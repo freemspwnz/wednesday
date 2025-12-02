@@ -6,6 +6,7 @@
 import asyncio
 import signal
 import sys
+import threading
 import types
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -492,6 +493,138 @@ def _start_prometheus_exporter(logger: "LoggerType") -> None:
         )
 
 
+def _init_sentry(logger: "LoggerType") -> None:
+    """
+    Инициализирует Sentry SDK (если задан SENTRY_DSN).
+
+    Используется интеграция asyncio, чтобы корректно перехватывать
+    необработанные исключения в асинхронном коде. Для FastAPI‑эндпоинта
+    healthcheck и других потенциальных HTTP‑сервисов также подключается
+    FastAPI‑интеграция.
+    """
+    dsn = config.sentry_dsn
+    if not dsn:
+        logger.info("Sentry отключён (SENTRY_DSN не задан)")
+        log_event(
+            event="sentry_disabled",
+            status="disabled",
+            extra={"reason": "missing_dsn"},
+            level="info",
+            message="Sentry не инициализирован: отсутствует SENTRY_DSN",
+        )
+        return
+
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.asyncio import AsyncioIntegration
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=config.sentry_environment,
+            release=config.sentry_release,
+            integrations=[
+                AsyncioIntegration(),
+                FastApiIntegration(),
+            ],
+            # Трассировку по умолчанию отключаем, чтобы не собирать лишний объём
+            # данных без явной настройки. При необходимости её можно включить
+            # через переменные окружения.
+            traces_sample_rate=0.0,
+        )
+        logger.info("Sentry SDK успешно инициализирован")
+        log_event(
+            event="sentry_initialized",
+            status="ok",
+            extra={
+                "environment": config.sentry_environment,
+                "release": config.sentry_release,
+            },
+            level="info",
+            message="Sentry SDK успешно инициализирован",
+        )
+    except Exception as exc:  # pragma: no cover - защитное логирование
+        logger.warning(f"Не удалось инициализировать Sentry SDK: {exc!s}")
+        log_event(
+            event="sentry_init_failed",
+            status="error",
+            extra={"error": str(exc)},
+            level="warning",
+            message="Ошибка инициализации Sentry SDK",
+        )
+
+
+def _start_health_server(logger: "LoggerType") -> None:
+    """
+    Запускает HTTP‑сервер FastAPI с эндпоинтом /health в отдельном потоке.
+
+    Сервер используется только для healthcheck и не обслуживает основной
+    Telegram‑бот. Его порт настраивается через переменную HEALTHCHECK_PORT.
+    """
+    port = config.healthcheck_port
+    if port is None:
+        logger.info("HTTP‑healthcheck отключён (HEALTHCHECK_PORT не задан)")
+        log_event(
+            event="healthcheck_server_disabled",
+            status="disabled",
+            extra={"raw_port_value": port},
+            level="info",
+            message="HTTP‑сервер healthcheck отключён конфигурацией",
+        )
+        return
+
+    try:
+        import uvicorn
+
+        from services.healthcheck import app as health_app
+
+        uvicorn_config = uvicorn.Config(
+            app=health_app,
+            host="0.0.0.0",
+            port=port,
+            log_level="info",
+        )
+        server = uvicorn.Server(config=uvicorn_config)
+
+        def _run_server() -> None:
+            """
+            Фоновая функция для запуска uvicorn в отдельном потоке.
+
+            Вызывается как daemon‑поток, чтобы не блокировать основной
+            event loop бота. При завершении процесса поток завершается
+            автоматически.
+            """
+            try:
+                asyncio.run(server.serve())
+            except Exception as exc:  # pragma: no cover - защитное логирование
+                logger.warning(f"Ошибка в фоновой задаче uvicorn health‑сервера: {exc!s}")
+
+        thread = threading.Thread(
+            target=_run_server,
+            name="healthcheck-server",
+            daemon=True,
+        )
+        thread.start()
+
+        logger.info(f"HTTP‑сервер healthcheck /health запущен на 0.0.0.0:{port}")
+        log_event(
+            event="healthcheck_server_started",
+            status="ok",
+            extra={"port": port},
+            level="info",
+            message="HTTP‑сервер healthcheck успешно запущен",
+        )
+    except Exception as exc:  # pragma: no cover - защитное логирование
+        logger.warning(f"Не удалось запустить HTTP‑сервер healthcheck на порту {port}: {exc!s}")
+        log_event(
+            event="healthcheck_server_failed",
+            status="error",
+            extra={"port": port, "error": str(exc)},
+            level="warning",
+            message="Ошибка запуска HTTP‑сервера healthcheck",
+        )
+
+
 async def main() -> None:
     """
     Главная функция приложения.
@@ -499,15 +632,40 @@ async def main() -> None:
     logger = get_logger(__name__)
     logger.info("Начало выполнения функции main()")
     try:
+        # Инициализируем Sentry до старта всех остальных подсистем, чтобы
+        # необработанные исключения в процессе инициализации также уходили
+        # в систему мониторинга.
+        _init_sentry(logger)
+
         # Запускаем HTTP‑экспортёр Prometheus до старта основного цикла бота,
         # чтобы метрики были доступны сразу после инициализации приложения.
         _start_prometheus_exporter(logger)
+
+        # Поднимаем HTTP‑сервер healthcheck (/health) в отдельном потоке.
+        _start_health_server(logger)
 
         runner = BotRunner()
         logger.info("BotRunner создан, запуск метода run()")
         await runner.run()
         logger.info("Функция main() завершена успешно")
     except Exception as e:
+        # Любое необработанное исключение в main считаем критическим.
+        try:
+            import sentry_sdk
+
+            sentry_sdk.capture_exception(e)
+        except Exception:
+            # Ошибки интеграции Sentry не должны маскировать исходное
+            # исключение.
+            pass
+
+        log_event(
+            event="unhandled_exception",
+            status="error",
+            extra={"where": "main", "error": str(e)},
+            level="error",
+            message="Необработанное исключение в функции main()",
+        )
         logger.error(f"Ошибка в функции main(): {e}", exc_info=True)
         raise
 
@@ -527,6 +685,22 @@ if __name__ == "__main__":
         logger.info("Получен сигнал прерывания (KeyboardInterrupt)")
         print("\n🛑 Получен сигнал прерывания. Завершение работы...")
     except Exception as e:
+        # Финальная линия обороны: любое необработанное исключение здесь
+        # означает аварийное завершение процесса.
+        try:
+            import sentry_sdk
+
+            sentry_sdk.capture_exception(e)
+        except Exception:
+            pass
+
+        log_event(
+            event="unhandled_exception",
+            status="error",
+            extra={"where": "__main__", "error": str(e)},
+            level="critical",
+            message="Критическая ошибка в точке входа приложения",
+        )
         logger.error(f"Критическая ошибка в точке входа: {e}", exc_info=True)
         print(f"❌ Критическая ошибка: {e}")
         sys.exit(1)

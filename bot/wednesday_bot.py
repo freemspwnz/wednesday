@@ -20,7 +20,7 @@ from services.user_state_store import UserStateStore
 from utils.chats_store import ChatsStore
 from utils.config import config
 from utils.dispatch_registry import DispatchRegistry
-from utils.logger import get_logger, log_all_methods
+from utils.logger import get_logger, log_all_methods, log_event
 from utils.metrics import Metrics
 from utils.usage_tracker import UsageTracker
 
@@ -203,6 +203,14 @@ class WednesdayBot:
         )
 
         self.logger.info("Обработчики команд успешно настроены и зарегистрированы")
+
+        # Регистрируем глобальный обработчик ошибок, чтобы централизованно
+        # отлавливать исключения из любых хендлеров и репортить их в Sentry.
+        #
+        # В проде объект Application всегда имеет метод add_error_handler,
+        # но в юнит‑тестах может использоваться упрощённая заглушка без него.
+        if hasattr(self.application, "add_error_handler"):
+            self.application.add_error_handler(self._handle_error)
 
     async def send_wednesday_frog(self, slot_time: str | None = None) -> None:
         """
@@ -770,6 +778,46 @@ class WednesdayBot:
         except Exception as e:
             self.logger.error(f"Ошибка при запуске бота: {e}")
             raise
+
+    async def _handle_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Глобальный обработчик ошибок PTB.
+
+        Любые необработанные исключения из обработчиков команд/сообщений
+        попадают сюда. Мы:
+        - логируем ошибку с полным стеком;
+        - отправляем исключение в Sentry (если интеграция включена);
+        - записываем структурированное событие log_event для дальнейшего анализа.
+        """
+        error = getattr(context, "error", None)
+        self.logger.error(f"Необработанное исключение в обработчике PTB: {error!r}", exc_info=True)
+
+        # Отправляем исключение в Sentry, если SDK инициализирован.
+        if error is not None:
+            try:
+                import sentry_sdk
+
+                sentry_sdk.capture_exception(error)
+            except Exception:
+                # Ошибки в интеграции Sentry не должны ломать основной поток.
+                pass
+
+        # Логируем структурированное событие для унифицированного JSON‑логирования.
+        try:
+            log_event(
+                event="unhandled_exception",
+                status="error",
+                extra={
+                    "where": "ptb_error_handler",
+                    "error": repr(error),
+                    "update_repr": repr(update),
+                },
+                level="error",
+                message="Необработанное исключение в обработчике PTB",
+            )
+        except Exception:
+            # Любые ошибки логирования здесь игнорируем, чтобы не усугублять ситуацию.
+            pass
 
     async def on_my_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:

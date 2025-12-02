@@ -32,6 +32,12 @@
     - обновление gauge длины очереди;
     - доступность HTTP‑эндпоинта `/metrics` и наличие метрики `frog_generations_total` в ответе.
   - В `docker-compose.yml` и `docker-compose.test.yml` добавлена переменная окружения `PROMETHEUS_EXPORTER_PORT` и проброс порта для сервиса `bot`, что упрощает настройку Prometheus/Grafana в проде и тестовых средах.
+- **HTTP healthcheck и интеграция Sentry**:
+  - Добавлен отдельный FastAPI‑сервис healthcheck (`/health`) в модуле `services/healthcheck.py`, проверяющий доступность Redis (включая Redis Stream `metrics:events`) и PostgreSQL с агрегированным JSON‑ответом (`status`, `redis`, `postgres`, `queues`, `latency_ms`) и кодом `200` только при полном наборе критичных зависимостей в состоянии `up`, иначе `503`.
+  - В `main.py` реализована инициализация `sentry_sdk` через новые настройки `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `RELEASE` (`utils.config.Config`) с интеграциями `AsyncioIntegration` и `FastApiIntegration`, запуск HTTP‑сервера healthcheck в отдельном daemon‑потоке (порт `HEALTHCHECK_PORT`, по умолчанию `8080`) и централизованный репортинг необработанных исключений (`unhandled_exception`) из `main()` и точки входа.
+  - В `bot/wednesday_bot.py` добавлен глобальный PTB error handler (`_handle_error`), который логирует полные стеки ошибок, репортит исключения в Sentry и пишет структурированные JSON‑события через `log_event(event="unhandled_exception", status="error", extra={...})` без дублирования обычных логов.
+  - В `docker-compose.yml` для сервиса `bot` проброшен порт healthcheck (`HEALTHCHECK_PORT`, по умолчанию `8080`) и добавлен Docker HEALTHCHECK по `http://127.0.0.1:${HEALTHCHECK_PORT}/health`, а в `docker-compose.test.yml` расширено окружение переменными `HEALTHCHECK_PORT` для выравнивания конфигурации с боевым compose.
+  - Добавлены юнит‑тесты `tests/test_services/test_healthcheck.py` и `tests/test_utils/test_sentry_integration.py`, проверяющие поведение эндпоинта `/health` при успехе и падении Redis/Postgres, а также корректную инициализацию и отключение Sentry через заглушки `sentry_sdk.init`.
 
 
 ### Изменено

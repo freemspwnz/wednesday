@@ -82,6 +82,8 @@ services:
       # Порт HTTP‑экспортёра Prometheus (/metrics) внутри контейнера.
       # При необходимости может быть переопределён через переменную окружения.
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
+      # Порт HTTP‑серверa healthcheck (/health) внутри контейнера.
+      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
     volumes:
       # Хранилище сгенерированных изображений жабы.
       # Внутри контейнера бот читает/пишет только в /app/data/frogs.
@@ -99,6 +101,19 @@ services:
       # - внутри контейнера и снаружи используется одно и то же значение,
       #   чтобы избежать путаницы при настройке Prometheus/Grafana.
       - "${PROMETHEUS_EXPORTER_PORT:-8000}:${PROMETHEUS_EXPORTER_PORT:-8000}"
+      # Пробрасываем порт healthcheck наружу (по умолчанию 8080).
+      - "${HEALTHCHECK_PORT:-8080}:${HEALTHCHECK_PORT:-8080}"
+    healthcheck:
+      # Используем встроенный python для проверки эндпоинта /health без
+      # дополнительных системных утилит (curl/wget).
+      test: >
+        python -c "import os, sys, urllib.request;
+        port = os.environ.get('HEALTHCHECK_PORT', '8080');
+        url = f'http://127.0.0.1:{port}/health';
+        sys.exit(0 if urllib.request.urlopen(url).getcode() == 200 else 1)"
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   wednesday_postgres_data:

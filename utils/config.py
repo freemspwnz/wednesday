@@ -201,6 +201,39 @@ class Config:  # noqa: PLR0904
             return None
 
     @property
+    def healthcheck_port(self) -> int | None:
+        """
+        Порт HTTP‑эндпоинта healthcheck (/health).
+
+        Если переменная HEALTHCHECK_PORT не задана или содержит некорректное
+        значение, эндпоинт считается отключённым и отдельный HTTP‑сервер для
+        healthcheck не поднимается.
+        """
+        value = Config._get_env_var("HEALTHCHECK_PORT")
+        if not value:
+            return None
+        try:
+            port = int(value)
+        except ValueError:
+            # Используем стандартный logging, чтобы не тянуть utils.logger
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Некорректное значение HEALTHCHECK_PORT={value}, healthcheck‑сервер будет отключён",
+            )
+            return None
+        if port <= 0:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Некорректное значение HEALTHCHECK_PORT={value} (<= 0), healthcheck‑сервер будет отключён",
+            )
+            return None
+        return port
+
+    @property
     def generation_timeout(self) -> int:
         """
         Таймаут для генерации изображения в секундах.
@@ -219,6 +252,32 @@ class Config:  # noqa: PLR0904
             Количество попыток из переменной MAX_RETRIES или 3 по умолчанию
         """
         return int(Config._get_env_var("MAX_RETRIES") or "3")
+
+    # --- Sentry / observability ---
+
+    @property
+    def sentry_dsn(self) -> str | None:
+        """
+        DSN для Sentry.
+
+        Если не задан, интеграция Sentry считается отключённой и инициализация
+        SDK не выполняется.
+        """
+        return Config._get_env_var("SENTRY_DSN")
+
+    @property
+    def sentry_environment(self) -> str | None:
+        """
+        Название окружения Sentry (например, "production", "staging", "local").
+        """
+        return Config._get_env_var("SENTRY_ENVIRONMENT")
+
+    @property
+    def sentry_release(self) -> str | None:
+        """
+        Версия релиза для Sentry (напр., git‑хэш или семантическая версия).
+        """
+        return Config._get_env_var("RELEASE")
 
     # --- Redis / кэш / состояние ---
 

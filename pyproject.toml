@@ -40,6 +40,7 @@ dependencies = [
   "iniconfig==2.3.0",
   "kombu==5.5.4",
   "loguru==0.7.3",
+  "fastapi==0.115.5",
   "MarkupSafe==3.0.3",
   "multidict==6.7.0",
   "mypy==1.18.2",
@@ -75,6 +76,8 @@ dependencies = [
   "wheel==0.45.1",
   "yarl==1.22.0",
   "prometheus_client>=0.20.0",
+  "sentry-sdk[fastapi,asyncio]==2.19.2",
+  "uvicorn==0.32.1",
 ]
 
 [tool.ruff]

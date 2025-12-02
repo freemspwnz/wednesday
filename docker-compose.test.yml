@@ -10,6 +10,8 @@ services:
       # В тестовом окружении HTTP‑экспортёр не запускается, но переменная
       # доступна для интеграционных тестов и future‑service'ов.
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
+      # Порт healthcheck используется для выравнивания окружения с продом.
+      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
     ports:
       - "5432:5432"
     healthcheck:
@@ -25,6 +27,7 @@ services:
     container_name: wednesday_redis_test
     environment:
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
+      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
     ports:
       - "6379:6379"
     healthcheck:
