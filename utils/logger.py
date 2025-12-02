@@ -17,8 +17,16 @@ if TYPE_CHECKING:
 from utils.config import config
 from utils.paths import LOGS_CONTAINER_PATH, resolve_logs_dir
 
-# Типы для уровней логирования
+# Типы для уровней логирования декораторов
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+
+# Допустимые имена уровней loguru для функции log_event.
+# Используем строчные имена, чтобы их можно было напрямую вызывать как методы логгера.
+EventLogLevel = Literal["trace", "debug", "info", "success", "warning", "error", "critical"]
+
+# Глубина стека кадров, необходимая для корректного определения модуля‑вызывателя
+# во вспомогательной функции _get_caller_module_name.
+CALLER_FRAME_DEPTH = 3
 
 
 def setup_logger() -> None:
@@ -42,7 +50,7 @@ def setup_logger() -> None:
     log_dir = resolve_logs_dir()
     log_dir.mkdir(exist_ok=True)
 
-    # Настраиваем вывод в консоль с цветами
+    # Настраиваем вывод в консоль с цветами (читаемые текстовые логи для локальной разработки).
     logger.add(
         sys.stdout,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
@@ -53,7 +61,7 @@ def setup_logger() -> None:
         colorize=True,
     )
 
-    # Настраиваем вывод в файл с подробной информацией.
+    # Настраиваем вывод в файл с подробной информацией (человеко-читаемый формат).
     # Важно: путь привязан к volume с логами внутри контейнера:
     # - локально пишем в ./logs;
     # - в Docker при WORKDIR=/app это /app/logs, примонтированный как volume.
@@ -69,6 +77,25 @@ def setup_logger() -> None:
         compression="zip",  # Сжимать старые логи
         backtrace=True,  # Показывать полный стек ошибок
         diagnose=True,  # Показывать переменные в ошибках
+    )
+
+    # Дополнительный sink c JSON‑сериализацией (структурированные логи).
+    #
+    # В этом sink loguru сериализует запись в один JSON‑объект с полями:
+    # - "time"    — timestamp события;
+    # - "level"   — уровень логирования;
+    # - "message" — строковое сообщение;
+    # - а также всеми дополнительными полями, добавленными через logger.bind(...)
+    #   (например, user_id, prompt_hash, image_id, latency_ms, status).
+    #
+    # Такой формат удобно парсить в Docker/CI, отдавать в централизованные системы
+    # логирования (ELK, Loki и т.п.) и использовать для метрик и дашбордов.
+    logger.add(
+        sys.stdout,
+        serialize=True,  # включаем JSON‑формат
+        level=config.log_level,
+        backtrace=True,
+        diagnose=True,
     )
 
     # Логируем успешную инициализацию с явным указанием контейнерного пути.
@@ -90,6 +117,119 @@ def get_logger(name: str | None = None) -> "LoggerType":
     if name:
         return logger.bind(name=name)
     return logger
+
+
+def _get_caller_module_name() -> str | None:
+    """
+    Возвращает имя модуля, вызвавшего вспомогательную функцию логирования.
+
+    Это нужно для того, чтобы log_event логировал события "от имени" реального
+    модуля (bot.handlers, services.image_generator и т.д.), а не только
+    модуля utils.logger. В логах и JSON‑записях поле `name` останется
+    привычным и понятным.
+    """
+    frame = inspect.currentframe()
+    if frame is None:  # pragma: no cover - защитный фоллбек
+        return None
+    # Стек:
+    # 0 — _get_caller_module_name
+    # 1 — log_event
+    # 2 — фактическое место вызова log_event в коде бота
+    outer_frames = inspect.getouterframes(frame, CALLER_FRAME_DEPTH)
+    if len(outer_frames) < CALLER_FRAME_DEPTH:  # pragma: no cover - защитный фоллбек
+        return None
+    caller_frame = outer_frames[2].frame
+    module_name = caller_frame.f_globals.get("__name__")
+    return str(module_name) if isinstance(module_name, str) else None
+
+
+def log_event(  # noqa: PLR0913
+    event: str,
+    *,
+    user_id: str | int | None = None,
+    prompt_hash: str | None = None,
+    image_id: str | None = None,
+    latency_ms: int | float | None = None,
+    status: str | None = None,
+    extra: dict[str, Any] | None = None,
+    level: EventLogLevel = "info",
+    message: str | None = None,
+) -> None:
+    """
+    Высокоуровневая обёртка для структурированного логирования событий.
+
+    Функция:
+    - собирает стандартные поля (event, user_id, prompt_hash, image_id,
+      latency_ms, status);
+    - объединяет их с дополнительными полями из `extra`;
+    - отфильтровывает все значения None, чтобы в JSON не появлялись "пустые" ключи;
+    - привязывает получившийся набор полей к логгеру через logger.bind(...);
+    - вызывает нужный метод loguru (info, error, warning и др.) с указанным message.
+
+    В результате в JSON‑логах (sink с serialize=True) появляется одна запись,
+    где:
+    - стандартные поля доступны как отдельные ключи;
+    - дополнительные поля из extra находятся на том же уровне;
+    - формат остаётся совместимым с парсерами структурированных логов.
+
+    Args:
+        event: Краткий тип/код события (например, "image_generation", "handler_error").
+        user_id: Идентификатор пользователя (Telegram user id).
+        prompt_hash: Хэш промпта (sha256, 64‑символьный hex).
+        image_id: Идентификатор или hash изображения (может совпадать с image_hash из БД).
+        latency_ms: Латентность операции в миллисекундах.
+        status: Статус события ("ok", "error", "cached", "started" и т.п.).
+        extra: Дополнительные произвольные поля, которые нужно добавить в лог.
+        level: Уровень логирования loguru ("info", "error", "warning" и т.д.).
+        message: Человеко‑читаемое сообщение; если не указано, используется event.
+    """
+    # Базовый набор полей события. Мы намеренно не включаем сюда None,
+    # чтобы далее их можно было отфильтровать и не захламлять JSON.
+    payload: dict[str, Any] = {"event": event}
+
+    if user_id is not None:
+        # user_id может быть int (Telegram id) или str — приводим к строке,
+        # чтобы в JSON не было неоднородности типов.
+        payload["user_id"] = str(user_id)
+    if prompt_hash is not None:
+        payload["prompt_hash"] = prompt_hash
+    if image_id is not None:
+        payload["image_id"] = image_id
+    if latency_ms is not None:
+        payload["latency_ms"] = float(latency_ms)
+    if status is not None:
+        payload["status"] = status
+
+    # Дополнительные поля (если переданы) перекладываем поверх стандартных.
+    # При совпадении ключей extra имеет приоритет — это даёт возможность
+    # локально переопределить значение в конкретном кейсе.
+    if extra:
+        for key, value in extra.items():
+            if value is not None:
+                payload[key] = value
+
+    # Получаем логгер с именем модуля вызывающего кода, чтобы:
+    # - сохранить привычное поле `name` в логах;
+    # - при этом "забиндить" к нему все дополнительные поля payload.
+    caller_module = _get_caller_module_name()
+    base_logger = get_logger(caller_module) if caller_module else get_logger(__name__)
+
+    # bind(...) в loguru не записывает лог немедленно, а возвращает новый логгер,
+    # у которого все указанные ключи будут автоматически добавляться к каждой записи.
+    # Эти ключи:
+    # - выводятся в текстовом формате (если включим {extra[...]});
+    # - попадают как отдельные поля в JSON‑sink (serialize=True), что и нужно
+    #   для структурированных логов.
+    bound_logger = base_logger.bind(**payload)
+
+    # Выбираем метод логирования по имени уровня. Если по какой‑то причине
+    # передан неподдерживаемый level, по умолчанию используем info.
+    log_method = getattr(bound_logger, level, bound_logger.info)
+
+    # Текстовое сообщение, которое увидит разработчик в консоли/файле.
+    # В JSON оно попадает в поле "message".
+    text = message or event
+    log_method(text)
 
 
 P = ParamSpec("P")

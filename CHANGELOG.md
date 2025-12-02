@@ -1,4 +1,32 @@
 # CHANGELOG
+## [X.X.X] 2025-12-X — Структурированное JSON‑логирование через Loguru, единая обёртка log_event и улучшенная наблюдаемость генераций
+
+### Добавлено
+- **Структурированное JSON‑логирование**:
+  - В `utils/logger.py` добавлен отдельный sink Loguru с `serialize=True`, пишущий структурированные JSON‑логи в `stdout` c полями `time`, `level`, `message` и всеми дополнительными полями из `logger.bind(...)`.
+  - Стандартные текстовые логи для разработки сохранены: человеко‑читаемый вывод в консоль и ротация файлового лога `logs/wednesday_bot.log` (`/app/logs` в Docker, rotation `10 MB`, retention `7 days`).
+- **Универсальная обёртка `utils.logger.log_event(...)`**:
+  - Новая функция `log_event(event, *, user_id=None, prompt_hash=None, image_id=None, latency_ms=None, status=None, extra=None, level=\"info\", message=None)` для единообразного структурированного логирования.
+  - Автоматически фильтрует значения `None`, приводит `user_id` к строке, объединяет стандартные поля (`event`, `user_id`, `prompt_hash`, `image_id`, `latency_ms`, `status`) с `extra` и записывает их через `logger.bind(...)` в JSON‑sink.
+  - Уровень логирования задаётся через параметр `level` (`\"trace\" | \"debug\" | \"info\" | \"success\" | \"warning\" | \"error\" | \"critical\"`), при неизвестном значении используется `info`.
+  - Добавлен модульный тест `tests/test_utils/test_logger_events.py`, проверяющий формирование корректного JSON (наличие стандартных полей, приведение типов, отсутствие ключей со значением `None`).
+- **Структурированные события генерации изображений**:
+  - В `services/image_generator.ImageGenerator.generate_frog_image()` и связанных методах добавлены вызовы `log_event(...)` для ключевых этапов: `generation_started`, `generation_caption_selected`, `prompt_selected`, `prompt_registered`, `image_cache_hit`, `image_cache_file_missing`, `image_metadata_saved`, `image_metadata_race_won`, `generation_api_ok`, `generation_attempt`, `generation_attempt_failed`, `generation_attempt_exception`, `generation_exhausted` и др.
+  - Во все события передаются типизированные поля: `user_id` (Telegram user id), `prompt_hash`, `image_id` (hash/ID изображения), `latency_ms` (при наличии измерений) и `status` (`ok`, `error`, `cached`, `started`, `reused`, `missing_file`, `redis_unavailable` и т.п.).
+  - Логи по circuit breaker Kandinsky (`generation_skipped_circuit_breaker`, `circuit_breaker_check_failed`, `circuit_breaker_record_failure_failed`) теперь тоже структурированы и легко агрегируются по полям статуса и типу ошибки.
+
+### Изменено
+- **Интеграция метрик и логирования**:
+  - `utils.metrics.record_metric(...)` по‑прежнему записывает события в Redis Stream `metrics:events` и таблицу `metrics_events`, а сопутствующее логирование теперь дополняется структурированными событиями `log_event(...)` в генераторе изображений.
+  - В `ImageGenerator` все места, где ранее использовались только `self.logger.info/warning/error`, для критичных бизнес‑событий дополнены вызовами `log_event(...)`, что обеспечивает согласованный формат логов и облегчает построение дашбордов по полям `user_id`, `prompt_hash`, `image_id`, `latency_ms`, `status`.
+
+### Откат
+- Для возврата к предыдущей схеме логирования достаточно:
+  - удалить новый sink с `serialize=True` и функцию `log_event` из `utils/logger.py`;
+  - заменить вызовы `log_event(...)` в `services/image_generator.py` и тест `tests/test_utils/test_logger_events.py` на прямые вызовы `logger.info()/warning()/error()` при необходимости.
+
+---
+
 ## [6.0.0] 2025-12-02 — Обновлён CI, улучшена работа с GigaChat-промптами и fallback-механизм, добавлена Redis-интеграция для временного состояния и кэширования, миграция персистентных данных в PostgreSQL завершена, обновлены тесты и инфраструктура, значительно увеличено покрытие тестами, добавлены Docker volumes для файловых операций, нормализация и безопасная запись файлов промптов GigaChat
 
 ### Добавлено

@@ -29,7 +29,7 @@ from services.prompt_generator import GigaChatClient, PromptStorage
 from services.rate_limiter import CircuitBreaker
 from utils.config import ImageConfig, config
 from utils.images_store import ImagesStore
-from utils.logger import get_logger, log_all_methods
+from utils.logger import get_logger, log_all_methods, log_event
 from utils.metrics import record_metric
 from utils.paths import FROG_IMAGES_CONTAINER_PATH, FROG_IMAGES_DIR, resolve_frog_images_dir
 from utils.prompts_store import PromptsStore
@@ -173,9 +173,18 @@ class ImageGenerator:
         try:
             if await self._circuit_breaker.is_open():
                 remaining = self.circuit_breaker_cooldown
-                self.logger.warning(
-                    "Circuit breaker для Kandinsky уже открыт (Redis). "
-                    f"Запрос к API пропущен до окончания окна cooldown ({remaining} c)",
+                # Структурированная запись о том, что circuit breaker уже открыт.
+                log_event(
+                    event="generation_skipped_circuit_breaker",
+                    user_id=user_id_str or None,
+                    status="circuit_breaker_open",
+                    latency_ms=0,
+                    extra={"cooldown_remaining_s": remaining},
+                    level="warning",
+                    message=(
+                        "Circuit breaker для Kandinsky уже открыт (Redis), запрос к API пропущен "
+                        f"до окончания окна cooldown ({remaining} c)"
+                    ),
                 )
                 if metrics:
                     try:
@@ -195,37 +204,84 @@ class ImageGenerator:
                 return None
         except Exception as cb_err:
             # В случае проблем с Redis не блокируем генерацию — работаем как раньше.
-            self.logger.warning(
-                f"Не удалось проверить состояние circuit breaker в Redis, продолжаем генерацию: {cb_err!s}",
+            log_event(
+                event="circuit_breaker_check_failed",
+                user_id=user_id_str or None,
+                status="redis_unavailable",
+                extra={"error": str(cb_err)},
+                level="warning",
+                message=(
+                    "Не удалось проверить состояние circuit breaker в Redis, продолжаем генерацию "
+                    f"в деградированном режиме: {cb_err!s}"
+                ),
             )
 
-        self.logger.info("Начинаю генерацию изображения жабы")
+        log_event(
+            event="generation_started",
+            user_id=user_id_str or None,
+            status="started",
+            level="info",
+            message="Начинаю генерацию изображения жабы",
+        )
 
         # Выбираем случайную подпись
         caption = random.choice(self.captions)
-        self.logger.info(f"Выбрана подпись: {caption}")
+        log_event(
+            event="generation_caption_selected",
+            user_id=user_id_str or None,
+            status="ok",
+            extra={"caption": caption},
+            level="debug",
+            message=f"Выбрана подпись для изображения: {caption}",
+        )
 
         # Генерируем промпт через GigaChat или используем fallback
         full_prompt = await self._generate_prompt()
         if not full_prompt:
-            self.logger.warning("Не удалось сгенерировать промпт, используем fallback")
+            log_event(
+                event="prompt_generation_failed",
+                user_id=user_id_str or None,
+                status="fallback_static",
+                level="warning",
+                message="Не удалось сгенерировать промпт, используем статический fallback",
+            )
             full_prompt = ImageGenerator._get_fallback_prompt()
 
-        self.logger.info(f"Промпт для генерации: {full_prompt}")
+        log_event(
+            event="prompt_selected",
+            user_id=user_id_str or None,
+            status="ok",
+            extra={"prompt_preview": full_prompt[:200]},
+            level="info",
+            message="Выбран промпт для генерации изображения жабы",
+        )
 
         # Регистрируем промпт и получаем его hash для привязки изображения.
         prompts_store = PromptsStore()
         try:
             prompt_record = await prompts_store.get_or_create_prompt(full_prompt)
             prompt_hash = prompt_record.prompt_hash
-            self.logger.info(
-                f"Получен prompt_hash для генерации изображения: {prompt_hash} (id={prompt_record.id})",
+            log_event(
+                event="prompt_registered",
+                user_id=user_id_str or None,
+                prompt_hash=prompt_hash,
+                status="ok",
+                extra={"prompt_id": prompt_record.id},
+                level="info",
+                message=(
+                    "Промпт зарегистрирован в БД и привязан к генерации изображения "
+                    f"(id={prompt_record.id}, hash={prompt_hash})"
+                ),
             )
         except Exception as exc:
             # В случае проблем с БД не блокируем генерацию, но логируем.
-            self.logger.error(
-                f"Не удалось зарегистрировать промпт в таблице prompts, отключаю кеш изображений: {exc}",
-                exc_info=True,
+            log_event(
+                event="prompt_register_failed",
+                user_id=user_id_str or None,
+                status="error",
+                extra={"error": str(exc)},
+                level="error",
+                message=("Не удалось зарегистрировать промпт в таблице prompts, кеш изображений временно отключён"),
             )
             prompt_hash = ""
 
@@ -249,18 +305,36 @@ class ImageGenerator:
             try:
                 existing = await images_store.get_by_prompt_hash(prompt_hash)
             except Exception as exc:  # pragma: no cover - защитный фоллбек
-                self.logger.error(
-                    f"Ошибка при обращении к ImagesStore (get_by_prompt_hash), кеш изображений отключён: {exc}",
-                    exc_info=True,
+                log_event(
+                    event="image_cache_lookup_failed",
+                    user_id=user_id_str or None,
+                    prompt_hash=prompt_hash,
+                    status="error",
+                    extra={"error": str(exc)},
+                    level="error",
+                    message=(
+                        "Ошибка при обращении к ImagesStore (get_by_prompt_hash), кеш изображений отключён "
+                        "для текущей генерации"
+                    ),
                 )
                 existing = None
 
             if existing is not None:
                 try:
                     image_data_cached = images_store.load_image_bytes(existing)
-                    self.logger.info(
-                        "Найдено кешированное изображение для промпта: "
-                        f"{existing.prompt_hash} \u2192 image {existing.image_hash}",
+                    log_event(
+                        event="image_cache_hit",
+                        user_id=user_id_str or None,
+                        prompt_hash=existing.prompt_hash,
+                        image_id=existing.image_hash,
+                        latency_ms=0,
+                        status="cached",
+                        extra={"path": existing.path},
+                        level="info",
+                        message=(
+                            "Найдено кешированное изображение для промпта, генерация через API пропущена "
+                            f"(prompt_hash={existing.prompt_hash}, image_hash={existing.image_hash})"
+                        ),
                     )
                     # Кеш‑хит считаем успешной "генерацией" без обращения к API.
                     elapsed = time.time() - start_time
@@ -286,50 +360,105 @@ class ImageGenerator:
                         pass
                     return image_data_cached, caption
                 except FileNotFoundError:
-                    # Запись есть, но файла нет — логируем и продолжаем с живой генерацией.
-                    self.logger.warning(
-                        "Запись об изображении найдена в БД, но файл отсутствует на диске; "
-                        f"prompt_hash={existing.prompt_hash} image_hash={existing.image_hash} "
-                        f"path={existing.path}. Продолжаем живую генерацию.",
+                    # Запись есть, но файл нет — логируем и продолжаем с живой генерацией.
+                    log_event(
+                        event="image_cache_file_missing",
+                        user_id=user_id_str or None,
+                        prompt_hash=existing.prompt_hash,
+                        image_id=existing.image_hash,
+                        status="missing_file",
+                        extra={"path": existing.path},
+                        level="warning",
+                        message=(
+                            "Запись об изображении найдена в БД, но файл отсутствует на диске; "
+                            "продолжаем живую генерацию через API"
+                        ),
                     )
                 except Exception as exc:  # pragma: no cover - защитный фоллбек
-                    self.logger.error(
-                        f"Ошибка при загрузке кешированного изображения из файловой системы: {exc}",
-                        exc_info=True,
+                    log_event(
+                        event="image_cache_load_failed",
+                        user_id=user_id_str or None,
+                        prompt_hash=existing.prompt_hash,
+                        image_id=existing.image_hash,
+                        status="error",
+                        extra={"path": existing.path, "error": str(exc)},
+                        level="error",
+                        message="Ошибка при загрузке кешированного изображения из файловой системы",
                     )
 
         # Пытаемся сгенерировать изображение с повторными попытками
         for attempt in range(self.max_retries):
             try:
-                self.logger.info(f"Попытка генерации {attempt + 1}/{self.max_retries}")
+                log_event(
+                    event="generation_attempt",
+                    user_id=user_id_str or None,
+                    prompt_hash=prompt_hash or None,
+                    status="in_progress",
+                    extra={"attempt": attempt + 1, "max_retries": self.max_retries},
+                    level="info",
+                    message=f"Попытка генерации изображения {attempt + 1}/{self.max_retries}",
+                )
 
                 # Генерируем изображение
                 image_data = await self._generate_image(full_prompt)
 
                 if image_data:
-                    self.logger.info("Изображение успешно сгенерировано")
+                    log_event(
+                        event="generation_api_ok",
+                        user_id=user_id_str or None,
+                        prompt_hash=prompt_hash or None,
+                        status="ok",
+                        level="info",
+                        message="Изображение успешно сгенерировано через Kandinsky API",
+                    )
 
                     # Сохраняем изображение в content-addressable хранилище + БД.
                     if images_store is not None and prompt_hash:
                         try:
                             image_record = await images_store.get_or_create_image(prompt_hash, image_data)
                             if image_record.prompt_hash == prompt_hash:
-                                self.logger.info(
-                                    "Метаданные изображения сохранены: "
-                                    f"prompt_hash={image_record.prompt_hash} \u2192 "
-                                    f"image_hash={image_record.image_hash} (path={image_record.path})",
+                                log_event(
+                                    event="image_metadata_saved",
+                                    user_id=user_id_str or None,
+                                    prompt_hash=image_record.prompt_hash,
+                                    image_id=image_record.image_hash,
+                                    status="ok",
+                                    extra={"path": image_record.path},
+                                    level="info",
+                                    message=(
+                                        "Метаданные изображения сохранены в ImagesStore "
+                                        f"(prompt_hash={image_record.prompt_hash}, "
+                                        f"image_hash={image_record.image_hash})"
+                                    ),
                                 )
                             else:
                                 # Гонка: другая транзакция уже привязала изображение.
-                                self.logger.info(
-                                    "Обработана гонка при сохранении изображения: "
-                                    f"prompt_hash={prompt_hash}, переиспользую image_hash="
-                                    f"{image_record.image_hash} (path={image_record.path})",
+                                log_event(
+                                    event="image_metadata_race_won",
+                                    user_id=user_id_str or None,
+                                    prompt_hash=prompt_hash or None,
+                                    image_id=image_record.image_hash,
+                                    status="reused",
+                                    extra={"path": image_record.path},
+                                    level="info",
+                                    message=(
+                                        "Обработана гонка при сохранении изображения: переиспользуем "
+                                        f"существующую запись (prompt_hash={prompt_hash}, "
+                                        f"image_hash={image_record.image_hash})"
+                                    ),
                                 )
                         except Exception as exc:  # pragma: no cover - не критично для пользователя
-                            self.logger.error(
-                                f"Ошибка при сохранении изображения в ImagesStore (метаданные/файл): {exc}",
-                                exc_info=True,
+                            log_event(
+                                event="image_metadata_save_failed",
+                                user_id=user_id_str or None,
+                                prompt_hash=prompt_hash or None,
+                                status="error",
+                                extra={"error": str(exc)},
+                                level="error",
+                                message=(
+                                    "Ошибка при сохранении изображения в ImagesStore "
+                                    "(метаданные/файл), генерация для пользователя продолжена"
+                                ),
                             )
 
                     elapsed = time.time() - start_time
@@ -364,21 +493,54 @@ class ImageGenerator:
                         pass
                     return image_data, caption
                 else:
-                    self.logger.warning(f"Попытка {attempt + 1} не удалась")
+                    log_event(
+                        event="generation_attempt_failed",
+                        user_id=user_id_str or None,
+                        prompt_hash=prompt_hash or None,
+                        status="error",
+                        extra={"attempt": attempt + 1, "max_retries": self.max_retries},
+                        level="warning",
+                        message=f"Попытка генерации {attempt + 1}/{self.max_retries} не удалась",
+                    )
                     if metrics and attempt == 0:
                         try:
                             await metrics.increment_generation_retry()
                         except Exception as exc:
-                            self.logger.warning(f"Не удалось обновить метрики retry генерации: {exc}")
+                            log_event(
+                                event="metrics_retry_update_failed",
+                                user_id=user_id_str or None,
+                                prompt_hash=prompt_hash or None,
+                                status="error",
+                                extra={"error": str(exc)},
+                                level="warning",
+                                message="Не удалось обновить метрики retry генерации",
+                            )
 
             except Exception as e:
-                self.logger.error(f"Ошибка при генерации (попытка {attempt + 1}): {e}", exc_info=True)
+                log_event(
+                    event="generation_attempt_exception",
+                    user_id=user_id_str or None,
+                    prompt_hash=prompt_hash or None,
+                    status="error",
+                    extra={"attempt": attempt + 1, "max_retries": self.max_retries, "error": str(e)},
+                    level="error",
+                    message=f"Ошибка при генерации изображения (попытка {attempt + 1}): {e}",
+                )
                 self.circuit_breaker_failures += 1
                 try:
                     await self._circuit_breaker.record_failure()
                 except Exception as cb_rec_err:
-                    self.logger.warning(
-                        f"Не удалось записать ошибку в Redis‑based circuit breaker: {cb_rec_err!s}",
+                    log_event(
+                        event="circuit_breaker_record_failure_failed",
+                        user_id=user_id_str or None,
+                        prompt_hash=prompt_hash or None,
+                        status="error",
+                        extra={"error": str(cb_rec_err)},
+                        level="warning",
+                        message=(
+                            "Не удалось записать ошибку в Redis‑based circuit breaker, "
+                            f"локальный счётчик увеличен: {cb_rec_err!s}"
+                        ),
                     )
 
                 # Логируем событие ошибки генерации.
@@ -404,7 +566,16 @@ class ImageGenerator:
                 await metrics.increment_generation_failed()
                 await metrics.add_generation_time(elapsed)
             except Exception as exc:
-                self.logger.warning(f"Не удалось обновить метрики неуспешной генерации: {exc}")
+                log_event(
+                    event="metrics_failed_update_failed",
+                    user_id=user_id_str or None,
+                    prompt_hash=prompt_hash or None,
+                    latency_ms=round(elapsed * 1000),
+                    status="error",
+                    extra={"error": str(exc)},
+                    level="warning",
+                    message="Не удалось обновить метрики неуспешной генерации",
+                )
 
         # Финальное событие ошибки (если так и не получили результат).
         try:
@@ -418,7 +589,15 @@ class ImageGenerator:
         except Exception:
             pass
 
-        self.logger.error("Все попытки генерации изображения исчерпаны")
+        log_event(
+            event="generation_exhausted",
+            user_id=user_id_str or None,
+            prompt_hash=prompt_hash or None,
+            latency_ms=round(elapsed * 1000),
+            status="error",
+            level="error",
+            message="Все попытки генерации изображения исчерпаны, результат не получен",
+        )
         return None
 
     async def _generate_image(self, prompt: str) -> bytes | None:
