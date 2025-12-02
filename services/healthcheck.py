@@ -27,12 +27,12 @@ from redis.exceptions import RedisError
 
 from utils.logger import get_logger, log_event
 from utils.postgres_client import get_postgres_pool
-from utils.redis_client import get_redis, redis_available
+from utils.redis_client import get_redis
 
 logger = get_logger(__name__)
 
 # Экспортируемое FastAPI‑приложение. Uvicorn использует его для запуска
-# HTTP‑сервера внутри основного процесса бота.
+# HTTP‑сервера внутри того же event loop, что и Telegram‑бот.
 app = FastAPI(title="Wednesday Frog Bot Healthcheck")
 
 
@@ -49,20 +49,12 @@ async def _check_redis() -> dict[str, Any]:
         }
     """
     started = time.monotonic()
-    using_real = redis_available()
-    client = get_redis()
 
-    if not using_real:
-        # В приложении в этом случае используется in‑memory fallback.
-        # Для healthcheck считаем Redis критичным, поэтому статус "down".
-        return {
-            "status": "down",
-            "using_fallback": True,
-            "latency_ms": None,
-            "details": "Redis недоступен, используется in‑memory fallback",
-        }
+    # Если main() уже прокинул клиент в app.state, используем его;
+    # иначе — глобальный singleton через utils.redis_client.
+    client = getattr(app.state, "redis", None) or get_redis()
 
-    # В тестах (и потенциально в других окружениях) get_redis может быть
+    # В тестах (и потенциально в других окружениях) client может быть
     # замокан на класс вместо инстанса. В этом случае создаём экземпляр.
     if isinstance(client, type):
         client = client()
@@ -80,7 +72,7 @@ async def _check_redis() -> dict[str, Any]:
         }
     except RedisError as exc:
         latency_ms = (time.monotonic() - started) * 1000.0
-        logger.error(f"Ошибка при проверке Redis в healthcheck: {exc!s}", exc_info=True)
+        logger.warning(f"Ошибка при проверке Redis в healthcheck: {exc!s}")
         return {
             "status": "down",
             "using_fallback": False,
@@ -89,12 +81,13 @@ async def _check_redis() -> dict[str, Any]:
         }
     except Exception as exc:  # pragma: no cover - защитный фоллбек
         latency_ms = (time.monotonic() - started) * 1000.0
-        logger.error(f"Неожиданная ошибка при проверке Redis в healthcheck: {exc!s}", exc_info=True)
+        error_msg = str(exc)
+        logger.warning(f"Неожиданная ошибка при проверке Redis в healthcheck: {error_msg}")
         return {
             "status": "down",
             "using_fallback": False,
             "latency_ms": latency_ms,
-            "details": str(exc),
+            "details": error_msg,
         }
 
 
@@ -110,24 +103,19 @@ async def _check_postgres() -> dict[str, Any]:
         }
     """
     started = time.monotonic()
-    try:
-        pool = get_postgres_pool()
-    except RuntimeError as exc:
-        # Пул не инициализирован — для healthcheck это значит, что БД недоступна.
-        return {
-            "status": "down",
-            "latency_ms": None,
-            "details": str(exc),
-        }
 
-    # В тестах get_postgres_pool может быть подменён на класс‑заглушку.
-    # В этом случае создаём экземпляр перед использованием.
-    if isinstance(pool, type):
+    # Сначала пробуем взять пул из app.state, если main() его туда прокинул.
+    pool = getattr(app.state, "postgres_pool", None) or get_postgres_pool()
+
+    # В тестах пул может быть подменён на фабрику; если это callable без acquire,
+    # создаём экземпляр перед использованием.
+    if callable(pool) and not hasattr(pool, "acquire"):
         pool = pool()
 
     try:
         async with pool.acquire() as conn:
             await conn.execute("SELECT 1;")
+
         latency_ms = (time.monotonic() - started) * 1000.0
         return {
             "status": "up",
@@ -136,19 +124,22 @@ async def _check_postgres() -> dict[str, Any]:
         }
     except asyncpg.PostgresError as exc:
         latency_ms = (time.monotonic() - started) * 1000.0
-        logger.error(f"Ошибка Postgres в healthcheck: {exc!s}", exc_info=True)
+        error_msg = str(exc)
+        # Логируем ошибки только на уровне debug, чтобы не спамить логами.
+        logger.debug(f"Ошибка Postgres в healthcheck: {error_msg}")
         return {
             "status": "down",
             "latency_ms": latency_ms,
-            "details": str(exc),
+            "details": error_msg,
         }
     except Exception as exc:  # pragma: no cover - защитный фоллбек
         latency_ms = (time.monotonic() - started) * 1000.0
-        logger.error(f"Неожиданная ошибка при проверке Postgres в healthcheck: {exc!s}", exc_info=True)
+        error_msg = str(exc)
+        logger.warning(f"Неожиданная ошибка при проверке Postgres в healthcheck: {error_msg}")
         return {
             "status": "down",
             "latency_ms": latency_ms,
-            "details": str(exc),
+            "details": error_msg,
         }
 
 
@@ -170,16 +161,9 @@ async def _check_metrics_stream() -> dict[str, Any]:
       это важная очередь бизнес‑метрик.
     """
     started = time.monotonic()
-    using_real = redis_available()
-    client = get_redis()
 
-    # Если Redis недоступен (in‑memory fallback), очередь считаем down.
-    if not using_real:
-        return {
-            "status": "down",
-            "latency_ms": None,
-            "details": "Redis недоступен или используется in‑memory fallback",
-        }
+    # Для очереди метрик важен именно реальный Redis, а не in‑memory fallback.
+    client = getattr(app.state, "redis", None) or get_redis()
 
     # Аналогично _check_redis, учитываем возможность подмены на класс в тестах.
     if isinstance(client, type):
@@ -197,11 +181,16 @@ async def _check_metrics_stream() -> dict[str, Any]:
         }
     except RedisError as exc:
         latency_ms = (time.monotonic() - started) * 1000.0
-        logger.error(f"Ошибка XINFO STREAM metrics:events в healthcheck: {exc!s}", exc_info=True)
+        error_msg = str(exc)
+        # Отсутствие Stream при первом запуске - это нормально, не критичная ошибка
+        if "no such key" in error_msg.lower() or "does not exist" in error_msg.lower():
+            logger.debug(f"Redis Stream metrics:events ещё не создан: {error_msg}")
+        else:
+            logger.warning(f"Ошибка XINFO STREAM metrics:events в healthcheck: {error_msg}")
         return {
             "status": "down",
             "latency_ms": latency_ms,
-            "details": str(exc),
+            "details": error_msg,
         }
     except Exception as exc:  # pragma: no cover - защитный фоллбек
         latency_ms = (time.monotonic() - started) * 1000.0
@@ -260,7 +249,21 @@ async def _build_health_payload() -> dict[str, Any]:
     }
 
     # При любом неблагополучном состоянии логируем структурированное событие.
+    # Но если проблема только в отсутствии Redis Stream (что нормально при первом запуске),
+    # логируем на уровне warning, а не error
     if not all_ok:
+        # Проверяем, является ли проблема только отсутствием Stream
+        metrics_details = metrics_stream_status.get("details", "")
+        is_only_stream_missing = (
+            metrics_stream_status.get("status") == "down"
+            and ("no such key" in metrics_details.lower() or "does not exist" in metrics_details.lower())
+            and redis_status.get("status") == "up"
+            and postgres_status.get("status") == "up"
+        )
+
+        from utils.logger import EventLogLevel
+
+        log_level: EventLogLevel = "warning" if is_only_stream_missing else "error"
         log_event(
             event="healthcheck_failed",
             status="error",
@@ -270,7 +273,7 @@ async def _build_health_payload() -> dict[str, Any]:
                 "postgres_status": postgres_status.get("status"),
                 "metrics_events_status": metrics_stream_status.get("status"),
             },
-            level="error",
+            level=log_level,
             message="Healthcheck зависимости бота не в состоянии up",
         )
 

@@ -35,6 +35,8 @@ async def init_postgres_pool(
     """
     Инициализирует глобальный пул подключений к PostgreSQL.
 
+    Автоматически создаёт базу данных, если она не существует.
+
     Параметры подключения берутся из переменных окружения:
     - POSTGRES_USER
     - POSTGRES_PASSWORD
@@ -58,14 +60,12 @@ async def init_postgres_pool(
     # Проверяем, был ли пул создан в другом event loop
     current_loop = asyncio.get_running_loop()
     if _pool is not None and _pool_loop is not None and _pool_loop is not current_loop:
-        # Пул был создан в другом loop, закрываем его и создаём новый
-        logger.warning("Пул Postgres был создан в другом event loop, пересоздаём пул")
-        try:
-            await _pool.close()
-        except Exception:
-            pass
-        _pool = None
-        _pool_loop = None
+        # Пул был создан в другом loop - это нормально для healthcheck в отдельном потоке
+        # НЕ пересоздаём пул, чтобы не конфликтовать с основным потоком
+        # Healthcheck будет использовать временный пул
+        logger.debug("Пул Postgres был создан в другом event loop, но не пересоздаём его")
+        # Возвращаем существующий пул - healthcheck обработает это отдельно
+        return _pool
 
     if _pool is not None:
         return _pool
@@ -76,11 +76,14 @@ async def init_postgres_pool(
     host = config.postgres_host
     port = config.postgres_port
 
+    # Создаём базу данных, если она не существует
+    await ensure_database()
+
+    # ВАЖНО: используем database (POSTGRES_DB), а не user (POSTGRES_USER) в DSN
     dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
     logger.info(
-        f"Инициализация пула Postgres (host={host}, port={port}, db={database}, "
-        f"min_size={min_size}, max_size={max_size})",
+        f"Инициализация пула Postgres (host={host}, port={port}, min_size={min_size}, max_size={max_size})",
     )
 
     try:
@@ -157,3 +160,56 @@ async def close_postgres_pool() -> None:
         finally:
             _pool = None
             _pool_loop = None
+
+
+async def ensure_database() -> None:
+    """
+    Создаёт базу данных, если она не существует.
+
+    Подключается к системной базе 'postgres' для проверки и создания
+    целевой базы данных перед инициализацией пула подключений.
+    """
+    user = config.postgres_user
+    password = config.postgres_password
+    database = config.postgres_db
+    host = config.postgres_host
+    port = config.postgres_port
+
+    # Подключаемся к системной базе 'postgres' для проверки существования целевой БД
+    system_dsn = f"postgresql://{user}:{password}@{host}:{port}/postgres"
+
+    logger.info(f"Проверка существования базы данных '{database}' (host={host}, port={port})...")
+
+    try:
+        # Создаём временное подключение к системной базе
+        conn = await asyncpg.connect(system_dsn)
+        try:
+            # Проверяем, существует ли база данных
+            exists = await conn.fetchval(
+                "SELECT 1 FROM pg_database WHERE datname = $1",
+                database,
+            )
+
+            if exists:
+                logger.info(f"База данных '{database}' уже существует")
+            else:
+                logger.info(f"База данных '{database}' не найдена, создаём...")
+                # Создаём базу данных
+                # Используем параметризованный запрос через format для имени БД
+                # (asyncpg не поддерживает параметризацию для CREATE DATABASE)
+                await conn.execute(f'CREATE DATABASE "{database}"')
+                logger.info(f"База данных '{database}' успешно создана")
+        finally:
+            await conn.close()
+    except asyncpg.InvalidPasswordError:
+        logger.error(f"Неверный пароль для подключения к PostgreSQL (пользователь: {user})")
+        raise
+    except asyncpg.PostgresError as exc:
+        if "already exists" in str(exc).lower():
+            logger.info(f"База данных '{database}' уже существует (обнаружено при создании)")
+        else:
+            logger.error(f"Ошибка PostgreSQL при проверке/создании базы данных: {exc}")
+            raise
+    except Exception as exc:
+        logger.error(f"Неожиданная ошибка при проверке/создании базы данных: {exc}", exc_info=True)
+        raise

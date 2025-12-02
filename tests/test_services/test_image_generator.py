@@ -2,10 +2,10 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import aiohttp
 import pytest
 
 from services.image_generator import ImageGenerator
+from tests._doubles.clients import MockTextToImageClient, MockTextToTextClient
 from utils.images_store import ImagesStore
 from utils.postgres_client import get_postgres_pool
 from utils.prompts_store import PromptsStore
@@ -15,33 +15,22 @@ from utils.prompts_store import PromptsStore
 async def test_check_api_status_dry_run(monkeypatch: Any) -> None:
     """Dry-run: проверяем, что возвращается ожидаемый статус без настоящих запросов."""
 
-    class DummyResponse:
-        def __init__(self, status: int = 200, payload: Any = None) -> None:
-            self.status = status
-            self._payload: Any = payload or [{"id": "p1", "name": "Model One"}]
+    from services.clients.kandinsky import KandinskyClient
 
-        async def __aenter__(self) -> "DummyResponse":
-            return self
-
-        async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-            return False
-
-        async def json(self) -> Any:
-            return self._payload
-
-    class DummySession:
-        async def __aenter__(self) -> "DummySession":
-            return self
-
-        async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-            return False
-
-        def get(self, *args: Any, **kwargs: Any) -> DummyResponse:
-            return DummyResponse()
-
-    monkeypatch.setattr(aiohttp, "ClientSession", lambda *args, **kwargs: DummySession())
-
-    generator = ImageGenerator()
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
+    # Используем настоящий KandinskyClient, но подменяем его метод, чтобы исключить реальные HTTP‑запросы.
+    kandinsky_client = KandinskyClient()
+    monkeypatch.setattr(
+        kandinsky_client,
+        "check_api_status",
+        AsyncMock(
+            return_value=(True, "✅ API доступен, ключ валиден", ["Model One (ID: p1)"], (None, None)),
+        ),
+    )
+    generator._kandinsky_client = kandinsky_client
     ok, message, models, current = await generator.check_api_status()
 
     assert ok is True
@@ -51,7 +40,10 @@ async def test_check_api_status_dry_run(monkeypatch: Any) -> None:
 
 
 def test_save_image_locally_success(tmp_path: Path) -> None:
-    generator = ImageGenerator()
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
     data = b"fake-image"
 
     saved = generator.save_image_locally(data, folder=str(tmp_path), prefix="frog", max_files=1)
@@ -63,7 +55,10 @@ def test_save_image_locally_success(tmp_path: Path) -> None:
 
 
 def test_save_image_locally_handles_error(monkeypatch: Any) -> None:
-    generator = ImageGenerator()
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
     target_folder = "/tmp/forbidden"
 
     def fail_write_bytes(self: Any, data: bytes) -> None:
@@ -76,18 +71,18 @@ def test_save_image_locally_handles_error(monkeypatch: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_generate_frog_image_success(monkeypatch: Any) -> None:
-    generator = ImageGenerator()
-    generator.gigachat_enabled = False
+    image_client = MockTextToImageClient()
+    image_client.set_response(b"img")
+    generator = ImageGenerator(
+        image_client=image_client,
+        text_client=MockTextToTextClient(),
+    )
 
     def fake_generate_prompt() -> str:
         return "frog prompt"
 
-    def fake_generate_image(prompt: str) -> bytes:
-        return b"img"
-
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(side_effect=fake_generate_prompt))
     monkeypatch.setattr(generator, "_get_fallback_prompt", MagicMock(return_value="fallback prompt"))
-    monkeypatch.setattr(generator, "_generate_image", AsyncMock(side_effect=fake_generate_image))
 
     result = await generator.generate_frog_image(user_id=42)
 
@@ -104,24 +99,22 @@ async def test_generate_frog_image_uses_cache_on_existing_prompt_hash(monkeypatc
     а не вызывать живую генерацию второй раз.
     """
 
-    generator = ImageGenerator()
-    generator.gigachat_enabled = False
+    image_client = MockTextToImageClient()
+    generator = ImageGenerator(
+        image_client=image_client,
+        text_client=MockTextToTextClient(),
+    )
 
     prompt_text = "cached frog prompt"
 
     def fake_generate_prompt() -> str:
         return prompt_text
 
-    # Живая генерация возвращает фиксированные байты; следим за количеством вызовов.
-    generate_calls: dict[str, int] = {"count": 0}
-
-    def fake_generate_image(prompt: str) -> bytes:
-        generate_calls["count"] += 1
-        return b"cached-image-bytes"
+    # Живая генерация возвращает фиксированные байты; следим за количеством вызовов через mock.
+    image_client.set_response(b"cached-image-bytes")
 
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(side_effect=fake_generate_prompt))
     monkeypatch.setattr(generator, "_get_fallback_prompt", MagicMock(return_value=prompt_text))
-    monkeypatch.setattr(generator, "_generate_image", AsyncMock(side_effect=fake_generate_image))
 
     # Первый вызов — создаёт промпт и изображение, записывает их в БД.
     result1 = await generator.generate_frog_image(user_id=123)
@@ -138,7 +131,7 @@ async def test_generate_frog_image_uses_cache_on_existing_prompt_hash(monkeypatc
     assert isinstance(caption2, str)
 
     # Генерация должна была произойти ровно один раз.
-    assert generate_calls["count"] == 1
+    assert len(image_client.calls) == 1
 
     # В БД должна быть одна запись для этого prompt_hash.
     prompts_store = PromptsStore()
@@ -150,11 +143,14 @@ async def test_generate_frog_image_uses_cache_on_existing_prompt_hash(monkeypatc
 
 @pytest.mark.asyncio
 async def test_generate_frog_image_network_error(monkeypatch: Any) -> None:
-    generator = ImageGenerator()
-    generator.gigachat_enabled = False
+    image_client = MockTextToImageClient()
+    generator = ImageGenerator(
+        image_client=image_client,
+        text_client=MockTextToTextClient(),
+    )
 
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(return_value="frog prompt"))
-    monkeypatch.setattr(generator, "_generate_image", AsyncMock(side_effect=Exception("network")))
+    monkeypatch.setattr(image_client, "generate", AsyncMock(side_effect=Exception("network")))
 
     result = await generator.generate_frog_image(user_id=777)
 
@@ -162,7 +158,10 @@ async def test_generate_frog_image_network_error(monkeypatch: Any) -> None:
 
 
 def test_get_random_caption() -> None:
-    generator = ImageGenerator()
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
     caption = generator.get_random_caption()
     assert caption
     assert isinstance(caption, str)
@@ -179,13 +178,19 @@ def test_get_fallback_prompt() -> None:
 
 
 def test_get_random_saved_image_no_files(tmp_path: Path) -> None:
-    generator = ImageGenerator()
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
     result = generator.get_random_saved_image(folder=str(tmp_path))
     assert result is None
 
 
 def test_get_random_saved_image_with_files(tmp_path: Path) -> None:
-    generator = ImageGenerator()
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
     # Создаём тестовые файлы изображений
     (tmp_path / "frog_20251101_120000.png").write_bytes(b"fake image 1")
     (tmp_path / "frog_20251102_120000.png").write_bytes(b"fake image 2")
@@ -199,33 +204,20 @@ def test_get_random_saved_image_with_files(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_set_kandinsky_model_success(monkeypatch: Any, cleanup_tables: Any) -> None:
-    generator = ImageGenerator()
+    from services.clients.kandinsky import KandinskyClient
 
-    class DummyResponse:
-        def __init__(self, status: int = 200, payload: Any = None) -> None:
-            self.status = status
-            self._payload: Any = payload or [{"id": "p1", "name": "Model One"}]
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
 
-        async def __aenter__(self) -> "DummyResponse":
-            return self
-
-        async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-            return False
-
-        async def json(self) -> Any:
-            return self._payload
-
-    class DummySession:
-        async def __aenter__(self) -> "DummySession":
-            return self
-
-        async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-            return False
-
-        def get(self, *args: Any, **kwargs: Any) -> DummyResponse:
-            return DummyResponse()
-
-    monkeypatch.setattr(aiohttp, "ClientSession", lambda *args, **kwargs: DummySession())
+    kandinsky_client = KandinskyClient()
+    monkeypatch.setattr(
+        kandinsky_client,
+        "set_kandinsky_model",
+        AsyncMock(return_value=(True, "Модель установлена: Model One (ID: p1)")),
+    )
+    generator._kandinsky_client = kandinsky_client
 
     success, message = await generator.set_kandinsky_model("p1")
     assert success is True
@@ -234,33 +226,20 @@ async def test_set_kandinsky_model_success(monkeypatch: Any, cleanup_tables: Any
 
 @pytest.mark.asyncio
 async def test_set_kandinsky_model_not_found(monkeypatch: Any) -> None:
-    generator = ImageGenerator()
+    from services.clients.kandinsky import KandinskyClient
 
-    class DummyResponse:
-        def __init__(self, status: int = 200, payload: Any = None) -> None:
-            self.status = status
-            self._payload: Any = payload or [{"id": "p1", "name": "Model One"}]
+    generator = ImageGenerator(
+        image_client=MockTextToImageClient(),
+        text_client=MockTextToTextClient(),
+    )
 
-        async def __aenter__(self) -> "DummyResponse":
-            return self
-
-        async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-            return False
-
-        async def json(self) -> Any:
-            return self._payload
-
-    class DummySession:
-        async def __aenter__(self) -> "DummySession":
-            return self
-
-        async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
-            return False
-
-        def get(self, *args: Any, **kwargs: Any) -> DummyResponse:
-            return DummyResponse()
-
-    monkeypatch.setattr(aiohttp, "ClientSession", lambda *args, **kwargs: DummySession())
+    kandinsky_client = KandinskyClient()
+    monkeypatch.setattr(
+        kandinsky_client,
+        "set_kandinsky_model",
+        AsyncMock(return_value=(False, "Модель 'nonexistent' не найдена")),
+    )
+    generator._kandinsky_client = kandinsky_client
 
     success, message = await generator.set_kandinsky_model("nonexistent")
     assert success is False
@@ -275,20 +254,20 @@ async def test_generate_frog_image_records_metrics_events_success(monkeypatch: A
     - generation/ok с ненулевой latency и заполненными hash.
     """
 
-    generator = ImageGenerator()
-    generator.gigachat_enabled = False
+    image_client = MockTextToImageClient()
+    image_client.set_response(b"img-metrics")
+    generator = ImageGenerator(
+        image_client=image_client,
+        text_client=MockTextToTextClient(),
+    )
 
     prompt_text = "metrics frog prompt"
 
     def fake_generate_prompt() -> str:
         return prompt_text
 
-    def fake_generate_image(prompt: str) -> bytes:
-        return b"img-metrics"
-
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(side_effect=fake_generate_prompt))
     monkeypatch.setattr(generator, "_get_fallback_prompt", MagicMock(return_value=prompt_text))
-    monkeypatch.setattr(generator, "_generate_image", AsyncMock(side_effect=fake_generate_image))
 
     result = await generator.generate_frog_image(user_id=999)
     assert result is not None
@@ -326,20 +305,20 @@ async def test_generate_frog_image_records_cache_hit(monkeypatch: Any, cleanup_t
     При cache hit должно писаться событие cache_hit с latency_ms=0 и status='cached'.
     """
 
-    generator = ImageGenerator()
-    generator.gigachat_enabled = False
+    image_client = MockTextToImageClient()
+    image_client.set_response(b"cached-bytes")
+    generator = ImageGenerator(
+        image_client=image_client,
+        text_client=MockTextToTextClient(),
+    )
 
     prompt_text = "cached metrics frog"
 
     def fake_generate_prompt() -> str:
         return prompt_text
 
-    def fake_generate_image(prompt: str) -> bytes:
-        return b"cached-bytes"
-
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(side_effect=fake_generate_prompt))
     monkeypatch.setattr(generator, "_get_fallback_prompt", MagicMock(return_value=prompt_text))
-    monkeypatch.setattr(generator, "_generate_image", AsyncMock(side_effect=fake_generate_image))
 
     # Первый вызов создаёт запись и изображение.
     result1 = await generator.generate_frog_image(user_id=1)
@@ -373,18 +352,18 @@ async def test_generate_frog_image_records_error_on_exception(monkeypatch: Any, 
     При ошибке генерации должно писаться событие error.
     """
 
-    generator = ImageGenerator()
-    generator.gigachat_enabled = False
+    image_client = MockTextToImageClient()
+    generator = ImageGenerator(
+        image_client=image_client,
+        text_client=MockTextToTextClient(),
+    )
 
     def fake_generate_prompt() -> str:
         return "error frog prompt"
 
-    def failing_generate_image(prompt: str) -> bytes:
-        raise RuntimeError("boom")
-
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(side_effect=fake_generate_prompt))
     monkeypatch.setattr(generator, "_get_fallback_prompt", MagicMock(return_value="error frog prompt"))
-    monkeypatch.setattr(generator, "_generate_image", AsyncMock(side_effect=failing_generate_image))
+    monkeypatch.setattr(image_client, "generate", AsyncMock(side_effect=RuntimeError("boom")))
 
     result = await generator.generate_frog_image(user_id=555)
     assert result is None
@@ -399,12 +378,3 @@ async def test_generate_frog_image_records_error_on_exception(monkeypatch: Any, 
     assert errors, f"metrics_events rows={rows!r}"
     # Проверяем, что хотя бы одно событие ошибки относится к нашему пользователю.
     assert any(e["user_id"] == "555" for e in errors)
-
-
-def test_get_auth_headers() -> None:
-    generator = ImageGenerator()
-    headers = generator._get_auth_headers()
-    assert "X-Key" in headers
-    assert "X-Secret" in headers
-    assert isinstance(headers["X-Key"], str)
-    assert isinstance(headers["X-Secret"], str)

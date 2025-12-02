@@ -28,6 +28,9 @@ services:
     environment:
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
       HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
+      # Для выравнивания окружения с боевым docker-compose:
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
     ports:
       - "6379:6379"
     healthcheck:

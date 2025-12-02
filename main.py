@@ -6,7 +6,6 @@
 import asyncio
 import signal
 import sys
-import threading
 import types
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -17,9 +16,9 @@ from bot.support_bot import SupportBot
 from bot.wednesday_bot import WednesdayBot
 from utils.config import config
 from utils.logger import get_logger, log_event
-from utils.postgres_client import init_postgres_pool
+from utils.postgres_client import get_postgres_pool, init_postgres_pool
 from utils.postgres_schema import ensure_schema
-from utils.redis_client import init_redis_pool, redis_available
+from utils.redis_client import get_redis, init_redis_pool, redis_available
 
 if TYPE_CHECKING:
     from loguru import Logger as LoggerType
@@ -120,7 +119,6 @@ class BotRunner:
             await self._init_redis_if_configured()
             await self._init_postgres_if_configured()
             await ensure_schema()
-            await self._init_postgres_if_configured()
 
             # Общий цикл: сначала пробуем запускать основной бот; при остановке — включаем SupportBot
             self.logger.info("Настройка обработчиков сигналов в event loop")
@@ -556,10 +554,14 @@ def _init_sentry(logger: "LoggerType") -> None:
 
 def _start_health_server(logger: "LoggerType") -> None:
     """
-    Запускает HTTP‑сервер FastAPI с эндпоинтом /health в отдельном потоке.
+    Запускает HTTP‑сервер FastAPI с эндпоинтом /health в том же event loop,
+    в котором работает Telegram‑бот.
 
-    Сервер используется только для healthcheck и не обслуживает основной
-    Telegram‑бот. Его порт настраивается через переменную HEALTHCHECK_PORT.
+    ВАЖНО:
+    - не создаёт отдельный поток и не вызывает asyncio.run;
+    - использует реальные Redis/Postgres‑клиенты, инициализированные при старте
+      приложения (через utils.redis_client / utils.postgres_client);
+    - перед запуском uvicorn прокидывает эти клиенты в FastAPI‑приложение через app.state.
     """
     port = config.healthcheck_port
     if port is None:
@@ -578,33 +580,41 @@ def _start_health_server(logger: "LoggerType") -> None:
 
         from services.healthcheck import app as health_app
 
+        # Прокидываем реальные клиенты в FastAPI‑приложение healthcheck.
+        # Если инициализация не удалась — оставляем None, а сам healthcheck
+        # корректно отразит недоступность зависимостей.
+        try:
+            health_app.state.redis = get_redis()
+        except Exception:
+            health_app.state.redis = None
+
+        try:
+            health_app.state.postgres_pool = get_postgres_pool()
+        except Exception:
+            health_app.state.postgres_pool = None
+
         uvicorn_config = uvicorn.Config(
             app=health_app,
             host="0.0.0.0",
             port=port,
             log_level="info",
+            loop="asyncio",
         )
         server = uvicorn.Server(config=uvicorn_config)
 
-        def _run_server() -> None:
-            """
-            Фоновая функция для запуска uvicorn в отдельном потоке.
+        # Запускаем uvicorn в том же event loop, что и бот, и навешиваем callback
+        # для логирования аварийных завершений.
+        task = asyncio.create_task(server.serve(), name="healthcheck_server")
 
-            Вызывается как daemon‑поток, чтобы не блокировать основной
-            event loop бота. При завершении процесса поток завершается
-            автоматически.
-            """
+        def _on_done(t: asyncio.Task[object]) -> None:
             try:
-                asyncio.run(server.serve())
-            except Exception as exc:  # pragma: no cover - защитное логирование
-                logger.warning(f"Ошибка в фоновой задаче uvicorn health‑сервера: {exc!s}")
+                exc = t.exception()
+            except asyncio.CancelledError:
+                return
+            if exc is not None:
+                logger.error(f"Healthcheck server crashed: {exc!r}")
 
-        thread = threading.Thread(
-            target=_run_server,
-            name="healthcheck-server",
-            daemon=True,
-        )
-        thread.start()
+        task.add_done_callback(_on_done)
 
         logger.info(f"HTTP‑сервер healthcheck /health запущен на 0.0.0.0:{port}")
         log_event(
@@ -641,7 +651,7 @@ async def main() -> None:
         # чтобы метрики были доступны сразу после инициализации приложения.
         _start_prometheus_exporter(logger)
 
-        # Поднимаем HTTP‑сервер healthcheck (/health) в отдельном потоке.
+        # Поднимаем HTTP‑сервер healthcheck (/health) в том же event loop.
         _start_health_server(logger)
 
         runner = BotRunner()

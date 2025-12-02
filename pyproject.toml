@@ -149,6 +149,7 @@ warn_unused_ignores = true
 warn_return_any = true
 no_implicit_optional = true
 strict_equality = true
+exclude = "(?x)(^tests/_doubles/)"
 
 [[tool.mypy.overrides]]
 module = "tests.*"

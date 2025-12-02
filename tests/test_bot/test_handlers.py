@@ -683,7 +683,7 @@ async def test_set_gigachat_model_command_no_args(fake_update: Any, fake_context
 @pytest.mark.asyncio
 async def test_set_gigachat_model_command_no_client(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     image_generator = MagicMock()
-    image_generator.gigachat_client = None
+    image_generator.text_client = None
 
     handler = CommandHandlers(image_generator=image_generator, next_run_provider=None)
     async_retry_stub(handler)
@@ -705,11 +705,11 @@ async def test_set_gigachat_model_command_no_client(fake_update: Any, fake_conte
 
 @pytest.mark.asyncio
 async def test_set_gigachat_model_command_success(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
-    gigachat_client = MagicMock()
-    gigachat_client.set_model = MagicMock(return_value=True)
+    text_client = MagicMock()
+    text_client.set_model = AsyncMock(return_value=(True, "✅ Модель GigaChat установлена: GigaChat-Pro"))
 
     image_generator = MagicMock()
-    image_generator.gigachat_client = gigachat_client
+    image_generator.text_client = text_client
 
     handler = CommandHandlers(image_generator=image_generator, next_run_provider=None)
     async_retry_stub(handler)
@@ -727,6 +727,7 @@ async def test_set_gigachat_model_command_success(fake_update: Any, fake_context
     call = fake_update.message.reply_text.await_args
     text = call.kwargs.get("text", call.args[0])
     assert "✅" in text or "Модель GigaChat установлена" in text
+    text_client.set_model.assert_awaited_once_with("GigaChat-Pro")
 
 
 @pytest.mark.asyncio

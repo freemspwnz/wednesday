@@ -121,6 +121,8 @@ build:
 # Запуск бота в Docker-контейнерах (с пересборкой образа)
 run: build
 	@echo "=== Запуск бота в Docker-контейнерах ==="
+	@echo "Очистка старых контейнеров..."
+	@docker-compose down
 	@echo "Поднятие боевых контейнеров Postgres и Redis..."
 	@docker-compose up -d postgres redis
 	@echo "Ожидание готовности сервисов..."

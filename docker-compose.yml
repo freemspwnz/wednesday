@@ -10,9 +10,9 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - wednesday_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -34,7 +34,7 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
-      - wednesday_redis_data:/data
+      - redis_data:/data
     healthcheck:
       test: >
         sh -c "
@@ -79,6 +79,11 @@ services:
       # Переопределяем хосты для работы внутри docker-сети
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
+      # Выбор бэкендов моделей (через фабрику клиентов):
+      # - IMAGE_MODEL_BACKEND: kandinsky (по умолчанию)
+      # - TEXT_MODEL_BACKEND: gigachat (по умолчанию)
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
       # Порт HTTP‑экспортёра Prometheus (/metrics) внутри контейнера.
       # При необходимости может быть переопределён через переменную окружения.
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
@@ -116,8 +121,8 @@ services:
       retries: 3
 
 volumes:
-  wednesday_postgres_data:
-  wednesday_redis_data:
+  postgres_data:
+  redis_data:
   frog_images:
   logs:
   prompt_storage:

@@ -936,14 +936,14 @@ class CommandHandlers:
             # Проверяем GigaChat API без траты токенов
             gigachat_status: str = "N/A"
             current_gigachat: str | None = None
-            if self.image_generator.gigachat_client:
+            if self.image_generator.text_client:
                 try:
                     gigachat_ok: bool
-                    gigachat_ok, gigachat_status = self.image_generator.gigachat_client.check_api_status()
+                    gigachat_ok, gigachat_status = await self.image_generator.text_client.check_api_status()
                     if not gigachat_ok:
                         self.logger.warning(f"Проверка API GigaChat не прошла: {gigachat_status}")
                     # Получаем доступные модели GigaChat
-                    _gigachat_models = self.image_generator.gigachat_client.get_available_models()
+                    _gigachat_models = await self.image_generator.text_client.get_available_models()
                     from utils.models_store import ModelsStore
 
                     models_store = ModelsStore()
@@ -1616,7 +1616,7 @@ class CommandHandlers:
 
         model_name = context.args[0]
 
-        if not self.image_generator.gigachat_client:
+        if not self.image_generator.text_client:
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
@@ -1629,21 +1629,13 @@ class CommandHandlers:
             return
 
         try:
-            success = self.image_generator.gigachat_client.set_model(model_name)
-            if success:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"✅ Модель GigaChat установлена: {model_name}",
-                    max_retries=3,
-                    delay=2,
-                )
-            else:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ Модель {model_name} не найдена в списке доступных",
-                    max_retries=3,
-                    delay=2,
-                )
+            _, message = await self.image_generator.text_client.set_model(model_name)
+            await self._retry_on_connect_error(
+                update.message.reply_text,
+                message,
+                max_retries=3,
+                delay=2,
+            )
         except Exception as e:
             self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
 
@@ -1884,8 +1876,8 @@ class CommandHandlers:
 
             # Получаем модели GigaChat
             try:
-                if self.image_generator.gigachat_client:
-                    gigachat_models = self.image_generator.gigachat_client.get_available_models()
+                if self.image_generator.text_client:
+                    gigachat_models = await self.image_generator.text_client.get_available_models()
                     from utils.models_store import ModelsStore
 
                     models_store = ModelsStore()

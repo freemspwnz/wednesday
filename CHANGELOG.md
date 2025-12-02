@@ -49,6 +49,11 @@
       - Postgres‑таблице `metrics_events` (для подробной аналитики и SQL‑отчётов),
       - Prometheus‑метриках (`frog_generations_total`, `frog_generation_latency_seconds`), что позволяет строить Grafana‑дашборды и алерты без дополнительного кода;
     - при ошибках записи метрик в Redis/Postgres или экспорте в Prometheus горячий путь генерации не блокируется (ошибки логируются как best‑effort).
+- **Абстракция API‑клиентов и Dependency Injection**:
+  - `services.image_generator.ImageGenerator` переведён на DI: вместо прямой работы с HTTP теперь использует абстракции клиентов `ITextToImageClient` и `ITextToTextClient`, а конкретные реализации выбираются через фабрики `services.clients.factory` по ENV (`IMAGE_MODEL_BACKEND`, `TEXT_MODEL_BACKEND`).
+  - Вся HTTP‑логика Kandinsky вынесена в `services/clients/kandinsky.py (KandinskyClient)`, где реализованы запросы к `pipelines`, запуск и опрос статуса генерации, а также структурированное JSON‑логирование через Loguru (`logger.bind(event=..., user_id=...)`); бизнес‑логика кеша/метрик и circuit breaker осталась в `ImageGenerator`.
+  - **Полное вынесение GigaChat клиента**: `services/clients/gigachat_text.py (GigaChatTextClient)` теперь полностью инкапсулирует всю HTTP‑логику работы с GigaChat API (получение токенов через OAuth2, запросы к `/chat/completions` и `/models`, обработка ошибок и таймаутов) с использованием `aiohttp` вместо синхронного `requests`. Интерфейс `ITextToTextClient` расширен методами `check_api_status()`, `get_available_models()` и `set_model()` для полной заменяемости текстовых моделей. Обработчики в `bot/handlers.py` обновлены для использования `text_client` вместо устаревшего `gigachat_client`, а `ImageGenerator` больше не содержит `gigachat_client` — все операции выполняются через абстракцию `ITextToTextClient`.
+  - Добавлены структурные Protocol‑интерфейсы `ITextToImageClient` и `ITextToTextClient` в `services/clients/interfaces.py` и тестовые моки `MockTextToImageClient`/`MockTextToTextClient` в `tests/_doubles/clients.py` (с полной реализацией всех методов интерфейса); тесты `tests/test_services/test_image_generator.py` переписаны под новую архитектуру и используют DI вместо патчинга внутренней HTTP‑логики.
 
 ### Откат
 - Для возврата к предыдущей схеме логирования достаточно:

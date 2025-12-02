@@ -162,7 +162,7 @@ POSTGRES_USER=your_postgres_user
 POSTGRES_PASSWORD=your_postgres_password
 
 # Имя базы данных
-POSTGRES_DB=wednesdaydb
+POSTGRES_DB=your_postgres_db
 
 # Хост PostgreSQL
 # Для локальной разработки: localhost

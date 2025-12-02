@@ -29,6 +29,25 @@ class _DummyPgPool:
         return _DummyPgAcquire()
 
 
+class _FailingPgAcquire:
+    """Контекстный менеджер для acquire, который выбрасывает исключение при входе."""
+
+    async def __aenter__(self) -> None:
+        import asyncpg
+
+        raise asyncpg.PostgresError("Connection refused")
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        return None
+
+
+class _FailingPgPool:
+    """Postgres пул, который выбрасывает исключение при acquire, симулируя недоступность."""
+
+    def acquire(self) -> _FailingPgAcquire:
+        return _FailingPgAcquire()
+
+
 class _DummyRedis:
     async def ping(self) -> bool:
         return True
@@ -36,6 +55,20 @@ class _DummyRedis:
     async def xinfo_stream(self, name: str) -> dict[str, Any]:
         # Для healthcheck нам не важны конкретные поля, достаточно успешного вызова.
         return {"length": 0}
+
+
+class _FailingRedis:
+    """Redis‑клиент, который выбрасывает исключение при ping/stream, симулируя недоступность."""
+
+    async def ping(self) -> bool:
+        from redis.exceptions import RedisError
+
+        raise RedisError("Connection refused")
+
+    async def xinfo_stream(self, name: str) -> dict[str, Any]:
+        from redis.exceptions import RedisError
+
+        raise RedisError("Connection refused")
 
 
 @pytest.fixture()
@@ -48,11 +81,10 @@ def test_health_all_dependencies_up(monkeypatch: pytest.MonkeyPatch, client: Tes
     """Проверяем, что при доступных Redis/Postgres/очереди возвращается 200 и status=up."""
     from services import healthcheck
 
-    # Redis доступен, используем реальный (заглушечный) клиент.
-    monkeypatch.setattr(healthcheck, "redis_available", lambda: True)
-    monkeypatch.setattr(healthcheck, "get_redis", _DummyRedis)
-    # Postgres пул успешно возвращается и выполняет SELECT 1.
-    monkeypatch.setattr(healthcheck, "get_postgres_pool", _DummyPgPool)
+    # Патчим функции в модуле healthcheck, где они импортированы.
+    # Также устанавливаем app.state, чтобы тесты использовали моки напрямую.
+    healthcheck.app.state.redis = _DummyRedis()
+    healthcheck.app.state.postgres_pool = _DummyPgPool()
 
     response = client.get("/health")
 
@@ -68,10 +100,10 @@ def test_health_redis_down_returns_503(monkeypatch: pytest.MonkeyPatch, client: 
     """Если Redis недоступен, healthcheck должен вернуть 503 и status=down."""
     from services import healthcheck
 
-    # Redis недоступен (используется in‑memory fallback).
-    monkeypatch.setattr(healthcheck, "redis_available", lambda: False)
+    # Redis недоступен - устанавливаем клиент, который выбрасывает исключение.
+    healthcheck.app.state.redis = _FailingRedis()
     # Postgres при этом доступен.
-    monkeypatch.setattr(healthcheck, "get_postgres_pool", _DummyPgPool)
+    healthcheck.app.state.postgres_pool = _DummyPgPool()
 
     response = client.get("/health")
 
@@ -82,18 +114,13 @@ def test_health_redis_down_returns_503(monkeypatch: pytest.MonkeyPatch, client: 
 
 
 def test_health_postgres_down_returns_503(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
-    """Если Postgres не инициализирован, healthcheck должен вернуть 503 и status=down."""
+    """Если Postgres недоступен, healthcheck должен вернуть 503 и status=down."""
     from services import healthcheck
 
-    # Redis доступен, но Postgres пул не инициализирован.
-    monkeypatch.setattr(healthcheck, "redis_available", lambda: True)
-    monkeypatch.setattr(healthcheck, "get_redis", _DummyRedis)
-
-    class _RaisesRuntimeError:
-        def __call__(self) -> None:
-            raise RuntimeError("Postgres pool not initialized")
-
-    monkeypatch.setattr(healthcheck, "get_postgres_pool", _RaisesRuntimeError())
+    # Redis доступен.
+    healthcheck.app.state.redis = _DummyRedis()
+    # Postgres пул выбрасывает исключение при использовании (симулируя недоступность).
+    healthcheck.app.state.postgres_pool = _FailingPgPool()
 
     response = client.get("/health")
 
