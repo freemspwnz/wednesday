@@ -32,6 +32,7 @@ from utils.images_store import ImagesStore
 from utils.logger import get_logger, log_all_methods, log_event
 from utils.metrics import record_metric
 from utils.paths import FROG_IMAGES_CONTAINER_PATH, FROG_IMAGES_DIR, resolve_frog_images_dir
+from utils.prometheus_metrics import FROG_GENERATION_LATENCY_SECONDS, FROG_GENERATIONS_TOTAL
 from utils.prompts_store import PromptsStore
 
 # Константы для магических чисел
@@ -186,6 +187,14 @@ class ImageGenerator:
                         f"до окончания окна cooldown ({remaining} c)"
                     ),
                 )
+                # Фиксируем факт "пропущенной" генерации в Prometheus.
+                # Отдельно считаем такие случаи как failure, чтобы в Grafana
+                # можно было увидеть влияние circuit breaker на общий success rate.
+                try:
+                    FROG_GENERATIONS_TOTAL.labels(status="failure", source="bot").inc()
+                except Exception:
+                    # Метрики никогда не должны ломать горячий путь генерации.
+                    pass
                 if metrics:
                     try:
                         await metrics.increment_circuit_breaker_trip()
@@ -346,6 +355,14 @@ class ImageGenerator:
                             self.logger.warning(
                                 f"Не удалось обновить метрики для кеш‑хита генерации: {exc}",
                             )
+                    # Обновляем Prometheus‑метрики: кеш‑хит считаем успешной генерацией
+                    # без запроса к внешнему API, с фактической латентностью.
+                    try:
+                        FROG_GENERATIONS_TOTAL.labels(status="success", source="bot").inc()
+                        FROG_GENERATION_LATENCY_SECONDS.labels(status="success", source="bot").observe(elapsed)
+                    except Exception:
+                        pass
+
                     # Логируем событие cache_hit в Postgres.
                     try:
                         await record_metric(
@@ -470,6 +487,13 @@ class ImageGenerator:
                                 await metrics.increment_generation_retry()
                         except Exception as exc:
                             self.logger.warning(f"Не удалось обновить метрики успешной генерации: {exc}")
+                    # Обновляем Prometheus‑метрики для успешной "живой" генерации.
+                    try:
+                        FROG_GENERATIONS_TOTAL.labels(status="success", source="bot").inc()
+                        FROG_GENERATION_LATENCY_SECONDS.labels(status="success", source="bot").observe(elapsed)
+                    except Exception:
+                        pass
+
                     # Логируем событие успешной генерации.
                     image_hash: str | None = None
                     if images_store is not None and prompt_hash:
@@ -576,6 +600,12 @@ class ImageGenerator:
                     level="warning",
                     message="Не удалось обновить метрики неуспешной генерации",
                 )
+
+        # Фиксируем итоговый неуспех генерации в Prometheus‑счётчике.
+        try:
+            FROG_GENERATIONS_TOTAL.labels(status="failure", source="bot").inc()
+        except Exception:
+            pass
 
         # Финальное событие ошибки (если так и не получили результат).
         try:

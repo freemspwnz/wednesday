@@ -8,15 +8,20 @@ import signal
 import sys
 import types
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from prometheus_client import start_http_server
 
 from bot.support_bot import SupportBot
 from bot.wednesday_bot import WednesdayBot
 from utils.config import config
-from utils.logger import get_logger
+from utils.logger import get_logger, log_event
 from utils.postgres_client import init_postgres_pool
 from utils.postgres_schema import ensure_schema
 from utils.redis_client import init_redis_pool, redis_available
+
+if TYPE_CHECKING:
+    from loguru import Logger as LoggerType
 
 # Константы вместо чисел
 SLEEP_BETWEEN_BOTS_SECONDS = 5.0
@@ -448,6 +453,45 @@ class BotRunner:
             self.logger.error(f"Ошибка при остановке SupportBot: {e}", exc_info=True)
 
 
+def _start_prometheus_exporter(logger: "LoggerType") -> None:
+    """
+    Запускает HTTP‑экспортёр Prometheus для эндпоинта /metrics в отдельном потоке.
+
+    Порт берётся из конфигурации (PROMETHEUS_EXPORTER_PORT). Если переменная
+    не задана или содержит некорректное значение, экспортер не запускается.
+    """
+    port = config.prometheus_exporter_port
+    if port is None or port <= 0:
+        logger.info("Prometheus‑экспортёр отключён (PROMETHEUS_EXPORTER_PORT не задан или некорректен)")
+        log_event(
+            event="prometheus_exporter_disabled",
+            status="disabled",
+            extra={"raw_port_value": port},
+            level="info",
+            message="HTTP‑экспортёр Prometheus отключён конфигурацией",
+        )
+        return
+    try:
+        start_http_server(port)
+        logger.info(f"Prometheus /metrics экспортёр запущен на 0.0.0.0:{port}")
+        log_event(
+            event="prometheus_exporter_started",
+            status="ok",
+            extra={"port": port},
+            level="info",
+            message="HTTP‑экспортёр Prometheus успешно запущен",
+        )
+    except Exception as exc:  # pragma: no cover - защитное логирование
+        logger.warning(f"Не удалось запустить Prometheus‑экспортёр на порту {port}: {exc}")
+        log_event(
+            event="prometheus_exporter_failed",
+            status="error",
+            extra={"port": port, "error": str(exc)},
+            level="warning",
+            message="Ошибка запуска HTTP‑экспортёра Prometheus",
+        )
+
+
 async def main() -> None:
     """
     Главная функция приложения.
@@ -455,6 +499,10 @@ async def main() -> None:
     logger = get_logger(__name__)
     logger.info("Начало выполнения функции main()")
     try:
+        # Запускаем HTTP‑экспортёр Prometheus до старта основного цикла бота,
+        # чтобы метрики были доступны сразу после инициализации приложения.
+        _start_prometheus_exporter(logger)
+
         runner = BotRunner()
         logger.info("BotRunner создан, запуск метода run()")
         await runner.run()

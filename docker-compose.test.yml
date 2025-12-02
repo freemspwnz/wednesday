@@ -6,6 +6,10 @@ services:
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_password_ci_2024
       POSTGRES_DB: wednesdaydb_test
+      # Прокидываем переменную для единообразия окружения с боевым docker-compose.
+      # В тестовом окружении HTTP‑экспортёр не запускается, но переменная
+      # доступна для интеграционных тестов и future‑service'ов.
+      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
     ports:
       - "5432:5432"
     healthcheck:
@@ -19,6 +23,8 @@ services:
   redis_test:
     image: redis:7-alpine
     container_name: wednesday_redis_test
+    environment:
+      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
     ports:
       - "6379:6379"
     healthcheck:

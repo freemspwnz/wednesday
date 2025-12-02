@@ -177,6 +177,30 @@ class Config:  # noqa: PLR0904
         return Config._get_env_var("LOG_LEVEL") or "INFO"
 
     @property
+    def prometheus_exporter_port(self) -> int | None:
+        """
+        Порт HTTP‑экспортера Prometheus для эндпоинта /metrics.
+
+        Если переменная PROMETHEUS_EXPORTER_PORT не задана или содержит
+        некорректное значение, экспортер считается отключённым.
+        """
+        value = Config._get_env_var("PROMETHEUS_EXPORTER_PORT")
+        if not value:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            # Используем стандартный logging, чтобы не тянуть utils.logger
+            # и не создавать циклические зависимости на этапе конфигурации.
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Некорректное значение PROMETHEUS_EXPORTER_PORT={value}, экспортер будет отключён",
+            )
+            return None
+
+    @property
     def generation_timeout(self) -> int:
         """
         Таймаут для генерации изображения в секундах.

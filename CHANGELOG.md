@@ -14,16 +14,43 @@
   - В `services/image_generator.ImageGenerator.generate_frog_image()` и связанных методах добавлены вызовы `log_event(...)` для ключевых этапов: `generation_started`, `generation_caption_selected`, `prompt_selected`, `prompt_registered`, `image_cache_hit`, `image_cache_file_missing`, `image_metadata_saved`, `image_metadata_race_won`, `generation_api_ok`, `generation_attempt`, `generation_attempt_failed`, `generation_attempt_exception`, `generation_exhausted` и др.
   - Во все события передаются типизированные поля: `user_id` (Telegram user id), `prompt_hash`, `image_id` (hash/ID изображения), `latency_ms` (при наличии измерений) и `status` (`ok`, `error`, `cached`, `started`, `reused`, `missing_file`, `redis_unavailable` и т.п.).
   - Логи по circuit breaker Kandinsky (`generation_skipped_circuit_breaker`, `circuit_breaker_check_failed`, `circuit_breaker_record_failure_failed`) теперь тоже структурированы и легко агрегируются по полям статуса и типу ошибки.
+- **Prometheus‑метрики и HTTP‑экспортёр `/metrics`**:
+  - Добавлен модуль `utils/prometheus_metrics.py` с базовыми метриками генераций:
+    - `frog_generations_total{status,source}` — счётчик всех попыток генерации жабы (успехи/ошибки/circuit breaker) с указанием источника (`bot`/`scheduler`).
+    - `frog_generation_latency_seconds{status,source}` — гистограмма латентности генераций в секундах с набором бакетов под типичный диапазон (от кэш‑хитов до медленных ответов внешнего API).
+    - `frog_generation_queue_length{source}` — gauge для текущей длины очереди задач генерации (если используется явная очередь).
+  - В `services/image_generator.ImageGenerator.generate_frog_image()` добавлена интеграция с Prometheus:
+    - при кеш‑хите (`image_cache_hit`) и успешной “живой” генерации увеличивается `frog_generations_total{status="success",source="bot"}` и наблюдается `frog_generation_latency_seconds{status="success",source="bot"}` с фактической латентностью;
+    - при срабатывании circuit breaker (`generation_skipped_circuit_breaker`) и окончательном провале всех попыток генерации увеличивается `frog_generations_total{status="failure",source="bot"}`.
+  - В `main.py` реализован запуск HTTP‑экспортёра Prometheus:
+    - конфигурационный параметр `PROMETHEUS_EXPORTER_PORT` добавлен в `utils.config.Config` (`config.prometheus_exporter_port`);
+    - вспомогательная функция `_start_prometheus_exporter(...)` поднимает HTTP‑endpoint `/metrics` через `prometheus_client.start_http_server(port)` и логирует события через `log_event` (`prometheus_exporter_started` / `prometheus_exporter_disabled` / `prometheus_exporter_failed`);
+    - экспортёр стартует до запуска основного цикла бота, чтобы метрики были доступны сразу.
+  - Добавлены unit‑тесты `tests/test_utils/test_prometheus_metrics.py`, проверяющие:
+    - инкремент счётчика `frog_generations_total`;
+    - работу гистограммы латентности (увеличение счётчика наблюдений);
+    - обновление gauge длины очереди;
+    - доступность HTTP‑эндпоинта `/metrics` и наличие метрики `frog_generations_total` в ответе.
+  - В `docker-compose.yml` и `docker-compose.test.yml` добавлена переменная окружения `PROMETHEUS_EXPORTER_PORT` и проброс порта для сервиса `bot`, что упрощает настройку Prometheus/Grafana в проде и тестовых средах.
+
 
 ### Изменено
 - **Интеграция метрик и логирования**:
   - `utils.metrics.record_metric(...)` по‑прежнему записывает события в Redis Stream `metrics:events` и таблицу `metrics_events`, а сопутствующее логирование теперь дополняется структурированными событиями `log_event(...)` в генераторе изображений.
   - В `ImageGenerator` все места, где ранее использовались только `self.logger.info/warning/error`, для критичных бизнес‑событий дополнены вызовами `log_event(...)`, что обеспечивает согласованный формат логов и облегчает построение дашбордов по полям `user_id`, `prompt_hash`, `image_id`, `latency_ms`, `status`.
+  - Интеграция событийной системы метрик (`metrics_events`) и Prometheus:
+    - успешные и неуспешные генерации, кеш‑хиты и срабатывания circuit breaker теперь одновременно отражаются в:
+      - Postgres‑таблице `metrics_events` (для подробной аналитики и SQL‑отчётов),
+      - Prometheus‑метриках (`frog_generations_total`, `frog_generation_latency_seconds`), что позволяет строить Grafana‑дашборды и алерты без дополнительного кода;
+    - при ошибках записи метрик в Redis/Postgres или экспорте в Prometheus горячий путь генерации не блокируется (ошибки логируются как best‑effort).
 
 ### Откат
 - Для возврата к предыдущей схеме логирования достаточно:
   - удалить новый sink с `serialize=True` и функцию `log_event` из `utils/logger.py`;
   - заменить вызовы `log_event(...)` в `services/image_generator.py` и тест `tests/test_utils/test_logger_events.py` на прямые вызовы `logger.info()/warning()/error()` при необходимости.
+  - При необходимости отключения Prometheus‑экспортёра достаточно:
+    - убрать переменную окружения `PROMETHEUS_EXPORTER_PORT` (или задать неположительное значение) — HTTP‑endpoint `/metrics` не будет запускаться;
+    - опционально удалить модуль `utils/prometheus_metrics.py` и связанные тесты, а также удалить зависимость `prometheus_client` из `requirements.txt` и `pyproject.toml`.
 
 ---
 

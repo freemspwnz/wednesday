@@ -79,6 +79,9 @@ services:
       # Переопределяем хосты для работы внутри docker-сети
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
+      # Порт HTTP‑экспортёра Prometheus (/metrics) внутри контейнера.
+      # При необходимости может быть переопределён через переменную окружения.
+      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
     volumes:
       # Хранилище сгенерированных изображений жабы.
       # Внутри контейнера бот читает/пишет только в /app/data/frogs.
@@ -91,6 +94,11 @@ services:
       - prompt_storage:/app/data/prompts
     networks:
       - default
+    ports:
+      # Пробрасываем порт экспортёра Prometheus наружу:
+      # - внутри контейнера и снаружи используется одно и то же значение,
+      #   чтобы избежать путаницы при настройке Prometheus/Grafana.
+      - "${PROMETHEUS_EXPORTER_PORT:-8000}:${PROMETHEUS_EXPORTER_PORT:-8000}"
 
 volumes:
   wednesday_postgres_data:

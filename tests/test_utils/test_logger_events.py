@@ -37,20 +37,25 @@ def test_log_event_produces_structured_json() -> None:
 
     data = json.loads(raw)
 
-    # Базовые поля loguru (time, level, message) должны присутствовать.
-    assert "time" in data
-    assert "level" in data
-    assert data["message"] == "hello"
+    # В serialize-формате loguru основные поля находятся внутри ключа "record".
+    record = data.get("record")
+    assert isinstance(record, dict), "ожидали, что корень JSON содержит ключ 'record' с данными события"
 
-    # Стандартные поля обёртки log_event.
-    assert data["event"] == "test_event"
-    assert data["user_id"] == "123"  # приводим к строке
-    assert data["prompt_hash"] == "phash"
-    assert data["image_id"] == "ihash"
-    assert data["latency_ms"] == LATENCY_TEST_VALUE_MS
-    assert data["status"] == "ok"
+    # Базовые поля loguru (time, level, message) должны присутствовать.
+    assert "time" in record
+    assert "level" in record
+    assert record["message"] == "hello"
+
+    # Стандартные поля обёртки log_event живут в record["extra"].
+    extra = record.get("extra") or {}
+    assert extra["event"] == "test_event"
+    assert extra["user_id"] == "123"  # приводим к строке
+    assert extra["prompt_hash"] == "phash"
+    assert extra["image_id"] == "ihash"
+    assert extra["latency_ms"] == LATENCY_TEST_VALUE_MS
+    assert extra["status"] == "ok"
 
     # Дополнительные поля из extra.
-    assert data["foo"] == "bar"
+    assert extra["foo"] == "bar"
     # Поля со значением None не должны попадать в JSON.
-    assert "skip_none" not in data
+    assert "skip_none" not in extra
