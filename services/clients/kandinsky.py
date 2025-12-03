@@ -244,8 +244,48 @@ class KandinskyClient(ITextToImageClient):
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             return False, f"❌ Ошибка подключения: {str(exc)[:50]}", [], (None, None)
 
-    async def set_kandinsky_model(self, model_identifier: str) -> tuple[bool, str]:
-        """Устанавливает модель (pipeline) по ID или части названия."""
+    async def get_available_models(self, save_models: bool = True) -> list[str]:
+        """Возвращает список доступных моделей Kandinsky.
+
+        Args:
+            save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
+
+        Returns:
+            Список доступных моделей в формате "Name (ID: xxx)" или пустой список при ошибке.
+        """
+        bound = logger.bind(event="kandinsky_get_available_models", save_models=save_models)
+        bound.debug("Запрос списка доступных моделей Kandinsky")
+
+        # Пытаемся получить через check_api_status, который уже возвращает список моделей
+        try:
+            _status_ok, _status_msg, models_list, _current = await self.check_api_status(save_models=save_models)
+            if models_list:
+                bound.debug("Получен список из {} моделей через check_api_status", len(models_list))
+                return models_list
+        except Exception as exc:
+            bound.warning("Не удалось получить модели через check_api_status: {}", str(exc))
+
+        # Fallback: пытаемся получить из хранилища
+        try:
+            from utils.models_store import ModelsStore
+
+            models_store = ModelsStore()
+            stored_models = await models_store.get_kandinsky_available_models()
+            if stored_models:
+                bound.debug("Получен список из {} моделей из хранилища", len(stored_models))
+                return stored_models
+        except Exception as exc:
+            bound.warning("Не удалось получить модели из хранилища: {}", str(exc))
+
+        # Если ничего не получилось, возвращаем пустой список
+        bound.warning("Не удалось получить список моделей, возвращаем пустой список")
+        return []
+
+    async def set_model(self, model_identifier: str) -> tuple[bool, str]:
+        """Устанавливает текущую модель (pipeline) по ID или части названия.
+
+        Этот метод является унифицированным интерфейсом ITextToImageClient.
+        """
         bound = logger.bind(event="kandinsky_set_model", model_identifier=model_identifier)
 
         try:
@@ -574,3 +614,18 @@ class KandinskyClient(ITextToImageClient):
             MAX_STATUS_ATTEMPTS,
         )
         return None
+
+    async def aclose(self) -> None:
+        """
+        Закрывает клиент и освобождает ресурсы.
+
+        В текущей реализации KandinskyClient не использует долгоживущие соединения
+        (сессии создаются в контекстных менеджерах и автоматически закрываются),
+        поэтому метод оставлен пустым для консистентности интерфейса с другими
+        клиентами и возможности расширения в будущем.
+        """
+        # В текущей реализации не требуется явного закрытия ресурсов,
+        # так как все aiohttp.ClientSession создаются в контекстных менеджерах
+        # и автоматически закрываются. Метод добавлен для консистентности
+        # интерфейса и поддержки паттерна динамической замены клиентов.
+        pass

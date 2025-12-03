@@ -22,6 +22,7 @@ from typing import Final
 
 from services.clients import ITextToImageClient, ITextToTextClient
 from services.clients.gigachat_text import GigaChatTextClient
+from services.clients.image_client_container import get_image_client_container
 from services.clients.kandinsky import KandinskyClient
 from services.clients.text_client_container import get_text_client_container
 from utils.logger import get_logger
@@ -33,14 +34,25 @@ DEFAULT_TEXT_BACKEND: Final[str] = "gigachat"
 
 
 def create_image_client() -> ITextToImageClient:
-    """Создаёт клиент генерации изображений в соответствии с `IMAGE_MODEL_BACKEND`.
+    """Создаёт/возвращает контейнер клиента генерации изображений в соответствии с `IMAGE_MODEL_BACKEND`.
 
-    Сейчас поддерживается один бэкенд:
+    Архитектура:
+    - фабрика больше не возвращает «сырую» реализацию (`KandinskyClient`);
+      вместо этого она инициализирует глобальный контейнер
+      `ImageClientContainer`, который реализует `ITextToImageClient` и
+      проксирует вызовы к текущему активному клиенту;
+    - все сервисы (например, `ImageGenerator`, обработчики команд) должны
+      зависеть от результата этой функции и вызывать методы интерфейса
+      (`generate`) на контейнере;
+    - в будущем админ‑команды смогут заменить реальный клиент внутри
+      контейнера без рестарта бота (через `replace_client()`), при этом
+      существующие ссылки на контейнер останутся валидными.
 
-    - ``kandinsky`` — клиент `KandinskyClient` (по умолчанию).
+    Поддерживаемые значения `IMAGE_MODEL_BACKEND`:
+    - ``kandinsky`` (или пустое значение) — клиент `KandinskyClient`.
 
-    При неизвестном значении переменной окружения логируем предупреждение и
-    возвращаем `KandinskyClient` как безопасный дефолт.
+    При неизвестном значении логируем предупреждение и используем Kandinsky
+    как безопасный дефолт.
     """
     backend = os.getenv("IMAGE_MODEL_BACKEND", DEFAULT_IMAGE_BACKEND).lower()
     if backend != "kandinsky":
@@ -48,7 +60,18 @@ def create_image_client() -> ITextToImageClient:
             "Неизвестный IMAGE_MODEL_BACKEND=%r, будет использован kandinsky",
             backend,
         )
-    return KandinskyClient()
+
+    # Создаём реальный HTTP‑клиент один раз и регистрируем его в singleton‑контейнере.
+    # Контейнер реализует интерфейс `ITextToImageClient`, так что вызывающий код
+    # продолжает работать через те же методы (`generate`),
+    # но теперь с возможностью безопасной замены клиента в рантайме.
+    kandinsky_client = KandinskyClient()
+
+    container = get_image_client_container()
+    # Инициализируем контейнер только один раз; последующие вызовы фабрики
+    # вернут тот же контейнер без повторной замены клиента.
+    container.set_initial_client(kandinsky_client)
+    return container
 
 
 def create_text_client() -> ITextToTextClient | None:

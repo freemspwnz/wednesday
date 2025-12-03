@@ -1566,7 +1566,7 @@ class CommandHandlers:
             self.logger.error(f"Не удалось отправить сообщение о начале установки после {3} попыток: {e}")
 
         try:
-            success, message = await self.image_generator.set_kandinsky_model(model_arg)
+            success, message = await self.image_generator.image_client.set_model(model_arg)
             if success:
                 await self._retry_on_connect_error(
                     update.message.reply_text,

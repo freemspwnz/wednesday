@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from services.clients.image_client_container import ImageClientContainer
 from services.image_generator import ImageGenerator
 from tests._doubles.clients import MockTextToImageClient, MockTextToTextClient
 from utils.images_store import ImagesStore
@@ -71,10 +72,12 @@ def test_save_image_locally_handles_error(monkeypatch: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_generate_frog_image_success(monkeypatch: Any) -> None:
-    image_client = MockTextToImageClient()
-    image_client.set_response(b"img")
+    # Создаём мок с правильным ответом и новый контейнер для каждого теста
+    image_client = MockTextToImageClient(generate_response=b"img")
+    container = ImageClientContainer()
+    container.set_initial_client(image_client)
     generator = ImageGenerator(
-        image_client=image_client,
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
@@ -99,9 +102,12 @@ async def test_generate_frog_image_uses_cache_on_existing_prompt_hash(monkeypatc
     а не вызывать живую генерацию второй раз.
     """
 
-    image_client = MockTextToImageClient()
+    # Создаём мок с правильным ответом и новый контейнер для каждого теста
+    image_client = MockTextToImageClient(generate_response=b"cached-image-bytes")
+    container = ImageClientContainer()
+    container.set_initial_client(image_client)
     generator = ImageGenerator(
-        image_client=image_client,
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
@@ -109,9 +115,6 @@ async def test_generate_frog_image_uses_cache_on_existing_prompt_hash(monkeypatc
 
     def fake_generate_prompt() -> str:
         return prompt_text
-
-    # Живая генерация возвращает фиксированные байты; следим за количеством вызовов через mock.
-    image_client.set_response(b"cached-image-bytes")
 
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(side_effect=fake_generate_prompt))
     monkeypatch.setattr(generator, "_get_fallback_prompt", MagicMock(return_value=prompt_text))
@@ -143,14 +146,20 @@ async def test_generate_frog_image_uses_cache_on_existing_prompt_hash(monkeypatc
 
 @pytest.mark.asyncio
 async def test_generate_frog_image_network_error(monkeypatch: Any) -> None:
+    # Создаём мок и новый контейнер для каждого теста
     image_client = MockTextToImageClient()
+    container = ImageClientContainer()
+    container.set_initial_client(image_client)
     generator = ImageGenerator(
-        image_client=image_client,
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(return_value="frog prompt"))
-    monkeypatch.setattr(image_client, "generate", AsyncMock(side_effect=Exception("network")))
+    # Патчим underlying клиент в контейнере
+    underlying = container.get_client()
+    assert underlying is not None
+    monkeypatch.setattr(underlying, "generate", AsyncMock(side_effect=Exception("network")))
 
     result = await generator.generate_frog_image(user_id=777)
 
@@ -203,45 +212,40 @@ def test_get_random_saved_image_with_files(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_kandinsky_model_success(monkeypatch: Any, cleanup_tables: Any) -> None:
-    from services.clients.kandinsky import KandinskyClient
+async def test_set_model_success(monkeypatch: Any, cleanup_tables: Any) -> None:
+    # Создаём мок и новый контейнер для каждого теста
+    mock_client = MockTextToImageClient(
+        set_model_response=(True, "Модель установлена: Model One (ID: p1)"),
+    )
+    container = ImageClientContainer()
+    container.set_initial_client(mock_client)
 
     generator = ImageGenerator(
-        image_client=MockTextToImageClient(),
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
-    kandinsky_client = KandinskyClient()
-    monkeypatch.setattr(
-        kandinsky_client,
-        "set_kandinsky_model",
-        AsyncMock(return_value=(True, "Модель установлена: Model One (ID: p1)")),
-    )
-    generator._kandinsky_client = kandinsky_client
-
-    success, message = await generator.set_kandinsky_model("p1")
+    success, message = await generator.image_client.set_model("p1")
     assert success is True
     assert "установлена" in message.lower() or "успешно" in message.lower()
 
 
 @pytest.mark.asyncio
-async def test_set_kandinsky_model_not_found(monkeypatch: Any) -> None:
-    from services.clients.kandinsky import KandinskyClient
+async def test_set_model_not_found(monkeypatch: Any) -> None:
+    # Создаём мок с правильным ответом и новый контейнер для каждого теста
+    mock_client = MockTextToImageClient(
+        set_model_response=(False, "Модель 'nonexistent' не найдена"),
+    )
+    container = ImageClientContainer()
+    container.set_initial_client(mock_client)
 
     generator = ImageGenerator(
-        image_client=MockTextToImageClient(),
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
-    kandinsky_client = KandinskyClient()
-    monkeypatch.setattr(
-        kandinsky_client,
-        "set_kandinsky_model",
-        AsyncMock(return_value=(False, "Модель 'nonexistent' не найдена")),
-    )
-    generator._kandinsky_client = kandinsky_client
-
-    success, message = await generator.set_kandinsky_model("nonexistent")
+    # Используем image_client напрямую (контейнер проксирует к моку)
+    success, message = await generator.image_client.set_model("nonexistent")
     assert success is False
     assert "не найдена" in message.lower() or "не найдено" in message.lower()
 
@@ -254,10 +258,12 @@ async def test_generate_frog_image_records_metrics_events_success(monkeypatch: A
     - generation/ok с ненулевой latency и заполненными hash.
     """
 
-    image_client = MockTextToImageClient()
-    image_client.set_response(b"img-metrics")
+    # Создаём мок с правильным ответом и новый контейнер для каждого теста
+    image_client = MockTextToImageClient(generate_response=b"img-metrics")
+    container = ImageClientContainer()
+    container.set_initial_client(image_client)
     generator = ImageGenerator(
-        image_client=image_client,
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
@@ -305,10 +311,12 @@ async def test_generate_frog_image_records_cache_hit(monkeypatch: Any, cleanup_t
     При cache hit должно писаться событие cache_hit с latency_ms=0 и status='cached'.
     """
 
-    image_client = MockTextToImageClient()
-    image_client.set_response(b"cached-bytes")
+    # Создаём мок с правильным ответом и новый контейнер для каждого теста
+    image_client = MockTextToImageClient(generate_response=b"cached-bytes")
+    container = ImageClientContainer()
+    container.set_initial_client(image_client)
     generator = ImageGenerator(
-        image_client=image_client,
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
@@ -352,9 +360,12 @@ async def test_generate_frog_image_records_error_on_exception(monkeypatch: Any, 
     При ошибке генерации должно писаться событие error.
     """
 
+    # Создаём мок и новый контейнер для каждого теста
     image_client = MockTextToImageClient()
+    container = ImageClientContainer()
+    container.set_initial_client(image_client)
     generator = ImageGenerator(
-        image_client=image_client,
+        image_client=container,
         text_client=MockTextToTextClient(),
     )
 
@@ -363,7 +374,10 @@ async def test_generate_frog_image_records_error_on_exception(monkeypatch: Any, 
 
     monkeypatch.setattr(generator, "_generate_prompt", AsyncMock(side_effect=fake_generate_prompt))
     monkeypatch.setattr(generator, "_get_fallback_prompt", MagicMock(return_value="error frog prompt"))
-    monkeypatch.setattr(image_client, "generate", AsyncMock(side_effect=RuntimeError("boom")))
+    # Патчим underlying клиент в контейнере
+    underlying = container.get_client()
+    assert underlying is not None
+    monkeypatch.setattr(underlying, "generate", AsyncMock(side_effect=RuntimeError("boom")))
 
     result = await generator.generate_frog_image(user_id=555)
     assert result is None

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Optional
 
 from services.clients import ITextToImageClient, ITextToTextClient
 from services.clients.factory import create_image_client, create_text_client
+from services.clients.image_client_container import ImageClientContainer
 from services.clients.kandinsky import KandinskyClient
 from services.prompt_generator import PromptStorage
 from services.rate_limiter import CircuitBreaker
@@ -82,13 +83,35 @@ class ImageGenerator:
         # (например, GigaChat -> другой провайдер) в рантайме без рестарта
         # бота: все сервисы держат ссылку на контейнер, а не на конкретный
         # `GigaChatTextClient`.
-        self._image_client: ITextToImageClient = image_client or create_image_client()
+        # Для изображений аналогично используется singleton‑контейнер
+        # `ImageClientContainer`, возвращаемый `create_image_client()`, что
+        # позволяет безопасно менять TTI‑бэкенд в рантайме без рестарта бота.
+        if image_client is None:
+            # Используем контейнер из фабрики (singleton).
+            self._image_client: ITextToImageClient = create_image_client()
+        elif isinstance(image_client, ImageClientContainer):
+            # Уже передан контейнер - используем его напрямую.
+            self._image_client = image_client
+        else:
+            # Передан прямой клиент (например, в тестах или для обратной совместимости).
+            # Оборачиваем его в контейнер для поддержки замены в runtime.
+            from services.clients.image_client_container import get_image_client_container
+
+            container = get_image_client_container()
+            container.set_initial_client(image_client)
+            self._image_client = container
+
         self._text_client: ITextToTextClient | None = text_client or create_text_client()
 
-        # Для админ‑команд `/status` и `/set_kandinsky_model` нужен доступ к
-        # расширенному интерфейсу KandinskyClient (dry‑run и смена модели).
+        # Для обратной совместимости с тестами сохраняем ссылку на KandinskyClient, если он используется.
+        # В новой архитектуре все методы доступны через image_client (контейнер).
+        underlying_client = (
+            self._image_client.get_client()
+            if isinstance(self._image_client, ImageClientContainer)
+            else self._image_client
+        )
         self._kandinsky_client: KandinskyClient | None = (
-            self._image_client if isinstance(self._image_client, KandinskyClient) else None
+            underlying_client if isinstance(underlying_client, KandinskyClient) else None
         )
 
         # Circuit breaker для API.
@@ -636,38 +659,16 @@ class ImageGenerator:
         """
         Проверяет статус API и валидность ключа без генерации изображения (dry-run).
 
-        В текущей реализации делегирует проверку специализированному `KandinskyClient`.
-        При использовании альтернативного бэкенда возвращает информативное сообщение
-        о том, что статус доступен только для Kandinsky‑реализации.
+        DEPRECATED: Используйте напрямую `image_generator.image_client.check_api_status()`.
+        Этот метод сохранён для обратной совместимости.
 
         Returns:
             Кортеж (успех_проверки, сообщение_о_статусе, список_моделей, (текущий_pipeline_id, текущее_имя))
         """
-        if self._kandinsky_client is None:
-            return (
-                False,
-                "❌ Проверка статуса поддерживается только для бэкенда IMAGE_MODEL_BACKEND=kandinsky",
-                [],
-                (None, None),
-            )
-        return await self._kandinsky_client.check_api_status(save_models=save_models)
-
-    async def set_kandinsky_model(self, model_identifier: str) -> tuple[bool, str]:
-        """
-        Устанавливает модель Kandinsky по ID или названию.
-
-        Args:
-            model_identifier: ID pipeline или название модели (или часть названия)
-
-        Returns:
-            Кортеж (успех, сообщение)
-        """
-        if self._kandinsky_client is None:
-            return (
-                False,
-                "Смена модели поддерживается только для бэкенда IMAGE_MODEL_BACKEND=kandinsky",
-            )
-        return await self._kandinsky_client.set_kandinsky_model(model_identifier)
+        self.logger.warning(
+            "ImageGenerator.check_api_status() устарел, используйте image_client.check_api_status() напрямую",
+        )
+        return await self._image_client.check_api_status(save_models=save_models)
 
     async def _start_generation(self, *_args: object, **_kwargs: object) -> str | None:  # pragma: no cover
         """Устаревший helper прямого запуска генерации на Kandinsky."""

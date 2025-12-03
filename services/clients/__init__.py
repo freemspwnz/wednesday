@@ -15,7 +15,14 @@
 - централизовать политику ретраев и обработку сетевых ошибок.
 """
 
-from services.clients.interfaces import ITextToImageClient, ITextToTextClient
+from services.clients.image_client_container import (
+    ImageClientContainer,
+    get_image_client_container,
+)
+from services.clients.interfaces import (
+    ITextToImageClient,
+    ITextToTextClient,
+)
 from services.clients.text_client_container import (
     TextClientContainer,
     get_text_client_container,
@@ -24,6 +31,8 @@ from services.clients.text_client_container import (
 __all__ = [
     "ITextToImageClient",
     "ITextToTextClient",
+    "ImageClientContainer",
     "TextClientContainer",
+    "get_image_client_container",
     "get_text_client_container",
 ]

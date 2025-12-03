@@ -639,8 +639,11 @@ async def test_set_kandinsky_model_command_no_args(fake_update: Any, fake_contex
 
 @pytest.mark.asyncio
 async def test_set_kandinsky_model_command_success(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+    image_client = MagicMock()
+    image_client.set_model = AsyncMock(return_value=(True, "Модель установлена"))
+
     image_generator = MagicMock()
-    image_generator.set_kandinsky_model = AsyncMock(return_value=(True, "Модель установлена"))
+    image_generator.image_client = image_client
 
     handler = CommandHandlers(image_generator=image_generator, next_run_provider=None)
     async_retry_stub(handler)
@@ -658,6 +661,7 @@ async def test_set_kandinsky_model_command_success(fake_update: Any, fake_contex
     call = fake_update.message.reply_text.await_args
     text = call.kwargs.get("text", call.args[0])
     assert "✅" in text or "Модель установлена" in text
+    image_client.set_model.assert_awaited_once_with("kandinsky-2.2")
 
 
 @pytest.mark.asyncio
