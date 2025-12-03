@@ -37,6 +37,7 @@ from services.clients import ITextToTextClient
 from services.prompt_generator import PromptStorage
 from utils.config import config
 from utils.models_store import ModelsStore
+from utils.retry import retry_critical, retry_standard
 
 HTTP_STATUS_OK = 200
 TIMEOUT_TOKEN_SECONDS = 60
@@ -215,8 +216,12 @@ class GigaChatTextClient(ITextToTextClient):
                 "Accept": "application/json",
             }
 
+            @retry_standard(service_name="gigachat", method_name="generate")
+            async def _post_generate() -> aiohttp.ClientResponse:
+                return await self._session.post(self._api_url, headers=headers, json=payload)
+
             bound.debug("Отправка запроса к GigaChat API для генерации промпта")
-            async with self._session.post(self._api_url, headers=headers, json=payload) as response:
+            async with await _post_generate() as response:
                 if response.status == HTTP_STATUS_OK:
                     result = await response.json()
                     generated_prompt = result["choices"][0]["message"]["content"].strip()
@@ -296,9 +301,13 @@ class GigaChatTextClient(ITextToTextClient):
                 "Accept": "application/json",
             }
 
+            @retry_standard(service_name="gigachat", method_name="get_available_models")
+            async def _get_models() -> aiohttp.ClientResponse:
+                timeout = aiohttp.ClientTimeout(total=TIMEOUT_MODELS_SECONDS, connect=10, sock_read=20)
+                return await self._session.get(models_url, headers=headers, timeout=timeout)
+
             bound.debug("Отправка запроса к GigaChat API для получения списка моделей")
-            timeout = aiohttp.ClientTimeout(total=TIMEOUT_MODELS_SECONDS, connect=10, sock_read=20)
-            async with self._session.get(models_url, headers=headers, timeout=timeout) as response:
+            async with await _get_models() as response:
                 if response.status == HTTP_STATUS_OK:
                     data = await response.json()
 
@@ -461,7 +470,8 @@ class GigaChatTextClient(ITextToTextClient):
             )
             bound.debug(f"Используется authorization_key длиной {key_length} символов: {key_preview}")
 
-            try:
+            @retry_critical(service_name="gigachat", method_name="get_access_token")
+            async def _fetch_token() -> aiohttp.ClientResponse:
                 headers = {
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Accept": "application/json",
@@ -472,9 +482,10 @@ class GigaChatTextClient(ITextToTextClient):
                 payload = {"scope": self._scope}
 
                 timeout = aiohttp.ClientTimeout(total=TIMEOUT_TOKEN_SECONDS, connect=10, sock_read=30)
-                async with self._session.post(
-                    self._auth_url, headers=headers, data=payload, timeout=timeout
-                ) as response:
+                return await self._session.post(self._auth_url, headers=headers, data=payload, timeout=timeout)
+
+            try:
+                async with await _fetch_token() as response:
                     if response.status == HTTP_STATUS_OK:
                         token_data = await response.json()
                         self._access_token = token_data["access_token"]

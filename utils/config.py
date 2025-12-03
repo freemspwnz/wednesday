@@ -253,6 +253,48 @@ class Config:  # noqa: PLR0904
         """
         return int(Config._get_env_var("MAX_RETRIES") or "3")
 
+    # --- Retry configuration ---
+
+    @property
+    def retry_max_attempts(self) -> int:
+        """
+        Максимальное количество попыток для retry-механики.
+
+        Returns:
+            Количество попыток из переменной RETRY_MAX_ATTEMPTS или 5 по умолчанию
+        """
+        return int(Config._get_env_var("RETRY_MAX_ATTEMPTS") or "5")
+
+    @property
+    def retry_multiplier(self) -> float:
+        """
+        Множитель для экспоненциального backoff.
+
+        Returns:
+            Множитель из переменной RETRY_MULTIPLIER или 1.0 по умолчанию
+        """
+        return float(Config._get_env_var("RETRY_MULTIPLIER") or "1.0")
+
+    @property
+    def retry_min_wait(self) -> float:
+        """
+        Минимальное время ожидания между попытками в секундах.
+
+        Returns:
+            Время из переменной RETRY_MIN_WAIT или 2.0 по умолчанию
+        """
+        return float(Config._get_env_var("RETRY_MIN_WAIT") or "2.0")
+
+    @property
+    def retry_max_wait(self) -> float:
+        """
+        Максимальное время ожидания между попытками в секундах.
+
+        Returns:
+            Время из переменной RETRY_MAX_WAIT или 30.0 по умолчанию
+        """
+        return float(Config._get_env_var("RETRY_MAX_WAIT") or "30.0")
+
     # --- Sentry / observability ---
 
     @property

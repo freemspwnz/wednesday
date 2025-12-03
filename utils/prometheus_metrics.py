@@ -92,3 +92,33 @@ def set_generation_queue_length(length: int, source: str = "bot") -> None:
     """
     length = max(length, 0)
     FROG_GENERATION_QUEUE_LENGTH.labels(source=source).set(float(length))
+
+
+# Метрики для retry-механик HTTP-запросов
+# Счётчик всех retry-попыток
+# label service: имя сервиса ("kandinsky", "gigachat")
+# label method: имя метода ("generate", "check_api_status" и т.д.)
+# label status: статус ("retry" - промежуточная попытка, "failed" - все попытки исчерпаны)
+HTTP_RETRIES_TOTAL: Final[Counter] = Counter(
+    name="http_retries_total",
+    documentation=("Общее количество retry-попыток для HTTP-запросов с разбивкой по сервису, методу и статусу."),
+    labelnames=("service", "method", "status"),
+)
+
+# Гистограмма времени ожидания между retry-попытками
+# label service: имя сервиса
+# label method: имя метода
+HTTP_RETRY_WAIT_SECONDS: Final[Histogram] = Histogram(
+    name="http_retry_wait_seconds",
+    documentation=("Время ожидания между retry-попытками в секундах с разбивкой по сервису и методу."),
+    labelnames=("service", "method"),
+    buckets=(
+        0.5,
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        30.0,
+    ),
+)

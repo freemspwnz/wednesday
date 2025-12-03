@@ -168,3 +168,6 @@ junit.xml
 ruff.log
 ruff_profile.txt
 ruff_*.txt
+
+# Development documentation
+/docs/dev/

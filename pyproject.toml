@@ -77,6 +77,7 @@ dependencies = [
   "yarl==1.22.0",
   "prometheus_client>=0.20.0",
   "sentry-sdk[fastapi,asyncio]==2.19.2",
+  "tenacity>=8.2.3",
   "uvicorn==0.32.1",
 ]
 
@@ -164,7 +165,7 @@ check_untyped_defs = false
 ignore_errors = true
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["ANN401", "PLR6301"]
+"tests/**/*.py" = ["ANN401", "PLR6301", "RUF029", "PLR2004"]
 "tests/conftest.py" = ["ANN401", "PLR6301"]
 
 [tool.pytest.ini_options]

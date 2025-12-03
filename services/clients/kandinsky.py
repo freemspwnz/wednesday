@@ -37,6 +37,7 @@ from PIL import Image
 
 from services.clients import ITextToImageClient
 from utils.config import config
+from utils.retry import retry_standard
 
 HTTP_STATUS_OK = 200
 HTTP_STATUS_UNAUTHORIZED = 401
@@ -189,6 +190,10 @@ class KandinskyClient(ITextToImageClient):
         if self._proxy_url:
             connector = aiohttp.ProxyConnector.from_url(self._proxy_url)  # type: ignore[attr-defined]
 
+        @retry_standard(service_name="kandinsky", method_name="check_api_status")
+        async def _fetch_pipelines_status(session: aiohttp.ClientSession) -> aiohttp.ClientResponse:
+            return await session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers)
+
         try:
             async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                 from utils.models_store import ModelsStore
@@ -197,7 +202,7 @@ class KandinskyClient(ITextToImageClient):
                 current_pipeline_id, current_pipeline_name = await models_store.get_kandinsky_model()
 
                 bound.debug("Запрос списка pipelines для dry‑run статуса")
-                async with session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers) as response:
+                async with await _fetch_pipelines_status(session) as response:
                     status_ok = False
                     status_message = "❌ Ошибка проверки"
                     models_list: list[str] = []
@@ -305,9 +310,13 @@ class KandinskyClient(ITextToImageClient):
         if self._proxy_url:
             connector = aiohttp.ProxyConnector.from_url(self._proxy_url)  # type: ignore[attr-defined]
 
+        @retry_standard(service_name="kandinsky", method_name="set_model")
+        async def _fetch_pipelines_for_set_model(session: aiohttp.ClientSession) -> aiohttp.ClientResponse:
+            return await session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers)
+
         try:
             async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                async with session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers) as response:
+                async with await _fetch_pipelines_for_set_model(session) as response:
                     if response.status != HTTP_STATUS_OK:
                         msg = f"Ошибка API при получении списка моделей: {response.status}"
                         bound.error(msg)
@@ -398,8 +407,12 @@ class KandinskyClient(ITextToImageClient):
         models_store = ModelsStore()
         saved_pipeline_id, saved_pipeline_name = await models_store.get_kandinsky_model()
 
+        @retry_standard(service_name="kandinsky", method_name="get_pipeline_id")
+        async def _fetch_pipelines() -> aiohttp.ClientResponse:
+            return await session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers)
+
         try:
-            async with session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers) as response:
+            async with await _fetch_pipelines() as response:
                 if response.status != HTTP_STATUS_OK:
                     bound.error("Ошибка при получении списка pipelines: HTTP {}", response.status)
                     return None
@@ -479,12 +492,16 @@ class KandinskyClient(ITextToImageClient):
         # Параметры передаём как JSON‑строку, как того требует API Fusion Brain.
         form_data.add_field("params", json.dumps(params), content_type="application/json")
 
-        try:
-            async with session.post(
+        @retry_standard(service_name="kandinsky", method_name="start_generation")
+        async def _post_generation() -> aiohttp.ClientResponse:
+            return await session.post(
                 f"{self._base_url}/key/api/v1/pipeline/run",
                 headers=headers,
                 data=form_data,
-            ) as response:
+            )
+
+        try:
+            async with await _post_generation() as response:
                 if response.status in {200, 201}:
                     result = await response.json()
                     uuid_value = result.get("uuid")
@@ -525,12 +542,16 @@ class KandinskyClient(ITextToImageClient):
         """Ожидает завершения задачи генерации и возвращает байты изображения."""
         bound = logger.bind(event="kandinsky_poll_generation", user_id=user_id, task_uuid=uuid)
 
+        @retry_standard(service_name="kandinsky", method_name="wait_for_generation_status")
+        async def _fetch_status() -> aiohttp.ClientResponse:
+            return await session.get(
+                f"{self._base_url}/key/api/v1/pipeline/status/{uuid}",
+                headers=headers,
+            )
+
         for attempt in range(1, MAX_STATUS_ATTEMPTS + 1):
             try:
-                async with session.get(
-                    f"{self._base_url}/key/api/v1/pipeline/status/{uuid}",
-                    headers=headers,
-                ) as response:
+                async with await _fetch_status() as response:
                     if response.status != HTTP_STATUS_OK:
                         bound.bind(http_status=response.status, attempt=attempt).error(
                             "Ошибка при проверке статуса генерации на Kandinsky",

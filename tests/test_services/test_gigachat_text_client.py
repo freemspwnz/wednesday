@@ -9,14 +9,20 @@ from services.clients.gigachat_text import GigaChatTextClient
 
 
 class _DummyResponse:
+    """Заглушка для aiohttp.ClientResponse, совместимая с retry-механикой."""
+
     def __init__(self) -> None:
         self.status = 200
+        self.headers: dict[str, str] = {}
 
     async def json(self) -> dict[str, Any]:
         return {"access_token": "dummy-token", "expires_in": 1800}
 
     async def text(self) -> str:
         return ""
+
+    async def read(self) -> bytes:
+        return b""
 
     async def __aenter__(self) -> _DummyResponse:
         return self
@@ -26,15 +32,19 @@ class _DummyResponse:
 
 
 class _DummySession:
+    """Заглушка для aiohttp.ClientSession, совместимая с retry-механикой."""
+
     def __init__(self) -> None:
         self.post_calls: int = 0
         self.get_calls: int = 0
 
-    def post(self, *args: Any, **kwargs: Any) -> _DummyResponse:
+    async def post(self, *args: Any, **kwargs: Any) -> _DummyResponse:
+        """Асинхронный метод post для совместимости с retry."""
         self.post_calls += 1
         return _DummyResponse()
 
-    def get(self, *args: Any, **kwargs: Any) -> _DummyResponse:
+    async def get(self, *args: Any, **kwargs: Any) -> _DummyResponse:
+        """Асинхронный метод get для совместимости с retry."""
         self.get_calls += 1
         return _DummyResponse()
 
