@@ -23,6 +23,7 @@ from typing import Final
 from services.clients import ITextToImageClient, ITextToTextClient
 from services.clients.gigachat_text import GigaChatTextClient
 from services.clients.kandinsky import KandinskyClient
+from services.clients.text_client_container import get_text_client_container
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -51,15 +52,25 @@ def create_image_client() -> ITextToImageClient:
 
 
 def create_text_client() -> ITextToTextClient | None:
-    """Создаёт клиент текстовой модели в соответствии с `TEXT_MODEL_BACKEND`.
+    """Создаёт/возвращает контейнер текстовой модели в соответствии с `TEXT_MODEL_BACKEND`.
 
-    Поддерживаемые значения:
+    Архитектура:
+    - фабрика больше не возвращает «сырую» реализацию (`GigaChatTextClient`);
+      вместо этого она инициализирует глобальный контейнер
+      `TextClientContainer`, который реализует `ITextToTextClient` и
+      проксирует вызовы к текущему активному клиенту;
+    - все сервисы (например, `ImageGenerator`, обработчики команд) должны
+      зависеть от результата этой функции и вызывать методы интерфейса
+      (`generate`, `set_model`, `get_available_models`) на контейнере;
+    - в будущем админ‑команды смогут заменить реальный клиент внутри
+      контейнера без рестарта бота (через `replace_client()`), при этом
+      существующие ссылки на контейнер останутся валидными.
 
-    - ``gigachat`` — клиент `GigaChatTextClient` (дефолт).
+    Поддерживаемые значения `TEXT_MODEL_BACKEND`:
+    - ``gigachat`` (или пустое значение) — клиент `GigaChatTextClient`.
 
-    При неизвестном значении логируем предупреждение и возвращаем GigaChat,
-    так как он является основным и наиболее ожидаемым бэкендом в текущей
-    архитектуре бота.
+    При неизвестном значении логируем предупреждение и используем GigaChat
+    как безопасный дефолт.
     """
     from utils.config import config
 
@@ -69,7 +80,12 @@ def create_text_client() -> ITextToTextClient | None:
             "Неизвестный TEXT_MODEL_BACKEND=%r, будет использован gigachat",
             backend,
         )
-    return GigaChatTextClient(
+
+    # Создаём реальный HTTP‑клиент один раз и регистрируем его в singleton‑контейнере.
+    # Контейнер реализует интерфейс `ITextToTextClient`, так что вызывающий код
+    # продолжает работать через те же методы (`generate`, `set_model` и т.д.),
+    # но теперь с возможностью безопасной замены клиента в рантайме.
+    gigachat_client = GigaChatTextClient(
         auth_url=config.gigachat_auth_url,
         api_url=config.gigachat_api_url,
         authorization_key=config.gigachat_authorization_key,
@@ -77,3 +93,9 @@ def create_text_client() -> ITextToTextClient | None:
         model=config.gigachat_model,
         verify_ssl=config.gigachat_verify_ssl,
     )
+
+    container = get_text_client_container()
+    # Инициализируем контейнер только один раз; последующие вызовы фабрики
+    # вернут тот же контейнер без повторной замены клиента.
+    container.set_initial_client(gigachat_client)
+    return container

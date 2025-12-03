@@ -76,6 +76,12 @@ class ImageGenerator:
         self.max_retries: int = config.max_retries
 
         # DI: клиенты генерации изображений и текста.
+        # Для текста по умолчанию используется singleton‑контейнер
+        # `TextClientContainer`, возвращаемый `create_text_client()`. Это
+        # позволяет в будущем безопасно менять реализацию LLM‑клиента
+        # (например, GigaChat -> другой провайдер) в рантайме без рестарта
+        # бота: все сервисы держат ссылку на контейнер, а не на конкретный
+        # `GigaChatTextClient`.
         self._image_client: ITextToImageClient = image_client or create_image_client()
         self._text_client: ITextToTextClient | None = text_client or create_text_client()
 

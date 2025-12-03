@@ -16,5 +16,14 @@
 """
 
 from services.clients.interfaces import ITextToImageClient, ITextToTextClient
+from services.clients.text_client_container import (
+    TextClientContainer,
+    get_text_client_container,
+)
 
-__all__ = ["ITextToImageClient", "ITextToTextClient"]
+__all__ = [
+    "ITextToImageClient",
+    "ITextToTextClient",
+    "TextClientContainer",
+    "get_text_client_container",
+]
