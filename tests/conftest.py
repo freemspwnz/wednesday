@@ -246,33 +246,6 @@ def patch_models_store(monkeypatch: Any, request: Any) -> Generator[None, None, 
     yield
 
 
-@pytest.fixture(autouse=True)
-def patch_gigachat_client(monkeypatch: Any) -> Generator[None, None, None]:
-    """Исключает реальные вызовы GigaChat при создании ImageGenerator."""
-
-    class _DummyGigaChatClient:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            self._prompt: str = "dummy prompt"
-
-        @staticmethod
-        def _clean_prompt(prompt: str | None = None) -> str:
-            if not prompt:
-                return "Wednesday Frog prompt"
-            cleaned = prompt.replace("```", "")
-            cleaned = cleaned.replace("Prompt:", "").replace("prompt:", "").replace("Промпт:", "")
-            cleaned = cleaned.strip("\"'")
-            return ' '.join(cleaned.split()).strip()
-
-        def test_connection(self) -> bool:
-            return False
-
-        def generate_prompt_for_kandinsky(self) -> str:
-            return self._prompt
-
-    import services.prompt_generator as prompt_module
-
-    monkeypatch.setattr(prompt_module, "GigaChatClient", _DummyGigaChatClient)
-    yield
 
 
 @pytest.fixture

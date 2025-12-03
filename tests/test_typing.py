@@ -32,14 +32,14 @@ def test_type_annotations_exist() -> None:
     from bot.support_bot import SupportBot
     from bot.wednesday_bot import WednesdayBot
     from services.image_generator import ImageGenerator
-    from services.prompt_generator import GigaChatClient
+    from services.prompt_generator import PromptStorage
     from services.scheduler import TaskScheduler
 
     # Проверяем, что классы существуют и имеют методы
     assert hasattr(WednesdayBot, "__init__")
     assert hasattr(SupportBot, "__init__")
     assert hasattr(ImageGenerator, "__init__")
-    assert hasattr(GigaChatClient, "__init__")
+    assert hasattr(PromptStorage, "__init__")
     assert hasattr(TaskScheduler, "__init__")
 
     assert True
