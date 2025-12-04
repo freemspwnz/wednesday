@@ -29,6 +29,10 @@ from celery.result import AsyncResult
 
 from services.celery_app_test import celery_app_test
 
+# Этот модуль содержит инфраструктурные/диагностические проверки Celery.
+# Они помечены как e2e + infra и могут запускаться реже, отдельно от базового e2e‑набора.
+pytestmark = pytest.mark.infra
+
 
 @pytest.mark.e2e
 @pytest.mark.asyncio

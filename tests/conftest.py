@@ -11,7 +11,7 @@ import pytest_asyncio
 from pytest import MonkeyPatch
 
 # Импортируем fixture для ожидания готовности Celery worker в E2E тестах
-from tests.utils.wait_for_celery import celery_worker_ready  # noqa: F401
+from tests.fixtures.celery_worker_ready import celery_worker_ready  # noqa: F401
 
 _session_monkeypatch = MonkeyPatch()
 _session_env_defaults = {
@@ -20,15 +20,10 @@ _session_env_defaults = {
     "KANDINSKY_SECRET_KEY": "session-test-secret",
     "CHAT_ID": "999999",
     "ADMIN_CHAT_ID": "999998",
+    # Планировщик и базовые значения, не влияющие на сетевые адреса Postgres/Redis
     "SCHEDULER_SEND_TIMES": "09:00,12:00,18:00",
     "SCHEDULER_WEDNESDAY_DAY": "2",
     "SCHEDULER_TZ": "Europe/Moscow",
-    # Параметры подключения к тестовой Postgres-БД (принудительно устанавливаем тестовые значения)
-    "POSTGRES_USER": "test_user",
-    "POSTGRES_PASSWORD": "test_password_ci_2024",
-    "POSTGRES_DB": "wednesdaydb_test",
-    "POSTGRES_HOST": "localhost",
-    "POSTGRES_PORT": "5432",
 }
 
 for key, value in _session_env_defaults.items():
@@ -90,12 +85,6 @@ def base_env(monkeypatch: Any, tmp_path_factory: Any) -> Generator[None, None, N
         "ADMIN_CHAT_ID": "54321",
         "GIGACHAT_AUTHORIZATION_KEY": "ZmFrZS1rZXk=",
         "GIGACHAT_SCOPE": "GIGACHAT_API_PERS",
-        # Параметры подключения к тестовой Postgres-БД
-        "POSTGRES_USER": "test_user",
-        "POSTGRES_PASSWORD": "test_password_ci_2024",
-        "POSTGRES_DB": "wednesdaydb_test",
-        "POSTGRES_HOST": "localhost",
-        "POSTGRES_PORT": "5432",
         # Переменные планировщика для избежания вызовов load_dotenv() при инициализации SchedulerConfig
         "SCHEDULER_SEND_TIMES": "09:00,12:00,18:00",
         "SCHEDULER_WEDNESDAY_DAY": "2",

@@ -19,31 +19,18 @@ format:
 
 # Запуск тестовых контейнеров
 test-up:
-	@echo "Запуск тестовых контейнеров..."
-	@TIMEOUT_CMD=$$(command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || echo ""); \
-	if [ -n "$$TIMEOUT_CMD" ]; then \
-		echo "Используется timeout: $$TIMEOUT_CMD"; \
-		$$TIMEOUT_CMD 300 docker compose --env-file .env.test -f docker-compose.test.yml up -d --build || \
-			(echo "✗ Таймаут или ошибка при запуске контейнеров" && $(MAKE) test-down && exit 1); \
-	else \
-		echo "Timeout недоступен, запуск без таймаута (для macOS это нормально)"; \
-		docker compose --env-file .env.test -f docker-compose.test.yml up -d --build || \
-			(echo "✗ Ошибка при запуске контейнеров" && $(MAKE) test-down && exit 1); \
-	fi
-	@echo "✓ Контейнеры запущены (pytest сам подождёт готовности worker)"
+	@./scripts/test_up.sh
 
 # Остановка тестовых контейнеров
 test-down:
-	@echo "Остановка тестовых контейнеров..."
-	@docker compose -f docker-compose.test.yml down -v
-	@echo "✓ Контейнеры остановлены"
+	@./scripts/test_down.sh
 
 # Запуск unit/integration тестов
 test: test-down
 	@echo "=== Запуск Unit/Integration тестов ==="
 	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
-	@export $$(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$$' | xargs) && \
-	 pytest --junitxml=junit.xml -m "not e2e"; \
+	@docker compose --env-file .env.test -f docker-compose.test.yml run --rm tests \
+		pytest --junitxml=junit.xml -m "not e2e"; \
 	TEST_EXIT_CODE=$$?; \
 	$(MAKE) test-down; \
 	exit $$TEST_EXIT_CODE
@@ -52,8 +39,8 @@ test: test-down
 test-cov: test-down
 	@echo "=== Запуск тестов с тестовыми контейнерами (с покрытием) ==="
 	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
-	@export $$(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$$' | xargs) && \
-	pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
+	@docker compose --env-file .env.test -f docker-compose.test.yml run --rm tests \
+		pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
 		--junitxml=junit.xml -m "not e2e"; \
 	TEST_EXIT_CODE=$$?; \
 	$(MAKE) test-down; \
@@ -69,12 +56,7 @@ test-no-containers:
 # Запуск E2E тестов
 test-e2e: test-down
 	@echo "=== Запуск E2E тестов ==="
-	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
-	@export $$(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$$' | xargs) && \
-	 pytest --junitxml=junit-e2e.xml -m e2e; \
-	TEST_EXIT_CODE=$$?; \
-	$(MAKE) test-down; \
-	exit $$TEST_EXIT_CODE
+	@./scripts/run_e2e.sh
 
 type:
 	mypy .

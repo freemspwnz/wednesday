@@ -1,4 +1,47 @@
 # CHANGELOG
+## [6.4.2] 2025-12-04 — Вторая итерация рефакторинга E2E-инфраструктуры Celery
+
+### Добавлено
+- **Тестовый settings-слой**:
+  - Создан модуль `utils.config_test` с `TestConfig`, описывающим настройки только для тестовой среды (Redis, Postgres, логирование).
+  - Тестовый Celery app читает URL Redis из `CELERY_TEST_REDIS_URL` через `config_test`, полностью изолируясь от боевого `utils.config` и `utils.redis_client`.
+- **Общая утилита и фикстура готовности Celery worker**:
+  - Добавлен `tests/common/wait_for_celery.py` с функцией `wait_for_celery_worker()`, которая с ретраями отправляет `test.ping` в очередь `test_main` и ждёт `"pong"`.
+  - Добавлен `tests/fixtures/celery_worker_ready.py` с session-fixture `celery_worker_ready` (`autouse=True`), использующей новую утилиту.
+- **Новый поведенческий e2e-набор Celery**:
+  - Создан `tests/e2e/celery/test_celery_e2e_basic.py` с короткими сценариями:
+    - базовый `test.ping` → `"pong"`;
+    - проверка работы result backend;
+    - конкурентное выполнение нескольких задач.
+- **Запуск pytest внутри Docker-контейнера**:
+  - В `docker-compose.test.yml` добавлен сервис `tests`, собираемый из `Dockerfile.test` и использующий то же окружение, что и `celery-worker-test` (Postgres/Redis в тестовой сети, `CELERY_TEST_REDIS_URL` и т.д.).
+  - Цели `make test`, `make test-cov`, `make test-e2e` теперь запускают pytest внутри контейнера `tests` через `docker compose ... run --rm tests ...`.
+- **Скрипты оркестрации тестового окружения**:
+  - Добавлены `scripts/test_up.sh`, `scripts/test_down.sh`, `scripts/run_e2e.sh`, инкапсулирующие подъем/остановку `docker-compose.test.yml` и запуск e2e-набора.
+
+### Изменено
+- **Healthcheck Celery worker в тестовом docker-compose**:
+  - Для `celery-worker-test` healthcheck переведён с проверки процесса через `pgrep` на поведенческую проверку `celery -A services.celery_app_test inspect ping --timeout=2`.
+  - В `docker-compose.test.yml` для сервисов `celery-worker-test` и `tests` явно заданы `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` и `CELERY_TEST_REDIS_URL` на `redis_test:6379`, чтобы избежать скрытого fallback-а на `localhost`.
+- **Тестовый Celery app**:
+  - `services.celery_app_test` больше не импортирует `utils.redis_client.get_redis_url` и не зависит от боевого конфигурационного модуля.
+  - Брокер и result backend Celery теперь настраиваются только через тестовые env/`utils.config_test`, что делает тестовый app полностью самостоятельным.
+- **Структура тестов Celery**:
+  - Логика ожидания worker’а перенесена из `tests/utils/wait_for_celery.py` в `tests/common/wait_for_celery.py` и `tests/fixtures/celery_worker_ready.py`.
+  - Поведенческие e2e-сценарии вынесены в `tests/e2e/celery/`, а инфраструктурные/диагностические проверки Celery (inspect/stats/beat/timezone и т.п.) остались в `tests/test_services/test_celery_e2e.py` и помечены маркером `@pytest.mark.infra`.
+  - В pytest-конфиге (`pyproject.toml`) зарегистрирован новый маркер `infra`, чтобы явно отделить редкий инфраструктурный набор от основного e2e.
+- **Makefile и запуск тестов**:
+  - Цели `test` и `test-cov` больше не запускают pytest на хосте, а используют `docker compose ... run --rm tests pytest ...`, что гарантирует идентичное окружение с `celery-worker-test`.
+  - Цель `test-e2e` (`scripts/run_e2e.sh`) теперь также выполняет e2e-набор внутри контейнера `tests`, с фильтрацией по маркеру `e2e and not infra`.
+- **Документация по Celery E2E**:
+  - В `docs/dev/celery_e2e_testing_notes.md` добавлен раздел про вторую итерацию рефакторинга: новый healthcheck, упрощённую readiness-логику и разделение e2e/infra-наборов.
+  - Обновлён `tests/README.md` с описанием новой структуры каталогов (`tests/e2e/celery/`, `tests/common/`, `tests/fixtures/`), правилами маркеров `e2e`/`infra` и примерами запуска поведенческих и инфраструктурных наборов.
+
+### Удалено
+- Удалён устаревший модуль `tests/utils/wait_for_celery.py`; его функциональность заменена более простым `tests/common/wait_for_celery.py` и отдельной фикстурой `tests/fixtures/celery_worker_ready.py`.
+
+---
+
 ## [6.4.1] 2025-12-04 — Упрощение и изоляция E2E-инфраструктуры Celery
 
 ### Добавлено

@@ -3,17 +3,18 @@
 
 Полностью изолирован от production кода:
 - Не импортирует бот, сервисы, production задачи
-- Использует только базовые утилиты (config, redis_client)
+- Не использует боевой config и utils.redis_client
+- Конфигурируется только через тестовые переменные окружения
 - Имеет тестовые очереди по умолчанию
 - Регистрирует только test.ping задачу
 """
 
 from celery import Celery
 
-from utils.redis_client import get_redis_url
+from utils.config_test import config_test
 
-# Получаем URL Redis для брокера и результата
-redis_url = get_redis_url() or "redis://localhost:6379/0"
+# Получаем URL Redis для брокера и результата из тестового тестового конфига
+redis_url = config_test.celery_test_redis_url
 
 # Создаём отдельный Celery app для тестов
 celery_app_test = Celery(

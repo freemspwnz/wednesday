@@ -150,7 +150,7 @@ warn_unused_ignores = true
 warn_return_any = true
 no_implicit_optional = true
 strict_equality = true
-exclude = "(?x)(^tests/_doubles/|^tests/utils/|^services/celery_app_test\\.py|^services/celery_tasks_test\\.py)"
+exclude = "(?x)(^tests/_doubles/|^tests/utils/|^tests/common/|^tests/fixtures/|^services/celery_app_test\\.py|^services/celery_tasks_test\\.py)"
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -179,6 +179,7 @@ ignore_errors = true
 [tool.pytest.ini_options]
 markers = [
     "e2e: marks tests as end-to-end (requires running containers)",
+    "infra: infrastructure/diagnostic tests (run less often)",
 ]
 addopts = "-v -ra --tb=short"
 testpaths = ["tests"]

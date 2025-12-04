@@ -62,6 +62,9 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: 0
       REDIS_URL: ${REDIS_URL:-}
+      # Тестовый Celery app использует отдельную переменную окружения,
+      # чтобы не зависеть от боевого utils.redis_client/get_redis_url
+      CELERY_TEST_REDIS_URL: redis://redis_test:6379/1
       TELEGRAM_BOT_TOKEN: test-token
       KANDINSKY_API_KEY: test-api
       KANDINSKY_SECRET_KEY: test-secret
@@ -77,17 +80,68 @@ services:
       TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
     networks:
       - default
-    # ⚠️ КРИТИЧНО: Healthcheck обязателен (нельзя удалять полностью)
-    # Предотвращает crashloop контейнера, если Redis/Postgres недоступны
-    # Pytest fixture дополняет, но не заменяет healthcheck
+    # ⚠️ КРИТИЧНО: Healthcheck обязателен (нельзя удалять полностью).
+    # Теперь он проверяет не только наличие процесса, но и реальную готовность Celery worker'а.
+    # Используем минимально «глупую» проверку через Celery CLI:
+    #   celery -A services.celery_app_test inspect ping
+    # Pytest fixture дополняет, но не заменяет этот healthcheck.
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'celery worker' > /dev/null"]
+      test: ["CMD-SHELL", "celery -A services.celery_app_test inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
       interval: 5s
-      timeout: 3s
-      retries: 3
+      timeout: 5s
+      retries: 5
       start_period: 10s
 
-  # Убрать celery-beat-test - не нужен для E2E тестов
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: wednesday_tests
+    restart: "no"
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+      celery-worker-test:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password_ci_2024
+      POSTGRES_DB: wednesdaydb_test
+      POSTGRES_HOST: postgres_test
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis_test
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      # Явно задаём URL Redis, чтобы избежать fallback'а на localhost.
+      REDIS_URL: redis://redis_test:6379/0
+      # Для Celery явно задаём брокер и backend на redis_test.
+      CELERY_BROKER_URL: redis://redis_test:6379/0
+      CELERY_RESULT_BACKEND: redis://redis_test:6379/0
+      CELERY_TEST_REDIS_URL: redis://redis_test:6379/1
+      TELEGRAM_BOT_TOKEN: test-token
+      KANDINSKY_API_KEY: test-api
+      KANDINSKY_SECRET_KEY: test-secret
+      CHAT_ID: 12345
+      ADMIN_CHAT_ID: 54321
+      GIGACHAT_AUTHORIZATION_KEY: ZmFrZS1rZXk=
+      SCHEDULER_SEND_TIMES: "09:00,12:00,18:00"
+      SCHEDULER_WEDNESDAY_DAY: "2"
+      SCHEDULER_TZ: "Europe/Moscow"
+      TZ: "Europe/Moscow"
+      TESTING: "1"
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
+      PYTHONPATH: /app
+    working_dir: /app
+    volumes:
+      - .:/app
+    networks:
+      - default
+    # Команда по умолчанию будет переопределяться через `docker compose run tests ...`
+    # Поэтому оставляем её по умолчанию из Dockerfile.test (Celery worker) и всегда
+    # передаём явный `pytest ...` в командах Makefile/скриптов.
 
 volumes:
   frog_images:

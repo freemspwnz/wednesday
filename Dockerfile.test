@@ -13,7 +13,8 @@ COPY requirements.txt .
 # Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем только рабочий код (не тесты, не docs, не скрипты)
+# Копируем только рабочий код.
+# Тесты и конфиги pytest монтируются в контейнер через volume (см. docker-compose.test.yml: service tests).
 COPY services ./services
 COPY utils ./utils
 COPY bot ./bot
