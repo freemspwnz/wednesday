@@ -30,6 +30,59 @@ EventLogLevel = Literal["trace", "debug", "info", "success", "warning", "error",
 CALLER_FRAME_DEPTH = 3
 
 
+_MIN_SECRET_LENGTH = 16
+_MASKED_VALUE = "****"
+
+
+def _get_known_secret_values() -> list[str]:
+    """
+    Возвращает список известных секретных значений для точечной маскировки.
+
+    Важно:
+    - используем только конкретные значения из конфигурации/env;
+    - короткие значения (меньше _MIN_SECRET_LENGTH) сознательно не включаем
+      в маскирование через str.replace, чтобы избежать ложных совпадений.
+    """
+    secrets: list[str] = []
+
+    try:
+        # Основной чувствительный секрет — authorization key GigaChat.
+        gigachat_key = config.gigachat_authorization_key
+        if gigachat_key and len(gigachat_key) >= _MIN_SECRET_LENGTH:
+            secrets.append(gigachat_key)
+    except Exception:
+        # При ошибке чтения конфигурации не изменяем поведение логирования.
+        return []
+
+    return secrets
+
+
+def mask_secrets(text: str) -> str:
+    """
+    Точечная маскировка известных длинных секретных значений в строке.
+
+    - Использует только конкретные значения из _get_known_secret_values().
+    - Не применяет regexp или эвристики по ключевым словам.
+    - Короткие значения не маскируются, чтобы не повредить обычные строки.
+    """
+    try:
+        secrets = _get_known_secret_values()
+        if not secrets or not text:
+            return text
+
+        result = text
+        for value in secrets:
+            if value and len(value) >= _MIN_SECRET_LENGTH:
+                result = result.replace(value, _MASKED_VALUE)
+        return result
+    except Exception:
+        # В случае любой ошибки не модифицируем исходный текст,
+        # чтобы не ломать формат логов.
+        logger.warning("mask_secrets: не удалось применить маскировку секретов (см. стек в debug)")
+        logger.debug("mask_secrets: исключение при обработке текста", exc_info=True)
+        return text
+
+
 def setup_logger() -> None:
     """
     Настраивает систему логирования для приложения.
@@ -110,6 +163,28 @@ def setup_logger() -> None:
         # из директории с логами и отправляют их в централизованные системы
         # (ELK, Loki, Vector и т.п.). JSON‑логи больше не дублируются в stdout.
         try:
+
+            def _json_sink_filter(record: object) -> bool:
+                """
+                Фильтр для JSON‑sink.
+
+                Применяет:
+                - mask_secrets к полю message;
+                - scrub к полю extra (nested‑структурам).
+                """
+                if not isinstance(record, dict):
+                    return True
+
+                message = record.get("message")
+                if isinstance(message, str):
+                    record["message"] = mask_secrets(message)
+
+                extra = record.get("extra")
+                if isinstance(extra, dict):
+                    record["extra"] = scrub(extra)
+
+                return True
+
             logger.add(
                 log_dir / "wednesday_bot.events.jsonl",
                 serialize=True,
@@ -119,6 +194,7 @@ def setup_logger() -> None:
                 compression="zip",
                 backtrace=True,
                 diagnose=True,
+                filter=_json_sink_filter,
             )
         except (PermissionError, OSError):
             # Если нет прав на запись в файл, логируем только в stdout
@@ -170,6 +246,66 @@ def _get_caller_module_name() -> str | None:
     caller_frame = outer_frames[2].frame
     module_name = caller_frame.f_globals.get("__name__")
     return str(module_name) if isinstance(module_name, str) else None
+
+
+_SENSITIVE_KEYWORDS: set[str] = {
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "api_key",
+    "authorization",
+    "bearer",
+    "access_token",
+    "refresh_token",
+    "apikey",
+    "cookie",
+    "set-cookie",
+    "client_secret",
+    "private_key",
+    "secret_key",
+}
+
+
+def scrub(obj: object) -> object:
+    """
+    Минимально необходимая рекурсивная очистка структурированных данных.
+
+    Правила:
+    - dict: по ключам, содержащим чувствительные слова, значение заменяется
+      на маску "****" без дальнейшей рекурсии внутрь;
+      для остальных значений рекурсивно вызывается scrub.
+    - list/tuple/set: рекурсивно применяем scrub к элементам.
+    - str: пропускаем через mask_secrets.
+    - остальные типы возвращаем как есть.
+    """
+    try:
+        if isinstance(obj, dict):
+            cleaned: dict[object, object] = {}
+            for key, value in obj.items():
+                key_lower = str(key).lower()
+                if any(word in key_lower for word in _SENSITIVE_KEYWORDS):
+                    cleaned[key] = _MASKED_VALUE
+                elif isinstance(value, dict | list | tuple | set | str):
+                    cleaned[key] = scrub(value)
+                else:
+                    cleaned[key] = value
+            return cleaned
+
+        if isinstance(obj, list | tuple | set):
+            container_type = type(obj)
+            cleaned_items = [scrub(item) if isinstance(item, dict | list | tuple | set | str) else item for item in obj]
+            return container_type(cleaned_items)
+
+        if isinstance(obj, str):
+            return mask_secrets(obj)
+
+        return obj
+    except Exception:
+        # В защитном режиме возвращаем объект как есть, чтобы не ломать логи.
+        logger.warning("scrub: не удалось обработать объект (см. стек в debug)")
+        logger.debug("scrub: исключение при обработке объекта", exc_info=True)
+        return obj
 
 
 def log_event(  # noqa: PLR0913
@@ -256,8 +392,10 @@ def log_event(  # noqa: PLR0913
     log_method = getattr(bound_logger, level, bound_logger.info)
 
     # Текстовое сообщение, которое увидит разработчик в консоли/файле.
-    # В JSON оно попадает в поле "message".
-    text = message or event
+    # В JSON оно попадает в поле "message". Для дополнительной защиты
+    # прогоняем его через mask_secrets, чтобы известные секреты не
+    # попали в текстовые логи.
+    text = mask_secrets(message or event)
     log_method(text)
 
 
@@ -265,14 +403,6 @@ P = ParamSpec("P")
 R = TypeVar("R")
 F = TypeVar("F", bound=Callable[..., Any])
 MAX_ARG_REPR_LENGTH = 300
-_SENSITIVE_KEYWORDS: set[str] = {
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "api_key",
-    "authorization",
-}
 
 
 def _safe_repr(value: object) -> str:

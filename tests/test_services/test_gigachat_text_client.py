@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from loguru import logger
 
 from services.clients.gigachat_text import GigaChatTextClient
 
@@ -90,5 +91,52 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
     assert all(r == "dummy-token" for r in results), f"Не все результаты равны 'dummy-token': {results}"
     # HTTP‑вызов был выполнен только один раз (благодаря lock в _get_access_token).
     assert dummy_session.post_calls == 1, f"Ожидался 1 вызов post, получено: {dummy_session.post_calls}"
+
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Проверяем, что при логировании authorization_key используется только preview,
+    а полный ключ в лог не попадает.
+    """
+    full_key = "A" * 40
+
+    client = GigaChatTextClient(
+        auth_url="https://example.test/auth",
+        api_url="https://example.test/api",
+        authorization_key=full_key,
+        scope="GIGACHAT_API_PERS",
+        model="GigaChat",
+        verify_ssl=False,
+    )
+
+    # Подменяем session, чтобы не было реальных HTTP‑запросов.
+    dummy_session = _DummySession()
+    monkeypatch.setattr(client, "_session", dummy_session, raising=True)
+
+    # Захватываем логи в буфер.
+    from io import StringIO
+
+    buffer = StringIO()
+    sink_id = logger.add(buffer, level="DEBUG")
+
+    try:
+        # Принудительно сбрасываем кэш токена и вызываем _get_access_token.
+        client._access_token = None
+        client._token_expiry_time = None
+
+        await client._get_access_token()
+    finally:
+        logger.remove(sink_id)
+
+    log_text = buffer.getvalue()
+
+    # В логах должен быть только preview (первые 10 символов + '...'),
+    # но не полный ключ.
+    preview = full_key[:10]
+    assert preview in log_text
+    assert full_key not in log_text
 
     await client.aclose()
