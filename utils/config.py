@@ -560,6 +560,49 @@ class Config:  # noqa: PLR0904
         """
         return Config._get_env_var("ADMIN_CHAT_ID")
 
+    @property
+    def scheduler_tz(self) -> str:
+        """
+        Часовой пояс для планировщика (Celery Beat).
+
+        Returns:
+            Часовой пояс из переменной SCHEDULER_TZ или "Europe/Amsterdam" по умолчанию
+        """
+        return Config._get_env_var("SCHEDULER_TZ") or "Europe/Amsterdam"
+
+    @property
+    def scheduler_send_times(self) -> list[str]:
+        """
+        Времена отправки в среду.
+
+        Returns:
+            Список времён из переменной SCHEDULER_SEND_TIMES или ["09:00", "12:00", "18:00"] по умолчанию
+        """
+        times_str = Config._get_env_var("SCHEDULER_SEND_TIMES")
+        if times_str:
+            return [t.strip() for t in times_str.split(",")]
+        return ["09:00", "12:00", "18:00"]
+
+    @property
+    def scheduler_wednesday_day(self) -> int:
+        """
+        День недели для отправки (0=понедельник, 2=среда).
+
+        Returns:
+            День недели из переменной SCHEDULER_WEDNESDAY_DAY или 2 (среда) по умолчанию
+        """
+        return int(Config._get_env_var("SCHEDULER_WEDNESDAY_DAY") or "2")
+
+    @property
+    def use_old_scheduler(self) -> bool:
+        """
+        Флаг для использования старого TaskScheduler вместо Celery.
+
+        Returns:
+            True если USE_OLD_SCHEDULER=true, False иначе (по умолчанию используется Celery)
+        """
+        return Config._get_env_var("USE_OLD_SCHEDULER") == "true"
+
 
 # Создаем глобальный экземпляр конфигурации
 config = Config()

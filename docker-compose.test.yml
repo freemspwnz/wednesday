@@ -41,7 +41,107 @@ services:
     tmpfs:
       - /data  # Используем tmpfs для быстрой очистки после тестов
 
+  celery-worker-test:
+    build: .
+    container_name: wednesday_celery_worker_test
+    restart: "no"
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+    environment:
+      # Тестовые учетные данные
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password_ci_2024
+      POSTGRES_DB: wednesdaydb_test
+      POSTGRES_HOST: postgres_test
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis_test
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      # Redis URL для Celery (если используется REDIS_URL, иначе формируется из параметров выше)
+      REDIS_URL: ${REDIS_URL:-}
+      # Обязательные переменные для инициализации
+      TELEGRAM_BOT_TOKEN: test-token
+      KANDINSKY_API_KEY: test-api
+      KANDINSKY_SECRET_KEY: test-secret
+      CHAT_ID: 12345
+      ADMIN_CHAT_ID: 54321
+      GIGACHAT_AUTHORIZATION_KEY: ZmFrZS1rZXk=
+      # Настройки планировщика
+      SCHEDULER_SEND_TIMES: "09:00,12:00,18:00"
+      SCHEDULER_WEDNESDAY_DAY: "2"
+      SCHEDULER_TZ: "Europe/Moscow"
+      # Timezone для Celery
+      TZ: "Europe/Moscow"
+      # Логирование только в stdout для тестов (избегаем проблем с правами и volume)
+      LOG_TO_STDOUT_ONLY: "1"
+      # Выбор бэкендов моделей
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
+    # ⚠️ ВАЖНО: Явно выбираем режим worker (asyncio pool)
+    command: >
+      celery -A services.celery_app worker
+      --pool=solo
+      --loglevel=info
+      -Q wednesday,images,maintenance
+    volumes:
+      - logs_test:/app/logs
+      - prompt_storage_test:/app/data/prompts
+    networks:
+      - default
+    healthcheck:
+      # Проверяем здоровье worker через Celery inspect() API
+      # Это гарантирует, что worker не просто запущен, но и готов обрабатывать задачи
+      # Запускаем из /app с правильным PYTHONPATH
+      test: ["CMD-SHELL", "cd /app && python scripts/celery_healthcheck.py"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  celery-beat-test:
+    build: .
+    container_name: wednesday_celery_beat_test
+    restart: "no"
+    depends_on:
+      redis_test:
+        condition: service_healthy
+    environment:
+      # Тестовые учетные данные
+      REDIS_HOST: redis_test
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      # Redis URL для Celery (если используется REDIS_URL, иначе формируется из параметров выше)
+      REDIS_URL: ${REDIS_URL:-}
+      # Обязательные переменные для инициализации
+      TELEGRAM_BOT_TOKEN: test-token
+      KANDINSKY_API_KEY: test-api
+      KANDINSKY_SECRET_KEY: test-secret
+      CHAT_ID: 12345
+      ADMIN_CHAT_ID: 54321
+      # Настройки планировщика
+      SCHEDULER_SEND_TIMES: "09:00,12:00,18:00"
+      SCHEDULER_WEDNESDAY_DAY: "2"
+      SCHEDULER_TZ: "Europe/Moscow"
+      # Timezone для Celery Beat
+      TZ: "Europe/Moscow"
+      # Логирование только в stdout для тестов
+      LOG_TO_STDOUT_ONLY: "1"
+    command: celery -A services.celery_app beat --loglevel=info
+    volumes:
+      - logs_test:/app/logs
+      # Beat сохраняет состояние расписания в файл
+      - beat_data_test:/app/data/beat
+    networks:
+      - default
+    # Beat не зависит от celery-worker (Beat и Worker - отдельные процессы)
+
 volumes:
   frog_images:
   logs:
   prompt_storage:
+  logs_test:
+  prompt_storage_test:
+  beat_data_test:

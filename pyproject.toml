@@ -22,7 +22,7 @@ dependencies = [
   "asyncpg==0.31.0",
   "attrs==25.4.0",
   "billiard==4.2.3",
-  "celery==5.5.3",
+  "celery[asyncio]==5.5.3",
   "certifi==2025.10.5",
   "charset-normalizer==3.4.4",
   "click==8.3.1",
@@ -169,6 +169,9 @@ ignore_errors = true
 "tests/conftest.py" = ["ANN401", "PLR6301"]
 
 [tool.pytest.ini_options]
+markers = [
+    "e2e: marks tests as end-to-end (requires running containers)",
+]
 addopts = "-v -ra --tb=short"
 testpaths = ["tests"]
 asyncio_mode = "strict"

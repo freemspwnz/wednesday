@@ -173,7 +173,8 @@ def wednesday_bot(monkeypatch: Any) -> Any:
 def test_wednesday_bot_initializes_components(wednesday_bot: Any) -> None:
     assert wednesday_bot.application is not None
     assert wednesday_bot.handlers is not None
-    assert wednesday_bot.scheduler is not None
+    # scheduler может быть None если USE_OLD_SCHEDULER=false (используется Celery)
+    # assert wednesday_bot.scheduler is not None
     assert wednesday_bot.is_running is False
 
 
@@ -186,7 +187,9 @@ def test_setup_handlers_registers_all_callbacks(wednesday_bot: Any) -> None:
 async def test_send_wednesday_frog_dispatches_to_targets(monkeypatch: Any, wednesday_bot: Any) -> None:
     wednesday_bot.chat_id = "222"
     wednesday_bot.chats.chat_ids = [111]
-    wednesday_bot.scheduler.send_times = ["10:00"]
+    # scheduler может быть None, если используется Celery
+    if wednesday_bot.scheduler is not None:
+        wednesday_bot.scheduler.send_times = ["10:00"]
 
     def fake_generate(metrics: Any = None) -> tuple[bytes, str]:
         return b"img", "caption"
@@ -229,7 +232,7 @@ async def test_send_user_friendly_error(wednesday_bot: Any) -> None:
 
     wednesday_bot.application.bot.send_message.assert_awaited_once()
     call = wednesday_bot.application.bot.send_message.await_args
-    assert call.kwargs["chat_id"] == 12345  # noqa: PLR2004
+    assert call.kwargs["chat_id"] == 12345
     assert "не удалось сгенерировать" in call.kwargs["text"].lower()
 
 
@@ -241,7 +244,7 @@ async def test_send_fallback_image_success(wednesday_bot: Any) -> None:
     assert result is True
     wednesday_bot.application.bot.send_photo.assert_awaited_once()
     call = wednesday_bot.application.bot.send_photo.await_args
-    assert call.kwargs["chat_id"] == 12345  # noqa: PLR2004
+    assert call.kwargs["chat_id"] == 12345
 
 
 @pytest.mark.asyncio
@@ -253,6 +256,7 @@ async def test_send_fallback_image_no_image(wednesday_bot: Any) -> None:
     assert wednesday_bot.application.bot.send_photo.await_count == 0
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_on_my_chat_member_added(wednesday_bot: Any, cleanup_tables: Any) -> None:
     from types import SimpleNamespace
@@ -271,11 +275,12 @@ async def test_on_my_chat_member_added(wednesday_bot: Any, cleanup_tables: Any) 
 
     # Проверяем, что чат добавлен
     chat_ids = await wednesday_bot.chats.list_chat_ids()
-    assert 99999 in chat_ids  # noqa: PLR2004
+    assert 99999 in chat_ids
     # Проверяем, что было отправлено приветствие (может быть несколько вызовов)
     assert wednesday_bot.application.bot.send_message.await_count >= 1
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_on_my_chat_member_removed(wednesday_bot: Any, cleanup_tables: Any) -> None:
     from types import SimpleNamespace
@@ -297,7 +302,7 @@ async def test_on_my_chat_member_removed(wednesday_bot: Any, cleanup_tables: Any
 
     # Проверяем, что чат удалён
     chat_ids = await wednesday_bot.chats.list_chat_ids()
-    assert 99999 not in chat_ids  # noqa: PLR2004
+    assert 99999 not in chat_ids
 
 
 @pytest.mark.asyncio

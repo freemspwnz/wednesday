@@ -214,6 +214,7 @@ async def test_frog_command_usage_limit(fake_update: Any, fake_context: Any, asy
     assert fake_update.message.reply_photo.await_count == 0
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_status_command_integration_with_postgres_stores(
     fake_update: Any,
@@ -262,6 +263,7 @@ async def test_status_command_integration_with_postgres_stores(
     assert "Генерации:" in text
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_force_send_command_integration_with_postgres_stores(
     fake_update: Any,
@@ -390,6 +392,7 @@ async def test_unknown_command(fake_update: Any, fake_context: Any, async_retry_
     assert "/help" in text
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admin_add_chat_command_success(
     fake_update: Any,
@@ -420,7 +423,7 @@ async def test_admin_add_chat_command_success(
 
     # Проверяем, что чат действительно добавлен
     chat_ids = await chats.list_chat_ids()
-    assert 12345 in chat_ids  # noqa: PLR2004
+    assert 12345 in chat_ids
 
 
 @pytest.mark.asyncio
@@ -461,6 +464,7 @@ async def test_admin_add_chat_command_invalid_id(fake_update: Any, fake_context:
     assert "Неверный chat_id" in message
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admin_remove_chat_command_success(
     fake_update: Any,
@@ -492,7 +496,7 @@ async def test_admin_remove_chat_command_success(
 
     # Проверяем, что чат действительно удалён
     chat_ids = await chats.list_chat_ids()
-    assert 12345 not in chat_ids  # noqa: PLR2004
+    assert 12345 not in chat_ids
 
 
 @pytest.mark.asyncio
@@ -514,6 +518,7 @@ async def test_admin_remove_chat_command_no_args(fake_update: Any, fake_context:
     assert "Использование: /remove_chat" in message
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_list_chats_command_success(
     fake_update: Any,
@@ -545,6 +550,7 @@ async def test_list_chats_command_success(
     assert "Активные чаты" in text or "чатов" in text.lower()
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_list_chats_command_no_chats(
     fake_update: Any,
@@ -734,6 +740,7 @@ async def test_set_gigachat_model_command_success(fake_update: Any, fake_context
     text_client.set_model.assert_awaited_once_with("GigaChat-Pro")
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_mod_command_success(
     fake_update: Any,
@@ -788,6 +795,7 @@ async def test_mod_command_no_args(fake_update: Any, fake_context: Any, async_re
     assert "Использование: /mod" in text
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_unmod_command_success(
     fake_update: Any,
@@ -843,6 +851,7 @@ async def test_unmod_command_no_args(fake_update: Any, fake_context: Any, async_
     assert "Использование: /unmod" in text
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_list_mods_command_success(
     fake_update: Any,

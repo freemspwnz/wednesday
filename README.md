@@ -84,7 +84,9 @@ wednesday_tg_bot/
 ├── services/
 │   ├── image_generator.py       # Генератор изображений (Kandinsky + dry-run)
 │   ├── prompt_generator.py      # Клиент GigaChat для генерации промптов
-│   └── scheduler.py             # Планировщик задач с часовыми поясами
+│   ├── scheduler.py             # Планировщик задач с часовыми поясами (legacy)
+│   ├── celery_app.py            # Конфигурация Celery (брокер, beat schedule)
+│   └── celery_tasks.py          # Celery задачи (send_frog, generate_image, cleanup)
 ├── utils/
 │   ├── config.py                # Конфигурация и валидация
 │   ├── logger.py                # Настройка логирования (loguru)
@@ -104,6 +106,72 @@ wednesday_tg_bot/
 ├── .env                         # Конфигурация (создается пользователем)
 └── README.md                    # Этот файл
 ```
+
+## Celery (Планировщик задач)
+
+Проект использует Celery для планирования и выполнения периодических задач. Celery заменяет старый `TaskScheduler` и предоставляет более надёжное планирование с поддержкой распределённых worker'ов.
+
+### Архитектура
+
+- **Celery Beat** — планировщик, который создаёт задачи по расписанию
+- **Celery Worker** — исполнитель задач (поддерживает async через `celery[asyncio]`)
+- **Redis** — брокер и backend для очередей задач
+
+### Запуск через Docker Compose
+
+```bash
+# Запуск всех сервисов (бот + Celery worker + Celery beat)
+docker-compose up -d
+
+# Просмотр логов Celery worker
+docker-compose logs -f celery-worker
+
+# Просмотр логов Celery beat
+docker-compose logs -f celery-beat
+```
+
+### Запуск вручную (для разработки)
+
+```bash
+# В отдельном терминале: запуск Celery worker
+celery -A services.celery_app worker -P asyncio --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
+
+# В другом терминале: запуск Celery beat
+celery -A services.celery_app beat --loglevel=info
+```
+
+### Очереди задач
+
+- `wednesday` — отправка жаб по средам (concurrency: 6)
+- `images` — генерация изображений (concurrency: 2)
+- `maintenance` — ежедневные задачи очистки и статистики (concurrency: 1)
+
+### Конфигурация Celery
+
+Переменные окружения для настройки Celery (см. `env_example.txt`):
+
+```env
+# Timezone для Celery Beat
+SCHEDULER_TZ=Europe/Amsterdam
+
+# Worker настройки
+WORKER_CONCURRENCY=8
+WORKER_PREFETCH_MULTIPLIER=1
+
+# Beat настройки
+BEAT_MAX_LOOP_INTERVAL=10
+
+# Retry настройки
+CELERY_TASK_MAX_RETRIES=3
+CELERY_TASK_RETRY_BACKOFF=True
+CELERY_TASK_RETRY_BACKOFF_MAX=600
+```
+
+### Мониторинг
+
+- **Healthcheck**: `/health` endpoint включает проверку доступности Celery workers
+- **Prometheus метрики**: `celery_tasks_total`, `celery_task_duration_seconds`, `celery_task_retries_total`
+- **Логирование**: все задачи логируются через Loguru с структурированными событиями
 
 ## Конфигурация
 

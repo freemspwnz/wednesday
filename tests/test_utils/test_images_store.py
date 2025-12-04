@@ -12,6 +12,7 @@ from utils.prompts_store import PromptsStore
 IMAGE_HASH_HEX_LENGTH = 64
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_get_or_create_image_saves_file_and_metadata(
     tmp_path: Path, monkeypatch: Any, cleanup_tables: Any
@@ -50,6 +51,7 @@ async def test_get_or_create_image_saves_file_and_metadata(
     assert record2.image_hash == record1.image_hash
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_get_or_create_image_handles_concurrent_insert(
     monkeypatch: Any, tmp_path: Path, cleanup_tables: Any

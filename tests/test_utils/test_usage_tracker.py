@@ -29,6 +29,7 @@ def test_usage_tracker_initial_save() -> None:
     assert tracker.frog_threshold == TEST_THRESHOLD_20
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_usage_tracker_increment_and_limits(cleanup_tables: Any) -> None:
     tracker = UsageTracker(
@@ -47,6 +48,7 @@ async def test_usage_tracker_increment_and_limits(cleanup_tables: Any) -> None:
     assert await tracker.can_use_frog(when=when) is False
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_usage_tracker_threshold_and_totals(cleanup_tables: Any) -> None:
     tracker = UsageTracker(

@@ -122,3 +122,41 @@ HTTP_RETRY_WAIT_SECONDS: Final[Histogram] = Histogram(
         30.0,
     ),
 )
+
+# Метрики Celery задач
+CELERY_TASKS_TOTAL: Final[Counter] = Counter(
+    name="celery_tasks_total",
+    documentation="Общее количество Celery задач с разбивкой по имени задачи и статусу",
+    labelnames=("task_name", "status"),
+)
+
+CELERY_TASK_DURATION_SECONDS: Final[Histogram] = Histogram(
+    name="celery_task_duration_seconds",
+    documentation="Длительность выполнения Celery задач в секундах",
+    labelnames=("task_name",),
+    buckets=(1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0),
+)
+
+CELERY_TASK_RETRIES_TOTAL: Final[Counter] = Counter(
+    name="celery_task_retries_total",
+    documentation="Количество retry-попыток для Celery задач",
+    labelnames=("task_name",),
+)
+
+CELERY_TASK_FAILURES_TOTAL: Final[Counter] = Counter(
+    name="celery_task_failures_total",
+    documentation="Количество неудачных Celery задач",
+    labelnames=("task_name", "error_type"),
+)
+
+CELERY_QUEUE_LENGTH: Final[Gauge] = Gauge(
+    name="celery_queue_length",
+    documentation="Текущая длина очереди Celery",
+    labelnames=("queue_name",),
+)
+
+CELERY_ACTIVE_TASKS: Final[Gauge] = Gauge(
+    name="celery_active_tasks",
+    documentation="Количество активных задач в Celery worker",
+    labelnames=("worker_name",),
+)

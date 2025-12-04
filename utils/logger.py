@@ -4,6 +4,7 @@
 """
 
 import inspect
+import os
 import sys
 from collections.abc import Callable
 from functools import wraps
@@ -65,51 +66,66 @@ def setup_logger() -> None:
         colorize=True,
     )
 
-    # Настраиваем вывод в файл с подробной информацией (человеко-читаемый формат).
-    # Важно: путь привязан к volume с логами внутри контейнера:
-    # - локально пишем в ./logs;
-    # - в Docker при WORKDIR=/app это /app/logs, примонтированный как volume.
-    # Используем ротацию по размеру (10 MB) и retention 7 дней, чтобы:
-    # - не допустить бесконтрольного роста логов;
-    # - сохранить достаточно истории для расследований инцидентов.
-    logger.add(
-        log_dir / "wednesday_bot.log",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
-        level=config.log_level,
-        rotation="10 MB",  # Ротация по размеру файла
-        retention="7 days",  # Хранить логи 7 дней
-        compression="zip",  # Сжимать старые логи
-        backtrace=True,  # Показывать полный стек ошибок
-        diagnose=True,  # Показывать переменные в ошибках
-    )
+    # Проверяем, нужно ли логировать только в stdout (для тестов)
+    log_to_stdout_only = os.getenv("LOG_TO_STDOUT_ONLY", "").lower() in {"1", "true", "yes"}
 
-    # Дополнительный файловый sink c JSON‑сериализацией (структурированные логи).
-    #
-    # В этом sink loguru сериализует запись в один JSON‑объект с полями:
-    # - "time"    — timestamp события;
-    # - "level"   — уровень логирования;
-    # - "message" — строковое сообщение;
-    # - а также всеми дополнительными полями, добавленными через logger.bind(...)
-    #   (например, user_id, prompt_hash, image_id, latency_ms, status).
-    #
-    # Такой формат удобно парсить агентами сбора логов, которые читают файлы
-    # из директории с логами и отправляют их в централизованные системы
-    # (ELK, Loki, Vector и т.п.). JSON‑логи больше не дублируются в stdout.
-    logger.add(
-        log_dir / "wednesday_bot.events.jsonl",
-        serialize=True,
-        level=config.log_level,
-        rotation="10 MB",
-        retention="7 days",
-        compression="zip",
-        backtrace=True,
-        diagnose=True,
-    )
+    if not log_to_stdout_only:
+        # Настраиваем вывод в файл с подробной информацией (человеко-читаемый формат).
+        # Важно: путь привязан к volume с логами внутри контейнера:
+        # - локально пишем в ./logs;
+        # - в Docker при WORKDIR=/app это /app/logs, примонтированный как volume.
+        # Используем ротацию по размеру (10 MB) и retention 7 дней, чтобы:
+        # - не допустить бесконтрольного роста логов;
+        # - сохранить достаточно истории для расследований инцидентов.
+        try:
+            logger.add(
+                log_dir / "wednesday_bot.log",
+                format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+                level=config.log_level,
+                rotation="10 MB",  # Ротация по размеру файла
+                retention="7 days",  # Хранить логи 7 дней
+                compression="zip",  # Сжимать старые логи
+                backtrace=True,  # Показывать полный стек ошибок
+                diagnose=True,  # Показывать переменные в ошибках
+            )
+        except (PermissionError, OSError):
+            # Если нет прав на запись в файл (например, в тестах), логируем только в stdout
+            pass
 
-    # Логируем успешную инициализацию с явным указанием контейнерного пути.
-    logger.info(
-        f"Система логирования успешно настроена, логи пишутся в {LOGS_CONTAINER_PATH}",
-    )
+        # Дополнительный файловый sink c JSON‑сериализацией (структурированные логи).
+        #
+        # В этом sink loguru сериализует запись в один JSON‑объект с полями:
+        # - "time"    — timestamp события;
+        # - "level"   — уровень логирования;
+        # - "message" — строковое сообщение;
+        # - а также всеми дополнительными полями, добавленными через logger.bind(...)
+        #   (например, user_id, prompt_hash, image_id, latency_ms, status).
+        #
+        # Такой формат удобно парсить агентами сбора логов, которые читают файлы
+        # из директории с логами и отправляют их в централизованные системы
+        # (ELK, Loki, Vector и т.п.). JSON‑логи больше не дублируются в stdout.
+        try:
+            logger.add(
+                log_dir / "wednesday_bot.events.jsonl",
+                serialize=True,
+                level=config.log_level,
+                rotation="10 MB",
+                retention="7 days",
+                compression="zip",
+                backtrace=True,
+                diagnose=True,
+            )
+        except (PermissionError, OSError):
+            # Если нет прав на запись в файл, логируем только в stdout
+            pass
+
+    # Логируем успешную инициализацию
+    if log_to_stdout_only:
+        logger.info("Система логирования настроена, логи пишутся только в stdout (тестовый режим)")
+    else:
+        logger.info(
+            f"Система логирования успешно настроена, логи пишутся в {LOGS_CONTAINER_PATH}",
+        )
 
 
 def get_logger(name: str | None = None) -> "LoggerType":

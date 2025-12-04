@@ -5,6 +5,7 @@ import pytest
 from utils.admins_store import AdminsStore
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_add_admin(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -17,6 +18,7 @@ async def test_admins_store_add_admin(cleanup_tables: Any) -> None:
     assert await store.is_admin(12345) is True
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -29,6 +31,7 @@ async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
     assert result2 is False  # Уже был админом
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -43,6 +46,7 @@ async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
     assert await store.is_admin(12345) is False
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -52,6 +56,7 @@ async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None
     assert result is False
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -63,12 +68,13 @@ async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
 
     # Получаем список
     admins = await store.list_admins()
-    assert 11111 in admins  # noqa: PLR2004
-    assert 22222 in admins  # noqa: PLR2004
-    assert 33333 in admins  # noqa: PLR2004
-    assert len(admins) == 3  # noqa: PLR2004
+    assert 11111 in admins
+    assert 22222 in admins
+    assert 33333 in admins
+    assert len(admins) == 3
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_list_all_admins(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -79,6 +85,6 @@ async def test_admins_store_list_all_admins(cleanup_tables: Any) -> None:
 
     # Получаем полный список (включая главного из config)
     all_admins = await store.list_all_admins()
-    assert len(all_admins) >= 2  # noqa: PLR2004
-    assert 11111 in all_admins  # noqa: PLR2004
-    assert 22222 in all_admins  # noqa: PLR2004
+    assert len(all_admins) >= 2
+    assert 11111 in all_admins
+    assert 22222 in all_admins

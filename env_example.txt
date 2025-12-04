@@ -38,6 +38,11 @@ SCHEDULER_TZ=Europe/Moscow
 # 0 = понедельник, 1 = вторник, 2 = среда, 3 = четверг, 4 = пятница, 5 = суббота, 6 = воскресенье
 SCHEDULER_WEDNESDAY_DAY=2
 
+# Использовать старый TaskScheduler вместо Celery (для обратной совместимости)
+# Если установлено в "true", будет использован старый планировщик
+# По умолчанию (не установлено или "false") используется Celery
+# USE_OLD_SCHEDULER=false
+
 # ===== ЛОГИРОВАНИЕ =====
 
 # Уровень логирования
@@ -211,6 +216,45 @@ SENTRY_ENVIRONMENT=
 # Примеры: v1.0.0, abc123def456, 1.2.3
 # Рекомендуется устанавливать через CI/CD при деплое
 RELEASE=
+
+# ============================================
+# CELERY CONFIGURATION
+# ============================================
+
+# Celery Broker и Backend (Redis URL)
+# Используется тот же Redis, что и для основного приложения
+# CELERY_BROKER_URL=redis://localhost:6379/0
+# CELERY_BACKEND_URL=redis://localhost:6379/0
+
+# Timezone для Celery Beat
+# CELERY_TIMEZONE=Europe/Amsterdam
+# SCHEDULER_TZ=Europe/Amsterdam
+
+# Worker настройки
+# WORKER_CONCURRENCY=8
+# WORKER_PREFETCH_MULTIPLIER=1
+# CELERY_ASYNC_MODE=asyncio
+
+# Beat настройки
+# BEAT_ENABLED=1
+# BEAT_MAX_LOOP_INTERVAL=10
+
+# Retry настройки
+# CELERY_TASK_MAX_RETRIES=3
+# CELERY_TASK_RETRY_BACKOFF=True
+# CELERY_TASK_RETRY_BACKOFF_MAX=600
+# CELERY_TASK_RETRY_JITTER=True
+
+# Dead Letter Queue
+# CELERY_TASK_REJECT_ON_WORKER_LOST=True
+# CELERY_TASK_ACKS_LATE=True
+# CELERY_DLQ_ENABLED=1
+# CELERY_DLQ_QUEUE=dead_letter
+
+# Queue concurrency (разделение по очередям)
+# CELERY_QUEUE_WEDNESDAY_CONCURRENCY=6
+# CELERY_QUEUE_IMAGES_CONCURRENCY=2
+# CELERY_QUEUE_MAINTENANCE_CONCURRENCY=1
 
 # ==========================================
 # ПРИМЕЧАНИЯ

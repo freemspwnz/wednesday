@@ -16,14 +16,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import Any, cast
 
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
-logger = logging.getLogger(__name__)
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class _InMemoryRedis:
@@ -328,3 +329,26 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
         if fallback_method is None:
             raise
         return await fallback_method(*args, **kwargs)
+
+
+def get_redis_url() -> str | None:
+    """
+    Возвращает URL Redis для использования в Celery.
+
+    Используется для настройки Celery broker и backend.
+
+    Returns:
+        URL Redis в формате redis://host:port/db или None если не настроен
+    """
+    from utils.config import config
+
+    if config.redis_url:
+        return config.redis_url
+
+    # Формируем URL из отдельных параметров
+    # Проверяем, что password не пустая строка и не None
+    if config.redis_password and config.redis_password.strip():
+        password_part = f":{config.redis_password}@"
+    else:
+        password_part = ""
+    return f"redis://{password_part}{config.redis_host}:{config.redis_port}/{config.redis_db}"

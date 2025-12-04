@@ -4,7 +4,7 @@ COV_ARGS := --cov=bot --cov=services --cov=utils
 
 IMAGE_NAME := wednesday-bot
 
-.PHONY: lint format format-check test test-cov test-no-containers test-cleanup test-up test-down type run ci build migrate
+.PHONY: lint format format-check test test-cov test-no-containers test-cleanup test-up test-down test-e2e type run ci build migrate
 
 lint:
 	ruff check .
@@ -13,25 +13,33 @@ format:
 	ruff check . --fix
 	ruff format .
 
-# Запуск тестовых контейнеров (Postgres + Redis)
+# Запуск тестовых контейнеров (Postgres + Redis + Celery)
 test-up:
-	@echo "Запуск тестовых контейнеров Postgres и Redis..."
+	@echo "Запуск тестовых контейнеров Postgres, Redis и Celery..."
 	@docker-compose -f docker-compose.test.yml up -d
-	@echo "Ожидание готовности сервисов (до 30 секунд)..."
-	@timeout=30; \
+	@echo "Ожидание готовности сервисов (до 60 секунд)..."
+	@timeout=60; \
 	while [ $$timeout -gt 0 ]; do \
 		postgres_health=$$(docker inspect --format='{{.State.Health.Status}}' wednesday_postgres_test 2>/dev/null || echo "starting"); \
 		redis_health=$$(docker inspect --format='{{.State.Health.Status}}' wednesday_redis_test 2>/dev/null || echo "starting"); \
-		if [ "$$postgres_health" = "healthy" ] && [ "$$redis_health" = "healthy" ]; then \
-			echo "✓ Сервисы готовы к тестированию"; \
+		worker_health=$$(docker inspect --format='{{.State.Health.Status}}' wednesday_celery_worker_test 2>/dev/null || echo "starting"); \
+		if [ "$$postgres_health" = "healthy" ] && [ "$$redis_health" = "healthy" ] && [ "$$worker_health" = "healthy" ]; then \
+			echo "✓ Все сервисы готовы к тестированию"; \
 			break; \
 		fi; \
-		echo "Ожидание сервисов... (Postgres: $$postgres_health, Redis: $$redis_health)"; \
+		echo "Ожидание сервисов... (Postgres: $$postgres_health, Redis: $$redis_health, Celery Worker: $$worker_health)"; \
 		sleep 1; \
 		timeout=$$((timeout-1)); \
 	done; \
 	if [ $$timeout -eq 0 ]; then \
 		echo "✗ Таймаут ожидания готовности сервисов"; \
+		echo ""; \
+		echo "=== Логи Celery Worker ==="; \
+		docker logs wednesday_celery_worker_test 2>&1 | tail -50 || true; \
+		echo ""; \
+		echo "=== Healthcheck статус ==="; \
+		docker inspect wednesday_celery_worker_test --format='{{range .State.Health.Log}}{{.Output}}{{end}}' 2>&1 | tail -10 || true; \
+		echo ""; \
 		$(MAKE) test-down; \
 		exit 1; \
 	fi
@@ -58,6 +66,7 @@ test: test-cleanup
 	 REDIS_HOST=localhost \
 	 REDIS_PORT=6379 \
 	 REDIS_DB=0 \
+	 REDIS_PASSWORD="" \
 	 SCHEDULER_SEND_TIMES="09:00,12:00,18:00" \
 	 SCHEDULER_WEDNESDAY_DAY="2" \
 	 SCHEDULER_TZ="Europe/Moscow" \
@@ -95,6 +104,27 @@ test-no-containers:
 	@pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
 		--junitxml=junit.xml \
 		-o junit_family=legacy
+
+# Запуск E2E тестов для Celery (требует запущенных контейнеров)
+test-e2e: test-up
+	@echo "=== Запуск E2E тестов для Celery ==="
+	@POSTGRES_USER=test_user \
+	 POSTGRES_PASSWORD=test_password_ci_2024 \
+	 POSTGRES_DB=wednesdaydb_test \
+	 POSTGRES_HOST=localhost \
+	 POSTGRES_PORT=5432 \
+	 REDIS_HOST=localhost \
+	 REDIS_PORT=6379 \
+	 REDIS_DB=0 \
+	 SCHEDULER_SEND_TIMES="09:00,12:00,18:00" \
+	 SCHEDULER_WEDNESDAY_DAY="2" \
+	 SCHEDULER_TZ="Europe/Moscow" \
+	 pytest tests/test_services/test_celery_e2e.py -v -m e2e \
+		--junitxml=junit-e2e.xml \
+		-o junit_family=legacy; \
+	TEST_EXIT_CODE=$$?; \
+	$(MAKE) test-down; \
+	exit $$TEST_EXIT_CODE
 
 type:
 	mypy .

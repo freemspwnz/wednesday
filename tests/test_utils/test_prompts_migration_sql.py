@@ -10,6 +10,7 @@ from utils.postgres_client import get_postgres_pool
 SQL_DIR = Path("docs/sql")
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_prompts_migration_up_and_down_applies_successfully(cleanup_tables: Any) -> None:
     """

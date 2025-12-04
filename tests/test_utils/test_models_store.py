@@ -5,6 +5,7 @@ import pytest
 from utils.models_store import ModelsStore
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_models_store_initial_defaults(cleanup_tables: Any) -> None:
     store = ModelsStore(storage_path="ignored.json")
@@ -15,6 +16,7 @@ async def test_models_store_initial_defaults(cleanup_tables: Any) -> None:
     assert await store.get_kandinsky_available_models() == []
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_models_store_persistence(cleanup_tables: Any) -> None:
     store = ModelsStore(storage_path="ignored.json")
@@ -32,6 +34,7 @@ async def test_models_store_persistence(cleanup_tables: Any) -> None:
     assert any("Model One" in item for item in models_list)
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_models_store_handles_string_models(cleanup_tables: Any) -> None:
     store = ModelsStore(storage_path="ignored.json")

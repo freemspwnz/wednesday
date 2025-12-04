@@ -73,11 +73,13 @@ class WednesdayBot:
 
         # Создаем сервисы
         self.logger.info(
-            "Инициализация сервисов: ImageGenerator, TaskScheduler, "
+            "Инициализация сервисов: ImageGenerator, TaskScheduler (опционально), "
             "UsageTracker, ChatsStore, DispatchRegistry, Metrics",
         )
         self.image_generator: ImageGenerator = ImageGenerator()
-        self.scheduler: TaskScheduler = TaskScheduler()
+        # TaskScheduler используется только если USE_OLD_SCHEDULER=true
+        # Иначе используется Celery (запускается отдельно через celery worker/beat)
+        self.scheduler: TaskScheduler | None = TaskScheduler() if config.use_old_scheduler else None
         self.usage: UsageTracker = UsageTracker(
             storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
             monthly_quota=MONTHLY_QUOTA_DEFAULT,
@@ -104,7 +106,9 @@ class WednesdayBot:
 
         # Создаем обработчики команд
         self.logger.info("Создание CommandHandlers")
-        self.handlers: CommandHandlers = CommandHandlers(self.image_generator, self.scheduler.get_next_run)
+        # Для get_next_run используем scheduler если он есть, иначе None (Celery управляет расписанием)
+        get_next_run_fn = self.scheduler.get_next_run if self.scheduler else lambda: None
+        self.handlers: CommandHandlers = CommandHandlers(self.image_generator, get_next_run_fn)
 
         # ID чата для отправки сообщений
         self.chat_id: str | None = config.chat_id
@@ -224,7 +228,13 @@ class WednesdayBot:
         # Если слот не передан планировщиком — сопоставим ближайший (<= now)
         if slot_time is None:
             try:
-                configured_times: list[str] = list(self.scheduler.send_times or [])
+                if self.scheduler:
+                    configured_times: list[str] = list(self.scheduler.send_times or [])
+                else:
+                    # Используем конфигурацию из config для Celery
+                    from utils.config import config
+
+                    configured_times = config.scheduler_send_times
             except Exception:
                 configured_times = []
             resolved_slot: str | None = None
@@ -586,8 +596,15 @@ class WednesdayBot:
     def setup_scheduler(self) -> None:
         """
         Настраивает планировщик задач для автоматической отправки жабы.
+
+        Используется только если USE_OLD_SCHEDULER=true.
+        Иначе используется Celery (запускается отдельно).
         """
-        self.logger.info("Настраиваю планировщик задач")
+        if not self.scheduler:
+            self.logger.info("TaskScheduler отключен, используется Celery для планирования задач")
+            return
+
+        self.logger.info("Настраиваю планировщик задач (старый TaskScheduler)")
 
         # Планируем отправку жабы каждую среду
         self.scheduler.schedule_wednesday_task(self.send_wednesday_frog)
@@ -611,19 +628,22 @@ class WednesdayBot:
         """
         self.logger.info("Запускаю Wednesday Bot (боевой режим с планировщиком)")
 
-        # Валидация конфигурации слотов
-        self.logger.info(
-            f"Валидация планировщика: день недели={self.scheduler.wednesday}, "
-            f"времена={self.scheduler.send_times}, TZ={self.scheduler.tz.key}",
-        )
-        if len(self.scheduler.send_times) == 0:
-            self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
+        # Валидация конфигурации слотов (только для старого планировщика)
+        if self.scheduler:
+            self.logger.info(
+                f"Валидация планировщика: день недели={self.scheduler.wednesday}, "
+                f"времена={self.scheduler.send_times}, TZ={self.scheduler.tz.key}",
+            )
+            if len(self.scheduler.send_times) == 0:
+                self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
+        else:
+            self.logger.info("Используется Celery для планирования задач (TaskScheduler отключен)")
 
         try:
             # Настраиваем обработчики
             self.setup_handlers()
 
-            # Настраиваем и запускаем планировщик
+            # Настраиваем и запускаем планировщик (только если используется старый планировщик)
             self.setup_scheduler()
 
             # Проверяем доступность чата перед отправкой сообщения
@@ -666,10 +686,11 @@ class WednesdayBot:
 
             # Отправляем сообщение о запуске после старта
             try:
+                scheduler_status = "включен (Celery)" if not self.scheduler else "включен (TaskScheduler)"
                 startup_message = (
                     "🚀 Wednesday Frog Bot запущен!\n\n"
                     "✅ Бот активен и готов к работе\n"
-                    "📅 Планировщик: включен (среда в указанное время)\n"
+                    f"📅 Планировщик: {scheduler_status}\n"
                     "🎨 Генератор изображений: Kandinsky API\n"
                     "📝 Логирование: включено\n\n"
                     "🐸 Используйте команду /frog для генерации жабы!"
@@ -757,8 +778,12 @@ class WednesdayBot:
             except Exception as e:
                 self.logger.warning(f"Не удалось обновить статусное сообщение SupportBot: {e}")
 
-            # Запускаем планировщик в фоновой задаче
-            self.scheduler_task = asyncio.create_task(self.scheduler.start())
+            # Запускаем планировщик в фоновой задаче (только если используется старый планировщик)
+            if self.scheduler:
+                self.scheduler_task = asyncio.create_task(self.scheduler.start())
+            else:
+                self.scheduler_task = None
+                self.logger.info("Celery используется для планирования, TaskScheduler не запущен")
 
             # Устанавливаем флаг запуска
             self.is_running = True
@@ -892,9 +917,9 @@ class WednesdayBot:
             # Устанавливаем флаг остановки
             self.is_running = False
 
-            # Останавливаем планировщик
+            # Останавливаем планировщик (только если используется старый планировщик)
             try:
-                if hasattr(self, "scheduler_task") and self.scheduler_task:
+                if self.scheduler and hasattr(self, "scheduler_task") and self.scheduler_task:
                     self.scheduler.stop()
                     self.scheduler_task.cancel()
                     try:

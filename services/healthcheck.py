@@ -205,6 +205,58 @@ async def _check_metrics_stream() -> dict[str, Any]:
         }
 
 
+async def _check_celery() -> dict[str, Any]:
+    """
+    Выполняет проверку доступности Celery workers.
+
+    Возвращает структуру:
+        {
+            "status": "up" | "down",
+            "workers_count": int,
+            "latency_ms": float | None,
+            "details": str | None,
+        }
+    """
+    started = time.monotonic()
+
+    try:
+        import asyncio
+
+        from services.celery_app import celery_app
+
+        # Проверяем доступность workers через ping
+        # celery_app.control.ping() синхронный, запускаем в executor
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: celery_app.control.ping(timeout=1))
+
+        if result:
+            workers_count = len(result)
+            latency_ms = (time.monotonic() - started) * 1000.0
+            return {
+                "status": "up",
+                "workers_count": workers_count,
+                "latency_ms": latency_ms,
+                "details": None,
+            }
+        else:
+            latency_ms = (time.monotonic() - started) * 1000.0
+            return {
+                "status": "down",
+                "workers_count": 0,
+                "latency_ms": latency_ms,
+                "details": "No workers available",
+            }
+    except Exception as exc:
+        latency_ms = (time.monotonic() - started) * 1000.0
+        logger.warning(f"Ошибка при проверке Celery в healthcheck: {exc!s}")
+        return {
+            "status": "down",
+            "workers_count": 0,
+            "latency_ms": latency_ms,
+            "details": str(exc),
+        }
+
+
 async def _build_health_payload() -> dict[str, Any]:
     """
     Выполняет все проверки и формирует итоговый JSON‑ответ healthcheck.
@@ -214,6 +266,7 @@ async def _build_health_payload() -> dict[str, Any]:
             "status": "up" | "down",
             "redis": {...},
             "postgres": {...},
+            "celery": {...},
             "queues": {
                 "metrics_events": {...}
             },
@@ -224,11 +277,13 @@ async def _build_health_payload() -> dict[str, Any]:
     redis_status = await _check_redis()
     postgres_status = await _check_postgres()
     metrics_stream_status = await _check_metrics_stream()
+    celery_status = await _check_celery()
 
     # Все три зависимости считаются критичными для статуса "up":
     # - Redis (в том числе для лимитеров, кэшей и circuit‑breaker);
     # - Postgres (персистентное хранилище);
     # - основная очередь метрик metrics:events.
+    # Celery не критичен для основного healthcheck бота, но полезен для мониторинга
     all_ok = (
         redis_status.get("status") == "up"
         and postgres_status.get("status") == "up"
@@ -242,6 +297,7 @@ async def _build_health_payload() -> dict[str, Any]:
         "status": overall_status,
         "redis": redis_status,
         "postgres": postgres_status,
+        "celery": celery_status,  # Добавляем статус Celery
         "queues": {
             "metrics_events": metrics_stream_status,
         },
@@ -272,6 +328,7 @@ async def _build_health_payload() -> dict[str, Any]:
                 "redis_status": redis_status.get("status"),
                 "postgres_status": postgres_status.get("status"),
                 "metrics_events_status": metrics_stream_status.get("status"),
+                "celery_status": celery_status.get("status"),
             },
             level=log_level,
             message="Healthcheck зависимости бота не в состоянии up",

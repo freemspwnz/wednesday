@@ -120,9 +120,76 @@ services:
       timeout: 5s
       retries: 3
 
+  celery-worker:
+    image: wednesday-bot:local
+    container_name: wednesday_celery_worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bot-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      # Переопределяем хосты для работы внутри docker-сети
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      # Timezone для Celery Beat
+      TZ: ${SCHEDULER_TZ:-Europe/Amsterdam}
+      # Выбор бэкендов моделей
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
+    # ⚠️ ВАЖНО: Используем Python скрипт для запуска worker с asyncio pool
+    # В Celery 5.5.3 asyncio pool не поддерживается через CLI, но доступен через Python API
+    command: python /app/scripts/celery_worker_asyncio.py
+    volumes:
+      - frog_images:/app/data/frogs
+      - logs:/app/logs
+      - prompt_storage:/app/data/prompts
+    networks:
+      - default
+    healthcheck:
+      # Проверяем здоровье worker через Celery inspect() API
+      # Используем скрипт для более надежной проверки
+      # Запускаем из /app с правильным PYTHONPATH
+      test: ["CMD-SHELL", "cd /app && python scripts/celery_healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  celery-beat:
+    image: wednesday-bot:local
+    container_name: wednesday_celery_beat
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      bot-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      # Переопределяем хосты для работы внутри docker-сети
+      REDIS_HOST: redis
+      # Timezone для Celery Beat
+      TZ: ${SCHEDULER_TZ:-Europe/Amsterdam}
+    command: celery -A services.celery_app beat --loglevel=info
+    volumes:
+      - logs:/app/logs
+      # Beat сохраняет состояние расписания в файл (опционально)
+      - beat_data:/app/data/beat
+    networks:
+      - default
+    # Beat не зависит от celery-worker (Beat и Worker - отдельные процессы)
+
 volumes:
   postgres_data:
   redis_data:
   frog_images:
   logs:
   prompt_storage:
+  beat_data:

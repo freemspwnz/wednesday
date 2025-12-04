@@ -6,6 +6,7 @@ import pytest
 from utils.dispatch_registry import DispatchRegistry
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_dispatch_registry_is_dispatched_false(cleanup_tables: Any) -> None:
     registry = DispatchRegistry()
@@ -15,6 +16,7 @@ async def test_dispatch_registry_is_dispatched_false(cleanup_tables: Any) -> Non
     assert result is False
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_dispatch_registry_mark_and_check(cleanup_tables: Any) -> None:
     registry = DispatchRegistry()
@@ -31,6 +33,7 @@ async def test_dispatch_registry_mark_and_check(cleanup_tables: Any) -> None:
     assert result is True
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_dispatch_registry_mark_duplicate(cleanup_tables: Any) -> None:
     registry = DispatchRegistry()
@@ -45,6 +48,7 @@ async def test_dispatch_registry_mark_duplicate(cleanup_tables: Any) -> None:
     assert result is True
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_dispatch_registry_cleanup_old(cleanup_tables: Any) -> None:
     registry = DispatchRegistry(retention_days=1)

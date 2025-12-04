@@ -10,6 +10,7 @@ from utils.prompts_store import PromptsStore
 SHA256_HEX_LENGTH = 64
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_get_or_create_prompt_inserts_and_deduplicates(cleanup_tables: Any) -> None:
     store = PromptsStore()
@@ -29,6 +30,7 @@ async def test_get_or_create_prompt_inserts_and_deduplicates(cleanup_tables: Any
     assert record2.prompt_hash == record1.prompt_hash
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_get_prompt_by_hash_returns_existing(cleanup_tables: Any) -> None:
     store = PromptsStore()
@@ -42,6 +44,7 @@ async def test_get_prompt_by_hash_returns_existing(cleanup_tables: Any) -> None:
     assert loaded.normalized_text == record.normalized_text
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_get_prompt_by_hash_missing_returns_none(cleanup_tables: Any) -> None:
     store = PromptsStore()
@@ -50,6 +53,7 @@ async def test_get_prompt_by_hash_missing_returns_none(cleanup_tables: Any) -> N
     assert loaded is None
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_get_random_prompt_returns_record(cleanup_tables: Any) -> None:
     store = PromptsStore()
@@ -62,6 +66,7 @@ async def test_get_random_prompt_returns_record(cleanup_tables: Any) -> None:
     assert random_record.raw_text in {"Prompt A", "Prompt B"}
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_get_or_create_prompt_concurrent_insert(cleanup_tables: Any) -> None:
     """
