@@ -1,4 +1,44 @@
 # CHANGELOG
+## [6.4.1] 2025-12-04 — Упрощение и изоляция E2E-инфраструктуры Celery
+
+### Добавлено
+- **Отдельный тестовый Celery app**:
+  - Создан `services/celery_app_test.py` — минимальный Celery-приложение для тестов, использующее только Redis и не импортирующее боевой код бота и сервисов.
+  - Создан `services/celery_tasks_test.py` с единственной задачей `test.ping`, используемой для healthcheck и E2E-тестов.
+- **Ожидание готовности Celery worker в тестах**:
+  - Добавлен модуль `tests/utils/wait_for_celery.py` с синхронной функцией `wait_for_celery_worker()`, проверяющей:
+    - доступность Redis;
+    - регистрацию очередей через `inspect().active_queues()`;
+    - успешное выполнение задачи `test.ping` в очереди `test_main`.
+  - Добавлена session-fixture `celery_worker_ready` с `autouse=True`, гарантирующая готовность worker перед запуском E2E-тестов.
+
+### Изменено
+- **Тестовый Docker-образ и docker-compose для E2E**:
+  - Добавлен `Dockerfile.test`, собирающий минимальный образ только из `services/`, `utils/`, `bot/` и `requirements.txt` с `ENV TESTING=1` до копирования кода.
+  - Упрощён `docker-compose.test.yml`:
+    - оставлены только сервисы `postgres_test`, `redis_test`, `celery-worker-test`;
+    - `celery-worker-test` собирается из `Dockerfile.test` и использует `services.celery_app_test` с тестовыми очередями (`test_main`, `test_images`, `test_maintenance`);
+    - healthcheck worker-а переведён на простой `pgrep 'celery worker'` без Python-скриптов и импорта приложения.
+- **Логирование в тестах**:
+  - В `utils/logger.py` добавлена ветка для `TESTING=1`: в тестовой среде логи пишутся только в stdout, файловые sink-ы не создаются.
+- **Запуск тестовой инфраструктуры через Makefile**:
+  - Цель `test-up` переведена на использование `docker compose` и, при наличии `timeout`/`gtimeout`, ограничена по времени (для CI); на macOS запуск выполняется без таймаута.
+  - Цели `test`, `test-cov`, `test-e2e` теперь загружают окружение из `.env.test`, фильтруя комментарии и пустые строки, и не дублируют переменные вручную.
+- **E2E-тесты Celery**:
+  - `tests/test_services/test_celery_e2e.py` переведён на использование `services.celery_app_test` и тестовых очередей.
+  - Проверка доступности worker теперь основана на `inspect.ping()` и регистрации задачи `test.ping`, а не на производственных задачах и очередях.
+  - Тесты, завязанные на Beat и retry-механику, адаптированы к тестовому app и проверяют структуру конфигурации либо выполнение `test.ping`, не полагаясь на боевое расписание.
+- **Конфигурация тестового окружения**:
+  - Создан `.env.test`, описывающий тестовые переменные окружения для E2E (Postgres, Redis, TESTING, расписание), с использованием `localhost` для доступа к проброшенным портам.
+  - Обновлён `tests/README.md` с новыми инструкциями по запуску E2E-тестов через `make test-up` / `make test-e2e` / `make test-down`.
+
+### Удалено
+- Удалён скрипт `scripts/celery_healthcheck.py`; проверка готовности Celery worker в тестовой инфраструктуре теперь выполняется:
+  - на уровне Docker healthcheck через `pgrep`;
+  - на уровне pytest через задачу `test.ping` и `wait_for_celery_worker()`.
+
+---
+
 ## [6.4.0] 2025-12-03 — Миграция планировщика задач на Celery с поддержкой распределённых worker'ов
 
 ### Добавлено

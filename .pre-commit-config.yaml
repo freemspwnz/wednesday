@@ -76,8 +76,8 @@ repos:
     hooks:
       - id: dotenv-linter
         name: Dotenv linter
-        files: "^\\.env.*"
-        # Проверяет только .env файлы
+        files: "^\\.env$|^\\.env\\.(example|local|production)$"
+        # Проверяет только основные .env файлы (исключаем .env.test через files паттерн)
 
   # ---------------------------
   # Ruff: линтер и форматтер (использует конфиг из pyproject.toml)

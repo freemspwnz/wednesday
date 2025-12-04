@@ -66,7 +66,12 @@ def setup_logger() -> None:
         colorize=True,
     )
 
-    # Проверяем, нужно ли логировать только в stdout (для тестов)
+    # Для тестовой среды: только stdout, без файлов
+    if os.getenv("TESTING", "").lower() in {"1", "true", "yes"}:
+        logger.info("Система логирования настроена для тестов (только stdout)")
+        return  # Ранний выход для тестов
+
+    # Проверяем, нужно ли логировать только в stdout (для обратной совместимости)
     log_to_stdout_only = os.getenv("LOG_TO_STDOUT_ONLY", "").lower() in {"1", "true", "yes"}
 
     if not log_to_stdout_only:

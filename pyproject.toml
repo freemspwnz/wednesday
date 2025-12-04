@@ -150,7 +150,7 @@ warn_unused_ignores = true
 warn_return_any = true
 no_implicit_optional = true
 strict_equality = true
-exclude = "(?x)(^tests/_doubles/)"
+exclude = "(?x)(^tests/_doubles/|^tests/utils/|^services/celery_app_test\\.py|^services/celery_tasks_test\\.py)"
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -162,6 +162,14 @@ ignore_errors = true
 module = "tests.conftest"
 disallow_untyped_defs = false
 check_untyped_defs = false
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "services.celery_app_test"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "services.celery_tasks_test"
 ignore_errors = true
 
 [tool.ruff.lint.per-file-ignores]

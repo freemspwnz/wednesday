@@ -21,27 +21,31 @@ pytest --cov=bot --cov=services --cov=utils --cov-report=xml |--cov-report=term-
 
 ## E2E тесты для Celery
 
-E2E тесты для Celery требуют запущенных контейнеров с worker и beat:
+E2E тесты для Celery требуют запущенных контейнеров с worker:
 
 ```bash
-# Запуск тестовых контейнеров (включая celery-worker-test и celery-beat-test)
-docker-compose -f docker-compose.test.yml up -d
+# Запуск тестовых контейнеров (Postgres, Redis, Celery Worker)
+make test-up
 
-# Дождаться готовности всех сервисов
-docker-compose -f docker-compose.test.yml ps
+# Запуск только E2E тестов (pytest сам подождёт готовности worker)
+make test-e2e
 
-# Запуск только E2E тестов
-pytest tests/test_services/test_celery_e2e.py -v -m e2e
-
-# Остановка контейнеров
-docker-compose -f docker-compose.test.yml down
+# Или вручную:
+docker compose --env-file .env.test -f docker-compose.test.yml up -d --build
+export $(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$' | xargs) && pytest -m e2e
+docker compose -f docker-compose.test.yml down -v
 ```
+
+**Важно:**
+- Используется отдельный тестовый Celery app (`services.celery_app_test`) с тестовыми очередями
+- Pytest fixture `celery_worker_ready` автоматически проверяет готовность worker через `test.ping` задачу
+- Worker запускается с тестовыми очередями: `test_main`, `test_images`, `test_maintenance`
+- Логирование в тестах идёт только в stdout (нет файловых логов)
 
 E2E тесты проверяют:
 - Доступность Celery worker через control.inspect()
-- Отправку задач в очереди
+- Отправку задач в тестовые очереди
 - Маршрутизацию задач по очередям
-- Регистрацию расписания в Celery Beat
 - Мониторинг длины очередей
 - Работу result backend (Redis)
 

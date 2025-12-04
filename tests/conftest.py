@@ -10,6 +10,9 @@ import pytest
 import pytest_asyncio
 from pytest import MonkeyPatch
 
+# Импортируем fixture для ожидания готовности Celery worker в E2E тестах
+from tests.utils.wait_for_celery import celery_worker_ready  # noqa: F401
+
 _session_monkeypatch = MonkeyPatch()
 _session_env_defaults = {
     "TELEGRAM_BOT_TOKEN": "session-test-token",

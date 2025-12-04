@@ -13,87 +13,48 @@ format:
 	ruff check . --fix
 	ruff format .
 
-# Запуск тестовых контейнеров (Postgres + Redis + Celery)
+# ⚠️ КРИТИЧНО: Добавлен timeout для предотвращения зависаний в CI
+# Если docker build или compose зависнет, команда завершится через 5 минут
+# На macOS timeout может быть недоступен, поэтому используем условную проверку
+
+# Запуск тестовых контейнеров
 test-up:
-	@echo "Запуск тестовых контейнеров Postgres, Redis и Celery..."
-	@docker-compose -f docker-compose.test.yml up -d
-	@echo "Ожидание готовности сервисов (до 60 секунд)..."
-	@timeout=60; \
-	while [ $$timeout -gt 0 ]; do \
-		postgres_health=$$(docker inspect --format='{{.State.Health.Status}}' wednesday_postgres_test 2>/dev/null || echo "starting"); \
-		redis_health=$$(docker inspect --format='{{.State.Health.Status}}' wednesday_redis_test 2>/dev/null || echo "starting"); \
-		worker_health=$$(docker inspect --format='{{.State.Health.Status}}' wednesday_celery_worker_test 2>/dev/null || echo "starting"); \
-		if [ "$$postgres_health" = "healthy" ] && [ "$$redis_health" = "healthy" ] && [ "$$worker_health" = "healthy" ]; then \
-			echo "✓ Все сервисы готовы к тестированию"; \
-			break; \
-		fi; \
-		echo "Ожидание сервисов... (Postgres: $$postgres_health, Redis: $$redis_health, Celery Worker: $$worker_health)"; \
-		sleep 1; \
-		timeout=$$((timeout-1)); \
-	done; \
-	if [ $$timeout -eq 0 ]; then \
-		echo "✗ Таймаут ожидания готовности сервисов"; \
-		echo ""; \
-		echo "=== Логи Celery Worker ==="; \
-		docker logs wednesday_celery_worker_test 2>&1 | tail -50 || true; \
-		echo ""; \
-		echo "=== Healthcheck статус ==="; \
-		docker inspect wednesday_celery_worker_test --format='{{range .State.Health.Log}}{{.Output}}{{end}}' 2>&1 | tail -10 || true; \
-		echo ""; \
-		$(MAKE) test-down; \
-		exit 1; \
+	@echo "Запуск тестовых контейнеров..."
+	@TIMEOUT_CMD=$$(command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || echo ""); \
+	if [ -n "$$TIMEOUT_CMD" ]; then \
+		echo "Используется timeout: $$TIMEOUT_CMD"; \
+		$$TIMEOUT_CMD 300 docker compose --env-file .env.test -f docker-compose.test.yml up -d --build || \
+			(echo "✗ Таймаут или ошибка при запуске контейнеров" && $(MAKE) test-down && exit 1); \
+	else \
+		echo "Timeout недоступен, запуск без таймаута (для macOS это нормально)"; \
+		docker compose --env-file .env.test -f docker-compose.test.yml up -d --build || \
+			(echo "✗ Ошибка при запуске контейнеров" && $(MAKE) test-down && exit 1); \
 	fi
+	@echo "✓ Контейнеры запущены (pytest сам подождёт готовности worker)"
 
 # Остановка тестовых контейнеров
 test-down:
 	@echo "Остановка тестовых контейнеров..."
-	@docker-compose -f docker-compose.test.yml down -v
+	@docker compose -f docker-compose.test.yml down -v
 	@echo "✓ Контейнеры остановлены"
 
-# Очистка тестовых контейнеров (используется как fallback)
-test-cleanup:
-	@docker-compose -f docker-compose.test.yml down -v 2>/dev/null || true
-
-# Запуск тестов без покрытия (только junit.xml)
-test: test-cleanup
-	@echo "=== Запуск тестов с тестовыми контейнерами (без покрытия) ==="
-	@$(MAKE) test-up || ($(MAKE) test-cleanup && exit 1)
-	@POSTGRES_USER=test_user \
-	 POSTGRES_PASSWORD=test_password_ci_2024 \
-	 POSTGRES_DB=wednesdaydb_test \
-	 POSTGRES_HOST=localhost \
-	 POSTGRES_PORT=5432 \
-	 REDIS_HOST=localhost \
-	 REDIS_PORT=6379 \
-	 REDIS_DB=0 \
-	 REDIS_PASSWORD="" \
-	 SCHEDULER_SEND_TIMES="09:00,12:00,18:00" \
-	 SCHEDULER_WEDNESDAY_DAY="2" \
-	 SCHEDULER_TZ="Europe/Moscow" \
-	 pytest --junitxml=junit.xml \
-		-o junit_family=legacy; \
+# Запуск unit/integration тестов
+test: test-down
+	@echo "=== Запуск Unit/Integration тестов ==="
+	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
+	@export $$(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$$' | xargs) && \
+	 pytest --junitxml=junit.xml -m "not e2e"; \
 	TEST_EXIT_CODE=$$?; \
 	$(MAKE) test-down; \
 	exit $$TEST_EXIT_CODE
 
 # Запуск тестов с покрытием (coverage.xml + junit.xml)
-test-cov: test-cleanup
+test-cov: test-down
 	@echo "=== Запуск тестов с тестовыми контейнерами (с покрытием) ==="
-	@$(MAKE) test-up || ($(MAKE) test-cleanup && exit 1)
-	@POSTGRES_USER=test_user \
-	 POSTGRES_PASSWORD=test_password_ci_2024 \
-	 POSTGRES_DB=wednesdaydb_test \
-	 POSTGRES_HOST=localhost \
-	 POSTGRES_PORT=5432 \
-	 REDIS_HOST=localhost \
-	 REDIS_PORT=6379 \
-	 REDIS_DB=0 \
-	 SCHEDULER_SEND_TIMES="09:00,12:00,18:00" \
-	 SCHEDULER_WEDNESDAY_DAY="2" \
-	 SCHEDULER_TZ="Europe/Moscow" \
+	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
+	@export $$(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$$' | xargs) && \
 	pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
-		--junitxml=junit.xml \
-		-o junit_family=legacy; \
+		--junitxml=junit.xml -m "not e2e"; \
 	TEST_EXIT_CODE=$$?; \
 	$(MAKE) test-down; \
 	exit $$TEST_EXIT_CODE
@@ -105,23 +66,12 @@ test-no-containers:
 		--junitxml=junit.xml \
 		-o junit_family=legacy
 
-# Запуск E2E тестов для Celery (требует запущенных контейнеров)
-test-e2e: test-up
-	@echo "=== Запуск E2E тестов для Celery ==="
-	@POSTGRES_USER=test_user \
-	 POSTGRES_PASSWORD=test_password_ci_2024 \
-	 POSTGRES_DB=wednesdaydb_test \
-	 POSTGRES_HOST=localhost \
-	 POSTGRES_PORT=5432 \
-	 REDIS_HOST=localhost \
-	 REDIS_PORT=6379 \
-	 REDIS_DB=0 \
-	 SCHEDULER_SEND_TIMES="09:00,12:00,18:00" \
-	 SCHEDULER_WEDNESDAY_DAY="2" \
-	 SCHEDULER_TZ="Europe/Moscow" \
-	 pytest tests/test_services/test_celery_e2e.py -v -m e2e \
-		--junitxml=junit-e2e.xml \
-		-o junit_family=legacy; \
+# Запуск E2E тестов
+test-e2e: test-down
+	@echo "=== Запуск E2E тестов ==="
+	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
+	@export $$(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$$' | xargs) && \
+	 pytest --junitxml=junit-e2e.xml -m e2e; \
 	TEST_EXIT_CODE=$$?; \
 	$(MAKE) test-down; \
 	exit $$TEST_EXIT_CODE

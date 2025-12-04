@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+# ⚠️ КРИТИЧНО: Устанавливаем TESTING=1 ДО копирования кода
+# Это гарантирует, что при импорте celery_app_test.py переменная уже установлена
+ENV TESTING=1
+
+# Создаём рабочую директорию
+WORKDIR /app
+
+# Копируем только зависимости
+COPY requirements.txt .
+
+# Устанавливаем зависимости
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем только рабочий код (не тесты, не docs, не скрипты)
+COPY services ./services
+COPY utils ./utils
+COPY bot ./bot
+
+# В тестах запускаем от root (проще, нет проблем с правами)
+USER root
+
+# Команда по умолчанию: Celery worker с тестовым app и тестовыми очередями
+CMD ["celery", "-A", "services.celery_app_test", "worker", "-P", "solo", "-Q", "test_main,test_images,test_maintenance", "--loglevel=info"]
