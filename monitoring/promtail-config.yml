@@ -1,0 +1,53 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: wednesday-json-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: wednesday-json-logs
+          service: wednesday-bot
+          env: dev
+          __path__: /var/log/wednesday/wednesday_bot.events.jsonl
+    pipeline_stages:
+      # 1. Парсим строку как JSON, извлекая базовые поля и extra
+      - json:
+          expressions:
+            time: time
+            level: level
+            message: message
+            extra: extra
+      # 2. Используем поле time как timestamp записи в Loki
+      - timestamp:
+          source: time
+          # loguru пишет time в ISO8601 с таймзоной, совместимой с RFC3339
+          format: RFC3339
+      # 3. Поднимаем стабильные labels низкой кардинальности
+      - labels:
+          level:
+          service:
+          env:
+      # 4. Разворачиваем extra в отдельные поля
+      - json:
+          source: extra
+          expressions:
+            event: event
+            status: status
+            user_id: user_id
+            prompt_hash: prompt_hash
+            latency_ms: latency_ms
+      # 5. Поднимаем только event/status в labels
+      - labels:
+          event:
+          status:
+      # high-cardinality поля (user_id, prompt_hash и др.) остаются полями поиска,
+      # а не labels, чтобы не раздувать кардинальность в Loki.

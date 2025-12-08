@@ -1,0 +1,97 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: wednesday-logging
+    folder: "Logging"
+    interval: 1m
+    rules:
+      - uid: high-error-rate
+        title: "High error rate in logs"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: loki_ds
+            queryType: range
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: "sum(rate({level=~\"ERROR|CRITICAL\"}[$__interval]))"
+              queryType: "range"
+              refId: "A"
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              refId: "B"
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: "and"
+              refId: "C"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["B"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+        noDataState: "NoData"
+        execErrState: "Error"
+        for: 5m
+        annotations:
+          description: "Уровень ERROR/CRITICAL в логах превышает 1 событие/сек в течение 5 минут."
+          summary: "Высокий уровень ошибок в логах Wednesday Bot"
+
+      - uid: suspicious-secrets
+        title: "Suspicious secret patterns in logs"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki_ds
+            queryType: range
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              expr: "sum(rate(({job=\"wednesday-json-logs\"} |= \"Authorization\" or {job=\"wednesday-json-logs\"} |= \"Bearer\" or {job=\"wednesday-json-logs\"} |= \"BEGIN_PRIVATE_KEY\")[$__interval]))"
+              queryType: "range"
+              refId: "A"
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              refId: "B"
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+        noDataState: "NoData"
+        execErrState: "Error"
+        for: 0m
+        annotations:
+          description: "Обнаружены подозрительные паттерны секретов (Authorization/Bearer/BEGIN_PRIVATE_KEY) в логах. Значения должны быть уже замаскированы."
+          summary: "Подозрение на утечку секретов в логах Wednesday Bot"

@@ -347,8 +347,13 @@ def get_redis_url() -> str | None:
 
     # Формируем URL из отдельных параметров
     # Проверяем, что password не пустая строка и не None
+    # ВАЖНО: Экранируем пароль через urllib.parse.quote для корректной работы с Celery/kombu
+    # Специальные символы в пароле (например, !) могут ломать парсинг URL
     if config.redis_password and config.redis_password.strip():
-        password_part = f":{config.redis_password}@"
+        from urllib.parse import quote
+
+        password_encoded = quote(config.redis_password, safe="")
+        password_part = f":{password_encoded}@"
     else:
         password_part = ""
     return f"redis://{password_part}{config.redis_host}:{config.redis_port}/{config.redis_db}"

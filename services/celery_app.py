@@ -20,13 +20,45 @@ from utils.redis_client import get_redis_url
 logger = get_logger(__name__)
 
 # Получаем URL Redis для брокера и результата
-redis_url = get_redis_url() or "redis://localhost:6379/0"
+# Используем get_redis_url(), который читает REDIS_HOST из переменных окружения
+# В docker-compose.yml REDIS_HOST=redis установлен в секции environment
+redis_url_initial = get_redis_url()
+if not redis_url_initial or redis_url_initial.strip() == "":
+    # Fallback на redis:6379 (правильный хост для Docker сети)
+    redis_url_initial = "redis://redis:6379/0"
+    logger.warning(f"get_redis_url() вернул пустое значение, используем fallback: {redis_url_initial}")
+else:
+    from urllib.parse import urlparse, urlunparse
+
+    from utils.logger import mask_secrets
+
+    # Маскируем пароль в URL перед логированием
+    parsed = urlparse(redis_url_initial)
+    if parsed.password:
+        # Заменяем пароль на маскированное значение
+        masked_netloc = parsed.netloc.replace(f":{parsed.password}@", ":****@")
+        masked_url = urlunparse(parsed._replace(netloc=masked_netloc))
+        logger.info(f"Celery использует Redis URL: {masked_url}")
+    else:
+        logger.info(f"Celery использует Redis URL: {mask_secrets(redis_url_initial)}")
+
 
 celery_app = Celery(
     "wednesday_bot",
-    broker=redis_url,
-    backend=redis_url,
+    broker=redis_url_initial,
+    backend=redis_url_initial,
 )
+
+# ВАЖНО: Принудительно устанавливаем все broker URL параметры сразу после создания app
+# Celery может неправильно парсить URL с паролем при создании Connection,
+# поэтому устанавливаем все параметры явно
+# get_redis_url() читает переменные окружения в момент импорта модуля,
+# поэтому дополнительное обновление через сигналы не требуется
+celery_app.conf.broker_url = redis_url_initial
+celery_app.conf.broker = redis_url_initial
+celery_app.conf.result_backend = redis_url_initial
+celery_app.conf.broker_read_url = redis_url_initial
+celery_app.conf.broker_write_url = redis_url_initial
 
 # Настройка таймзон
 celery_app.conf.enable_utc = False
@@ -160,6 +192,6 @@ celery_app.conf.worker_task_log_format = (
 )
 
 # Подключаем Loguru handler к Celery logger
+# НЕ устанавливаем уровень жёстко - пусть Celery сам управляет через --loglevel
 celery_logger = logging.getLogger("celery")
 celery_logger.handlers = [LoguruHandler()]
-celery_logger.setLevel(logging.INFO)

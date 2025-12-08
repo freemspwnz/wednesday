@@ -36,7 +36,7 @@ _MASKED_VALUE = "****"
 
 def _get_known_secret_values() -> list[str]:
     """
-    Возвращает список известных секретных значений для точечной маскировки.
+    Возвращает список известных секретных значений для маскировки.
 
     Важно:
     - используем только конкретные значения из конфигурации/env;
@@ -50,6 +50,16 @@ def _get_known_secret_values() -> list[str]:
         gigachat_key = config.gigachat_authorization_key
         if gigachat_key and len(gigachat_key) >= _MIN_SECRET_LENGTH:
             secrets.append(gigachat_key)
+
+        # Добавляем пароль Redis для маскировки в логах
+        redis_password = config.redis_password
+        if redis_password and len(redis_password) >= _MIN_SECRET_LENGTH:
+            secrets.append(redis_password)
+
+        # Добавляем пароль Postgres для маскировки в логах
+        postgres_password = config.postgres_password
+        if postgres_password and len(postgres_password) >= _MIN_SECRET_LENGTH:
+            secrets.append(postgres_password)
     except Exception:
         # При ошибке чтения конфигурации не изменяем поведение логирования.
         return []

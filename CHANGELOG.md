@@ -1,4 +1,66 @@
 # CHANGELOG
+## [6.5.0] 2025-12-05 — Интеграция Loki/Grafana/Promtail и улучшение инфраструктуры
+
+### Добавлено
+
+- **Интеграция Loki/Grafana/Promtail для централизованного логирования**:
+  - Добавлены сервисы `loki`, `grafana` и `promtail` в `docker-compose.yml` с соответствующими volumes, портами и healthcheck'ами
+  - Создан `monitoring/loki-config.yml` с файловым backend и retention 7 дней для dev/stage окружения
+  - Создан `monitoring/promtail-config.yml` с pipeline для чтения JSONL-логов из `wednesday_bot.events.jsonl`, парсинга JSON полей (`time`, `level`, `message`, `extra`), использования `time` как timestamp и продвижения `level`, `service`, `env`, `event`, `status` в Loki labels
+  - Создан `monitoring/grafana/provisioning/datasources/datasource-loki.yml` для автоматической настройки Loki как datasource в Grafana
+  - Создан `monitoring/grafana/provisioning/dashboards/dashboard.yml` для файлового provisioning дашбордов
+  - Создан `monitoring/grafana/provisioning/dashboards/wednesday-logs-dashboard.json` с дашбордом "Wednesday Bot Logs", включающим templating переменные (`env`, `service`, `level`, `event`, `status`) и панели для log rate, event types, generation latency и recent logs
+  - Создан `monitoring/grafana/provisioning/alerting/logging-rules.yml` с правилами алёртинга для "High error rate in logs" и "Suspicious secret patterns in logs"
+  - Создан `docs/dev/logger_loki_schema.md` с формальной схемой JSON-логов для Loki/Promtail (версия v1)
+  - Создан `docs/logging_loki_validation.md` с детальным гайдом по валидации стека логирования и рекомендациями по поэтапному внедрению (dev → stage → prod)
+  - Интеграция реализована минимально инвазивно: существующий код логирования не изменён, защита секретов через `mask_secrets` и `scrub` сохранена, Promtail только читает уже маскированные JSON-строки из volume `logs`
+
+### Изменено
+
+- **Миграция Celery worker с asyncio на threads pool**:
+  - Удалён скрипт `scripts/celery_worker_asyncio.py` — теперь используется прямой CLI в `docker-compose.yml`
+  - Обновлён `docker-compose.yml`: команда запуска worker использует `celery -A services.celery_app worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance`
+  - Исправлен healthcheck в `docker-compose.yml`: заменён удалённый `scripts/celery_healthcheck.py` на стандартный `celery inspect ping`
+  - Обновлены комментарии и документация: убраны упоминания про "asyncio pool через Python API"
+  - Обновлён `README.md`: команда запуска worker теперь использует `--pool=threads`
+  - **Причина**: В Celery 5.x пул asyncio не поддерживается вообще (ни через CLI, ни через Python API). Threads pool официально поддерживается через CLI и корректно работает с async/await задачами для I/O-bound операций.
+
+- **Упрощение логики подключения Celery к Redis**:
+  - Удалена избыточная функция `_update_redis_url()` и её вызовы через сигнал `on_after_configure` в `services/celery_app.py`
+  - Упрощены комментарии: убраны упоминания про обновление URL через сигналы, так как все параметры broker устанавливаются сразу после создания app
+  - Добавлено экранирование пароля Redis через `urllib.parse.quote()` в `utils/redis_client.py` для корректной работы с паролями, содержащими специальные символы (например, `!`)
+  - Все параметры broker URL (`broker_url`, `broker`, `result_backend`, `broker_read_url`, `broker_write_url`) устанавливаются сразу после создания Celery app, что исключает необходимость дополнительного обновления
+  - Упрощена команда запуска worker в `docker-compose.yml`: убрана установка `CELERY_BROKER_URL` через `sh -c`, используется прямой вызов `celery` с правильным `REDIS_HOST=redis` из переменных окружения
+  - Добавлена маскировка пароля Redis в логах в `services/celery_app.py`: пароль в Redis URL заменяется на `****` перед логированием для предотвращения утечки секретов
+
+- **Улучшение healthcheck для сервисов**:
+  - **bot**: упрощена команда healthcheck до однострочной Python-команды (убрана многострочная конструкция), увеличен `start_period` с 30s до 60s для времени на инициализацию
+  - **celery-beat**: изменён подход к healthcheck — вместо проверки процесса и подключения к Redis теперь проверяется наличие и свежесть файла лога `/app/logs/beat.log` (обновлён менее 60 секунд назад), добавлен `--logfile=/app/logs/beat.log` в команду запуска beat, увеличен `start_period` с 30s до 60s
+  - **promtail**: изменена команда healthcheck с `ps aux | grep` на `/bin/pidof promtail` для более надёжной проверки процесса, увеличен `start_period` с 20s до 40s
+  - **loki**: исправлен healthcheck для использования `wget -q -O- http://localhost:3100/ready | grep -q ready` (busybox wget доступен в образе grafana/loki)
+  - **grafana**: добавлен healthcheck с проверкой HTTP endpoint `/api/health` через `wget`, установлен `start_period: 60s` для времени на инициализацию
+
+### Исправлено
+
+- **Исправление ложных срабатываний pre-commit хука `detect-private-key`**:
+  - Заменён паттерн "BEGIN_PRIVATE_KEY" (с подчёркиванием) вместо варианта с пробелом в следующих файлах:
+    - `docs/logging_loki_validation.md` — в примере тестирования
+    - `monitoring/grafana/provisioning/alerting/logging-rules.yml` — в LogQL запросе и описании алёрта
+    - `docs/logger_loki_schema.md` — в документации
+    - `docs/dev/logging_loki_grafana_plan.md` — в двух местах
+  - Изменение сохраняет смысл как паттерн для поиска в логах, но предотвращает ложные срабатывания детектора приватных ключей
+
+- **Исправление ошибки `KeyError: 'No such transport: '` в celery-worker**:
+  - Проблема была вызвана некорректным парсингом Redis URL с паролем, содержащим специальные символы (например, `!`)
+  - Решение: добавлено экранирование пароля через `urllib.parse.quote()` в `utils/redis_client.py` и принудительная установка всех broker URL параметров сразу после создания Celery app
+  - Упрощена логика получения Redis URL: убрана зависимость от `CELERY_BROKER_URL` при импорте, используется только `get_redis_url()`, который читает `REDIS_HOST` из переменных окружения
+
+- **Исправление ошибки `ValueError: Signal receiver must accept keyword arguments`**:
+  - Функция `_update_redis_url()` была обновлена для принятия `*args` и `**kwargs` для совместимости с сигналами Celery
+  - Впоследствии функция была удалена как избыточная, так как все параметры broker устанавливаются сразу после создания app
+
+---
+
 ## [6.4.3] 2025-12-04 — Усиление защиты секретов в логах
 
 ### Добавлено

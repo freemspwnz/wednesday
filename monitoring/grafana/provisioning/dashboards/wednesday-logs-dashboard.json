@@ -1,0 +1,192 @@
+{
+  "id": null,
+  "uid": "wednesday-logs",
+  "title": "Wednesday Bot Logs",
+  "tags": ["wednesday", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "label": "Env",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki_ds"
+        },
+        "query": "label_values(env)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki_ds"
+        },
+        "query": "label_values({env=~\"$env\"}, service)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "level",
+        "label": "Level",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki_ds"
+        },
+        "query": "label_values({env=~\"$env\", service=~\"$service\"}, level)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "event",
+        "label": "Event",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki_ds"
+        },
+        "query": "label_values({env=~\"$env\", service=~\"$service\"}, event)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "status",
+        "label": "Status",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki_ds"
+        },
+        "query": "label_values({env=~\"$env\", service=~\"$service\"}, status)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Log rate by level",
+      "id": 1,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (level) (rate({env=~\"$env\", service=~\"$service\", level=~\"$level\"}[$__interval]))",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Events by type",
+      "id": 2,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (event) (rate({env=~\"$env\", service=~\"$service\", event=~\"$event\"}[$__interval]))",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency (ms) for generation (event=\"generation\")",
+      "id": 3,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {env=~\"$env\", service=~\"$service\", event=\"generation\", status=~\"$status\"} | unwrap latency_ms [$__interval])",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Recent logs",
+      "id": 4,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds"
+      },
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{env=~\"$env\", service=~\"$service\", level=~\"$level\", event=~\"$event\", status=~\"$status\"}",
+          "queryType": "range"
+        }
+      ]
+    }
+  ]
+}

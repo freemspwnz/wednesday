@@ -225,9 +225,10 @@ async def _check_celery() -> dict[str, Any]:
         from services.celery_app import celery_app
 
         # Проверяем доступность workers через ping
-        # celery_app.control.ping() синхронный, запускаем в executor
+        # celery_app.control.inspect() синхронный, запускаем в executor
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: celery_app.control.ping(timeout=1))
+        inspect_obj = celery_app.control.inspect(timeout=0.2)
+        result = await loop.run_in_executor(None, inspect_obj.ping)
 
         if result:
             workers_count = len(result)

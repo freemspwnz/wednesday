@@ -134,7 +134,7 @@ docker-compose logs -f celery-beat
 
 ```bash
 # В отдельном терминале: запуск Celery worker
-celery -A services.celery_app worker -P asyncio --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
+celery -A services.celery_app worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
 
 # В другом терминале: запуск Celery beat
 celery -A services.celery_app beat --loglevel=info

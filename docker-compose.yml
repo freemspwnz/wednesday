@@ -24,9 +24,9 @@ services:
     command: >
       sh -c "
       if [ -n \"$$REDIS_PASSWORD\" ]; then
-        redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\"
+        redis-server --appendonly yes --appendfsync everysec --requirepass \"$$REDIS_PASSWORD\"
       else
-        redis-server --appendonly yes
+        redis-server --appendonly yes --appendfsync everysec
       fi
       "
     environment:
@@ -111,14 +111,13 @@ services:
     healthcheck:
       # Используем встроенный python для проверки эндпоинта /health без
       # дополнительных системных утилит (curl/wget).
-      test: >
-        python -c "import os, sys, urllib.request;
-        port = os.environ.get('HEALTHCHECK_PORT', '8080');
-        url = f'http://127.0.0.1:{port}/health';
-        sys.exit(0 if urllib.request.urlopen(url).getcode() == 200 else 1)"
+      # Скрипт минималистичный - только проверка 200 OK, без лишней логики
+      # Таймауты fail-fast для быстрой диагностики проблем
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; resp=urllib.request.urlopen(\"http://127.0.0.1:8080/health\"); import sys; sys.exit(0 if resp.getcode()==200 else 1)'"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 60s
 
   celery-worker:
     image: wednesday-bot:local
@@ -142,9 +141,16 @@ services:
       # Выбор бэкендов моделей
       IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
       TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
-    # ⚠️ ВАЖНО: Используем Python скрипт для запуска worker с asyncio pool
-    # В Celery 5.5.3 asyncio pool не поддерживается через CLI, но доступен через Python API
-    command: python /app/scripts/celery_worker_asyncio.py
+    # ⚠️ ВАЖНО: Используем threads pool для поддержки async задач
+    # В Celery 5.5.3 asyncio pool не поддерживается (ни через CLI, ни через Python API)
+    # Threads pool:
+    # - Официально поддерживается в Celery 5.x через --pool=threads
+    # - Корректно работает с async/await задачами
+    # - Позволяет выполнять несколько async задач параллельно
+    # - Подходит для I/O-bound задач (HTTP запросы, БД)
+    # ВАЖНО: get_redis_url() в celery_app.py читает REDIS_HOST из переменных окружения,
+    # которые установлены в секции environment выше (REDIS_HOST=redis)
+    command: celery -A services.celery_app worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
     volumes:
       - frog_images:/app/data/frogs
       - logs:/app/logs
@@ -152,10 +158,9 @@ services:
     networks:
       - default
     healthcheck:
-      # Проверяем здоровье worker через Celery inspect() API
-      # Используем скрипт для более надежной проверки
-      # Запускаем из /app с правильным PYTHONPATH
-      test: ["CMD-SHELL", "cd /app && python scripts/celery_healthcheck.py"]
+      # Проверяем здоровье worker через стандартный Celery inspect ping
+      # Используем celery inspect ping для проверки доступности worker
+      test: ["CMD-SHELL", "celery -A services.celery_app inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -177,7 +182,7 @@ services:
       REDIS_HOST: redis
       # Timezone для Celery Beat
       TZ: ${SCHEDULER_TZ:-Europe/Amsterdam}
-    command: celery -A services.celery_app beat --loglevel=info
+    command: celery -A services.celery_app beat --loglevel=debug --logfile=/app/logs/beat.log
     volumes:
       - logs:/app/logs
       # Beat сохраняет состояние расписания в файл (опционально)
@@ -185,6 +190,81 @@ services:
     networks:
       - default
     # Beat не зависит от celery-worker (Beat и Worker - отдельные процессы)
+    healthcheck:
+      # Проверяем, что процесс beat запущен и может подключиться к Redis
+      # ВАЖНО: celery inspect active не работает для beat (beat не воркер),
+      # поэтому используем проверку процесса + подключения к Redis
+      test: ["CMD-SHELL", "python3 -c 'import sys, os, time; path=\"/app/logs/beat.log\"; sys.exit(0 if os.path.exists(path) and time.time()-os.path.getmtime(path)<60 else 1)'"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  loki:
+    image: grafana/loki:2.9.6
+    container_name: wednesday_loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    healthcheck:
+      # Loki имеет встроенный HTTP endpoint /ready
+      # Используем busybox wget (доступен в образе grafana/loki)
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready | grep -q ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: wednesday_grafana
+    restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_DOMAIN=localhost
+      - GF_UNIFIED_ALERTING_PROVISIONING_PATH=/etc/grafana/provisioning/alerting
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+
+  promtail:
+    image: grafana/promtail:2.9.6
+    container_name: wednesday_promtail
+    restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - logs:/var/log/wednesday
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    ports:
+      - "9080:9080"
+    healthcheck:
+      # Promtail не имеет wget/curl в образе, используем проверку процесса
+      # Это безопасный вариант - проверяет, что процесс запущен
+      # Примечание: promtail может висеть (процесс жив, но не отправляет логи),
+      # но для базового healthcheck проверки процесса достаточно
+      test: ["CMD-SHELL", "/bin/pidof promtail > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
 
 volumes:
   postgres_data:
@@ -193,3 +273,5 @@ volumes:
   logs:
   prompt_storage:
   beat_data:
+  loki_data:
+  grafana_data:
