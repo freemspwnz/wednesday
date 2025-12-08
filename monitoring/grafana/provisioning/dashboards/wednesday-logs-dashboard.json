@@ -55,7 +55,7 @@
           "type": "loki",
           "uid": "loki_ds"
         },
-        "query": "label_values({env=~\"$env\", service=~\"$service\"}, level)",
+        "query": "label_values({env=~\"$env\", service=~\"$service\"}, level_name)",
         "includeAll": true,
         "multi": true,
         "current": {
@@ -124,7 +124,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (level) (rate({env=~\"$env\", service=~\"$service\", level=~\"$level\"}[$__interval]))",
+          "expr": "sum by (level_name) (rate({env=~\"$env\", service=~\"$service\", level_name=~\"$level\"}[$__interval]))",
           "queryType": "range"
         }
       ]
@@ -183,7 +183,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=~\"$env\", service=~\"$service\", level=~\"$level\", event=~\"$event\", status=~\"$status\"}",
+          "expr": "{env=~\"$env\", service=~\"$service\", level_name=~\"$level\", event=~\"$event\", status=~\"$status\"}",
           "queryType": "range"
         }
       ]

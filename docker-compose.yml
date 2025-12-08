@@ -250,7 +250,8 @@ services:
       loki:
         condition: service_healthy
     volumes:
-      - logs:/var/log/wednesday
+      # Используем тот же путь, что и бот, для синхронизации путей volume
+      - logs:/app/logs
       - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
     command: -config.file=/etc/promtail/config.yml
     ports:

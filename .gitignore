@@ -161,6 +161,7 @@ data/
 coverage.xml
 .coverage
 junit.xml
+junit-e2e.xml
 .junit
 
 # Ruff

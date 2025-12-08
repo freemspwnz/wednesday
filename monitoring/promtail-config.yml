@@ -17,26 +17,33 @@ scrape_configs:
           job: wednesday-json-logs
           service: wednesday-bot
           env: dev
-          __path__: /var/log/wednesday/wednesday_bot.events.jsonl
+          __path__: /app/logs/wednesday_bot.events.jsonl
     pipeline_stages:
-      # 1. Парсим строку как JSON, извлекая базовые поля и extra
+      # 1. Парсим корневой JSON и извлекаем record как объект
+      # ВАЖНО: Promtail создаёт новое поле record как объект, который затем используется в source: record
+      # Без этого этапа Promtail не сможет развернуть вложенный объект record
       - json:
           expressions:
-            time: time
-            level: level
+            record: record
+      # 2. Извлекаем поля из объекта record
+      - json:
+          source: record
+          expressions:
+            time: time.repr  # Используем time.repr (ISO8601/RFC3339 строка) для надежного парсинга
+            level_name: level.name  # Извлекаем строковое имя уровня из объекта level
             message: message
             extra: extra
-      # 2. Используем поле time как timestamp записи в Loki
+      # 3. Устанавливаем timestamp из time.repr (формат RFC3339/ISO8601)
       - timestamp:
           source: time
-          # loguru пишет time в ISO8601 с таймзоной, совместимой с RFC3339
           format: RFC3339
-      # 3. Поднимаем стабильные labels низкой кардинальности
+      # 4. Поднимаем стабильные labels низкой кардинальности
       - labels:
-          level:
+          level_name:  # Используем level_name вместо level для совместимости с объектом
           service:
           env:
-      # 4. Разворачиваем extra в отдельные поля
+      # 5. Извлекаем поля из extra (если extra существует)
+      # Если extra отсутствует или пуст, этот stage просто не создаст поля, что корректно
       - json:
           source: extra
           expressions:
@@ -45,7 +52,9 @@ scrape_configs:
             user_id: user_id
             prompt_hash: prompt_hash
             latency_ms: latency_ms
-      # 5. Поднимаем только event/status в labels
+      # 6. Поднимаем event и status в labels
+      # Promtail автоматически пропускает пустые/отсутствующие labels
+      # Для записей без extra или без event/status эти labels просто не будут созданы
       - labels:
           event:
           status:

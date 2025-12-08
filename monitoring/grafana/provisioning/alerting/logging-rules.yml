@@ -17,7 +17,7 @@ groups:
               from: 300
               to: 0
             model:
-              expr: "sum(rate({level=~\"ERROR|CRITICAL\"}[$__interval]))"
+              expr: "sum(rate({level_name=~\"ERROR|CRITICAL\"}[$__interval]))"
               queryType: "range"
               refId: "A"
           - refId: B
