@@ -18,6 +18,10 @@ venv.bak/
 # Logs
 logs/
 *.log
+*.jsonl
+
+# Runtime files
+*.tmp
 
 # Test / coverage reports
 tests/
@@ -26,6 +30,7 @@ htmlcov/
 .nox/
 .coverage
 .coverage.*
+coverage.*
 .cache
 nosetests.xml
 coverage.xml
@@ -34,6 +39,8 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 junit.xml
+junit-e2e.xml
+junit-e2e-infra.xml
 .junit
 
 # Build / distribution

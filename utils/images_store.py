@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
@@ -159,7 +160,6 @@ class ImagesStore:
 
         image_hash = self._compute_hash(image_bytes)
         fs_final_path = self._filesystem_path_for_hash(image_hash)
-        fs_tmp_path = fs_final_path.with_suffix(fs_final_path.suffix + ".tmp")
         db_path = self._container_path_for_hash(image_hash)
 
         # 1. Атомарно сохраняем файл на диск (content-addressable storage).
@@ -171,23 +171,26 @@ class ImagesStore:
                 f"Файл изображения уже существует для hash={image_hash} (path={fs_final_path}), переиспользуем",
             )
         else:
-            try:
-                fs_tmp_path.write_bytes(image_bytes)
-                # os.replace обеспечивает атомарный move поверх существующего файла,
-                # но мы предварительно проверяем существование, поэтому перезапись
-                # возможна только при гонке между процессами.
-                fs_tmp_path.replace(fs_final_path)
-                self._logger.info(
-                    f"Файл изображения сохранён: hash={image_hash} path={fs_final_path} (container_path={db_path})",
-                )
-            finally:
-                # На всякий случай удаляем временный файл, если он остался.
-                if fs_tmp_path.exists():
-                    try:
-                        fs_tmp_path.unlink()
-                    except Exception:
-                        # Логируем на уровне debug, чтобы не шуметь в проде.
-                        self._logger.debug(f"Не удалось удалить временный файл изображения: {fs_tmp_path}")
+            # Создаём временный файл в /tmp для работы с read_only: true
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp", dir="/tmp") as tmp_file:
+                fs_tmp_path = Path(tmp_file.name)
+                try:
+                    fs_tmp_path.write_bytes(image_bytes)
+                    # os.replace обеспечивает атомарный move поверх существующего файла,
+                    # но мы предварительно проверяем существование, поэтому перезапись
+                    # возможна только при гонке между процессами.
+                    fs_tmp_path.replace(fs_final_path)
+                    self._logger.info(
+                        f"Файл изображения сохранён: hash={image_hash} path={fs_final_path} (container_path={db_path})",
+                    )
+                finally:
+                    # На всякий случай удаляем временный файл, если он остался.
+                    if fs_tmp_path.exists():
+                        try:
+                            fs_tmp_path.unlink()
+                        except Exception:
+                            # Логируем на уровне debug, чтобы не шуметь в проде.
+                            self._logger.debug(f"Не удалось удалить временный файл изображения: {fs_tmp_path}")
 
         # 2. Вставляем или находим запись в БД.
         #
