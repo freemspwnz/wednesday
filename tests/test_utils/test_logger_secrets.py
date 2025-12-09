@@ -1,13 +1,31 @@
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from loguru import logger
 
-from utils.logger import log_event, mask_secrets, scrub, setup_logger
+os.environ.setdefault("POSTGRES_USER", "test")
+os.environ.setdefault("POSTGRES_PASSWORD", "test")
+os.environ.setdefault("POSTGRES_DB", "test")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def celery_worker_ready() -> None:
+    """Отключаем ожидание внешнего Celery worker для юнит-тестов."""
+    return None
+
+
+@pytest.fixture(autouse=True)
+def _setup_test_postgres() -> Generator[None, None, None]:
+    """Отключаем автосоздание/очистку тестовой БД для юнит-тестов логгера."""
+    yield
+
+
+from utils.logger import log_event, mask_secrets, scrub, setup_logger  # noqa: E402
 
 SECRET_VALUE = "dummy-secret-for-tests"
 
@@ -111,6 +129,8 @@ def test_json_logs_do_not_contain_gigachat_key(
 
     # Гарантируем, что файловые sink-и не отключены принудительно
     monkeypatch.delenv("LOG_TO_STDOUT_ONLY", raising=False)
+    # Включаем файловые логи для теста
+    monkeypatch.setenv("LOG_TO_FILE", "1")
 
     # Подменяем директорию логов
     logs_dir = tmp_path / "logs"
@@ -140,7 +160,12 @@ def test_json_logs_do_not_contain_gigachat_key(
         message="nested secret",
     )
 
-    logger.bind(auth=SECRET_VALUE).info("direct bind with secret")
+    log_event(
+        event="test_secret_bind",
+        extra={"auth": SECRET_VALUE},
+        level="info",
+        message="direct bind with secret",
+    )
 
     jsonl_path = logs_dir / "wednesday_bot.events.jsonl"
     records = _read_all_jsonl(jsonl_path)

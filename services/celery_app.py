@@ -7,14 +7,12 @@
 
 import logging
 import os
-import sys
-from types import FrameType
 
 from celery import Celery
 from celery.schedules import crontab
 
 from utils.config import config
-from utils.logger import get_logger
+from utils.logger import LoguruHandler, get_logger
 from utils.redis_client import get_redis_url
 
 logger = get_logger(__name__)
@@ -140,6 +138,13 @@ beat_schedule["daily_statistics"] = {
     "options": {"queue": "maintenance"},
 }
 
+# Heartbeat задача для Beat healthcheck
+beat_schedule["beat_heartbeat"] = {
+    "task": "wednesday.beat_heartbeat",
+    "schedule": 30.0,  # Каждые 30 секунд
+    "options": {"queue": "maintenance"},
+}
+
 celery_app.conf.beat_schedule = beat_schedule
 
 # ⚠️ ВАЖНО: Проверка timezone на старте beat
@@ -149,41 +154,6 @@ logger.info(f"System timezone: {os.environ.get('TZ', 'not set')}")
 # Предупреждение, если timezone не совпадает
 if os.environ.get('TZ') and os.environ.get('TZ') != celery_app.conf.timezone:
     logger.warning(f"Timezone mismatch: system TZ={os.environ.get('TZ')}, celery TZ={celery_app.conf.timezone}")
-
-# Настройка логирования Celery через Loguru
-
-
-class LoguruHandler(logging.Handler):
-    """Адаптер для использования Loguru в Celery."""
-
-    def emit(self, record: logging.LogRecord) -> None:  # noqa: PLR6301
-        try:
-            level = logger.level(record.levelname).name
-        except ValueError:
-            # Если levelname не распознан, используем числовой уровень
-            level_int = record.levelno
-            # Преобразуем в строку для loguru (используем константы logging)
-            if level_int >= logging.CRITICAL:  # 50
-                level = "CRITICAL"
-            elif level_int >= logging.ERROR:  # 40
-                level = "ERROR"
-            elif level_int >= logging.WARNING:  # 30
-                level = "WARNING"
-            elif level_int >= logging.INFO:  # 20
-                level = "INFO"
-            elif level_int >= logging.DEBUG:  # 10
-                level = "DEBUG"
-            else:
-                level = "TRACE"
-
-        frame: FrameType | None = sys._getframe(6)
-        depth = 6
-        while frame is not None and frame.f_code.co_filename == logging.__file__:
-            frame = frame.f_back
-            depth += 1
-
-        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
-
 
 # Настройка Celery для использования Loguru
 celery_app.conf.worker_log_format = "[%(asctime)s: %(levelname)s/%(processName)s] %(message)s"

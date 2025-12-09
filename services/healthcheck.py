@@ -18,14 +18,15 @@ HTTP‑эндпоинт healthcheck для бота.
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import asyncpg
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response
 from redis.exceptions import RedisError
 
-from utils.logger import get_logger, log_event
+from utils.logger import get_logger, log_event, log_http
 from utils.postgres_client import get_postgres_pool
 from utils.redis_client import get_redis
 
@@ -34,6 +35,29 @@ logger = get_logger(__name__)
 # Экспортируемое FastAPI‑приложение. Uvicorn использует его для запуска
 # HTTP‑сервера внутри того же event loop, что и Telegram‑бот.
 app = FastAPI(title="Wednesday Frog Bot Healthcheck")
+
+# HTTP статус код для разделения успешных и ошибочных запросов
+_HTTP_STATUS_OK_MAX = 399
+
+
+@app.middleware("http")
+async def log_requests(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    """Middleware для логирования HTTP запросов."""
+    start_time = time.time()
+    response = await call_next(request)
+    latency_ms = (time.time() - start_time) * 1000
+
+    log_http(
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        latency_ms=latency_ms,
+        level="info" if response.status_code <= _HTTP_STATUS_OK_MAX else "warning",
+    )
+    return response
 
 
 async def _check_redis() -> dict[str, Any]:

@@ -3,60 +3,50 @@ server:
   grpc_listen_port: 0
 
 positions:
-  filename: /tmp/positions.yaml
+  filename: /promtail/positions.yaml  # Персистентный volume
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: wednesday-json-logs
+  - job_name: wednesday-logs
     static_configs:
       - targets:
           - localhost
         labels:
-          job: wednesday-json-logs
-          service: wednesday-bot
-          env: dev
-          __path__: /app/logs/wednesday_bot.events.jsonl
+          job: wednesday-logs
+          __path__: /var/lib/docker/containers/*/*-json.log
     pipeline_stages:
-      # 1. Парсим корневой JSON и извлекаем record как объект
-      # ВАЖНО: Promtail создаёт новое поле record как объект, который затем используется в source: record
-      # Без этого этапа Promtail не сможет развернуть вложенный объект record
+      # 1. Парсим docker json-file формат
+      - docker: {}
+
+      # 2. Парсим JSON из поля log (docker добавляет свои поля)
       - json:
           expressions:
-            record: record
-      # 2. Извлекаем поля из объекта record
-      - json:
-          source: record
-          expressions:
-            time: time.repr  # Используем time.repr (ISO8601/RFC3339 строка) для надежного парсинга
-            level_name: level.name  # Извлекаем строковое имя уровня из объекта level
+            timestamp: timestamp
+            level: level
             message: message
             extra: extra
-      # 3. Устанавливаем timestamp из time.repr (формат RFC3339/ISO8601)
-      - timestamp:
-          source: time
-          format: RFC3339
-      # 4. Поднимаем стабильные labels низкой кардинальности
-      - labels:
-          level_name:  # Используем level_name вместо level для совместимости с объектом
-          service:
-          env:
-      # 5. Извлекаем поля из extra (если extra существует)
-      # Если extra отсутствует или пуст, этот stage просто не создаст поля, что корректно
+
+      # 3. Извлекаем service и env из extra
       - json:
           source: extra
           expressions:
+            service: service
+            env: env
             event: event
             status: status
-            user_id: user_id
-            prompt_hash: prompt_hash
-            latency_ms: latency_ms
-      # 6. Поднимаем event и status в labels
-      # Promtail автоматически пропускает пустые/отсутствующие labels
-      # Для записей без extra или без event/status эти labels просто не будут созданы
+
+      # 4. Устанавливаем timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339
+
+      # 5. Поднимаем только low-cardinality labels
       - labels:
-          event:
-          status:
-      # high-cardinality поля (user_id, prompt_hash и др.) остаются полями поиска,
-      # а не labels, чтобы не раздувать кардинальность в Loki.
+          service:
+          env:
+          level:
+
+      # 6. High-cardinality поля (event, status, user_id, prompt_hash) остаются в extra
+      # НЕ поднимаем их в labels!

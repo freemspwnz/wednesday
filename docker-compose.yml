@@ -89,13 +89,16 @@ services:
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
       # Порт HTTP‑серверa healthcheck (/health) внутри контейнера.
       HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
+      LOG_TO_FILE: ${LOG_TO_FILE:-0}  # По умолчанию 0
+      SERVICE_NAME: wednesday-bot
+      ENV: ${ENV:-dev}
     volumes:
       # Хранилище сгенерированных изображений жабы.
       # Внутри контейнера бот читает/пишет только в /app/data/frogs.
       - frog_images:/app/data/frogs
-      # Персистентные логи приложения.
+      # Персистентные логи приложения (опционально, только при LOG_TO_FILE=1).
       # Внутри контейнера логгер пишет только в /app/logs.
-      - logs:/app/logs
+      # logs:/app/logs  # Убрать по умолчанию
       # Хранилище промптов GigaChat (файловый fallback).
       # Внутри контейнера промпты сохраняются в /app/data/prompts.
       - prompt_storage:/app/data/prompts
@@ -141,6 +144,9 @@ services:
       # Выбор бэкендов моделей
       IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
       TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
+      LOG_TO_FILE: ${LOG_TO_FILE:-0}
+      SERVICE_NAME: celery-worker
+      ENV: ${ENV:-dev}
     # ⚠️ ВАЖНО: Используем threads pool для поддержки async задач
     # В Celery 5.5.3 asyncio pool не поддерживается (ни через CLI, ни через Python API)
     # Threads pool:
@@ -153,7 +159,7 @@ services:
     command: celery -A services.celery_app worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
     volumes:
       - frog_images:/app/data/frogs
-      - logs:/app/logs
+      # logs:/app/logs  # Убрать по умолчанию
       - prompt_storage:/app/data/prompts
     networks:
       - default
@@ -182,19 +188,20 @@ services:
       REDIS_HOST: redis
       # Timezone для Celery Beat
       TZ: ${SCHEDULER_TZ:-Europe/Amsterdam}
-    command: celery -A services.celery_app beat --loglevel=debug --logfile=/app/logs/beat.log
+      LOG_TO_FILE: ${LOG_TO_FILE:-0}
+      SERVICE_NAME: celery-beat
+      ENV: ${ENV:-dev}
+    command: celery -A services.celery_app beat --loglevel=debug
     volumes:
-      - logs:/app/logs
+      # logs:/app/logs  # Убрать по умолчанию
       # Beat сохраняет состояние расписания в файл (опционально)
       - beat_data:/app/data/beat
     networks:
       - default
     # Beat не зависит от celery-worker (Beat и Worker - отдельные процессы)
     healthcheck:
-      # Проверяем, что процесс beat запущен и может подключиться к Redis
-      # ВАЖНО: celery inspect active не работает для beat (beat не воркер),
-      # поэтому используем проверку процесса + подключения к Redis
-      test: ["CMD-SHELL", "python3 -c 'import sys, os, time; path=\"/app/logs/beat.log\"; sys.exit(0 if os.path.exists(path) and time.time()-os.path.getmtime(path)<60 else 1)'"]
+      # Проверяем tmpfs heartbeat файл
+      test: ["CMD-SHELL", "python3 -c 'import os, time; path=\"/tmp/beat-hb\"; exit(0 if os.path.exists(path) and time.time()-os.path.getmtime(path)<60 else 1)'"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -250,8 +257,8 @@ services:
       loki:
         condition: service_healthy
     volumes:
-      # Используем тот же путь, что и бот, для синхронизации путей volume
-      - logs:/app/logs
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro  # Для чтения docker logs
+      - promtail_positions:/promtail  # Персистентные позиции
       - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
     command: -config.file=/etc/promtail/config.yml
     ports:
@@ -276,3 +283,4 @@ volumes:
   beat_data:
   loki_data:
   grafana_data:
+  promtail_positions:

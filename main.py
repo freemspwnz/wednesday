@@ -598,6 +598,7 @@ def _start_health_server(logger: "LoggerType") -> None:
             host="0.0.0.0",
             port=port,
             log_level="info",
+            access_log=False,  # Отключить access log, логировать через middleware
             loop="asyncio",
         )
         server = uvicorn.Server(config=uvicorn_config)

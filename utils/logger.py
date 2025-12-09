@@ -4,10 +4,12 @@
 """
 
 import inspect
+import logging
 import os
 import sys
 from collections.abc import Callable
 from functools import wraps
+from types import FrameType
 from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar, cast, overload
 
 from loguru import logger
@@ -32,6 +34,38 @@ CALLER_FRAME_DEPTH = 3
 
 _MIN_SECRET_LENGTH = 16
 _MASKED_VALUE = "****"
+
+
+class LoguruHandler(logging.Handler):
+    """Адаптер для использования Loguru в стандартном logging."""
+
+    def emit(self, record: logging.LogRecord) -> None:  # noqa: PLR6301
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            # Если levelname не распознан, используем числовой уровень
+            level_int = record.levelno
+            # Преобразуем в строку для loguru (используем константы logging)
+            if level_int >= logging.CRITICAL:  # 50
+                level = "CRITICAL"
+            elif level_int >= logging.ERROR:  # 40
+                level = "ERROR"
+            elif level_int >= logging.WARNING:  # 30
+                level = "WARNING"
+            elif level_int >= logging.INFO:  # 20
+                level = "INFO"
+            elif level_int >= logging.DEBUG:  # 10
+                level = "DEBUG"
+            else:
+                level = "TRACE"
+
+        frame: FrameType | None = sys._getframe(6)
+        depth = 6
+        while frame is not None and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
 def _get_known_secret_values() -> list[str]:
@@ -96,127 +130,75 @@ def mask_secrets(text: str) -> str:
 def setup_logger() -> None:
     """
     Настраивает систему логирования для приложения.
-
-    Конфигурирует два независимых типа логов:
-    - человеко‑читаемые текстовые логи в stdout и файле;
-    - структурированные JSON‑логи в отдельном файловом sink-е.
-
-    ВАЖНО: stdout используется только для форматированных текстовых логов,
-    чтобы консоль/Docker‑логи оставались читаемыми. JSON‑логи никогда
-    не попадают в stdout и пишутся только в файл для последующей доставки
-    в Loki.
     """
 
     # Удаляем стандартный обработчик loguru
     logger.remove()
 
-    # Создаем папку для логов, если её нет.
-    # Используем относительный путь (logs/), который внутри Docker-контейнера
-    # при WORKDIR=/app будет соответствовать /app/logs и будет примонтирован
-    # в volume. При локальном запуске логи пишутся в ./logs рядом с проектом.
-    log_dir = resolve_logs_dir()
-    log_dir.mkdir(exist_ok=True)
-
-    # Настраиваем вывод в консоль с цветами (читаемые текстовые логи для локальной разработки
-    # и просмотра логов контейнера через stdout).
+    # Основной sink: JSON в stdout (единственный обязательный sink)
     logger.add(
         sys.stdout,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-        "<level>{level: <8}</level> | "
-        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-        "<level>{message}</level>",
+        serialize=True,
         level=config.log_level,
-        colorize=True,
+        backtrace=False,  # Отключить для прода
+        diagnose=False,  # Отключить для прода
+        format="{message}",  # Минимальный формат, т.к. serialize=True
     )
 
-    # Для тестовой среды: только stdout, без файлов
-    if os.getenv("TESTING", "").lower() in {"1", "true", "yes"}:
-        logger.info("Система логирования настроена для тестов (только stdout)")
-        return  # Ранний выход для тестов
+    # Опциональный файловый sink для debug/forensics
+    log_to_file = os.getenv("LOG_TO_FILE", "0").lower() in {"1", "true", "yes"}
 
-    # Проверяем, нужно ли логировать только в stdout (для обратной совместимости)
-    log_to_stdout_only = os.getenv("LOG_TO_STDOUT_ONLY", "").lower() in {"1", "true", "yes"}
+    if log_to_file:
+        log_dir = resolve_logs_dir()
+        log_dir.mkdir(exist_ok=True)
 
-    if not log_to_stdout_only:
-        # Настраиваем вывод в файл с подробной информацией (человеко-читаемый формат).
-        # Важно: путь привязан к volume с логами внутри контейнера:
-        # - локально пишем в ./logs;
-        # - в Docker при WORKDIR=/app это /app/logs, примонтированный как volume.
-        # Используем ротацию по размеру (10 MB) и retention 7 дней, чтобы:
-        # - не допустить бесконтрольного роста логов;
-        # - сохранить достаточно истории для расследований инцидентов.
-        try:
-            logger.add(
-                log_dir / "wednesday_bot.log",
-                format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
-                level=config.log_level,
-                rotation="10 MB",  # Ротация по размеру файла
-                retention="7 days",  # Хранить логи 7 дней
-                compression="zip",  # Сжимать старые логи
-                backtrace=True,  # Показывать полный стек ошибок
-                diagnose=True,  # Показывать переменные в ошибках
-            )
-        except (PermissionError, OSError):
-            # Если нет прав на запись в файл (например, в тестах), логируем только в stdout
-            pass
+        # Текстовый файл для человеко-читаемости
+        logger.add(
+            log_dir / "wednesday_bot.log",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+            level=config.log_level,
+            rotation="10 MB",
+            retention="7 days",
+            compression="zip",
+            backtrace=True,  # Включить для файлов
+            diagnose=True,  # Включить для файлов
+        )
 
-        # Дополнительный файловый sink c JSON‑сериализацией (структурированные логи).
-        #
-        # В этом sink loguru сериализует запись в один JSON‑объект с полями:
-        # - "time"    — timestamp события;
-        # - "level"   — уровень логирования;
-        # - "message" — строковое сообщение;
-        # - а также всеми дополнительными полями, добавленными через logger.bind(...)
-        #   (например, user_id, prompt_hash, image_id, latency_ms, status).
-        #
-        # Такой формат удобно парсить агентами сбора логов, которые читают файлы
-        # из директории с логами и отправляют их в централизованные системы
-        # (ELK, Loki, Vector и т.п.). JSON‑логи больше не дублируются в stdout.
-        try:
+        # JSON файл для forensics (если нужен)
+        logger.add(
+            log_dir / "wednesday_bot.events.jsonl",
+            serialize=True,
+            level=config.log_level,
+            rotation="10 MB",
+            retention="7 days",
+            compression="zip",
+        )
 
-            def _json_sink_filter(record: object) -> bool:
-                """
-                Фильтр для JSON‑sink.
+    # Точечная интеграция сторонних логеров
+    # НЕ трогаем root logger - это опасно и может создать рекурсию
 
-                Применяет:
-                - mask_secrets к полю message;
-                - scrub к полю extra (nested‑структурам).
-                """
-                if not isinstance(record, dict):
-                    return True
+    import logging
 
-                message = record.get("message")
-                if isinstance(message, str):
-                    record["message"] = mask_secrets(message)
+    # Интегрируем только uvicorn logger
+    uvicorn_logger = logging.getLogger("uvicorn")
+    uvicorn_logger.handlers = [LoguruHandler()]
+    uvicorn_logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
+    uvicorn_logger.propagate = False  # Отключить propagate для избежания дублирования
 
-                extra = record.get("extra")
-                if isinstance(extra, dict):
-                    record["extra"] = scrub(extra)
+    # Интегрируем prometheus_client logger
+    prometheus_logger = logging.getLogger("prometheus_client")
+    prometheus_logger.handlers = [LoguruHandler()]
+    prometheus_logger.setLevel(logging.WARNING)  # Prometheus обычно на WARNING
+    prometheus_logger.propagate = False
 
-                return True
-
-            logger.add(
-                log_dir / "wednesday_bot.events.jsonl",
-                serialize=True,
-                level=config.log_level,
-                rotation="10 MB",
-                retention="7 days",
-                compression="zip",
-                backtrace=True,
-                diagnose=True,
-                filter=_json_sink_filter,
-            )
-        except (PermissionError, OSError):
-            # Если нет прав на запись в файл, логируем только в stdout
-            pass
+    # НЕ трогаем root logger!
+    # Если библиотека логирует до setup_logger - это нормально, пусть идёт в stderr
 
     # Логируем успешную инициализацию
-    if log_to_stdout_only:
-        logger.info("Система логирования настроена, логи пишутся только в stdout (тестовый режим)")
+    if log_to_file:
+        logger.info(f"Система логирования настроена, логи пишутся в stdout и {LOGS_CONTAINER_PATH}")
     else:
-        logger.info(
-            f"Система логирования успешно настроена, логи пишутся в {LOGS_CONTAINER_PATH}",
-        )
+        logger.info("Система логирования настроена, логи пишутся только в stdout (JSON)")
 
 
 def get_logger(name: str | None = None) -> "LoggerType":
@@ -332,39 +314,16 @@ def log_event(  # noqa: PLR0913
 ) -> None:
     """
     Высокоуровневая обёртка для структурированного логирования событий.
-
-    Функция:
-    - собирает стандартные поля (event, user_id, prompt_hash, image_id,
-      latency_ms, status);
-    - объединяет их с дополнительными полями из `extra`;
-    - отфильтровывает все значения None, чтобы в JSON не появлялись "пустые" ключи;
-    - привязывает получившийся набор полей к логгеру через logger.bind(...);
-    - вызывает нужный метод loguru (info, error, warning и др.) с указанным message.
-
-    В результате в JSON‑логах (sink с serialize=True) появляется одна запись,
-    где:
-    - стандартные поля доступны как отдельные ключи;
-    - дополнительные поля из extra находятся на том же уровне;
-    - формат остаётся совместимым с парсерами структурированных логов.
-
-    Args:
-        event: Краткий тип/код события (например, "image_generation", "handler_error").
-        user_id: Идентификатор пользователя (Telegram user id).
-        prompt_hash: Хэш промпта (sha256, 64‑символьный hex).
-        image_id: Идентификатор или hash изображения (может совпадать с image_hash из БД).
-        latency_ms: Латентность операции в миллисекундах.
-        status: Статус события ("ok", "error", "cached", "started" и т.п.).
-        extra: Дополнительные произвольные поля, которые нужно добавить в лог.
-        level: Уровень логирования loguru ("info", "error", "warning" и т.д.).
-        message: Человеко‑читаемое сообщение; если не указано, используется event.
+    Маскировка секретов выполняется здесь, перед логированием.
     """
-    # Базовый набор полей события. Мы намеренно не включаем сюда None,
-    # чтобы далее их можно было отфильтровать и не захламлять JSON.
-    payload: dict[str, Any] = {"event": event}
+    # Базовый набор полей события
+    payload: dict[str, Any] = {
+        "event": event,
+        "service": os.getenv("SERVICE_NAME", "wednesday-bot"),
+        "env": os.getenv("ENV", "dev"),
+    }
 
     if user_id is not None:
-        # user_id может быть int (Telegram id) или str — приводим к строке,
-        # чтобы в JSON не было неоднородности типов.
         payload["user_id"] = str(user_id)
     if prompt_hash is not None:
         payload["prompt_hash"] = prompt_hash
@@ -375,38 +334,84 @@ def log_event(  # noqa: PLR0913
     if status is not None:
         payload["status"] = status
 
-    # Дополнительные поля (если переданы) перекладываем поверх стандартных.
-    # При совпадении ключей extra имеет приоритет — это даёт возможность
-    # локально переопределить значение в конкретном кейсе.
+    # Дополнительные поля
     if extra:
         for key, value in extra.items():
             if value is not None:
                 payload[key] = value
 
-    # Получаем логгер с именем модуля вызывающего кода, чтобы:
-    # - сохранить привычное поле `name` в логах;
-    # - при этом "забиндить" к нему все дополнительные поля payload.
+    # Маскировка секретов перед логированием
+    # Применяем mask_secrets к message и scrub к payload
+    masked_message = mask_secrets(message or event)
+    scrubbed_payload_obj = scrub(payload)
+    # scrub возвращает object, но для dict мы гарантируем dict
+    if not isinstance(scrubbed_payload_obj, dict):
+        scrubbed_payload: dict[str, Any] = payload  # Fallback на исходный payload
+    else:
+        scrubbed_payload = scrubbed_payload_obj
+
+    # Получаем логгер с именем модуля вызывающего кода
     caller_module = _get_caller_module_name()
     base_logger = get_logger(caller_module) if caller_module else get_logger(__name__)
 
-    # bind(...) в loguru не записывает лог немедленно, а возвращает новый логгер,
-    # у которого все указанные ключи будут автоматически добавляться к каждой записи.
-    # Эти ключи:
-    # - выводятся в текстовом формате (если включим {extra[...]});
-    # - попадают как отдельные поля в JSON‑sink (serialize=True), что и нужно
-    #   для структурированных логов.
-    bound_logger = base_logger.bind(**payload)
+    # Привязываем payload к логгеру
+    bound_logger = base_logger.bind(**scrubbed_payload)
 
-    # Выбираем метод логирования по имени уровня. Если по какой‑то причине
-    # передан неподдерживаемый level, по умолчанию используем info.
+    # Выбираем метод логирования
     log_method = getattr(bound_logger, level, bound_logger.info)
+    log_method(masked_message)
 
-    # Текстовое сообщение, которое увидит разработчик в консоли/файле.
-    # В JSON оно попадает в поле "message". Для дополнительной защиты
-    # прогоняем его через mask_secrets, чтобы известные секреты не
-    # попали в текстовые логи.
-    text = mask_secrets(message or event)
-    log_method(text)
+
+# HTTP статус код для разделения успешных и ошибочных запросов
+_HTTP_STATUS_OK_MAX = 399
+
+
+def log_http(
+    method: str,
+    path: str,
+    status_code: int,
+    latency_ms: float,
+    *,
+    level: EventLogLevel = "info",
+) -> None:
+    """Логирование HTTP запросов."""
+    log_event(
+        event="http_request",
+        status="ok" if status_code <= _HTTP_STATUS_OK_MAX else "error",
+        latency_ms=latency_ms,
+        extra={
+            "method": method,
+            "path": path,
+            "status_code": status_code,
+        },
+        level=level,
+        message=f"{method} {path} {status_code}",
+    )
+
+
+def log_worker(  # noqa: PLR0913
+    task_name: str,
+    task_id: str,
+    status: str,
+    latency_ms: float | None = None,
+    *,
+    level: EventLogLevel = "info",
+    extra: dict[str, Any] | None = None,
+) -> None:
+    """Логирование Celery задач."""
+    worker_extra = {
+        "task_name": task_name,
+        "task_id": task_id,
+        **(extra or {}),
+    }
+    log_event(
+        event="celery_task",
+        status=status,
+        latency_ms=latency_ms,
+        extra=worker_extra,
+        level=level,
+        message=f"Task {task_name} ({task_id}) {status}",
+    )
 
 
 P = ParamSpec("P")

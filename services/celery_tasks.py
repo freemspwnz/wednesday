@@ -442,3 +442,25 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Error in daily statistics task: {e}")
         raise
+
+
+@celery_app.task(
+    bind=True,
+    name="wednesday.beat_heartbeat",
+)
+def beat_heartbeat(self: Task) -> dict[str, Any]:
+    """
+    Задача для heartbeat Beat (touch файл в tmpfs).
+    """
+    import os
+
+    heartbeat_path = "/tmp/beat-hb"
+    try:
+        # Touch файл (создать или обновить mtime)
+        with open(heartbeat_path, "a", encoding="utf-8"):
+            os.utime(heartbeat_path, None)
+    except Exception:
+        # Игнорируем ошибки - healthcheck сам проверит наличие файла
+        pass
+
+    return {"status": "ok"}
