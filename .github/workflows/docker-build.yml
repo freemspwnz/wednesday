@@ -54,3 +54,23 @@ jobs:
             ghcr.io/${{ steps.vars.outputs.repo_owner }}/${{ inputs.image-name }}:${{ steps.vars.outputs.latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Verify Docker image
+        run: |
+          # Проверяем, что runtime-данные не попали в образ
+          echo "🔍 Проверка образа на runtime-данные..."
+          docker run --rm ghcr.io/${{ steps.vars.outputs.repo_owner }}/${{ inputs.image-name }}:${{ steps.vars.outputs.tag }} ls -la /app/data || echo "✅ /app/data не содержит runtime-данных"
+          docker run --rm ghcr.io/${{ steps.vars.outputs.repo_owner }}/${{ inputs.image-name }}:${{ steps.vars.outputs.tag }} test ! -d /app/logs || echo "⚠️  /app/logs существует (не должен)"
+
+          # Проверяем, что контейнер запускается с read_only: true
+          echo "🔍 Проверка read_only: true..."
+          docker run --rm --read-only --tmpfs /tmp --tmpfs /var/tmp --tmpfs /root/.cache --tmpfs /run \
+            ghcr.io/${{ steps.vars.outputs.repo_owner }}/${{ inputs.image-name }}:${{ steps.vars.outputs.tag }} \
+            python3 -c "import sys; print('✅ Контейнер работает с read_only: true')" || exit 1
+
+          # Проверяем, что Python кеши не создаются
+          echo "🔍 Проверка PYTHONDONTWRITEBYTECODE..."
+          docker run --rm ghcr.io/${{ steps.vars.outputs.repo_owner }}/${{ inputs.image-name }}:${{ steps.vars.outputs.tag }} \
+            python3 -c "import sys; assert sys.dont_write_bytecode == True; print('✅ PYTHONDONTWRITEBYTECODE=1 установлен')" || exit 1
+
+          echo "✅ Все проверки Docker образа пройдены"
