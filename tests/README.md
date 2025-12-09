@@ -552,6 +552,30 @@ FAIL Required test coverage of 50% not reached. Total coverage: 44.44%
 - Интеграционный прогон: `make test-integration-containers` (создаёт `coverage.xml`, `junit.xml`)
 - E2E отчёт: `make test-e2e` (создаёт `junit-e2e.xml`, без coverage)
 
+## Конфигурация подключения к PostgreSQL
+
+Тесты автоматически определяют окружение (Docker контейнер vs локальное) и устанавливают правильный `POSTGRES_HOST`:
+
+- **В Docker контейнере**: используется `postgres_test` (имя сервиса из `docker-compose.test.yml`)
+- **Локально**: используется `localhost`
+
+**Как это работает:**
+
+1. `conftest.py` определяет окружение через:
+   - Наличие файла `/.dockerenv` (создаётся Docker при запуске контейнера)
+   - Переменную окружения `TESTING="1"` (устанавливается в `docker-compose.test.yml`)
+
+2. Если тесты запускаются в Docker и `POSTGRES_HOST` уже установлен (из `docker-compose.test.yml`), он не перезаписывается.
+
+3. Если PostgreSQL недоступен, тесты пропускаются с понятным сообщением:
+   - В Docker: "PostgreSQL недоступен по адресу postgres_test:5432. Убедитесь, что контейнер postgres_test запущен..."
+   - Локально: "PostgreSQL недоступен по адресу localhost:5432. Убедитесь, что PostgreSQL запущен локально..."
+
+**Важно:**
+
+- Для запуска integration тестов с PostgreSQL используйте `make test-integration-containers` (автоматически поднимает контейнеры)
+- Для локального запуска убедитесь, что PostgreSQL запущен на `localhost:5432` или используйте `make test-up`
+
 ## Изоляция тестов с PostgreSQL
 
 Для тестов, которые работают с PostgreSQL, доступны два подхода к изоляции:

@@ -1,4 +1,50 @@
 # CHANGELOG
+## [6.7.7] 2025-12-10 — Исправление архитектуры тестов: подключение к PostgreSQL и event loops
+
+### Исправлено
+
+- **Подключение к PostgreSQL в тестах**:
+  - Исправлена логика определения окружения (Docker vs локальное) в `tests/conftest.py`
+  - Добавлена функция `_is_running_in_docker()` для автоматического определения окружения через `/.dockerenv` и переменную `TESTING="1"`
+  - `POSTGRES_HOST` теперь устанавливается условно: в Docker контейнере — `postgres_test`, локально — `localhost`
+  - Переменные окружения из `docker-compose.test.yml` больше не перезаписываются принудительно
+  - Все integration тесты с `@pytest.mark.db` теперь корректно подключаются к PostgreSQL
+
+- **Проблемы с event loops в pytest-asyncio**:
+  - Исправлена ошибка "RuntimeError: got Future attached to a different loop" в async-фикстурах
+  - Изменён scope `async_postgres_pool` с `session` на `function` для создания пула в том же event loop, что и тесты
+  - Изменён scope `_setup_test_postgres` с `session` на `function` для соответствия новому scope пула
+  - Добавлена фикстура `event_loop` с `scope="session"` для единого event loop во всех async-тестах
+  - Исправлена фикстура `postgres_transaction`: патчит `get_postgres_pool()` вместо `pool.acquire()` (read-only атрибут)
+  - Добавлена очистка таблиц в `postgres_transaction` перед началом транзакции для изоляции тестов
+
+- **Обработка ошибок подключения к PostgreSQL**:
+  - Улучшены сообщения об ошибках подключения с указанием окружения (Docker vs локальное)
+  - Тесты пропускаются с `pytest.skip()` вместо падения с неясными ошибками
+  - Добавлены понятные подсказки: "Запустите `make test-up` для поднятия тестовых контейнеров"
+
+### Изменено
+
+- **Архитектура фикстур PostgreSQL**:
+  - `async_postgres_pool` теперь создаёт пул для каждого теста (function scope) вместо одного на сессию
+  - `_ensure_postgres_schema` использует переданный пул напрямую для инициализации схемы, избегая проблем с event loops
+  - `cleanup_tables` и `postgres_transaction` используют `get_postgres_pool()` напрямую без вызова `_ensure_postgres_schema`
+  - `postgres_transaction` теперь очищает таблицы перед началом транзакции для гарантии изоляции тестов
+
+### Улучшено
+
+- **Документация тестов**:
+  - Добавлен раздел "Конфигурация подключения к PostgreSQL" в `tests/README.md`
+  - Описана логика определения окружения и установки `POSTGRES_HOST`
+  - Добавлены примеры правильного использования фикстур для работы с PostgreSQL
+
+- **Надёжность тестов**:
+  - Все integration тесты с PostgreSQL теперь работают стабильно без ошибок event loops
+  - Улучшена изоляция тестов: каждый тест начинается с чистой БД
+  - Упрощена логика фикстур для лучшей поддерживаемости
+
+---
+
 ## [6.7.6] 2025-12-10 — Оптимизация Docker-конфигурации для production: read_only, tmpfs, минимизация образа
 
 ### Добавлено
