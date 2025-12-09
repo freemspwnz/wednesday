@@ -191,6 +191,7 @@ jobs:
             --cov-report=term \
             --cov-fail-under=50 \
             --junitxml=junit-integration.xml \
+            -n auto \
             -m "(integration or db or redis) and not e2e and not infra and not slow"
 
       - name: Upload coverage (integration)
@@ -253,3 +254,20 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./junit-e2e.xml
+
+  test-quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check test quality
+        run: python tests/check_test_quality.py
