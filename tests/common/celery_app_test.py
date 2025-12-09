@@ -36,4 +36,4 @@ celery_app_test.conf.task_routes = {
 }
 
 # Импортируем test.ping задачу для регистрации
-from tests.common.celery_tasks_test import test_ping  # noqa: E402, F401
+from tests.common.celery_tasks_test import ping_task  # noqa: E402, F401

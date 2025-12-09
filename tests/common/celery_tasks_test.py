@@ -9,7 +9,7 @@ from tests.common.celery_app_test import celery_app_test
 
 
 @celery_app_test.task(name="test.ping", bind=False)
-def test_ping() -> str:
+def ping_task() -> str:
     """
     Простая задача для проверки готовности worker.
 
