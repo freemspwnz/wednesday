@@ -5,7 +5,7 @@ COV_ARGS := --cov=bot --cov=services --cov=utils
 IMAGE_NAME := wednesday-bot
 
 .PHONY: lint format format-check \
-	test-unit-no-container test-integration-containers test-e2e test-e2e-infra \
+	test-unit-no-container test-integration-containers test-integration-containers-xdist test-e2e test-e2e-infra \
 	test-cov test-cleanup test-up test-down type run ci build migrate
 
 lint:
@@ -41,6 +41,19 @@ test-integration-containers: test-down
 		pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
 		--cov-fail-under=50 \
 		--junitxml=junit.xml -m "(integration or db or redis) and not celery and not e2e and not infra and not slow"; \
+	TEST_EXIT_CODE=$$?; \
+	$(MAKE) test-down; \
+	exit $$TEST_EXIT_CODE
+
+# Integration c контейнерами Postgres/Redis с параллельным запуском (xdist)
+test-integration-containers-xdist: test-down
+	@echo "=== Запуск integration с контейнерами (Postgres/Redis) с xdist ==="
+	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
+	@docker compose --env-file .env.test -f docker-compose.test.yml run --rm tests \
+		pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
+		--cov-fail-under=50 \
+		--junitxml=junit.xml -n auto \
+		-m "(integration or db or redis) and not celery and not e2e and not infra and not slow"; \
 	TEST_EXIT_CODE=$$?; \
 	$(MAKE) test-down; \
 	exit $$TEST_EXIT_CODE

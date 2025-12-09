@@ -12,7 +12,7 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_admins_store_add_admin(cleanup_tables: Any) -> None:
+async def test_admins_store_add_admin(postgres_transaction: Any) -> None:
     store = AdminsStore()
 
     # Добавляем админа
@@ -24,7 +24,7 @@ async def test_admins_store_add_admin(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
+async def test_admins_store_add_admin_duplicate(postgres_transaction: Any) -> None:
     store = AdminsStore()
 
     # Добавляем админа дважды

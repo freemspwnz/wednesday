@@ -103,33 +103,81 @@ def base_env(monkeypatch: Any, tmp_path_factory: Any) -> Generator[None, None, N
     yield
 
 
-async def _ensure_postgres_schema() -> Any:
+async def _ensure_postgres_schema(pool: Any | None = None) -> Any:
     """Гарантирует доступность тестовой БД и схему без глобального autouse."""
-    from utils import postgres_client
-    from utils.postgres_client import get_postgres_pool, init_postgres_pool
     from utils.postgres_schema import ensure_schema
 
-    # Если пул уже создан в текущем loop, просто убеждаемся в наличии схемы.
+    # Если пул передан, используем его, иначе получаем из глобального пула
+    if pool is None:
+        from utils import postgres_client
+        from utils.postgres_client import get_postgres_pool, init_postgres_pool
+
+        # Если пул уже создан в текущем loop, просто убеждаемся в наличии схемы.
+        try:
+            if getattr(postgres_client, "_pool", None) is None:
+                await init_postgres_pool(min_size=1, max_size=2)
+            pool = get_postgres_pool()
+        except Exception as exc:  # pragma: no cover - защитное поведение
+            pytest.skip(
+                f"Postgres недоступен для теста: {exc!s}. Запустите `make test-up` "
+                "или экспортируйте корректные POSTGRES_* переменные.",
+            )
+    else:
+        # Используем переданный пул
+        pass
+
+    # Убеждаемся в наличии схемы
     try:
-        if getattr(postgres_client, "_pool", None) is None:
-            await init_postgres_pool(min_size=1, max_size=2)
         await ensure_schema()
     except Exception as exc:  # pragma: no cover - защитное поведение
         pytest.skip(
-            f"Postgres недоступен для теста: {exc!s}. Запустите `make test-up` "
+            f"Не удалось инициализировать схему Postgres: {exc!s}. Запустите `make test-up` "
             "или экспортируйте корректные POSTGRES_* переменные.",
         )
-    return get_postgres_pool()
+
+    return pool
 
 
 @pytest_asyncio.fixture(scope="session")
-async def _setup_test_postgres() -> AsyncIterator[None]:
+async def async_postgres_pool() -> AsyncIterator[Any]:
+    """
+    Session-фикстура для создания пула соединений PostgreSQL один раз на сессию.
+
+    Пул создаётся один раз для всей сессии тестов и корректно закрывается после всех тестов.
+    Каждый worker в xdist имеет свой собственный пул.
+
+    Используется минимальные параметры (min_size=1, max_size=2) для тестов.
+    """
+    import asyncpg
+    from utils import postgres_client
+    from utils.postgres_client import close_postgres_pool, init_postgres_pool
+    from utils.postgres_schema import ensure_schema
+
+    # Закрываем существующий пул, если он есть (на случай повторного использования)
+    if getattr(postgres_client, "_pool", None) is not None:
+        await close_postgres_pool()
+
+    try:
+        # Создаём пул с минимальными параметрами для тестов
+        pool = await init_postgres_pool(min_size=1, max_size=2)
+        # Убеждаемся в наличии схемы
+        await ensure_schema()
+        yield pool
+    finally:
+        # Закрываем пул после всех тестов
+        await close_postgres_pool()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def _setup_test_postgres(async_postgres_pool: Any) -> AsyncIterator[None]:
     """
     Опциональная session-фикстура для инициализации тестовой БД Postgres.
 
     Подходит для integration/db тестов. В быстрых unit-прогонах не подключается.
+    Использует session-пул из async_postgres_pool для оптимизации.
     """
-    await _ensure_postgres_schema()
+    # Используем session-пул для инициализации схемы
+    await _ensure_postgres_schema(async_postgres_pool)
     yield
 
 
@@ -146,8 +194,17 @@ async def cleanup_tables() -> AsyncIterator[None]:
         async def test_something(cleanup_tables):
             # тест использует БД
     """
+    # Используем session-пул, если он доступен, иначе создаём новый
+    from utils import postgres_client
+    from utils.postgres_client import get_postgres_pool
 
-    pool = await _ensure_postgres_schema()
+    try:
+        pool = get_postgres_pool()
+        # Убеждаемся в наличии схемы
+        await _ensure_postgres_schema(pool)
+    except RuntimeError:
+        # Пул не инициализирован, используем _ensure_postgres_schema
+        pool = await _ensure_postgres_schema()
 
     try:
         async with pool.acquire() as conn:
@@ -173,6 +230,66 @@ async def cleanup_tables() -> AsyncIterator[None]:
         pass
 
     yield
+
+
+@pytest_asyncio.fixture(scope="function")
+async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
+    """
+    Использует транзакционный rollback для изоляции тестов.
+
+    Эта фикстура создаёт транзакцию перед тестом и выполняет ROLLBACK после теста.
+    Быстрее, чем TRUNCATE, но не подходит для тестов, которые проверяют commit'ы в БД.
+
+    Используйте эту фикстуру для быстрых тестов без проверки commit'ов.
+    Для тестов, которые проверяют commit'ы, используйте cleanup_tables.
+
+    Пример использования:
+        @pytest.mark.asyncio
+        async def test_something(postgres_transaction):
+            # тест использует БД, все изменения будут откачены после теста
+    """
+    import asyncpg
+    from contextlib import asynccontextmanager
+    from utils import postgres_client
+    from utils.postgres_client import get_postgres_pool
+
+    # Используем session-пул, если он доступен, иначе создаём новый
+    try:
+        pool = get_postgres_pool()
+        # Убеждаемся в наличии схемы
+        await _ensure_postgres_schema(pool)
+    except RuntimeError:
+        # Пул не инициализирован, используем _ensure_postgres_schema
+        pool = await _ensure_postgres_schema()
+
+    # Получаем соединение и начинаем транзакцию
+    transaction_conn = await pool.acquire()
+    try:
+        # Начинаем транзакцию
+        await transaction_conn.execute("BEGIN")
+
+        # Патчим pool.acquire() чтобы все соединения использовали нашу транзакцию
+        original_acquire = pool.acquire
+
+        @asynccontextmanager
+        async def patched_acquire() -> asyncpg.Connection:
+            # Возвращаем то же соединение с транзакцией
+            # Не освобождаем его, так как это делается в finally
+            yield transaction_conn
+
+        monkeypatch.setattr(pool, "acquire", patched_acquire)
+
+        yield
+    finally:
+        # Откатываем транзакцию
+        try:
+            await transaction_conn.execute("ROLLBACK")
+        except Exception:
+            # Игнорируем ошибки при rollback (например, если транзакция уже закрыта)
+            pass
+        finally:
+            # Возвращаем соединение в пул
+            await pool.release(transaction_conn)
 
 
 @pytest.fixture(autouse=True)

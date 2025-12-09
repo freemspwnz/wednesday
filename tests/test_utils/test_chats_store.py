@@ -12,7 +12,7 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_chats_store_add_chat(cleanup_tables: Any) -> None:
+async def test_chats_store_add_chat(postgres_transaction: Any) -> None:
     store = ChatsStore()
 
     await store.add_chat(12345, "Test Chat")
@@ -22,7 +22,7 @@ async def test_chats_store_add_chat(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chats_store_remove_chat(cleanup_tables: Any) -> None:
+async def test_chats_store_remove_chat(postgres_transaction: Any) -> None:
     store = ChatsStore()
 
     await store.add_chat(12345, "Test Chat")
@@ -33,7 +33,7 @@ async def test_chats_store_remove_chat(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chats_store_list_chat_ids(cleanup_tables: Any) -> None:
+async def test_chats_store_list_chat_ids(postgres_transaction: Any) -> None:
     store = ChatsStore()
 
     await store.add_chat(11111, "Chat 1")
