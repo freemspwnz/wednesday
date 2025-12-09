@@ -158,11 +158,16 @@ data/
 *.pem
 
 # Test results and coverage reports
-coverage.xml
 .coverage
+coverage.xml
+coverage-e2e.xml
+coverage-e2e-infra.xml
+
+.junit
 junit.xml
 junit-e2e.xml
-.junit
+junit-e2e-infra.xml
+
 
 # Ruff
 .ruff_cache/
@@ -172,3 +177,4 @@ ruff_*.txt
 
 # Development documentation
 /docs/dev/
+.ci_failed

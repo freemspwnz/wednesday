@@ -17,7 +17,7 @@ E2E тесты для Celery задач Wednesday Frog Bot.
        make test-down
 
 Примечание:
-    - Тесты используют тестовый Celery app (services.celery_app_test) с тестовыми очередями
+    - Тесты используют тестовый Celery app (tests.common.celery_app_test) с тестовыми очередями
     - Worker запущен с тестовыми очередями для изоляции от production
     - Тесты проверяют реальное взаимодействие с Celery worker через Redis
 """
@@ -27,11 +27,16 @@ import asyncio
 import pytest
 from celery.result import AsyncResult
 
-from services.celery_app_test import celery_app_test
+from tests.common.celery_app_test import celery_app_test
 
 # Этот модуль содержит инфраструктурные/диагностические проверки Celery.
 # Они помечены как e2e + infra и могут запускаться реже, отдельно от базового e2e‑набора.
-pytestmark = pytest.mark.infra
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.infra,
+    pytest.mark.celery,
+    pytest.mark.usefixtures("celery_worker_ready"),
+]
 
 
 @pytest.mark.e2e

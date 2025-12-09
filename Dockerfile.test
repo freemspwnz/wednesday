@@ -23,4 +23,4 @@ COPY bot ./bot
 USER root
 
 # Команда по умолчанию: Celery worker с тестовым app и тестовыми очередями
-CMD ["celery", "-A", "services.celery_app_test", "worker", "-P", "solo", "-Q", "test_main,test_images,test_maintenance", "--loglevel=info"]
+CMD ["celery", "-A", "tests.common.celery_app_test", "worker", "-P", "solo", "-Q", "test_main,test_images,test_maintenance", "--loglevel=info"]

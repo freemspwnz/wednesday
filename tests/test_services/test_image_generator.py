@@ -11,6 +11,12 @@ from utils.images_store import ImagesStore
 from utils.postgres_client import get_postgres_pool
 from utils.prompts_store import PromptsStore
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.db,
+    pytest.mark.usefixtures("_setup_test_postgres"),
+]
+
 
 @pytest.mark.asyncio
 async def test_check_api_status_dry_run(monkeypatch: Any) -> None:
@@ -144,6 +150,7 @@ async def test_generate_frog_image_uses_cache_on_existing_prompt_hash(monkeypatc
     assert image_record is not None
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_generate_frog_image_network_error(monkeypatch: Any) -> None:
     # Создаём мок и новый контейнер для каждого теста

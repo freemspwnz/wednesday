@@ -76,6 +76,9 @@ def support_bot(monkeypatch: Any) -> Any:
     return bot
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def _make_update(user_id: int = 1, chat_id: int = 10, text: str = "/cmd") -> Any:
     message = SimpleNamespace(
         reply_text=AsyncMock(),

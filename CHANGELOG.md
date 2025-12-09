@@ -1,4 +1,62 @@
 # CHANGELOG
+## [6.7.0] 2025-12-09 — Улучшение инфраструктуры тестирования: разделение таргетов, CI матрица и smoke-тесты
+
+### Добавлено
+
+- **Разделение таргетов тестов в Makefile**:
+  - Добавлен таргет `make test-unit-no-container` для запуска unit-тестов без контейнеров (с моками БД/Redis/Celery)
+  - Добавлен таргет `make test-integration-containers` для интеграционных тестов с Postgres/Redis (без Celery e2e)
+  - Добавлен таргет `make test-e2e-infra` для Celery infra-тестов с отдельным маркером `infra`
+  - Все таргеты корректно фильтруют тесты по маркерам (`unit`, `integration`, `e2e`, `infra`, `slow`, `db`, `redis`, `celery`)
+
+- **Маркировка долгих тестов**:
+  - Все тесты в `test_retry.py` помечены маркером `@pytest.mark.slow` через `pytestmark`
+  - Тест `test_generate_frog_image_network_error` помечен маркером `@pytest.mark.slow`
+  - Маркер `slow` автоматически исключается из быстрых прогонов (unit и integration)
+
+- **Система маркеров pytest**:
+  - Определены маркеры в `pyproject.toml`: `unit`, `integration`, `db`, `redis`, `celery`, `e2e`, `infra`, `slow`
+  - Все маркеры документированы с описанием назначения
+  - Тесты Celery infra (`test_celery_e2e.py`) помечены как `e2e + infra` для отдельного запуска
+
+- **CI матрица для тестов**:
+  - Добавлен отдельный job `pytest-unit` для unit-тестов без контейнеров
+  - Добавлен отдельный job `pytest-integration` для интеграционных тестов с Postgres/Redis
+  - Добавлен отдельный job `pytest-e2e-infra` для Celery infra-тестов
+  - Все jobs генерируют JUnit артефакты (`junit-unit.xml`, `junit-integration.xml`, `junit-e2e.xml`)
+  - Все jobs генерируют coverage артефакты с флагами (unit, integration, e2e_infra) для раздельного отслеживания покрытия
+  - Coverage включён для e2e прогонов для учёта вклада в общее покрытие
+
+- **Smoke-тесты для low-coverage модулей**:
+  - Создан файл `tests/test_smoke_low_coverage.py` с базовыми тестами для модулей с низким покрытием
+  - Покрыты модули: `services/clients/factory.py`, `services/prompt_cache.py`, `services/rate_limiter.py`, `bot/handlers.py`, `main.py`
+  - Все smoke-тесты помечены маркером `@pytest.mark.unit` для запуска без контейнеров
+
+- **Строгий режим pytest-asyncio**:
+  - Включён `asyncio_mode = "strict"` в `pyproject.toml` для предотвращения ошибок в async-тестах
+
+### Изменено
+
+- **Оптимизация фикстур pytest**:
+  - Фикстура `_setup_test_postgres` сделана opt-in (scope="session") вместо autouse для unit-тестов
+  - Фикстура `cleanup_tables` сделана opt-in (scope="function") для точечного использования
+  - Фикстура `patch_models_store` остаётся autouse, но автоматически исключает тесты с маркерами `db/integration/e2e/celery/infra`
+  - Фикстура `celery_worker_ready` сделана opt-in через `@pytest.mark.usefixtures("celery_worker_ready")` вместо autouse
+  - Фикстуры `session_env_defaults` и `base_env` остаются autouse для базовой настройки окружения
+
+- **Документация тестов**:
+  - Обновлён `tests/README.md` с описанием матрицы маркеров и команд запуска
+  - Добавлена документация по структуре Celery-тестов и разделению на поведенческие и infra-тесты
+  - Добавлены примеры команд для каждого таргета
+
+### Исправлено
+
+- **Изоляция тестов**:
+  - Улучшена изоляция unit-тестов от внешних зависимостей через автоматическое исключение интеграционных маркеров
+  - Устранены конфликты между моками и реальными хранилищами через умную фильтрацию в `patch_models_store`
+
+---
+
 ## [6.6.0] 2025-12-09 — Рефакторинг системы логирования: JSON stdout и миграция на docker logs
 
 ### Добавлено

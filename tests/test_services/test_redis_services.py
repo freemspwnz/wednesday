@@ -9,6 +9,8 @@ from services.rate_limiter import CircuitBreaker, RateLimiter
 from services.user_state_store import UserStateStore
 from utils.redis_client import _InMemoryRedis
 
+pytestmark = [pytest.mark.unit]
+
 
 @pytest.mark.asyncio
 async def test_prompt_cache_set_get_delete() -> None:

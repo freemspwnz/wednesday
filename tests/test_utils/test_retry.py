@@ -19,6 +19,8 @@ import pytest
 
 from utils.retry import retry_critical, retry_optional, retry_standard, retry_with_logging
 
+pytestmark = [pytest.mark.unit, pytest.mark.slow]
+
 # Константы для тестов
 MAX_ATTEMPTS_2 = 2
 MAX_ATTEMPTS_3 = 3

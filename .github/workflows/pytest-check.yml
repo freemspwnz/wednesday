@@ -11,9 +11,57 @@ on:
         required: true
 
 jobs:
-  pytest:
+  pytest-unit:
     runs-on: ubuntu-latest
 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit suite (no containers)
+        run: |
+          pytest \
+            --cov=bot \
+            --cov=services \
+            --cov=utils \
+            --cov-report=xml:coverage-unit.xml \
+            --cov-report=term \
+            --junitxml=junit-unit.xml \
+            -m "not integration and not e2e and not infra and not celery and not db and not redis and not slow"
+
+      - name: Upload coverage (unit)
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-unit.xml
+          flags: unit
+          fail_ci_if_error: true
+
+      - name: Upload test results (unit)
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./junit-unit.xml
+
+  pytest-integration:
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16-alpine
@@ -40,8 +88,6 @@ jobs:
           - 6379:6379
 
     env:
-      # Тестовые учетные данные для изолированной CI-среды
-      # Эти значения используются только для временной тестовой БД и не являются реальными паролями
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_password_ci_2024
       POSTGRES_DB: wednesdaydb_test
@@ -79,10 +125,9 @@ jobs:
           python -c "
           import time
           import sys
-
-          # Wait for Postgres (healthcheck in services ensures it's ready, but double-check)
           import asyncpg
           import asyncio
+
           async def check_postgres():
               import os
               for i in range(10):
@@ -93,7 +138,7 @@ jobs:
                           user=os.getenv('POSTGRES_USER', 'test_user'),
                           password=os.getenv('POSTGRES_PASSWORD', 'test_password_ci_2024'),
                           database=os.getenv('POSTGRES_DB', 'wednesdaydb_test'),
-                          timeout=2
+                          timeout=2,
                       )
                       await conn.close()
                       print('✓ Postgres is ready!')
@@ -104,7 +149,6 @@ jobs:
                           return False
                       time.sleep(1)
 
-          # Wait for Redis
           import redis
           for i in range(10):
               try:
@@ -122,27 +166,88 @@ jobs:
               sys.exit(1)
           "
 
-      - name: Run tests with coverage + junit
+      - name: Run migrations
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password_ci_2024
+          POSTGRES_DB: wednesdaydb_test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          TELEGRAM_BOT_TOKEN: "ci-dummy-token"
+          KANDINSKY_API_KEY: "ci-dummy-kandinsky-key"
+          KANDINSKY_SECRET_KEY: "ci-dummy-kandinsky-secret"
+          CHAT_ID: "0"
+          ADMIN_CHAT_ID: "0"
+        run: make migrate
+
+      - name: Run integration suite
         run: |
           pytest \
             --cov=bot \
             --cov=services \
             --cov=utils \
-            --cov-report=xml:coverage.xml \
+            --cov-report=xml:coverage-integration.xml \
             --cov-report=term \
-            --junitxml=junit.xml \
-            -o junit_family=legacy
+            --junitxml=junit-integration.xml \
+            -m "(integration or db or redis) and not e2e and not infra and not slow"
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage (integration)
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
+          files: ./coverage-integration.xml
+          flags: integration
           fail_ci_if_error: true
 
-      - name: Upload test results to Codecov
+      - name: Upload test results (integration)
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./junit.xml
+          files: ./junit-integration.xml
+
+  pytest-e2e-infra:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Celery infra E2E
+        env:
+          TELEGRAM_BOT_TOKEN: "ci-dummy-token"
+          KANDINSKY_API_KEY: "ci-dummy-kandinsky-key"
+          KANDINSKY_SECRET_KEY: "ci-dummy-secret"
+          CHAT_ID: "0"
+          ADMIN_CHAT_ID: "0"
+        run: ./scripts/run_e2e.sh "e2e and infra"
+
+      - name: Upload coverage (e2e)
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-e2e.xml
+          flags: e2e_infra
+          fail_ci_if_error: true
+
+      - name: Upload test results (e2e)
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./junit-e2e.xml

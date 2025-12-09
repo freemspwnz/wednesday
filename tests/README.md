@@ -1,23 +1,29 @@
 # Тесты проекта
 
-## Запуск локально
+## Быстрый старт (матрица маркеров)
 
-```bash
-pytest -v
-```
+- unit: без внешних зависимостей, без БД/Redis/Celery, без slow.
+- integration: с Postgres/Redis, но без Celery e2e/infra.
+- e2e: end-to-end сценарии; infra — диагностические Celery e2e.
+- db/redis/celery: ресурсные зависимости; slow — долгие кейсы.
+
+## Команды
+
+- Unit без контейнеров: `make test-unit-no-container`
+- Integration с контейнерами: `make test-integration-containers`
+- E2E без infra: `make test-e2e`
+- Celery infra: `make test-e2e-infra`
 
 ## Добавление нового теста
 
-- Создайте новый файл в `tests/` согласно структуре модулей проекта.
-- Используйте фикстуры из `conftest.py` (`tmp_path`, `monkeypatch`, подготовленные моки клиентов).
-- Для асинхронных функций добавляйте декоратор `@pytest.mark.asyncio`.
+- Создайте файл в `tests/` по структуре модулей.
+- Для async-тестов: `@pytest.mark.asyncio`.
+- Помечайте зависимости: `@pytest.mark.db`, `@pytest.mark.redis`, `@pytest.mark.celery`, `@pytest.mark.slow` по необходимости.
 
-## Запуск с покрытием
+## Покрытие
 
-```bash
-pytest --cov=bot --cov=services --cov=utils --cov-report=term
-pytest --cov=bot --cov=services --cov=utils --cov-report=xml |--cov-report=term-missing
-```
+- Интеграционный прогон: `make test-integration-containers` (создаёт `coverage.xml`, `junit.xml`).
+- E2E отчёт: `make test-e2e` (создаёт `junit-e2e.xml`).
 
 ## E2E тесты для Celery
 
@@ -37,7 +43,7 @@ docker compose -f docker-compose.test.yml down -v
 ```
 
 **Важно:**
-- Используется отдельный тестовый Celery app (`services.celery_app_test`) с тестовыми очередями
+- Используется отдельный тестовый Celery app (`tests.common.celery_app_test`) с тестовыми очередями
 - Тестовый Celery app изолирован от боевого кода и использует только тестовый конфиг (`utils.config_test`)
 - Pytest fixture `celery_worker_ready` (в `tests/fixtures/celery_worker_ready.py`) автоматически проверяет готовность worker через `test.ping`
 - Worker запускается с тестовыми очередями: `test_main`, `test_images`, `test_maintenance`

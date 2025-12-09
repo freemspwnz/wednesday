@@ -4,8 +4,13 @@ import pytest
 
 from utils.chats_store import ChatsStore
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.db,
+    pytest.mark.usefixtures("_setup_test_postgres"),
+]
 
-@pytest.mark.e2e
+
 @pytest.mark.asyncio
 async def test_chats_store_add_chat(cleanup_tables: Any) -> None:
     store = ChatsStore()
@@ -16,7 +21,6 @@ async def test_chats_store_add_chat(cleanup_tables: Any) -> None:
     assert 12345 in chat_ids
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_chats_store_remove_chat(cleanup_tables: Any) -> None:
     store = ChatsStore()
@@ -28,7 +32,6 @@ async def test_chats_store_remove_chat(cleanup_tables: Any) -> None:
     assert 12345 not in chat_ids
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_chats_store_list_chat_ids(cleanup_tables: Any) -> None:
     store = ChatsStore()
@@ -44,7 +47,6 @@ async def test_chats_store_list_chat_ids(cleanup_tables: Any) -> None:
     assert 33333 in chat_ids
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_chats_store_list_chat_ids_empty(cleanup_tables: Any) -> None:
     store = ChatsStore()

@@ -16,6 +16,8 @@ from services.celery_tasks import (
     send_wednesday_frog_task,
 )
 
+pytestmark = [pytest.mark.unit]
+
 
 @pytest.mark.asyncio
 async def test_celery_services_lazy_init() -> None:

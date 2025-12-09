@@ -4,8 +4,13 @@ import pytest
 
 from utils.admins_store import AdminsStore
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.db,
+    pytest.mark.usefixtures("_setup_test_postgres"),
+]
 
-@pytest.mark.e2e
+
 @pytest.mark.asyncio
 async def test_admins_store_add_admin(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -18,7 +23,6 @@ async def test_admins_store_add_admin(cleanup_tables: Any) -> None:
     assert await store.is_admin(12345) is True
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -31,7 +35,6 @@ async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
     assert result2 is False  # Уже был админом
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -46,7 +49,6 @@ async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
     assert await store.is_admin(12345) is False
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -56,7 +58,6 @@ async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None
     assert result is False
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
     store = AdminsStore()
@@ -74,7 +75,6 @@ async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
     assert len(admins) == 3
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_admins_store_list_all_admins(cleanup_tables: Any) -> None:
     store = AdminsStore()

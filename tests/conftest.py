@@ -1,9 +1,8 @@
 import importlib
-import os
 import sys
-from collections.abc import Callable, Generator
+from collections.abc import AsyncIterator, Callable, Generator
 from types import SimpleNamespace
-from typing import Any, AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -20,6 +19,15 @@ _session_env_defaults = {
     "KANDINSKY_SECRET_KEY": "session-test-secret",
     "CHAT_ID": "999999",
     "ADMIN_CHAT_ID": "999998",
+    # БД/Redis по умолчанию — для unit/integration без реальных сервисов
+    "POSTGRES_USER": "test_user",
+    "POSTGRES_PASSWORD": "test_password_ci_2024",
+    "POSTGRES_DB": "wednesdaydb_test",
+    "POSTGRES_HOST": "localhost",
+    "POSTGRES_PORT": "5432",
+    "REDIS_HOST": "localhost",
+    "REDIS_PORT": "6379",
+    "REDIS_DB": "0",
     # Планировщик и базовые значения, не влияющие на сетевые адреса Postgres/Redis
     "SCHEDULER_SEND_TIMES": "09:00,12:00,18:00",
     "SCHEDULER_WEDNESDAY_DAY": "2",
@@ -95,61 +103,34 @@ def base_env(monkeypatch: Any, tmp_path_factory: Any) -> Generator[None, None, N
     yield
 
 
-@pytest_asyncio.fixture(scope="function", autouse=True)
-async def _setup_test_postgres() -> AsyncIterator[None]:
-    """
-    Инициализирует тестовый пул Postgres и схему БД для async‑репозиториев.
-
-    Фикстура запускается перед каждым тестом и:
-    - создаёт пул подключений через init_postgres_pool (пересоздаёт, если был создан в другом loop);
-    - гарантирует наличие схемы через ensure_schema;
-    - очищает данные в основных таблицах перед запуском теста.
-
-    Ожидается, что тестовая БД (`POSTGRES_DB`) уже создана во внешнем окружении.
-    """
-    from utils.postgres_client import close_postgres_pool, get_postgres_pool, init_postgres_pool
+async def _ensure_postgres_schema() -> Any:
+    """Гарантирует доступность тестовой БД и схему без глобального autouse."""
+    from utils import postgres_client
+    from utils.postgres_client import get_postgres_pool, init_postgres_pool
     from utils.postgres_schema import ensure_schema
 
-    # Закрываем пул, если он был создан в другом loop
+    # Если пул уже создан в текущем loop, просто убеждаемся в наличии схемы.
     try:
-        from utils import postgres_client
-        if postgres_client._pool is not None:
-            try:
-                await close_postgres_pool()
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    await init_postgres_pool(min_size=1, max_size=2)
-    await ensure_schema()
-
-    pool = get_postgres_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            TRUNCATE TABLE
-                images,
-                dispatch_registry,
-                prompts,
-                metrics_events,
-                chats,
-                admins,
-                usage_stats,
-                usage_settings,
-                metrics,
-                models_kandinsky,
-                models_gigachat
-            RESTART IDENTITY;
-            """,
+        if getattr(postgres_client, "_pool", None) is None:
+            await init_postgres_pool(min_size=1, max_size=2)
+        await ensure_schema()
+    except Exception as exc:  # pragma: no cover - защитное поведение
+        pytest.skip(
+            f"Postgres недоступен для теста: {exc!s}. Запустите `make test-up` "
+            "или экспортируйте корректные POSTGRES_* переменные.",
         )
+    return get_postgres_pool()
 
-    try:
-        yield
-    finally:
-        # Не закрываем пул здесь, чтобы он был доступен для других тестов
-        # Пул будет пересоздан в следующем тесте, если loop изменится
-        pass
+
+@pytest_asyncio.fixture(scope="session")
+async def _setup_test_postgres() -> AsyncIterator[None]:
+    """
+    Опциональная session-фикстура для инициализации тестовой БД Postgres.
+
+    Подходит для integration/db тестов. В быстрых unit-прогонах не подключается.
+    """
+    await _ensure_postgres_schema()
+    yield
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -165,34 +146,30 @@ async def cleanup_tables() -> AsyncIterator[None]:
         async def test_something(cleanup_tables):
             # тест использует БД
     """
-    from utils import postgres_client
 
-    # Очистка выполняется в начале (setup) - только если пул инициализирован
+    pool = await _ensure_postgres_schema()
+
     try:
-        # Проверяем, инициализирован ли пул, без вызова get_postgres_pool()
-        # чтобы избежать RuntimeError для тестов, которые не используют БД
-        if postgres_client._pool is not None:
-            pool = postgres_client._pool
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    TRUNCATE TABLE
-                        images,
-                        dispatch_registry,
-                        prompts,
-                        metrics_events,
-                        chats,
-                        admins,
-                        usage_stats,
-                        usage_settings,
-                        metrics,
-                        models_kandinsky,
-                        models_gigachat
-                    RESTART IDENTITY;
-                    """,
-                )
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                TRUNCATE TABLE
+                    images,
+                    dispatch_registry,
+                    prompts,
+                    metrics_events,
+                    chats,
+                    admins,
+                    usage_stats,
+                    usage_settings,
+                    metrics,
+                    models_kandinsky,
+                    models_gigachat
+                RESTART IDENTITY;
+                """,
+            )
     except Exception:
-        # Игнорируем все ошибки (пул не инициализирован, проблемы с подключением и т.д.)
+        # Игнорируем все ошибки (проблемы подключения, отсутствующая схема и т.д.)
         pass
 
     yield
@@ -213,10 +190,11 @@ def patch_models_store(monkeypatch: Any, request: Any) -> Generator[None, None, 
     test_file = request.node.fspath.strpath if hasattr(request.node, "fspath") else ""
     test_name = request.node.name if hasattr(request.node, "name") else ""
 
-    # Исключаем тесты, которые используют реальный ModelsStore
+    markers = {marker.name for marker in request.node.iter_markers()}
     should_skip_patch = (
         "test_models_store.py" in test_file
         or "integration_with_postgres_stores" in test_name
+        or markers.intersection({"db", "integration", "e2e", "celery", "infra"})
     )
 
     if not should_skip_patch:
@@ -236,8 +214,6 @@ def patch_models_store(monkeypatch: Any, request: Any) -> Generator[None, None, 
 
     monkeypatch.setattr(admins_store_module, "AdminsStore", lambda *args, **kwargs: _TestAdminsStore())
     yield
-
-
 
 
 @pytest.fixture

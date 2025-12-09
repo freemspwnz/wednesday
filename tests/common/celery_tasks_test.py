@@ -5,7 +5,7 @@
 используются только для healthcheck в E2E тестах.
 """
 
-from services.celery_app_test import celery_app_test
+from tests.common.celery_app_test import celery_app_test
 
 
 @celery_app_test.task(name="test.ping", bind=False)

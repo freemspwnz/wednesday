@@ -8,7 +8,7 @@
 from celery.result import AsyncResult
 from tenacity import retry, stop_after_delay, wait_exponential
 
-from services.celery_app_test import celery_app_test
+from tests.common.celery_app_test import celery_app_test
 
 
 @retry(

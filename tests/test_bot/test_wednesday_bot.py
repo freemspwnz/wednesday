@@ -257,6 +257,8 @@ async def test_send_fallback_image_no_image(wednesday_bot: Any) -> None:
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_on_my_chat_member_added(wednesday_bot: Any, cleanup_tables: Any) -> None:
     from types import SimpleNamespace
@@ -281,6 +283,8 @@ async def test_on_my_chat_member_added(wednesday_bot: Any, cleanup_tables: Any) 
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_on_my_chat_member_removed(wednesday_bot: Any, cleanup_tables: Any) -> None:
     from types import SimpleNamespace

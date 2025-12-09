@@ -2,7 +2,11 @@
 Integration-тесты для Celery конфигурации и интеграции.
 """
 
+import pytest
+
 from services.celery_app import celery_app
+
+pytestmark = [pytest.mark.integration, pytest.mark.celery]
 
 
 def test_celery_beat_schedule() -> None:

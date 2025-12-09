@@ -10,10 +10,15 @@
 import pytest
 from celery.result import AsyncResult
 
-from services.celery_app_test import celery_app_test
+from tests.common.celery_app_test import celery_app_test
+
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.celery,
+    pytest.mark.usefixtures("celery_worker_ready"),
+]
 
 
-@pytest.mark.e2e
 def test_celery_ping_basic() -> None:
     """Отправляем test.ping в test_main и ждём pong."""
     result: AsyncResult = celery_app_test.send_task(
@@ -25,7 +30,6 @@ def test_celery_ping_basic() -> None:
     assert ping_result == "pong"
 
 
-@pytest.mark.e2e
 def test_celery_result_backend() -> None:
     """Проверяем, что результат задачи доступен через result backend."""
     result: AsyncResult = celery_app_test.send_task(
@@ -40,7 +44,6 @@ def test_celery_result_backend() -> None:
     assert result.state == "SUCCESS"
 
 
-@pytest.mark.e2e
 def test_celery_concurrent_tasks() -> None:
     """Отправляем несколько задач одновременно и убеждаемся, что все завершаются успешно."""
     tasks: list[AsyncResult] = []

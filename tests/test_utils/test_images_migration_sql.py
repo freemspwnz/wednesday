@@ -9,8 +9,13 @@ from utils.postgres_client import get_postgres_pool
 
 SQL_DIR = Path("docs/sql")
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.db,
+    pytest.mark.usefixtures("_setup_test_postgres"),
+]
 
-@pytest.mark.e2e
+
 @pytest.mark.asyncio
 async def test_images_migration_up_and_down_applies_successfully(cleanup_tables: Any) -> None:
     """

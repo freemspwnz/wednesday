@@ -165,11 +165,11 @@ check_untyped_defs = false
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = "services.celery_app_test"
+module = "tests.common.celery_app_test"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = "services.celery_tasks_test"
+module = "tests.common.celery_tasks_test"
 ignore_errors = true
 
 [tool.ruff.lint.per-file-ignores]
@@ -178,8 +178,14 @@ ignore_errors = true
 
 [tool.pytest.ini_options]
 markers = [
-    "e2e: marks tests as end-to-end (requires running containers)",
-    "infra: infrastructure/diagnostic tests (run less often)",
+    "unit: быстрые модульные тесты без внешних зависимостей",
+    "integration: интеграционные тесты с Postgres/Redis без Celery e2e",
+    "db: тест требует Postgres",
+    "redis: тест требует Redis",
+    "celery: тест требует Celery worker/beat",
+    "e2e: end-to-end сценарии с внешними сервисами",
+    "infra: инфраструктурные/диагностические проверки (запуск редко)",
+    "slow: долгие сценарии, исключаются из быстрых прогонов",
 ]
 addopts = "-v -ra --tb=short"
 testpaths = ["tests"]

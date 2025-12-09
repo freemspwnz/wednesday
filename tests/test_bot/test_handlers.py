@@ -215,6 +215,8 @@ async def test_frog_command_usage_limit(fake_update: Any, fake_context: Any, asy
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_status_command_integration_with_postgres_stores(
     fake_update: Any,
@@ -264,6 +266,8 @@ async def test_status_command_integration_with_postgres_stores(
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_force_send_command_integration_with_postgres_stores(
     fake_update: Any,
@@ -465,6 +469,8 @@ async def test_admin_add_chat_command_invalid_id(fake_update: Any, fake_context:
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_admin_remove_chat_command_success(
     fake_update: Any,
@@ -519,6 +525,8 @@ async def test_admin_remove_chat_command_no_args(fake_update: Any, fake_context:
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_list_chats_command_success(
     fake_update: Any,
@@ -551,6 +559,8 @@ async def test_list_chats_command_success(
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_list_chats_command_no_chats(
     fake_update: Any,
@@ -741,6 +751,8 @@ async def test_set_gigachat_model_command_success(fake_update: Any, fake_context
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_mod_command_success(
     fake_update: Any,
@@ -796,6 +808,8 @@ async def test_mod_command_no_args(fake_update: Any, fake_context: Any, async_re
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_unmod_command_success(
     fake_update: Any,
@@ -852,6 +866,8 @@ async def test_unmod_command_no_args(fake_update: Any, fake_context: Any, async_
 
 
 @pytest.mark.e2e
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_list_mods_command_success(
     fake_update: Any,

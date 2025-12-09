@@ -4,8 +4,13 @@ import pytest
 
 from utils.metrics import Metrics
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.db,
+    pytest.mark.usefixtures("_setup_test_postgres"),
+]
 
-@pytest.mark.e2e
+
 @pytest.mark.asyncio
 async def test_metrics_increment_generation_success(cleanup_tables: Any) -> None:
     metrics = Metrics()
@@ -17,7 +22,6 @@ async def test_metrics_increment_generation_success(cleanup_tables: Any) -> None
     assert summary["generations_total"] == 1
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_metrics_increment_generation_failed(cleanup_tables: Any) -> None:
     metrics = Metrics()
@@ -29,7 +33,6 @@ async def test_metrics_increment_generation_failed(cleanup_tables: Any) -> None:
     assert summary["generations_total"] == 1
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_metrics_increment_dispatch_success(cleanup_tables: Any) -> None:
     metrics = Metrics()
@@ -40,7 +43,6 @@ async def test_metrics_increment_dispatch_success(cleanup_tables: Any) -> None:
     assert summary["dispatches_success"] == 1
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_metrics_increment_dispatch_failed(cleanup_tables: Any) -> None:
     metrics = Metrics()
@@ -51,7 +53,6 @@ async def test_metrics_increment_dispatch_failed(cleanup_tables: Any) -> None:
     assert summary["dispatches_failed"] == 1
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_metrics_add_generation_time(cleanup_tables: Any) -> None:
     metrics = Metrics()
@@ -66,7 +67,6 @@ async def test_metrics_add_generation_time(cleanup_tables: Any) -> None:
     assert summary["average_generation_time"] == "4.00s"
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_metrics_increment_circuit_breaker_trip(cleanup_tables: Any) -> None:
     metrics = Metrics()
@@ -77,7 +77,6 @@ async def test_metrics_increment_circuit_breaker_trip(cleanup_tables: Any) -> No
     assert summary["circuit_breaker_trips"] == 1
 
 
-@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_metrics_get_summary_empty(cleanup_tables: Any) -> None:
     metrics = Metrics()

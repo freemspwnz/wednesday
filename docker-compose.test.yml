@@ -83,10 +83,10 @@ services:
     # ⚠️ КРИТИЧНО: Healthcheck обязателен (нельзя удалять полностью).
     # Теперь он проверяет не только наличие процесса, но и реальную готовность Celery worker'а.
     # Используем минимально «глупую» проверку через Celery CLI:
-    #   celery -A services.celery_app_test inspect ping
+    #   celery -A tests.common.celery_app_test inspect ping
     # Pytest fixture дополняет, но не заменяет этот healthcheck.
     healthcheck:
-      test: ["CMD-SHELL", "celery -A services.celery_app_test inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "celery -A tests.common.celery_app_test inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
