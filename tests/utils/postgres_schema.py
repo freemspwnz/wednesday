@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+import asyncio
+
+from utils.postgres_client import close_postgres_pool, init_postgres_pool
+from utils.postgres_schema import ensure_schema  # reuse основной код
+
+
+async def _main() -> None:
+    await init_postgres_pool(min_size=1, max_size=2)
+    await ensure_schema()
+    await close_postgres_pool()
+
+
+if __name__ == "__main__":
+    asyncio.run(_main())

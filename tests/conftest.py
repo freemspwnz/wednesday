@@ -8,6 +8,11 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+# Устанавливаем корень проекта в sys.path до всех импортов
+# Это необходимо для unit-тестов, которые запускаются локально
+if sys.path[0] != (repo_root := str(Path(__file__).parent.parent)):
+    sys.path.insert(0, repo_root)
+
 import pytest
 import pytest_asyncio
 from pytest import MonkeyPatch
@@ -18,48 +23,33 @@ from tests.fixtures.celery_worker_ready import celery_worker_ready, celery_test_
 _session_monkeypatch = MonkeyPatch()
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """
-    Создаёт единый event loop для всех async-тестов и фикстур.
-
-    Это гарантирует, что все async-фикстуры (включая session-фикстуры)
-    используют один и тот же event loop, предотвращая ошибки
-    "got Future attached to a different loop".
-
-    Важно: эта фикстура должна быть синхронной для правильной работы с pytest-asyncio.
-    """
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        yield loop
-    finally:
-        loop.close()
-        asyncio.set_event_loop(None)
 
 
 def _is_running_in_docker() -> bool:
     """
     Определяет, запускаются ли тесты внутри Docker контейнера.
 
-    Проверяет:
-    1. Наличие файла /.dockerenv (создаётся Docker при запуске контейнера) — самый надёжный способ
-    2. Переменную окружения TESTING="1" (устанавливается в docker-compose.test.yml)
-
-    Приоритет: /.dockerenv > TESTING
+    Проверяет наличие файла /.dockerenv (создаётся Docker при запуске контейнера).
 
     Returns:
         True, если тесты запускаются в Docker контейнере, False иначе.
     """
     # Проверяем наличие файла /.dockerenv (самый надёжный способ определения Docker окружения)
-    if Path("/.dockerenv").exists():
-        return True
-    # Проверяем переменную окружения TESTING (устанавливается в docker-compose.test.yml)
-    # Используем как дополнительный индикатор, но не как основной, чтобы избежать ложных срабатываний
-    if os.getenv("TESTING") == "1":
-        return True
-    return False
+    return Path("/.dockerenv").exists()
+
+
+def _is_running_in_ci() -> bool:
+    """
+    Определяет, запускаются ли тесты в CI окружении.
+
+    Проверяет переменные окружения, которые устанавливаются в CI:
+    - GITHUB_ACTIONS (GitHub Actions)
+    - CI (общая переменная для большинства CI систем)
+
+    Returns:
+        True, если тесты запускаются в CI, False иначе.
+    """
+    return os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("CI") == "true"
 
 
 _session_env_defaults = {
@@ -169,114 +159,61 @@ def base_env(monkeypatch: Any, tmp_path_factory: Any) -> Generator[None, None, N
     yield
 
 
-async def _ensure_postgres_schema(pool: Any | None = None) -> Any:
+def _handle_postgres_error(exc: Exception, hint: str) -> None:
     """
-    Гарантирует доступность тестовой БД и схему без глобального autouse.
+    Обрабатывает ошибку подключения к PostgreSQL.
 
-    Проверяет доступность PostgreSQL и инициализирует схему БД.
-    Если PostgreSQL недоступен, тест пропускается с понятным сообщением.
+    В CI окружении вызывает pytest.fail(), локально - pytest.skip().
 
     Args:
-        pool: Опциональный пул подключений. Если передан, используется он,
-              иначе создаётся новый или используется глобальный пул.
-
-    Returns:
-        Пул подключений PostgreSQL.
+        exc: Исключение, которое произошло при подключении.
+        hint: Подсказка для пользователя.
     """
-    import asyncpg
-    from utils.postgres_schema import _DDL_STATEMENTS
+    error_msg = f"{hint}\nОшибка подключения: {exc!s}"
+    if _is_running_in_ci():
+        pytest.fail(error_msg)
+    else:
+        pytest.skip(error_msg)
 
-    # Если пул передан, используем его, иначе получаем из глобального пула
-    if pool is None:
-        from utils import postgres_client
-        from utils.postgres_client import get_postgres_pool, init_postgres_pool
-        from utils.config import config
 
-        # Если пул уже создан в текущем loop, просто убеждаемся в наличии схемы.
-        try:
-            if getattr(postgres_client, "_pool", None) is None:
-                await init_postgres_pool(min_size=1, max_size=2)
-            pool = get_postgres_pool()
-        except (OSError, asyncpg.InvalidPasswordError, asyncpg.PostgresConnectionError) as exc:
-            # Улучшенное сообщение об ошибке подключения
-            postgres_host = config.postgres_host
-            postgres_port = config.postgres_port
-            is_docker = _is_running_in_docker()
-            if is_docker:
-                hint = (
-                    f"PostgreSQL недоступен по адресу {postgres_host}:{postgres_port}. "
-                    "Убедитесь, что контейнер postgres_test запущен и готов. "
-                    "Запустите `make test-up` для поднятия тестовых контейнеров."
-                )
-            else:
-                hint = (
-                    f"PostgreSQL недоступен по адресу {postgres_host}:{postgres_port}. "
-                    "Убедитесь, что PostgreSQL запущен локально или запустите `make test-up` "
-                    "для поднятия тестовых контейнеров."
-                )
-            pytest.skip(f"{hint}\nОшибка подключения: {exc!s}")
-        except Exception as exc:  # pragma: no cover - защитное поведение
-            pytest.skip(
-                f"Postgres недоступен для теста: {exc!s}. Запустите `make test-up` "
-                "или экспортируйте корректные POSTGRES_* переменные.",
-            )
+@pytest.fixture(scope="session")
+def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
+    """
+    Создаёт один глобальный event loop для всей сессии тестов.
 
-    # Убеждаемся в наличии схемы, используя переданный пул напрямую
-    # Это избегает проблем с event loops, так как не используем глобальный пул из ensure_schema()
-    if pool is None:  # pragma: no cover - защитная проверка
-        pytest.skip("Пул подключений не инициализирован")
-    # Type assertion для mypy: после проверки на None pool гарантированно не None
-    assert pool is not None
+    Используется для корректной работы session-scope async фикстур
+    (например, async_postgres_pool, создаваемого один раз на сессию).
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        async with pool.acquire() as conn:
-            for stmt in _DDL_STATEMENTS:
-                try:
-                    await conn.execute(stmt)
-                except Exception as exc:  # pragma: no cover - защитное логирование
-                    pytest.skip(
-                        f"Не удалось инициализировать схему Postgres: {exc!s}. Запустите `make test-up` "
-                        "или экспортируйте корректные POSTGRES_* переменные.",
-                    )
-    except Exception as exc:  # pragma: no cover - защитное поведение
-        pytest.skip(
-            f"Не удалось подключиться к Postgres для инициализации схемы: {exc!s}. Запустите `make test-up` "
-            "или экспортируйте корректные POSTGRES_* переменные.",
-        )
-
-    return pool
+        yield loop
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def async_postgres_pool() -> AsyncIterator[Any]:
     """
-    Function-фикстура для создания пула соединений PostgreSQL для каждого теста.
+    Session-фикстура для создания пула соединений PostgreSQL на всю сессию тестов.
 
-    Пул создаётся для каждого теста в том же event loop, что и тест,
-    что предотвращает ошибки "got Future attached to a different loop".
+    Пул создаётся один раз на сессию и переиспользуется всеми тестами.
+    Это более эффективно, чем создание пула для каждого теста.
 
     Используется минимальные параметры (min_size=1, max_size=2) для тестов.
 
-    Если PostgreSQL недоступен, тесты с этой фикстурой будут пропущены с понятным сообщением.
+    Если PostgreSQL недоступен, тесты с этой фикстурой будут пропущены (локально)
+    или упадут с ошибкой (в CI) с понятным сообщением.
     """
     import asyncpg
-    import asyncio
-    from utils import postgres_client
-    from utils.postgres_client import close_postgres_pool, init_postgres_pool, get_postgres_pool
+    from utils.postgres_client import close_postgres_pool, init_postgres_pool
     from utils.config import config
-
-    # Проверяем, был ли пул создан в текущем event loop
-    current_loop = asyncio.get_running_loop()
-    pool_loop = getattr(postgres_client, "_pool_loop", None)
-
-    # Если пул был создан в другом event loop, закрываем его
-    if getattr(postgres_client, "_pool", None) is not None and pool_loop is not None and pool_loop is not current_loop:
-        await close_postgres_pool()
 
     try:
         # Создаём пул с минимальными параметрами для тестов
         pool = await init_postgres_pool(min_size=1, max_size=2)
         # Убеждаемся в наличии схемы, используя созданный пул напрямую
-        # Это избегает проблем с event loops
         from utils.postgres_schema import _DDL_STATEMENTS
         async with pool.acquire() as conn:
             for stmt in _DDL_STATEMENTS:
@@ -303,29 +240,35 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
                 "Убедитесь, что PostgreSQL запущен локально или запустите `make test-up` "
                 "для поднятия тестовых контейнеров."
             )
-        pytest.skip(f"{hint}\nОшибка подключения: {exc!s}")
+        _handle_postgres_error(exc, hint)
     finally:
-        # Закрываем пул после теста
-        await close_postgres_pool()
+        # Закрываем пул после всех тестов
+        # Используем wait_for для таймаута, чтобы не зависнуть на закрытии
+        try:
+            loop = asyncio.get_running_loop()
+            await asyncio.wait_for(close_postgres_pool(), timeout=5.0)
+        except asyncio.TimeoutError:
+            # Если закрытие пула занимает слишком много времени, продолжаем
+            # (это может произойти, если есть зависшие соединения)
+            pass
+        except Exception:
+            # Игнорируем ошибки при закрытии пула в teardown
+            pass
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def _setup_test_postgres(async_postgres_pool: Any) -> AsyncIterator[None]:
     """
-    Опциональная session-фикстура для инициализации тестовой БД Postgres.
+    Session-фикстура для инициализации тестовой БД Postgres.
 
     Подходит для integration/db тестов. В быстрых unit-прогонах не подключается.
     Использует session-пул из async_postgres_pool для оптимизации.
 
     Схема БД уже инициализируется в async_postgres_pool, поэтому эта фикстура
     просто гарантирует, что пул создан и готов к использованию.
-
-    Важно: эта фикстура не выполняет никаких операций с пулом, чтобы избежать
-    проблем с event loops. Вся инициализация выполняется в async_postgres_pool.
     """
-    # Не выполняем никаких операций с пулом здесь, чтобы избежать проблем с event loops.
     # Схема БД уже инициализирована в async_postgres_pool, и пул готов к использованию.
-    # Если пул не был создан, async_postgres_pool уже пропустил тесты с понятным сообщением.
+    # Если пул не был создан, async_postgres_pool уже обработал ошибку.
     yield
 
 
@@ -348,15 +291,18 @@ async def cleanup_tables() -> AsyncIterator[None]:
 
     try:
         pool = get_postgres_pool()
-    except RuntimeError:
-        # Пул не инициализирован, тест будет пропущен
-        pytest.skip(
+    except RuntimeError as exc:
+        # Пул не инициализирован
+        error_msg = (
             "Postgres pool не инициализирован. Запустите `make test-up` "
-            "или экспортируйте корректные POSTGRES_* переменные.",
+            "или экспортируйте корректные POSTGRES_* переменные."
         )
+        _handle_postgres_error(exc, error_msg)
 
+    # Очищаем таблицы ПЕРЕД тестом
     try:
         async with pool.acquire() as conn:
+            # Используем CASCADE для удаления зависимостей (например, images зависит от prompts)
             await conn.execute(
                 """
                 TRUNCATE TABLE
@@ -371,13 +317,43 @@ async def cleanup_tables() -> AsyncIterator[None]:
                     metrics,
                     models_kandinsky,
                     models_gigachat
-                RESTART IDENTITY;
+                RESTART IDENTITY CASCADE;
                 """,
             )
-    except Exception:
-        # Игнорируем ошибки при очистке таблиц (отсутствующая схема и т.д.)
-        # Это может произойти, если схема ещё не инициализирована
-        pass
+    except Exception as exc:
+        # Если таблицы не существуют, это может означать, что схема не инициализирована
+        # В этом случае пробуем инициализировать схему
+        try:
+            from utils.postgres_schema import _DDL_STATEMENTS
+            async with pool.acquire() as conn:
+                for stmt in _DDL_STATEMENTS:
+                    try:
+                        await conn.execute(stmt)
+                    except Exception:
+                        pass
+            # Повторяем попытку очистки после инициализации схемы
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    TRUNCATE TABLE
+                        images,
+                        dispatch_registry,
+                        prompts,
+                        metrics_events,
+                        chats,
+                        admins,
+                        usage_stats,
+                        usage_settings,
+                        metrics,
+                        models_kandinsky,
+                        models_gigachat
+                    RESTART IDENTITY CASCADE;
+                    """,
+                )
+        except Exception:
+            # Если всё ещё не получается, пропускаем очистку
+            # (это может произойти, если схема действительно не инициализирована)
+            pass
 
     yield
 
@@ -406,35 +382,17 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
     # чтобы избежать проблем с event loops. Схема уже инициализирована в async_postgres_pool.
     try:
         pool = get_postgres_pool()
-    except RuntimeError:
-        # Пул не инициализирован, тест будет пропущен через async_postgres_pool
-        pytest.skip(
+    except RuntimeError as exc:
+        # Пул не инициализирован
+        error_msg = (
             "Postgres pool не инициализирован. Запустите `make test-up` "
-            "или экспортируйте корректные POSTGRES_* переменные.",
+            "или экспортируйте корректные POSTGRES_* переменные."
         )
+        _handle_postgres_error(exc, error_msg)
 
     # Получаем соединение и начинаем транзакцию
     transaction_conn = await pool.acquire()
     try:
-        # Очищаем таблицы перед началом транзакции для изоляции
-        # Это гарантирует, что каждый тест начинается с чистой БД
-        await transaction_conn.execute(
-            """
-            TRUNCATE TABLE
-                images,
-                dispatch_registry,
-                prompts,
-                metrics_events,
-                chats,
-                admins,
-                usage_stats,
-                usage_settings,
-                metrics,
-                models_kandinsky,
-                models_gigachat
-            RESTART IDENTITY;
-            """,
-        )
         # Начинаем транзакцию ПЕРЕД патчем, чтобы все операции были в транзакции
         await transaction_conn.execute("BEGIN")
 
@@ -632,3 +590,31 @@ def reset_singletons() -> Generator[None, None, None]:
         CeleryServices._bot = original_bot
         CeleryServices._generator = original_generator
         CeleryServices._initialized = original_initialized
+
+
+@pytest_asyncio.fixture
+async def gigachat_client() -> AsyncIterator[Any]:
+    """
+    Фикстура для создания GigaChatTextClient с автоматическим закрытием сессии.
+
+    Использование:
+        @pytest.mark.asyncio
+        async def test_something(gigachat_client):
+            result = await gigachat_client.generate_text("test")
+
+    Для кастомных параметров создавайте клиент вручную в тесте:
+        @pytest.mark.asyncio
+        async def test_something():
+            client = GigaChatTextClient(auth_url="...", verify_ssl=False)
+            try:
+                # тест
+            finally:
+                await client.aclose()
+    """
+    from services.clients.gigachat_text import GigaChatTextClient
+
+    client = GigaChatTextClient()
+    try:
+        yield client
+    finally:
+        await client.aclose()

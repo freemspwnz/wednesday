@@ -1,0 +1,131 @@
+services:
+  postgres_test:
+    image: postgres:16-alpine
+    container_name: wednesday_postgres_test
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-test_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_ci_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-wednesdaydb_test}
+      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
+      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-test_user} -d ${POSTGRES_DB:-wednesdaydb_test}"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  redis_test:
+    image: redis:7-alpine
+    container_name: wednesday_redis_test
+    environment:
+      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
+      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+    tmpfs:
+      - /data
+
+  celery-worker-test:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.test
+    container_name: wednesday_celery_worker_test
+    restart: "no"
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-test_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_ci_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-wednesdaydb_test}
+      POSTGRES_HOST: postgres_test
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      REDIS_HOST: redis_test
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_URL: ${REDIS_URL:-redis://redis_test:6379/0}
+      CELERY_TEST_REDIS_URL: ${CELERY_TEST_REDIS_URL:-redis://redis_test:6379/1}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-test-token}
+      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY:-test-api}
+      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY:-test-secret}
+      CHAT_ID: ${CHAT_ID:-12345}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-54321}
+      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY:-ZmFrZS1rZXk=}
+      SCHEDULER_SEND_TIMES: ${SCHEDULER_SEND_TIMES:-09:00,12:00,18:00}
+      SCHEDULER_WEDNESDAY_DAY: ${SCHEDULER_WEDNESDAY_DAY:-2}
+      SCHEDULER_TZ: ${SCHEDULER_TZ:-Europe/Moscow}
+      TZ: ${TZ:-Europe/Moscow}
+      TESTING: "1"
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
+    networks:
+      - default
+    volumes:
+      - ../:/app
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tests.common.celery_app_test inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  tests:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.test
+    container_name: wednesday_tests
+    restart: "no"
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+      celery-worker-test:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-test_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_ci_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-wednesdaydb_test}
+      POSTGRES_HOST: postgres_test
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      REDIS_HOST: redis_test
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_URL: ${REDIS_URL:-redis://redis_test:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis_test:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis_test:6379/0}
+      CELERY_TEST_REDIS_URL: ${CELERY_TEST_REDIS_URL:-redis://redis_test:6379/1}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-test-token}
+      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY:-test-api}
+      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY:-test-secret}
+      CHAT_ID: ${CHAT_ID:-12345}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-54321}
+      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY:-ZmFrZS1rZXk=}
+      SCHEDULER_SEND_TIMES: ${SCHEDULER_SEND_TIMES:-09:00,12:00,18:00}
+      SCHEDULER_WEDNESDAY_DAY: ${SCHEDULER_WEDNESDAY_DAY:-2}
+      SCHEDULER_TZ: ${SCHEDULER_TZ:-Europe/Moscow}
+      TZ: ${TZ:-Europe/Moscow}
+      TESTING: "1"
+      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
+      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
+      PYTHONPATH: /app
+    working_dir: /app
+    volumes:
+      - ../:/app
+    networks:
+      - default
+
+volumes:
+  frog_images:
+  logs:
+  prompt_storage:

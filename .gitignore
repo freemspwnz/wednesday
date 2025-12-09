@@ -162,11 +162,19 @@ data/
 coverage.xml
 coverage-e2e.xml
 coverage-e2e-infra.xml
+coverage-unit.xml
+coverage-integration.xml
+coverage-slow.xml
+coverage-celery.xml
 
 .junit
 junit.xml
 junit-e2e.xml
 junit-e2e-infra.xml
+junit-unit.xml
+junit-integration.xml
+junit-slow.xml
+junit-celery.xml
 
 
 # Ruff

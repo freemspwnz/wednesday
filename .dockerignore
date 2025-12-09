@@ -31,6 +31,7 @@ htmlcov/
 .coverage
 .coverage.*
 coverage.*
+coverage-*
 .cache
 nosetests.xml
 coverage.xml
@@ -39,8 +40,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 junit.xml
-junit-e2e.xml
-junit-e2e-infra.xml
+junit*.xml
 .junit
 
 # Build / distribution

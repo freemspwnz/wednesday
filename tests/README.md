@@ -556,16 +556,16 @@ FAIL Required test coverage of 50% not reached. Total coverage: 44.44%
 
 Тесты автоматически определяют окружение (Docker контейнер vs локальное) и устанавливают правильный `POSTGRES_HOST`:
 
-- **В Docker контейнере**: используется `postgres_test` (имя сервиса из `docker-compose.test.yml`)
+- **В Docker контейнере**: используется `postgres_test` (имя сервиса из `tests/docker-compose.test.yml`)
 - **Локально**: используется `localhost`
 
 **Как это работает:**
 
 1. `conftest.py` определяет окружение через:
    - Наличие файла `/.dockerenv` (создаётся Docker при запуске контейнера)
-   - Переменную окружения `TESTING="1"` (устанавливается в `docker-compose.test.yml`)
+   - Переменную окружения `TESTING="1"` (устанавливается в `tests/docker-compose.test.yml`)
 
-2. Если тесты запускаются в Docker и `POSTGRES_HOST` уже установлен (из `docker-compose.test.yml`), он не перезаписывается.
+2. Если тесты запускаются в Docker и `POSTGRES_HOST` уже установлен (из `tests/docker-compose.test.yml`), он не перезаписывается.
 
 3. Если PostgreSQL недоступен, тесты пропускаются с понятным сообщением:
    - В Docker: "PostgreSQL недоступен по адресу postgres_test:5432. Убедитесь, что контейнер postgres_test запущен..."
@@ -641,9 +641,9 @@ make test-up
 make test-e2e
 
 # Или вручную:
-docker compose --env-file .env.test -f docker-compose.test.yml up -d --build
-export $(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$' | xargs) && pytest -m "e2e and not infra"
-docker compose -f docker-compose.test.yml down -v
+docker compose --env-file tests/.env.test -f tests/docker-compose.test.yml up -d --build
+export $(grep -v '^[[:space:]]*#' tests/.env.test | grep -v '^[[:space:]]*$' | xargs) && pytest -m "e2e and not infra"
+docker compose -f tests/docker-compose.test.yml down -v
 ```
 
 **Важно:**
@@ -666,7 +666,7 @@ docker compose -f docker-compose.test.yml down -v
 
 ```bash
 make test-up
-export $(grep -v '^[[:space:]]*#' .env.test | grep -v '^[[:space:]]*$' | xargs) && pytest -m "e2e and infra"
+export $(grep -v '^[[:space:]]*#' tests/.env.test | grep -v '^[[:space:]]*$' | xargs) && pytest -m "e2e and infra"
 make test-down
 ```
 

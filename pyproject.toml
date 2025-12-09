@@ -80,6 +80,7 @@ dependencies = [
   "sentry-sdk[fastapi,asyncio]==2.19.2",
   "tenacity>=8.2.3",
   "uvicorn==0.32.1",
+  "junitparser==4.0.2",
 ]
 
 [tool.ruff]
@@ -191,5 +192,7 @@ markers = [
 addopts = "-v -ra --tb=short"
 testpaths = ["tests"]
 asyncio_mode = "strict"
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"
 filterwarnings = ["ignore::DeprecationWarning"]
 pythonpath = ["."]

@@ -208,11 +208,14 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
 
     client = GigaChatTextClient()
 
-    assert client._auth_url is not None
-    assert client._api_url is not None
-    assert client._authorization_key is not None
-    assert client._scope is not None
-    assert client._model is not None
+    try:
+        assert client._auth_url is not None
+        assert client._api_url is not None
+        assert client._authorization_key is not None
+        assert client._scope is not None
+        assert client._model is not None
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.asyncio
