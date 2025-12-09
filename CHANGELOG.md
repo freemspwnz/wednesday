@@ -1,4 +1,46 @@
 # CHANGELOG
+## [6.7.4] 2025-12-09 — Улучшение стабильности Celery-тестов: изоляция очередей, снижение таймаутов и retry/backoff
+
+### Добавлено
+
+- **Изоляция тестовых очередей Celery через динамические имена**:
+  - Обновлена функция `generate_celery_test_queues()` в `tests/common/celery_app_test.py` для генерации уникальных имён очередей через UUID
+  - Каждый тест получает уникальный набор очередей (`test_main_{uuid}`, `test_images_{uuid}`, `test_maintenance_{uuid}`)
+  - Worker подписывается на динамические очереди через control API (`ensure_queues_consumed()`) без перезапуска
+  - Очереди автоматически отписываются после теста через `drop_test_consumers()` для предотвращения засорения worker
+  - Исключены конфликты между параллельными тестами при использовании одинаковых имён очередей
+
+- **Троттлинг долгих задач в тестовом Celery app**:
+  - Добавлены ограничения времени выполнения задач в `tests/common/celery_app_test.py`:
+    - `task_time_limit = 30` секунд (жесткий лимит)
+    - `task_soft_time_limit = 25` секунд (мягкий лимит)
+  - Предотвращает зависания тестов при добавлении долгих задач в будущем
+
+- **Retry/backoff вместо skip при недоступности worker**:
+  - Обновлена функция `wait_for_celery_worker()` в `tests/common/wait_for_celery.py`:
+    - Улучшен экспоненциальный backoff (multiplier=1.0, min=0.5, max=5.0)
+    - Снижен таймаут `result.get()` до 5 секунд для быстрого обнаружения проблем
+  - Добавлена функция `_get_worker_stats_with_retry()` в `tests/test_services/test_celery_e2e.py` с retry/backoff вместо `pytest.skip()` при недоступности worker
+
+### Изменено
+
+- **Снижение таймаутов в Celery-тестах**:
+  - Все вызовы `result.get()` в Celery-тестах используют таймаут 5 секунд (вместо 10)
+  - Ускорено обнаружение проблем и уменьшено время выполнения тестов
+  - Обновлены тесты в `tests/e2e/celery/test_celery_e2e_basic.py` и `tests/test_services/test_celery_e2e.py`
+
+- **Обновление тестов для использования динамических очередей**:
+  - Все тесты в `tests/e2e/celery/test_celery_e2e_basic.py` используют фикстуру `celery_test_queues` для получения динамических очередей
+  - Все тесты в `tests/test_services/test_celery_e2e.py`, работающие с очередями, обновлены для использования динамических очередей:
+    - `test_celery_task_can_be_sent_to_queue`
+    - `test_celery_task_routing`
+    - `test_celery_task_result_backend`
+    - `test_celery_multiple_workers_concurrency`
+    - `test_celery_task_retry_mechanism`
+  - Тесты полностью изолированы друг от друга и могут безопасно выполняться параллельно
+
+---
+
 ## [6.7.3] 2025-12-09 — Расширение smoke-тестов для модулей с низким покрытием
 
 ### Добавлено

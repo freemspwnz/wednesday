@@ -61,12 +61,12 @@ test-integration-containers-xdist: test-down
 # E2E без infra (боты, Celery e2e базовые)
 test-e2e: test-down
 	@echo "=== Запуск E2E (без infra) ==="
-	@./scripts/run_e2e.sh -m "e2e and not infra"
+	@./scripts/run_e2e.sh "e2e and not infra"
 
 # Infra-набор Celery (диагностические e2e)
 test-e2e-infra: test-down
 	@echo "=== Запуск Celery infra E2E ==="
-	@./scripts/run_e2e.sh -m "e2e and infra"
+	@./scripts/run_e2e.sh "e2e and infra"
 
 # Запуск тестов с покрытием (integration-матрица)
 test-cov: test-integration-containers

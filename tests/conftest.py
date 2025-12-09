@@ -9,8 +9,8 @@ import pytest
 import pytest_asyncio
 from pytest import MonkeyPatch
 
-# Импортируем fixture для ожидания готовности Celery worker в E2E тестах
-from tests.fixtures.celery_worker_ready import celery_worker_ready  # noqa: F401
+# Импортируем fixtures для ожидания готовности Celery worker в E2E тестах
+from tests.fixtures.celery_worker_ready import celery_worker_ready, celery_test_queues  # noqa: F401
 
 _session_monkeypatch = MonkeyPatch()
 _session_env_defaults = {

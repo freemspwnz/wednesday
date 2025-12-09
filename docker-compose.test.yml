@@ -80,6 +80,8 @@ services:
       TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
     networks:
       - default
+    volumes:
+      - .:/app
     # ⚠️ КРИТИЧНО: Healthcheck обязателен (нельзя удалять полностью).
     # Теперь он проверяет не только наличие процесса, но и реальную готовность Celery worker'а.
     # Используем минимально «глупую» проверку через Celery CLI:
