@@ -256,7 +256,7 @@ async def test_send_fallback_image_no_image(wednesday_bot: Any) -> None:
     assert wednesday_bot.application.bot.send_photo.await_count == 0
 
 
-@pytest.mark.e2e
+@pytest.mark.integration
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
@@ -282,7 +282,7 @@ async def test_on_my_chat_member_added(wednesday_bot: Any, cleanup_tables: Any) 
     assert wednesday_bot.application.bot.send_message.await_count >= 1
 
 
-@pytest.mark.e2e
+@pytest.mark.integration
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio

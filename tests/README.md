@@ -24,6 +24,7 @@
 
 - Интеграционный прогон: `make test-integration-containers` (создаёт `coverage.xml`, `junit.xml`).
 - E2E отчёт: `make test-e2e` (создаёт `junit-e2e.xml`).
+- **Coverage threshold:** Минимальный порог покрытия кода установлен на 50% для unit и integration тестов. Если покрытие ниже порога, тесты завершаются с ошибкой.
 
 ## E2E тесты для Celery
 

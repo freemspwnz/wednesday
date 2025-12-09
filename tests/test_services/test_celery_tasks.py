@@ -2,6 +2,7 @@
 Unit-тесты для Celery задач Wednesday Frog Bot.
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -20,12 +21,8 @@ pytestmark = [pytest.mark.unit]
 
 
 @pytest.mark.asyncio
-async def test_celery_services_lazy_init() -> None:
+async def test_celery_services_lazy_init(reset_singletons: Any) -> None:
     """Тест lazy инициализации CeleryServices."""
-    # Сбрасываем состояние перед тестом
-    CeleryServices._bot = None
-    CeleryServices._generator = None
-    CeleryServices._initialized = False
 
     with (
         patch("services.celery_tasks.init_redis_pool") as mock_redis,
@@ -77,12 +74,8 @@ async def test_is_retryable_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_send_wednesday_frog_task_success() -> None:
+async def test_send_wednesday_frog_task_success(reset_singletons: Any) -> None:
     """Тест успешного выполнения задачи отправки."""
-    # Сбрасываем состояние CeleryServices
-    CeleryServices._bot = None
-    CeleryServices._generator = None
-    CeleryServices._initialized = False
 
     mock_self = MagicMock()
     mock_self.request = MagicMock()
@@ -263,16 +256,11 @@ async def test_generate_frog_image_task_retry_on_network_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daily_cleanup_task_success() -> None:
+async def test_daily_cleanup_task_success(reset_singletons: Any) -> None:
     """Тест успешного выполнения задачи очистки."""
     mock_self = MagicMock()
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
-
-    # Сбрасываем состояние CeleryServices
-    CeleryServices._bot = None
-    CeleryServices._generator = None
-    CeleryServices._initialized = False
 
     with (
         patch("services.celery_tasks.CeleryServices.get_bot") as mock_get_bot,
@@ -299,16 +287,11 @@ async def test_daily_cleanup_task_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daily_statistics_task_success() -> None:
+async def test_daily_statistics_task_success(reset_singletons: Any) -> None:
     """Тест успешного выполнения задачи статистики."""
     mock_self = MagicMock()
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
-
-    # Сбрасываем состояние CeleryServices
-    CeleryServices._bot = None
-    CeleryServices._generator = None
-    CeleryServices._initialized = False
 
     with patch("services.celery_tasks.CeleryServices.get_bot") as mock_get_bot:
         mock_bot = AsyncMock()

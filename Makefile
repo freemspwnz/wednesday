@@ -39,6 +39,7 @@ test-integration-containers: test-down
 	@$(MAKE) test-up || ($(MAKE) test-down && exit 1)
 	@docker compose --env-file .env.test -f docker-compose.test.yml run --rm tests \
 		pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
+		--cov-fail-under=50 \
 		--junitxml=junit.xml -m "(integration or db or redis) and not celery and not e2e and not infra and not slow"; \
 	TEST_EXIT_CODE=$$?; \
 	$(MAKE) test-down; \
@@ -121,6 +122,7 @@ ci:
 	@echo "=== Integration тесты (с контейнерами) ==="
 	@-docker compose --env-file .env.test -f docker-compose.test.yml run --rm tests \
 		pytest $(COV_ARGS) --cov-report=xml:coverage.xml --cov-report=term \
+		--cov-fail-under=50 \
 		--junitxml=junit.xml -m "(integration or db or redis) and not celery and not e2e and not infra and not slow" || (echo "✗ Integration тесты провалились" && touch .ci_failed)
 	@echo "=== E2E тесты (без infra) ==="
 	@-docker compose --env-file .env.test -f docker-compose.test.yml run --rm tests \

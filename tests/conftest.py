@@ -291,3 +291,37 @@ def async_retry_stub(monkeypatch: Any) -> Callable[[Any], None]:
         monkeypatch.setattr(target, "_retry_on_connect_error", _direct)
 
     return _apply
+
+
+@pytest.fixture(scope="function", autouse=False)
+def reset_singletons() -> Generator[None, None, None]:
+    """
+    Сбрасывает состояние синглтонов перед тестом для обеспечения изоляции.
+
+    Используйте эту фикстуру в тестах, которые мутируют состояние синглтонов
+    (CeleryServices, DispatchRegistry и др.).
+
+    Пример использования:
+        @pytest.mark.asyncio
+        async def test_something(reset_singletons):
+            # тест использует синглтоны
+    """
+    from services.celery_tasks import CeleryServices
+
+    # Сохраняем исходное состояние
+    original_bot = CeleryServices._bot
+    original_generator = CeleryServices._generator
+    original_initialized = CeleryServices._initialized
+
+    # Сбрасываем состояние
+    CeleryServices._bot = None
+    CeleryServices._generator = None
+    CeleryServices._initialized = False
+
+    try:
+        yield
+    finally:
+        # Восстанавливаем исходное состояние
+        CeleryServices._bot = original_bot
+        CeleryServices._generator = original_generator
+        CeleryServices._initialized = original_initialized

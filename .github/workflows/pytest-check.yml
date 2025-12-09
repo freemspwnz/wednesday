@@ -42,6 +42,7 @@ jobs:
             --cov=utils \
             --cov-report=xml:coverage-unit.xml \
             --cov-report=term \
+            --cov-fail-under=50 \
             --junitxml=junit-unit.xml \
             -m "not integration and not e2e and not infra and not celery and not db and not redis and not slow"
 
@@ -188,6 +189,7 @@ jobs:
             --cov=utils \
             --cov-report=xml:coverage-integration.xml \
             --cov-report=term \
+            --cov-fail-under=50 \
             --junitxml=junit-integration.xml \
             -m "(integration or db or redis) and not e2e and not infra and not slow"
 
