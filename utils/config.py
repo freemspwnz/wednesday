@@ -84,7 +84,7 @@ class Config:  # noqa: PLR0904
     @staticmethod
     def _get_env_var(name: str) -> str | None:
         """
-        Получает значение переменной окружения.
+        Получает значение переменной окружения с поддержкой *_FILE secret-файлов.
 
         Args:
             name: Имя переменной окружения
@@ -92,12 +92,29 @@ class Config:  # noqa: PLR0904
         Returns:
             Значение переменной или None, если переменная не найдена
         """
-        # Сначала читаем значение только из переменных окружения контейнера
+        # 1) Предпочитаем *_FILE, если путь задан
+        file_var = os.getenv(f"{name}_FILE")
+        if file_var:
+            try:
+                with open(file_var, encoding="utf-8") as secret_file:
+                    return secret_file.read().strip()
+            except OSError as exc:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "Не удалось прочитать файл секрета %s для переменной %s: %s",
+                    file_var,
+                    name,
+                    exc,
+                )
+
+        # 2) Читаем обычное окружение
         value = os.getenv(name)
         if value is not None:
             return value
 
-        # Если переменная не найдена, один раз пробуем подгрузить .env через python-dotenv
+        # 3) Fallback: загрузить .env один раз
         _load_dotenv_if_needed()
         return os.getenv(name)
 

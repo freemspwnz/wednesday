@@ -134,6 +134,7 @@ logs/
 .env
 .env.local
 .env.production
+secrets/
 
 # IDE files
 .vscode/

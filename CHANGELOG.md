@@ -1,4 +1,19 @@
 # CHANGELOG
+## [6.7.11] 2025-12-11 — Усиление безопасности docker-compose и secrets
+
+### Добавлено
+
+- Поддержка *_FILE секретов в `utils/config.py` для чтения паролей из Docker secrets.
+- Документ `docs/docker-compose-refactor.md` с описанием изменений и примерами конфигурации.
+- Примерные секреты для prod-compose по умолчанию в `./secrets` (postgres/redis/grafana) для локальных прогонов.
+
+### Изменено
+
+- Продакшн `docker-compose.yml`: вынесены пароли Postgres/Redis/Grafana в Docker secrets, сегментация сетей `backend/monitoring`, закрыты публичные порты (кроме Grafana на 127.0.0.1), добавлены ресурсные лимиты и ротация логов json-file, исправлен healthcheck бота с `${HEALTHCHECK_PORT}`, Prometheus ждёт здоровые зависимости.
+- CI `tests/docker-compose.test.yml`: убраны публикации портов Postgres/Redis (только internal `expose`), удалены жёсткие дефолты секретов/токенов (ожидаются из CI env), добавлены ресурсные лимиты и ротация логов, сохранён tmpfs для быстрого IO.
+
+---
+
 ## [6.7.10] 2025-12-11 — Усиление алертинга по логам и проверок Loki
 
 ### Добавлено

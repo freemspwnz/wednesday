@@ -4,12 +4,10 @@ services:
     container_name: wednesday_postgres_test
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-test_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_ci_2024}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-wednesdaydb_test}
-      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
-      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-test_user} -d ${POSTGRES_DB:-wednesdaydb_test}"]
       interval: 2s
@@ -17,21 +15,42 @@ services:
       retries: 10
     tmpfs:
       - /var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+        reservations:
+          cpus: "0.1"
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis_test:
     image: redis:7-alpine
     container_name: wednesday_redis_test
-    environment:
-      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
-      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
-      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
-      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
     tmpfs:
       - /data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.4"
+          memory: 256m
+        reservations:
+          cpus: "0.1"
+          memory: 64m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   celery-worker-test:
     build:
@@ -46,7 +65,7 @@ services:
         condition: service_healthy
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-test_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_ci_2024}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-wednesdaydb_test}
       POSTGRES_HOST: postgres_test
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
@@ -55,12 +74,12 @@ services:
       REDIS_DB: ${REDIS_DB:-0}
       REDIS_URL: ${REDIS_URL:-redis://redis_test:6379/0}
       CELERY_TEST_REDIS_URL: ${CELERY_TEST_REDIS_URL:-redis://redis_test:6379/1}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-test-token}
-      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY:-test-api}
-      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY:-test-secret}
-      CHAT_ID: ${CHAT_ID:-12345}
-      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-54321}
-      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY:-ZmFrZS1rZXk=}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY}
+      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY}
+      CHAT_ID: ${CHAT_ID}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID}
+      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY}
       SCHEDULER_SEND_TIMES: ${SCHEDULER_SEND_TIMES:-09:00,12:00,18:00}
       SCHEDULER_WEDNESDAY_DAY: ${SCHEDULER_WEDNESDAY_DAY:-2}
       SCHEDULER_TZ: ${SCHEDULER_TZ:-Europe/Moscow}
@@ -78,6 +97,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   tests:
     build:
@@ -94,7 +126,7 @@ services:
         condition: service_healthy
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-test_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_ci_2024}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-wednesdaydb_test}
       POSTGRES_HOST: postgres_test
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
@@ -105,12 +137,12 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis_test:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis_test:6379/0}
       CELERY_TEST_REDIS_URL: ${CELERY_TEST_REDIS_URL:-redis://redis_test:6379/1}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-test-token}
-      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY:-test-api}
-      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY:-test-secret}
-      CHAT_ID: ${CHAT_ID:-12345}
-      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-54321}
-      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY:-ZmFrZS1rZXk=}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY}
+      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY}
+      CHAT_ID: ${CHAT_ID}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID}
+      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY}
       SCHEDULER_SEND_TIMES: ${SCHEDULER_SEND_TIMES:-09:00,12:00,18:00}
       SCHEDULER_WEDNESDAY_DAY: ${SCHEDULER_WEDNESDAY_DAY:-2}
       SCHEDULER_TZ: ${SCHEDULER_TZ:-Europe/Moscow}
@@ -124,8 +156,16 @@ services:
       - ../:/app
     networks:
       - default
-
-volumes:
-  frog_images:
-  logs:
-  prompt_storage:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 768m
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

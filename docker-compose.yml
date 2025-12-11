@@ -5,48 +5,74 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
+    secrets:
+      - postgres_password
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 1g
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
     container_name: wednesday_redis
     restart: unless-stopped
     command: >
-      sh -c "
-      if [ -n \"$$REDIS_PASSWORD\" ]; then
-        redis-server --appendonly yes --appendfsync everysec --requirepass \"$$REDIS_PASSWORD\"
-      else
-        redis-server --appendonly yes --appendfsync everysec
-      fi
-      "
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+      sh -c '
+      REDIS_PASSWORD="$(cat /run/secrets/redis_password)";
+      redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD"
+      '
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
+    networks:
+      - backend
     healthcheck:
       test: >
-        sh -c "
-        if [ -n \"$$REDIS_PASSWORD\" ]; then
-          redis-cli -a \"$$REDIS_PASSWORD\" ping
-        else
-          redis-cli ping
-        fi
-        "
+        sh -c '
+        REDIS_PASSWORD="$(cat /run/secrets/redis_password)";
+        redis-cli -a "$$REDIS_PASSWORD" ping
+        '
       interval: 5s
       timeout: 3s
       retries: 5
+    secrets:
+      - redis_password
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+        reservations:
+          cpus: "0.2"
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   bot-init:
     image: wednesday-bot:local
@@ -62,6 +88,21 @@ services:
       - prompt_storage:/app/data/prompts
       - beat_data:/app/data/beat
     command: ["/bin/sh", "-lc", "mkdir -p /app/data/frogs /app/data/prompts /app/data/beat && chown -R app:app /app/data/frogs /app/data/prompts /app/data/beat"]
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256m
+        reservations:
+          cpus: "0.1"
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   bot:
     image: wednesday-bot:local
@@ -85,7 +126,9 @@ services:
     environment:
       # Переопределяем хосты для работы внутри docker-сети
       POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: redis
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
       # Выбор бэкендов моделей (через фабрику клиентов):
       # - IMAGE_MODEL_BACKEND: kandinsky (по умолчанию)
       # - TEXT_MODEL_BACKEND: gigachat (по умолчанию)
@@ -108,24 +151,37 @@ services:
       # Внутри контейнера промпты сохраняются в /app/data/prompts.
       - prompt_storage:/app/data/prompts
     networks:
-      - default
-    ports:
-      # Пробрасываем порт экспортёра Prometheus наружу:
-      # - внутри контейнера и снаружи используется одно и то же значение,
-      #   чтобы избежать путаницы при настройке Prometheus/Grafana.
-      - "${PROMETHEUS_EXPORTER_PORT:-8000}:${PROMETHEUS_EXPORTER_PORT:-8000}"
-      # Пробрасываем порт healthcheck наружу (по умолчанию 8080).
-      - "${HEALTHCHECK_PORT:-8080}:${HEALTHCHECK_PORT:-8080}"
+      - backend
+      - monitoring
+    expose:
+      - "${PROMETHEUS_EXPORTER_PORT:-8000}"
+      - "${HEALTHCHECK_PORT:-8080}"
     healthcheck:
       # Используем встроенный python для проверки эндпоинта /health без
       # дополнительных системных утилит (curl/wget).
       # Скрипт минималистичный - только проверка 200 OK, без лишней логики
       # Таймауты fail-fast для быстрой диагностики проблем
-      test: ["CMD-SHELL", "python3 -c 'import urllib.request; resp=urllib.request.urlopen(\"http://127.0.0.1:8080/health\"); import sys; sys.exit(0 if resp.getcode()==200 else 1)'"]
+      test: ["CMD-SHELL", "python3 -c 'import os, urllib.request, sys; port=os.getenv(\"HEALTHCHECK_PORT\",\"8080\"); resp=urllib.request.urlopen(f\"http://127.0.0.1:{port}/health\"); sys.exit(0 if resp.getcode()==200 else 1)'"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 60s
+    secrets:
+      - postgres_password
+      - redis_password
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   celery-worker:
     image: wednesday-bot:local
@@ -149,7 +205,9 @@ services:
     environment:
       # Переопределяем хосты для работы внутри docker-сети
       POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: redis
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
       # Timezone для Celery Beat
       TZ: ${SCHEDULER_TZ:-Europe/Amsterdam}
       # Выбор бэкендов моделей
@@ -173,7 +231,8 @@ services:
       - frog_images:/app/data/frogs
       - prompt_storage:/app/data/prompts
     networks:
-      - default
+      - backend
+      - monitoring
     healthcheck:
       # Проверяем здоровье worker через стандартный Celery inspect ping
       # Используем celery inspect ping для проверки доступности worker
@@ -182,6 +241,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    secrets:
+      - postgres_password
+      - redis_password
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   celery-beat:
     image: wednesday-bot:local
@@ -204,6 +279,7 @@ services:
     environment:
       # Переопределяем хосты для работы внутри docker-сети
       REDIS_HOST: redis
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
       # Timezone для Celery Beat
       TZ: ${SCHEDULER_TZ:-Europe/Amsterdam}
       LOG_TO_FILE: ${LOG_TO_FILE:-0}
@@ -215,7 +291,8 @@ services:
       # Beat сохраняет состояние расписания в файл (опционально)
       - beat_data:/app/data/beat
     networks:
-      - default
+      - backend
+      - monitoring
     # Beat не зависит от celery-worker (Beat и Worker - отдельные процессы)
     healthcheck:
       # Проверяем tmpfs heartbeat файл
@@ -224,6 +301,21 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
+    secrets:
+      - redis_password
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256m
+        reservations:
+          cpus: "0.1"
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   loki:
     image: grafana/loki:2.9.6
@@ -233,8 +325,10 @@ services:
     volumes:
       - ./monitoring/loki-config.yml:/etc/loki/config.yml:ro
       - loki_data:/loki
-    ports:
-      - "3100:3100"
+    expose:
+      - "3100"
+    networks:
+      - monitoring
     healthcheck:
       # Loki имеет встроенный HTTP endpoint /ready
       # Используем busybox wget (доступен в образе grafana/loki)
@@ -242,6 +336,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   grafana:
     image: grafana/grafana:11.1.0
@@ -251,12 +358,14 @@ services:
       loki:
         condition: service_healthy
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SERVER_DOMAIN=localhost
-      - GF_UNIFIED_ALERTING_PROVISIONING_PATH=/etc/grafana/provisioning/alerting
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SERVER_DOMAIN: localhost
+      GF_UNIFIED_ALERTING_PROVISIONING_PATH: /etc/grafana/provisioning/alerting
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    networks:
+      - monitoring
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -266,6 +375,21 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    secrets:
+      - grafana_admin_password
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -280,17 +404,38 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
+    expose:
+      - "9090"
+    networks:
+      - backend
+      - monitoring
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
       interval: 30s
       timeout: 5s
       retries: 3
     depends_on:
-      - bot
-      - celery-worker
-      - celery-beat
+      bot:
+        condition: service_healthy
+      celery-worker:
+        condition: service_healthy
+      celery-beat:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 1g
+        reservations:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   promtail:
     image: grafana/promtail:2.9.6
@@ -304,8 +449,10 @@ services:
       - promtail_positions:/promtail  # Персистентные позиции
       - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
     command: -config.file=/etc/promtail/config.yml
-    ports:
-      - "9080:9080"
+    expose:
+      - "9080"
+    networks:
+      - monitoring
     healthcheck:
       # Promtail не имеет wget/curl в образе, используем проверку процесса
       # Это безопасный вариант - проверяет, что процесс запущен
@@ -316,15 +463,41 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256m
+        reservations:
+          cpus: "0.1"
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
   redis_data:
   frog_images:
-  logs:
   prompt_storage:
   beat_data:
   loki_data:
   grafana_data:
   promtail_positions:
   prometheus_data:
+
+networks:
+  backend:
+    driver: bridge
+  monitoring:
+    driver: bridge
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  redis_password:
+    file: ./secrets/redis_password
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password
