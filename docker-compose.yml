@@ -267,6 +267,31 @@ services:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: wednesday_prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - bot
+      - celery-worker
+      - celery-beat
+
   promtail:
     image: grafana/promtail:2.9.6
     container_name: wednesday_promtail
@@ -302,3 +327,4 @@ volumes:
   loki_data:
   grafana_data:
   promtail_positions:
+  prometheus_data:

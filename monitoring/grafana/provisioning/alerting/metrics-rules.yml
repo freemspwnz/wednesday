@@ -1,0 +1,283 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: wednesday-metrics
+    folder: "Metrics"
+    interval: 1m
+    rules:
+      - uid: exporter-down
+        title: "ExporterDown"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prom_ds
+            queryType: timeSeriesQuery
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              exemplar: false
+              expr: up == 0
+              interval: ""
+              legendFormat: ""
+              queryType: "timeSeriesQuery"
+              refId: "A"
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              refId: "B"
+              type: "threshold"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+              threshold: 0
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "and"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["B"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+        noDataState: "NoData"
+        execErrState: "Error"
+        for: 2m
+        annotations:
+          summary: "Target {{ $labels.job }} недоступен"
+
+      - uid: high-generation-error-rate
+        title: "HighGenerationErrorRate"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prom_ds
+            queryType: timeSeriesQuery
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              exemplar: false
+              expr: frog_generation:error_rate5m > 0.05
+              interval: ""
+              legendFormat: ""
+              queryType: "timeSeriesQuery"
+              refId: "A"
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              refId: "B"
+              type: "threshold"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "and"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["B"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+        noDataState: "NoData"
+        execErrState: "Error"
+        for: 5m
+        annotations:
+          summary: "Доля ошибок генерации >5%"
+
+      - uid: slow-generation-p95
+        title: "SlowGenerationP95"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prom_ds
+            queryType: timeSeriesQuery
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              exemplar: false
+              expr: frog_generation:latency_p95:5m > 10
+              interval: ""
+              legendFormat: ""
+              queryType: "timeSeriesQuery"
+              refId: "A"
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              refId: "B"
+              type: "threshold"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "and"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["B"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+        noDataState: "NoData"
+        execErrState: "Error"
+        for: 10m
+        annotations:
+          summary: "p95 латентности генерации > 10s"
+
+      - uid: celery-task-failures
+        title: "CeleryTaskFailures"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prom_ds
+            queryType: timeSeriesQuery
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              exemplar: false
+              expr: sum(rate(celery_task_failures_total[5m])) > 0
+              interval: ""
+              legendFormat: ""
+              queryType: "timeSeriesQuery"
+              refId: "A"
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              refId: "B"
+              type: "threshold"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "and"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["B"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+        noDataState: "NoData"
+        execErrState: "Error"
+        for: 5m
+        annotations:
+          summary: "Есть фейлы Celery задач"
+
+      - uid: retry-failures
+        title: "RetryFailures"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prom_ds
+            queryType: timeSeriesQuery
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              exemplar: false
+              expr: sum(rate(http_retries_total{status=\"failed\"}[5m])) > 0
+              interval: ""
+              legendFormat: ""
+              queryType: "timeSeriesQuery"
+              refId: "A"
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              refId: "B"
+              type: "threshold"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "and"
+              conditions:
+                - evaluator:
+                    params: []
+                    type: "gt"
+                  operator:
+                    type: "and"
+                  query:
+                    params: ["B"]
+                  reducer:
+                    type: "last"
+                  type: "query"
+        noDataState: "NoData"
+        execErrState: "Error"
+        for: 5m
+        annotations:
+          summary: "Исчерпаны ретраи HTTP"

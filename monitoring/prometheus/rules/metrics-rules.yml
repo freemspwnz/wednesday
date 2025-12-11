@@ -1,0 +1,121 @@
+groups:
+  - name: wednesday-recording
+    interval: 30s
+    rules:
+      - record: frog_generation:rate5m
+        expr: sum by (job, service, status, source) (rate(frog_generations_total[5m]))
+
+      - record: frog_generation:error_rate5m
+        expr: >
+          sum by (job, service) (rate(frog_generations_total{status="failure"}[5m])) /
+          clamp_min(
+            sum by (job, service) (rate(frog_generations_total[5m])),
+            1e-9
+          )
+
+      - record: frog_generation:latency_p95:5m
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, job, service) (rate(frog_generation_latency_seconds_bucket[5m]))
+          )
+
+      - record: frog_generation:latency_p99:5m
+        expr: >
+          histogram_quantile(
+            0.99,
+            sum by (le, job, service) (rate(frog_generation_latency_seconds_bucket[5m]))
+          )
+
+      - record: frog_generation:latency_avg:5m
+        expr: >
+          sum by (job, service) (rate(frog_generation_latency_seconds_sum[5m])) /
+          clamp_min(
+            sum by (job, service) (rate(frog_generation_latency_seconds_count[5m])),
+            1e-9
+          )
+
+      - record: celery_tasks:rate5m
+        expr: sum by (job, service, task_name, status) (rate(celery_tasks_total[5m]))
+
+      - record: celery_tasks:failures5m
+        expr: sum by (job, service, task_name) (rate(celery_task_failures_total[5m]))
+
+      - record: celery_tasks:duration_p95:5m
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, job, service, task_name) (rate(celery_task_duration_seconds_bucket[5m]))
+          )
+
+      - record: celery_tasks:duration_avg:5m
+        expr: >
+          sum by (job, service, task_name) (rate(celery_task_duration_seconds_sum[5m])) /
+          clamp_min(
+            sum by (job, service, task_name) (rate(celery_task_duration_seconds_count[5m])),
+            1e-9
+          )
+
+      - record: celery_tasks:retries5m
+        expr: sum by (job, service, task_name) (rate(celery_task_retries_total[5m]))
+
+      - record: http_retries:rate5m
+        expr: sum by (job, service, method, status) (rate(http_retries_total[5m]))
+
+      - record: http_retry_wait:p95:5m
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, job, service, method) (rate(http_retry_wait_seconds_bucket[5m]))
+          )
+
+      - record: http_retry_wait:avg:5m
+        expr: >
+          sum by (job, service, method) (rate(http_retry_wait_seconds_sum[5m])) /
+          clamp_min(
+            sum by (job, service, method) (rate(http_retry_wait_seconds_count[5m])),
+            1e-9
+          )
+
+  - name: wednesday-alerts
+    interval: 30s
+    rules:
+      - alert: ExporterDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.job }} недоступен"
+
+      - alert: HighGenerationErrorRate
+        expr: frog_generation:error_rate5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Доля ошибок генерации >5%"
+
+      - alert: SlowGenerationP95
+        expr: frog_generation:latency_p95:5m > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 латентности генерации > 10s"
+
+      - alert: CeleryTaskFailures
+        expr: sum(rate(celery_task_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Есть фейлы Celery задач"
+
+      - alert: RetryFailures
+        expr: sum(rate(http_retries_total{status="failed"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Исчерпаны ретраи HTTP"

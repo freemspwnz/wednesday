@@ -1,0 +1,42 @@
+rule_files:
+  - metrics-rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: exporter_down_alert
+    interval: 1m
+    input_series:
+      - series: 'up{job="bot", instance="bot:8000", service="bot"}'
+        values: '0 0 0 0'
+    alert_rule_test:
+      - alertname: ExporterDown
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              alertname: ExporterDown
+              instance: bot:8000
+              job: bot
+              service: bot
+              severity: critical
+            exp_annotations:
+              summary: "Target bot недоступен"
+
+  - name: high_generation_error_rate_alert
+    interval: 1m
+    input_series:
+      - series: 'frog_generations_total{status="failure", job="bot", service="bot", source="bot"}'
+        values: '0 10 20 30 40 50'
+      - series: 'frog_generations_total{status="success", job="bot", service="bot", source="bot"}'
+        values: '0 20 40 60 80 100'
+    alert_rule_test:
+      - alertname: HighGenerationErrorRate
+        eval_time: 6m
+        exp_alerts:
+          - exp_labels:
+              alertname: HighGenerationErrorRate
+              job: bot
+              service: bot
+              severity: warning
+            exp_annotations:
+              summary: "Доля ошибок генерации >5%"

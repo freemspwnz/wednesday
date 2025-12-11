@@ -1,4 +1,20 @@
 # CHANGELOG
+## [6.7.9] 2025-12-11 — Интеграция мониторинга Prometheus/Grafana и дашборды метрик
+
+### Добавлено
+
+- Prometheus в docker-compose: хранение в `prometheus_data`, retention 15d, hot-reload и healthcheck.
+- Конфиг Prometheus с scrape `/metrics` для bot/celery-worker/celery-beat, правила recording/alerting и promtool unit-тесты.
+- Grafana provisioning: datasource `prom_ds`, unified alerting по метрикам, дашборды (app, celery, retry) как code.
+- CI job `prometheus`: установка promtool 2.54.1, `promtool check config` и `promtool test rules`.
+
+### Изменено
+
+- Datasource Loki перестал быть default, чтобы Prometheus был источником по умолчанию для метрик.
+- Провайдер дашбордов Grafana унифицирован под метрики и логи (dashboards-as-code).
+
+---
+
 ## [6.7.8] 2025-12-10 — Рефакторинг тестового пайплайна: детерминированный жизненный цикл контейнеров и оптимизация фикстур
 
 ### Добавлено
