@@ -60,7 +60,7 @@ _session_env_defaults = {
     "ADMIN_CHAT_ID": "999998",
     # БД/Redis по умолчанию — для unit/integration без реальных сервисов
     "POSTGRES_USER": "test_user",
-    "POSTGRES_PASSWORD": "test_password_ci_2024",
+    "POSTGRES_PASSWORD": "test_password_ci_2025",
     "POSTGRES_DB": "wednesdaydb_test",
     # POSTGRES_HOST устанавливается условно: в Docker используем значение из окружения
     # (устанавливается docker-compose.test.yml), локально — localhost.
@@ -86,12 +86,12 @@ else:
     _session_env_defaults["POSTGRES_HOST"] = "localhost"
 
 for key, value in _session_env_defaults.items():
-    # В Docker окружении не перезаписываем POSTGRES_HOST, если он уже установлен
-    # (позволяем docker-compose.test.yml устанавливать правильное значение)
-    if key == "POSTGRES_HOST" and _is_running_in_docker() and os.getenv("POSTGRES_HOST") is not None:
-        # Пропускаем установку, используем значение из окружения
+    # Не трогаем переменные, если они уже заданы извне (docker-compose/.env.test/CI)
+    if os.getenv(key) is not None:
         continue
-    # Для остальных переменных принудительно устанавливаем тестовые значения
+    # В Docker не перезаписываем POSTGRES_HOST, если compose уже выставил значение
+    if key == "POSTGRES_HOST" and _is_running_in_docker() and os.getenv("POSTGRES_HOST") is not None:
+        continue
     _session_monkeypatch.setenv(key, value)
 
 

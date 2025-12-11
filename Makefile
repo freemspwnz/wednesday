@@ -184,6 +184,10 @@ test-celery: ## Celery тесты (внутри docker compose)
 coverage-merge: ## Объединить все coverage файлы
 	@echo "=== Объединение покрытия кода из всех фаз ==="
 	@if ls .coverage.* 1>/dev/null 2>&1; then \
+		for f in $(wildcard .coverage.*); do \
+			echo "Исправление путей в $$f"; \
+			HOST_REPO_ROOT="$(REPO_ROOT)" $(PYTHON) scripts/fix_coverage_paths.py "$$f" || true; \
+		done; \
 		coverage combine $(wildcard .coverage.*) || true; \
 	else \
 		echo "⚠ Предупреждение: файлы покрытия не найдены"; \

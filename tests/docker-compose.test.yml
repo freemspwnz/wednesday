@@ -35,7 +35,11 @@ services:
     expose:
       - "6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
     tmpfs:
       - /data
     deploy:
@@ -74,12 +78,12 @@ services:
       REDIS_DB: ${REDIS_DB:-0}
       REDIS_URL: ${REDIS_URL:-redis://redis_test:6379/0}
       CELERY_TEST_REDIS_URL: ${CELERY_TEST_REDIS_URL:-redis://redis_test:6379/1}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY}
-      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY}
-      CHAT_ID: ${CHAT_ID}
-      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID}
-      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-dummy_token}
+      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY:-dummy_key}
+      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY:-dummy_secret}
+      CHAT_ID: ${CHAT_ID:-0}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-0}
+      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY:-dummy_key}
       SCHEDULER_SEND_TIMES: ${SCHEDULER_SEND_TIMES:-09:00,12:00,18:00}
       SCHEDULER_WEDNESDAY_DAY: ${SCHEDULER_WEDNESDAY_DAY:-2}
       SCHEDULER_TZ: ${SCHEDULER_TZ:-Europe/Moscow}
@@ -117,6 +121,8 @@ services:
       dockerfile: tests/Dockerfile.test
     container_name: wednesday_tests
     restart: "no"
+    # Явно переопределяем CMD из Dockerfile.test (Celery worker) на pytest
+    command: ["pytest", "--color=yes", "--disable-warnings"]
     depends_on:
       postgres_test:
         condition: service_healthy
@@ -137,12 +143,12 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis_test:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis_test:6379/0}
       CELERY_TEST_REDIS_URL: ${CELERY_TEST_REDIS_URL:-redis://redis_test:6379/1}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY}
-      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY}
-      CHAT_ID: ${CHAT_ID}
-      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID}
-      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-dummy_token}
+      KANDINSKY_API_KEY: ${KANDINSKY_API_KEY:-dummy_key}
+      KANDINSKY_SECRET_KEY: ${KANDINSKY_SECRET_KEY:-dummy_secret}
+      CHAT_ID: ${CHAT_ID:-0}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-0}
+      GIGACHAT_AUTHORIZATION_KEY: ${GIGACHAT_AUTHORIZATION_KEY:-dummy_key}
       SCHEDULER_SEND_TIMES: ${SCHEDULER_SEND_TIMES:-09:00,12:00,18:00}
       SCHEDULER_WEDNESDAY_DAY: ${SCHEDULER_WEDNESDAY_DAY:-2}
       SCHEDULER_TZ: ${SCHEDULER_TZ:-Europe/Moscow}
