@@ -9,6 +9,8 @@ groups:
       - uid: high-error-rate
         title: "High error rate in logs"
         condition: C
+        labels:
+          severity: warning
         data:
           - refId: A
             datasourceUid: loki_ds
@@ -58,10 +60,13 @@ groups:
         annotations:
           description: "Уровень ERROR/CRITICAL в логах превышает 1 событие/сек в течение 5 минут."
           summary: "Высокий уровень ошибок в логах Wednesday Bot"
+          runbook_url: "https://runbooks.example/wednesday/logging/high-error-rate"
 
       - uid: suspicious-secrets
         title: "Suspicious secret patterns in logs"
         condition: B
+        labels:
+          severity: critical
         data:
           - refId: A
             datasourceUid: loki_ds
@@ -95,3 +100,4 @@ groups:
         annotations:
           description: "Обнаружены подозрительные паттерны секретов (Authorization/Bearer/BEGIN_PRIVATE_KEY) в логах. Значения должны быть уже замаскированы."
           summary: "Подозрение на утечку секретов в логах Wednesday Bot"
+          runbook_url: "https://runbooks.example/wednesday/logging/suspicious-secrets"

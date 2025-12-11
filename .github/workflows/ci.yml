@@ -45,6 +45,17 @@ jobs:
       - name: Test Prometheus rules
         run: promtool test rules monitoring/prometheus/rules/metrics-rules.test.yml
 
+  loki-dashboards:
+    name: Loki dashboard lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Loki dashboard JSON
+        run: |
+          python -m json.tool monitoring/grafana/provisioning/dashboards/wednesday-logs-dashboard.json >/dev/null
+
   migrate:
     name: Run DB migrations
     runs-on: ubuntu-latest
