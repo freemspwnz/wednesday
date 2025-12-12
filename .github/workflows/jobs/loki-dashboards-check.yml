@@ -1,0 +1,16 @@
+name: Loki Dashboards Check
+
+on:
+  workflow_call:
+
+jobs:
+  loki-dashboards-check:
+    name: Loki dashboard lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Loki dashboard JSON
+        run: |
+          python -m json.tool monitoring/grafana/provisioning/dashboards/wednesday-logs-dashboard.json >/dev/null

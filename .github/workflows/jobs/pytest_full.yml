@@ -1,0 +1,220 @@
+name: Pytest Full Suite
+
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        required: true
+        type: string
+      compose_project:
+        required: true
+        type: string
+      compose_file:
+        required: true
+        type: string
+      compose_env:
+        required: true
+        type: string
+      is_release:
+        required: true
+        type: boolean
+
+jobs:
+  pytest-full:
+    name: All Pytest Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start test containers
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password_ci_2024
+          POSTGRES_DB: wednesdaydb_test
+          POSTGRES_PORT: 5432
+          REDIS_PORT: 6379
+          REDIS_DB: 0
+          TELEGRAM_BOT_TOKEN: "ci-dummy-token"
+          KANDINSKY_API_KEY: "ci-dummy-kandinsky-key"
+          KANDINSKY_SECRET_KEY: "ci-dummy-kandinsky-secret"
+          CHAT_ID: "0"
+          ADMIN_CHAT_ID: "0"
+        run: |
+          chmod +x scripts/test_up.sh
+          COMPOSE_CMD="docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}" ./scripts/test_up.sh
+
+      - name: Run migrations
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password_ci_2024
+          POSTGRES_DB: wednesdaydb_test
+          TELEGRAM_BOT_TOKEN: "ci-dummy-token"
+          KANDINSKY_API_KEY: "ci-dummy-kandinsky-key"
+          KANDINSKY_SECRET_KEY: "ci-dummy-kandinsky-secret"
+          CHAT_ID: "0"
+          ADMIN_CHAT_ID: "0"
+        run: |
+          docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }} run --rm \
+            tests python3 -m tests.utils.postgres_schema
+
+      - name: Run unit tests
+        env:
+          HOST_REPO_ROOT: ${{ github.workspace }}
+          PYTEST_XDIST: "-n auto"
+          MARK_EXPR: "not integration and not db and not redis and not e2e and not infra and not slow"
+          COVERAGE_FILE: ".coverage.unit"
+          JUNIT_FILE: "junit-unit.xml"
+        run: |
+          chmod +x scripts/pytest_unit.sh
+          ./scripts/pytest_unit.sh
+
+      - name: Run integration tests
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+          REPO_ROOT: ${{ github.workspace }}
+          PYTEST_XDIST: "-n auto"
+          MARK_EXPR: "(integration or db or redis) and not celery and not e2e and not infra and not slow"
+          COVERAGE_FILE: ".coverage.integration"
+          JUNIT_FILE: "junit-integration.xml"
+          HOST_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }} run --rm \
+            -e PYTEST_XDIST \
+            -e MARK_EXPR \
+            -e COVERAGE_FILE \
+            -e JUNIT_FILE \
+            -e HOST_REPO_ROOT \
+            tests /app/scripts/pytest_integration.sh
+
+      - name: Run e2e tests
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+          REPO_ROOT: ${{ github.workspace }}
+          PYTEST_XDIST: "-n auto"
+          MARK_EXPR: "e2e and not infra"
+          COVERAGE_FILE: ".coverage.e2e"
+          JUNIT_FILE: "junit-e2e.xml"
+          HOST_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }} run --rm \
+            -e PYTEST_XDIST \
+            -e MARK_EXPR \
+            -e COVERAGE_FILE \
+            -e JUNIT_FILE \
+            -e HOST_REPO_ROOT \
+            tests /app/scripts/pytest_e2e.sh
+
+      - name: Run e2e infra tests
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+          REPO_ROOT: ${{ github.workspace }}
+          PYTEST_XDIST: "-n auto"
+          MARK_EXPR: "e2e and infra"
+          COVERAGE_FILE: ".coverage.infra"
+          JUNIT_FILE: "junit-e2e-infra.xml"
+          HOST_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }} run --rm \
+            -e PYTEST_XDIST \
+            -e MARK_EXPR \
+            -e COVERAGE_FILE \
+            -e JUNIT_FILE \
+            -e HOST_REPO_ROOT \
+            tests /app/scripts/pytest_infra.sh
+
+      - name: Run slow tests
+        if: ${{ inputs.is_release }}
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+          REPO_ROOT: ${{ github.workspace }}
+          PYTEST_XDIST: "-n auto"
+          MARK_EXPR: "slow"
+          COVERAGE_FILE: ".coverage.slow"
+          JUNIT_FILE: "junit-slow.xml"
+          HOST_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }} run --rm \
+            -e PYTEST_XDIST \
+            -e MARK_EXPR \
+            -e COVERAGE_FILE \
+            -e JUNIT_FILE \
+            -e HOST_REPO_ROOT \
+            tests /app/scripts/pytest_slow.sh
+
+      - name: Run celery tests
+        if: ${{ inputs.is_release }}
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+          REPO_ROOT: ${{ github.workspace }}
+          PYTEST_XDIST: "-n auto"
+          MARK_EXPR: "celery"
+          COVERAGE_FILE: ".coverage.celery"
+          JUNIT_FILE: "junit-celery.xml"
+          HOST_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }} run --rm \
+            -e PYTEST_XDIST \
+            -e MARK_EXPR \
+            -e COVERAGE_FILE \
+            -e JUNIT_FILE \
+            -e HOST_REPO_ROOT \
+            tests /app/scripts/pytest_celery.sh
+
+      - name: Collect coverage files
+        if: always()
+        run: |
+          echo "=== Сбор файлов покрытия ==="
+          ls -la .coverage.* 2>/dev/null || echo "Файлы покрытия не найдены"
+          find . -name ".coverage.*" -type f
+
+      - name: Collect junit files
+        if: always()
+        run: |
+          echo "=== Сбор JUnit файлов ==="
+          ls -la junit-*.xml 2>/dev/null || echo "JUnit файлы не найдены"
+          find . -name "junit-*.xml" -type f
+
+      - name: Stop test containers
+        if: always()
+        env:
+          COMPOSE_CMD: docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}
+        run: |
+          chmod +x scripts/test_down.sh
+          COMPOSE_CMD="docker compose -p ${{ inputs.compose_project }} -f ${{ inputs.compose_file }} --env-file ${{ inputs.compose_env }}" ./scripts/test_down.sh || true
+
+      - name: Upload coverage-all artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-all
+          path: |
+            .coverage.*
+          retention-days: 1
+          if-no-files-found: ignore
+
+      - name: Upload junit-all artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-all
+          path: |
+            junit-*.xml
+          retention-days: 1
+          if-no-files-found: ignore

@@ -1,0 +1,26 @@
+name: Prometheus Check
+
+on:
+  workflow_call:
+
+jobs:
+  prometheus-check:
+    name: Prometheus config checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install promtool
+        run: |
+          PROM_VERSION=2.54.1
+          curl -sL "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/prometheus-${PROM_VERSION}.linux-amd64.tar.gz" -o /tmp/prometheus.tar.gz
+          tar -xzf /tmp/prometheus.tar.gz -C /tmp
+          sudo mv /tmp/prometheus-${PROM_VERSION}.linux-amd64/promtool /usr/local/bin/promtool
+          promtool --version
+
+      - name: Check Prometheus config
+        run: promtool check config monitoring/prometheus/prometheus.yml
+
+      - name: Test Prometheus rules
+        run: promtool test rules monitoring/prometheus/rules/metrics-rules.test.yml

@@ -8,113 +8,104 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  PYTHON_VERSION: "3.11"
+  COMPOSE_PROJECT: wednesday_test
+  COMPOSE_FILE: tests/docker-compose.test.yml
+  COMPOSE_ENV: tests/.env.test
+
 jobs:
+  # ============================================================================
+  # Определение типа запуска (release или обычный)
+  # ============================================================================
+  check_release:
+    name: Check if release
+    runs-on: ubuntu-latest
+    outputs:
+      is_tag: ${{ steps.check.outputs.is_tag }}
+    steps:
+      - name: Check if tag
+        id: check
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
+  # Линтинг и проверка форматирования (параллельно)
+  # ============================================================================
+
   lint:
-    uses: ./.github/workflows/lint-check.yml
+    uses: ./.github/workflows/jobs/lint-check.yml
     with:
-      python-version: "3.11"
+      python-version: ${{ env.PYTHON_VERSION }}
 
   format:
-    uses: ./.github/workflows/format-check.yml
+    uses: ./.github/workflows/jobs/format-check.yml
     with:
-      python-version: "3.11"
+      python-version: ${{ env.PYTHON_VERSION }}
 
   mypy:
-    uses: ./.github/workflows/mypy-check.yml
+    uses: ./.github/workflows/jobs/mypy-check.yml
     with:
-      python-version: "3.11"
+      python-version: ${{ env.PYTHON_VERSION }}
+
+  # ============================================================================
+  # Дополнительные проверки (параллельно с тестами)
+  # ============================================================================
 
   prometheus:
-    name: Prometheus config checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install promtool
-        run: |
-          PROM_VERSION=2.54.1
-          curl -sL "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/prometheus-${PROM_VERSION}.linux-amd64.tar.gz" -o /tmp/prometheus.tar.gz
-          tar -xzf /tmp/prometheus.tar.gz -C /tmp
-          sudo mv /tmp/prometheus-${PROM_VERSION}.linux-amd64/promtool /usr/local/bin/promtool
-          promtool --version
-
-      - name: Check Prometheus config
-        run: promtool check config monitoring/prometheus/prometheus.yml
-
-      - name: Test Prometheus rules
-        run: promtool test rules monitoring/prometheus/rules/metrics-rules.test.yml
+    uses: ./.github/workflows/jobs/prometheus-check.yml
 
   loki-dashboards:
-    name: Loki dashboard lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    uses: ./.github/workflows/jobs/loki-dashboards-check.yml
 
-      - name: Validate Loki dashboard JSON
-        run: |
-          python -m json.tool monitoring/grafana/provisioning/dashboards/wednesday-logs-dashboard.json >/dev/null
+  # ============================================================================
+  # Унифицированный набор всех Pytest тестов
+  # ============================================================================
 
-  migrate:
-    name: Run DB migrations
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password_ci_2024
-          POSTGRES_DB: wednesdaydb_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U test_user -d wednesdaydb_test"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run migrations
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password_ci_2024
-          POSTGRES_DB: wednesdaydb_test
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-          TELEGRAM_BOT_TOKEN: "ci-dummy-token"
-          KANDINSKY_API_KEY: "ci-dummy-kandinsky-key"
-          KANDINSKY_SECRET_KEY: "ci-dummy-kandinsky-secret"
-          CHAT_ID: "0"
-          ADMIN_CHAT_ID: "0"
-        run: make migrate
-
-  pytest:
-    uses: ./.github/workflows/pytest-check.yml
-    needs: [migrate]
+  pytest-full:
+    uses: ./.github/workflows/jobs/pytest_full.yml
+    needs: [check_release]
     with:
-      python-version: "3.11"
+      python_version: ${{ env.PYTHON_VERSION }}
+      compose_project: ${{ env.COMPOSE_PROJECT }}
+      compose_file: ${{ env.COMPOSE_FILE }}
+      compose_env: ${{ env.COMPOSE_ENV }}
+      is_release: ${{ needs.check_release.outputs.is_tag == 'true' }}
+
+  # ============================================================================
+  # Объединение результатов тестов
+  # ============================================================================
+
+  coverage-merge:
+    uses: ./.github/workflows/jobs/coverage_merge.yml
+    needs: [pytest-full]
+    if: always()
+    with:
+      python_version: ${{ env.PYTHON_VERSION }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  junit-merge:
+    uses: ./.github/workflows/jobs/junit_merge.yml
+    needs: [pytest-full]
+    if: always()
+    with:
+      python_version: ${{ env.PYTHON_VERSION }}
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================================================
+  # Docker Build (только для тегов)
+  # ============================================================================
+
   docker-build:
     name: Build Docker image (release only)
-    needs: [lint, format, mypy, pytest]
-    if: startsWith(github.ref, 'refs/tags/v')
-    uses: ./.github/workflows/docker-build.yml
+    needs: [check_release, lint, format, mypy, pytest-full, prometheus, loki-dashboards]
+    if: needs.check_release.outputs.is_tag == 'true'
+    uses: ./.github/workflows/jobs/docker-build.yml
     with:
       image-name: wednesday-bot

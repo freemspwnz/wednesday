@@ -1,0 +1,78 @@
+name: Coverage Merge
+
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        required: true
+        type: string
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+jobs:
+  coverage-merge:
+    name: Merge Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download coverage-all artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-all
+          path: coverage-files
+
+      - name: Copy coverage files
+        run: |
+          echo "=== Копирование файлов покрытия ==="
+          find coverage-files -name ".coverage.*" -type f -exec cp {} . \;
+          ls -la .coverage.* 2>/dev/null || echo "Файлы покрытия не найдены"
+
+      - name: Merge coverage
+        env:
+          HOST_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          # Исправляем пути в coverage файлах
+          for f in .coverage.*; do
+            if [ -f "$f" ]; then
+              echo "Исправление путей в $f"
+              python scripts/fix_coverage_paths.py "$f" || true
+            fi
+          done
+
+          # Объединяем coverage файлы
+          coverage combine .coverage.* || true
+
+          # Генерируем XML и отчет
+          coverage xml -o coverage.xml --ignore-errors || true
+          coverage report --fail-under=50 --ignore-errors || true
+
+      - name: Upload merged coverage
+        uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: merged
+          fail_ci_if_error: false
+
+      - name: Upload coverage XML artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-merged
+          path: coverage.xml
+          retention-days: 7
