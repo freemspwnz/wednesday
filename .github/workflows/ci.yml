@@ -76,7 +76,7 @@ jobs:
   # ============================================================================
 
   pytest-full:
-    uses: ./.github/workflows/jobs/pytest_full.yml
+    uses: ./.github/workflows/jobs/pytest-full.yml
     needs: [check_release]
     with:
       python_version: ${{ env.PYTHON_VERSION }}
@@ -90,7 +90,7 @@ jobs:
   # ============================================================================
 
   coverage-merge:
-    uses: ./.github/workflows/jobs/coverage_merge.yml
+    uses: ./.github/workflows/jobs/coverage-merge.yml
     needs: [pytest-full]
     if: always()
     with:
@@ -99,7 +99,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   junit-merge:
-    uses: ./.github/workflows/jobs/junit_merge.yml
+    uses: ./.github/workflows/jobs/junit-merge.yml
     needs: [pytest-full]
     if: always()
     with:
@@ -118,3 +118,25 @@ jobs:
     uses: ./.github/workflows/jobs/docker-build.yml
     with:
       image-name: wednesday-bot
+
+  # ============================================================================
+  # Deploy MkDocs documentation to GitHub Pages (only for main branch pushes)
+  # ============================================================================
+
+  deploy-docs:
+    name: "🚀 Deploy Documentation to GH Pages"
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs:
+      - check_release
+      - lint
+      - format
+      - mypy
+      - pytest-full
+      - prometheus
+      - loki-dashboards
+      - check-docs
+    uses: ./.github/workflows/jobs/deploy-docs.yml
+    with:
+      python_version: ${{ env.PYTHON_VERSION }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

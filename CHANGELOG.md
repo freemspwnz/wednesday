@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased] — Автоматическая документация MkDocs/mkdocstrings, стабилизация ссылок и проверка сборки docs в CI
+## [6.9.0] 2025-12-15 — Автоматическая документация MkDocs/mkdocstrings, стабилизация ссылок и проверка сборки docs в CI
 
 ### Добавлено
 
@@ -28,6 +28,8 @@
 - **CI пайплайн**:
   - Цели `ci` и `ci-full` в `Makefile` расширены шагом `docs-build` для проверки успешной сборки документации как части локального CI.
   - Основной workflow `.github/workflows/ci.yml` дополнен job `check-docs`, использующим reusable workflow для сборки документации в GitHub Actions.
+  - В `.github/workflows/ci.yml` добавлен job `deploy-docs`, который разворачивает собранную документацию на GitHub Pages только при `push` в ветку `main` после успешного прохождения всех проверок.
+  - Добавлен reusable workflow `.github/workflows/jobs/deploy-docs.yml`, отвечающий за установку зависимостей и запуск `mkdocs gh-deploy --force` в отдельном шаге CI.
 
 ---
 
