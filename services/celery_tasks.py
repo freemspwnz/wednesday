@@ -76,14 +76,19 @@ def is_retryable_error(error: Exception) -> bool:
 
 # Lazy factories для безопасной инициализации
 class CeleryServices:
-    """
-    Lazy factory для сервисов Celery.
+    """Lazy factory для сервисов Celery.
 
-    Инициализация происходит внутри задач, после fork worker процесса.
-    Это гарантирует:
-    - Fork safety (соединения создаются после fork)
-    - Отсутствие race conditions
-    - Корректную работу с async клиентами
+    Класс обеспечивает безопасную инициализацию сервисов в Celery worker процессах.
+    Инициализация происходит внутри задач, после fork worker процесса, что гарантирует:
+    - Fork safety (соединения создаются после fork).
+    - Отсутствие race conditions.
+    - Корректную работу с async клиентами.
+
+    Attributes:
+        _bot: Экземпляр WednesdayBot (инициализируется лениво).
+        _generator: Экземпляр ImageGenerator (инициализируется лениво).
+        _initialized: Флаг инициализации сервисов.
+        _init_lock: Блокировка для thread-safe инициализации.
     """
 
     _bot: WednesdayBot | None = None
@@ -93,7 +98,15 @@ class CeleryServices:
 
     @classmethod
     async def _ensure_initialized(cls) -> None:
-        """Инициализирует сервисы один раз (thread-safe)."""
+        """Инициализирует сервисы один раз (thread-safe).
+
+        Инициализирует Redis и Postgres пулы подключений, создаёт экземпляры
+        WednesdayBot и ImageGenerator. Гарантирует, что инициализация выполняется
+        только один раз даже при конкурентных вызовах.
+
+        Raises:
+            RuntimeError: Если не удалось инициализировать пулы подключений.
+        """
         if cls._initialized:
             return
 
@@ -163,7 +176,17 @@ class CeleryServices:
 
     @classmethod
     async def get_bot(cls) -> WednesdayBot:
-        """Получает экземпляр WednesdayBot (lazy init)."""
+        """Получает экземпляр WednesdayBot (lazy init).
+
+        Инициализирует сервисы при первом вызове, затем возвращает кэшированный
+        экземпляр.
+
+        Returns:
+            Экземпляр WednesdayBot.
+
+        Raises:
+            RuntimeError: Если не удалось инициализировать WednesdayBot.
+        """
         await cls._ensure_initialized()
         if cls._bot is None:
             raise RuntimeError("Failed to initialize WednesdayBot")
@@ -171,7 +194,17 @@ class CeleryServices:
 
     @classmethod
     async def get_generator(cls) -> ImageGenerator:
-        """Получает экземпляр ImageGenerator (lazy init)."""
+        """Получает экземпляр ImageGenerator (lazy init).
+
+        Инициализирует сервисы при первом вызове, затем возвращает кэшированный
+        экземпляр.
+
+        Returns:
+            Экземпляр ImageGenerator.
+
+        Raises:
+            RuntimeError: Если не удалось инициализировать ImageGenerator.
+        """
         await cls._ensure_initialized()
         if cls._generator is None:
             raise RuntimeError("Failed to initialize ImageGenerator")
@@ -181,11 +214,19 @@ class CeleryServices:
 # Регистрируем shutdown handler
 @worker_shutdown.connect
 def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
-    """
-    Обработчик сигнала остановки worker для graceful shutdown.
+    """Обработчик сигнала остановки worker для graceful shutdown.
 
-    Для celery[asyncio] worker_shutdown может быть вызван в контексте async,
-    но сигнал сам по себе синхронный. Используем безопасный подход.
+    Вызывается автоматически при остановке Celery worker. Выполняет graceful
+    shutdown всех async ресурсов (aiohttp sessions, Redis и Postgres пулы).
+
+    Args:
+        sender: Отправитель сигнала (обычно Celery app).
+        **kwargs: Дополнительные аргументы сигнала.
+
+    Note:
+        Для celery[asyncio] worker_shutdown может быть вызван в контексте async,
+        но сигнал сам по себе синхронный. Используем безопасный подход с проверкой
+        наличия event loop.
     """
     try:
         # Пытаемся получить текущий event loop
@@ -208,7 +249,22 @@ def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
 
 # Декоратор для логирования Celery задач
 def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
-    """Декоратор для автоматического логирования Celery задач."""
+    """Декоратор для автоматического логирования Celery задач.
+
+    Декоратор добавляет автоматическое логирование начала, завершения и ошибок
+    выполнения Celery задач, а также обновляет метрики Prometheus.
+
+    Args:
+        task_name: Имя задачи для логирования и метрик.
+
+    Returns:
+        Декоратор, который оборачивает асинхронную функцию задачи.
+
+    Example:
+        @log_celery_task("my_task")
+        async def my_task(self: Task) -> dict[str, Any]:
+            ...
+    """
 
     def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
         async def wrapper(self: Task, *args: object, **kwargs: object) -> Any:  # noqa: ANN401
@@ -302,14 +358,23 @@ def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[Any]]],
 )
 @log_celery_task("send_wednesday_frog")
 async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> dict[str, Any]:
-    """
-    Celery задача для отправки изображения жабы.
+    """Celery задача для отправки изображения жабы.
+
+    Выполняет отправку изображения жабы всем подписанным пользователям в указанное
+    время слота. Использует lazy инициализацию сервисов через CeleryServices.
 
     Args:
-        slot_time: Время слота в формате "HH:MM" или None
+        self: Экземпляр Celery Task.
+        slot_time: Время слота в формате "HH:MM" или None для текущего времени.
 
     Returns:
-        Словарь с результатом выполнения
+        Словарь с результатом выполнения, содержащий:
+        - status: Статус выполнения ("success" или "error").
+        - slot_time: Время слота, в которое была выполнена отправка.
+
+    Raises:
+        Exception: При ошибке отправки или инициализации сервисов.
+        Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
         # Lazy инициализация внутри задачи (после fork, безопасно)
@@ -348,14 +413,23 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
 )
 @log_celery_task("generate_frog_image")
 async def generate_frog_image_task(self: Task, user_id: int | None = None) -> dict[str, Any]:
-    """
-    Celery задача для генерации изображения жабы.
+    """Celery задача для генерации изображения жабы.
+
+    Выполняет генерацию изображения жабы через ImageGenerator. Использует lazy
+    инициализацию сервисов через CeleryServices.
 
     Args:
-        user_id: ID пользователя (опционально)
+        self: Экземпляр Celery Task.
+        user_id: ID пользователя, для которого выполняется генерация (опционально).
 
     Returns:
-        Словарь с результатом генерации
+        Словарь с результатом генерации, содержащий:
+        - status: Статус выполнения ("success" или "failed").
+        - image_size: Размер сгенерированного изображения в байтах (при успехе).
+
+    Raises:
+        Exception: При ошибке генерации или инициализации сервисов.
+        Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
         # Lazy инициализация внутри задачи (после fork, безопасно)
@@ -391,12 +465,22 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
 )
 @log_celery_task("daily_cleanup")
 async def daily_cleanup_task(self: Task) -> dict[str, Any]:
-    """
-    Ежедневная задача очистки старых данных.
+    """Ежедневная задача очистки старых данных.
 
-    - Очистка старых логов
-    - Очистка временных файлов
-    - Очистка кэша
+    Выполняет очистку устаревших данных:
+    - Очистка старых записей dispatch_registry.
+    - Очистка временных файлов.
+    - Очистка кэша.
+
+    Args:
+        self: Экземпляр Celery Task.
+
+    Returns:
+        Словарь с результатом выполнения, содержащий:
+        - status: Статус выполнения ("success" или "error").
+
+    Raises:
+        Exception: При ошибке выполнения очистки.
     """
     try:
         # Lazy инициализация для доступа к сервисам (для инициализации пулов)
@@ -423,12 +507,22 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
 )
 @log_celery_task("daily_statistics")
 async def daily_statistics_task(self: Task) -> dict[str, Any]:
-    """
-    Ежедневная задача сбора статистики.
+    """Ежедневная задача сбора статистики.
 
-    - Агрегация метрик за день
-    - Отправка отчётов
-    - Обновление дашбордов
+    Выполняет сбор и агрегацию статистики за день:
+    - Агрегация метрик из metrics_events.
+    - Отправка отчётов (если настроено).
+    - Обновление дашбордов (если настроено).
+
+    Args:
+        self: Экземпляр Celery Task.
+
+    Returns:
+        Словарь с результатом выполнения, содержащий:
+        - status: Статус выполнения ("success" или "error").
+
+    Raises:
+        Exception: При ошибке сбора статистики.
     """
     try:
         # Lazy инициализация для доступа к сервисам (для инициализации пулов)
@@ -449,8 +543,21 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
     name="wednesday.beat_heartbeat",
 )
 def beat_heartbeat(self: Task) -> dict[str, Any]:
-    """
-    Задача для heartbeat Beat (touch файл в tmpfs).
+    """Задача для heartbeat Beat (touch файл в tmpfs).
+
+    Создаёт или обновляет файл heartbeat для мониторинга работы Celery Beat.
+    Используется healthcheck-системами для проверки активности планировщика.
+
+    Args:
+        self: Экземпляр Celery Task.
+
+    Returns:
+        Словарь с результатом выполнения, содержащий:
+        - status: Статус выполнения ("ok").
+
+    Note:
+        Ошибки при создании файла игнорируются, так как healthcheck сам проверит
+        наличие файла.
     """
     import os
 

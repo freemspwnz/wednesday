@@ -28,7 +28,16 @@ logger = get_logger(__name__)
 
 @dataclass(slots=True)
 class PromptRecord:
-    """Структура данных одной записи из таблицы prompts."""
+    """Структура данных одной записи из таблицы prompts.
+
+    Attributes:
+        id: Уникальный идентификатор записи в базе данных.
+        raw_text: Исходный текст промпта (как был введён).
+        normalized_text: Нормализованный текст промпта (после обработки).
+        prompt_hash: SHA256-хеш нормализованного текста (hex, 64 символа).
+        created_at: Временная метка создания записи.
+        ab_group: A/B группа для промпта (опционально).
+    """
 
     id: int
     raw_text: str
@@ -48,28 +57,48 @@ class PromptsStore:
     """
 
     def __init__(self) -> None:
+        """Инициализирует репозиторий промптов."""
         self.logger = get_logger(__name__)
 
     @staticmethod
     def _normalize(prompt_text: str) -> str:
-        """
-        Возвращает нормализованный текст промпта.
+        """Возвращает нормализованный текст промпта.
 
         Сейчас нормализация минимальна: strip() по краям.
         Важно хранить и raw, и normalized, чтобы можно было откатить нормализацию.
+
+        Args:
+            prompt_text: Исходный текст промпта для нормализации.
+
+        Returns:
+            Нормализованный текст промпта (с удалёнными пробелами по краям).
         """
 
         return prompt_text.strip()
 
     @staticmethod
     def _hash(normalized: str) -> str:
-        """Считает sha256‑хэш нормализованного текста в hex‑представлении."""
+        """Вычисляет SHA256-хеш нормализованного текста.
+
+        Args:
+            normalized: Нормализованный текст промпта.
+
+        Returns:
+            SHA256-хеш в hex-представлении (64 символа).
+        """
 
         return sha256(normalized.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _row_to_record(row: object) -> PromptRecord:
-        """Преобразует asyncpg.Record в PromptRecord."""
+        """Преобразует asyncpg.Record в PromptRecord.
+
+        Args:
+            row: Запись из базы данных (asyncpg.Record).
+
+        Returns:
+            Объект PromptRecord с данными из записи.
+        """
 
         return PromptRecord(
             id=int(row["id"]),  # type: ignore[index]
@@ -81,14 +110,23 @@ class PromptsStore:
         )
 
     async def get_or_create_prompt(self, prompt_text: str) -> PromptRecord:
-        """
-        Возвращает существующий или создаёт новый промпт.
+        """Возвращает существующий или создаёт новый промпт.
 
         Алгоритм:
-        - normalized = prompt_text.strip();
-        - prompt_hash = sha256(normalized.encode("utf-8")).hexdigest();
-        - если запись с таким hash уже есть — возвращаем её;
-        - иначе создаём новую с ab_group=NULL.
+        1. Нормализует текст: normalized = prompt_text.strip()
+        2. Вычисляет хеш: prompt_hash = sha256(normalized.encode("utf-8")).hexdigest()
+        3. Если запись с таким hash уже есть — возвращает её
+        4. Иначе создаёт новую с ab_group=NULL
+
+        Args:
+            prompt_text: Исходный текст промпта.
+
+        Returns:
+            PromptRecord с метаданными промпта (существующая или новая запись).
+
+        Raises:
+            RuntimeError: При крайне маловероятной ошибке конкурентной вставки.
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
 
         normalized = self._normalize(prompt_text)
@@ -143,8 +181,13 @@ class PromptsStore:
             return record
 
     async def get_prompt_by_hash(self, prompt_hash: str) -> PromptRecord | None:
-        """
-        Возвращает промпт по prompt_hash или None, если не найден.
+        """Возвращает промпт по prompt_hash.
+
+        Args:
+            prompt_hash: SHA256-хеш нормализованного промпта.
+
+        Returns:
+            PromptRecord если промпт найден, None иначе.
         """
 
         pool = get_postgres_pool()
@@ -166,9 +209,12 @@ class PromptsStore:
         return record
 
     async def get_random_prompt(self) -> PromptRecord | None:
-        """
-        Возвращает случайный промпт из таблицы или None, если таблица пуста.
+        """Возвращает случайный промпт из таблицы.
+
         Используется как fallback при недоступности GigaChat.
+
+        Returns:
+            PromptRecord со случайным промптом или None, если таблица пуста.
         """
 
         pool = get_postgres_pool()

@@ -46,6 +46,11 @@ class _InMemoryRedis:
     """
 
     def __init__(self) -> None:
+        """Инициализирует in-memory Redis-подобное хранилище.
+
+        Создаёт внутренние структуры данных для хранения строк и хэшей
+        с поддержкой TTL (time-to-live).
+        """
         # string -> (value, expire_ts | None)
         self._data: dict[str, tuple[str, float | None]] = {}
         # string -> (field_map, expire_ts | None)
@@ -178,18 +183,30 @@ class _InMemoryRedis:
 
     @staticmethod
     async def xadd(name: str, fields: dict[str, Any], *args: object, **kwargs: object) -> str:
-        """
-        Минимальная реализация XADD для совместимости с Redis‑клиентом.
+        """Минимальная реализация XADD для совместимости с Redis-клиентом.
 
-        В in‑memory варианте данные потокообразно не храним — достаточно
+        В in-memory варианте данные потокообразно не хранятся — достаточно
         вернуть фиктивный идентификатор, чтобы вызывающий код считал операцию
         успешной и не падал.
+
+        Args:
+            name: Имя потока (игнорируется в in-memory реализации).
+            fields: Поля для добавления в поток (игнорируются).
+            *args: Дополнительные позиционные аргументы (игнорируются).
+            **kwargs: Дополнительные именованные аргументы (игнорируются).
+
+        Returns:
+            Фиктивный идентификатор записи "0-0".
         """
         _ = name, fields, args, kwargs  # заглушка для неиспользуемых аргументов
         return "0-0"
 
     @staticmethod
-    async def close() -> None:  # совместимость с `redis.Redis.close()`
+    async def close() -> None:
+        """Закрывает соединение (совместимость с redis.Redis.close()).
+
+        Для in-memory варианта ничего закрывать не нужно.
+        """
         # Для in‑memory варианта ничего закрывать не нужно.
         return
 
@@ -332,13 +349,14 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
 
 
 def get_redis_url() -> str | None:
-    """
-    Возвращает URL Redis для использования в Celery.
+    """Возвращает URL Redis для использования в Celery.
 
     Используется для настройки Celery broker и backend.
+    Формирует URL из переменных окружения или конфигурации.
 
     Returns:
-        URL Redis в формате redis://host:port/db или None если не настроен
+        URL Redis в формате redis://host:port/db или redis://password@host:port/db.
+        Если Redis не настроен, возвращает None.
     """
     from utils.config import config
 

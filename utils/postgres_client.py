@@ -163,11 +163,15 @@ async def close_postgres_pool() -> None:
 
 
 async def ensure_database() -> None:
-    """
-    Создаёт базу данных, если она не существует.
+    """Создаёт базу данных, если она не существует.
 
     Подключается к системной базе 'postgres' для проверки и создания
     целевой базы данных перед инициализацией пула подключений.
+
+    Raises:
+        asyncpg.InvalidPasswordError: При неверном пароле для подключения.
+        asyncpg.PostgresError: При ошибке PostgreSQL при создании базы данных.
+        Exception: При неожиданной ошибке при проверке/создании базы данных.
     """
     user = config.postgres_user
     password = config.postgres_password

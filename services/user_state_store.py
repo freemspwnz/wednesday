@@ -39,11 +39,12 @@ class UserStateStore:
         *,
         prefix: str = "user_state:",
     ) -> None:
-        """
+        """Инициализирует хранилище временного состояния пользователя.
+
         Args:
             redis_client: Экземпляр redis.asyncio.Redis или совместимого клиента.
                 Если None — будет использован глобальный клиент через `get_redis()`.
-            prefix: Префикс ключей для хранения состояний.
+            prefix: Префикс ключей для хранения состояний (по умолчанию "user_state:").
         """
         backend = redis_client or get_redis()
         self._redis: RedisBackend = backend
@@ -54,12 +55,20 @@ class UserStateStore:
         return f"{self._prefix}{user_id}"
 
     async def set_state(self, user_id: int, state: dict[str, Any], ttl: int | None = None) -> None:
-        """
-        Сохраняет состояние пользователя как JSON‑blob.
+        """Сохраняет состояние пользователя как JSON-blob.
 
-        TTL:
-        - Если указан ttl — применяется через EXPIRE к ключу.
-        - Если ttl не указан — состояние живёт до явного сброса.
+        Сохраняет состояние пользователя в Redis в формате JSON. При ошибке Redis
+        автоматически переходит на in-memory fallback.
+
+        Args:
+            user_id: Идентификатор пользователя в Telegram.
+            state: Словарь с состоянием пользователя для сохранения.
+            ttl: Время жизни состояния в секундах. Если None, состояние живёт
+                до явного сброса.
+
+        Note:
+            TTL применяется через EXPIRE к ключу в Redis. При ошибке Redis сохранение
+            выполняется в in-memory fallback.
         """
         key = self._key(user_id)
         payload = json.dumps(state, ensure_ascii=False)
@@ -78,8 +87,21 @@ class UserStateStore:
                 await self._fallback.set(key, payload)
 
     async def get_state(self, user_id: int) -> dict[str, Any] | None:
-        """
-        Возвращает состояние пользователя или None.
+        """Возвращает состояние пользователя или None.
+
+        Извлекает состояние пользователя из Redis. При ошибке Redis автоматически
+        проверяет in-memory fallback.
+
+        Args:
+            user_id: Идентификатор пользователя в Telegram.
+
+        Returns:
+            Словарь с состоянием пользователя или None, если состояние не найдено
+            или произошла ошибка декодирования JSON.
+
+        Note:
+            При ошибке Redis проверка выполняется в in-memory fallback. При ошибке
+            декодирования JSON возвращается None и логируется предупреждение.
         """
         key = self._key(user_id)
         try:
@@ -103,8 +125,15 @@ class UserStateStore:
         return value
 
     async def clear_state(self, user_id: int) -> None:
-        """
-        Полностью очищает состояние пользователя.
+        """Полностью очищает состояние пользователя.
+
+        Удаляет состояние пользователя из Redis и из in-memory fallback.
+
+        Args:
+            user_id: Идентификатор пользователя в Telegram.
+
+        Note:
+            При ошибке Redis удаление выполняется только в fallback кэше.
         """
         key = self._key(user_id)
         try:

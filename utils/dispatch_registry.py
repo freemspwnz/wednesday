@@ -15,17 +15,49 @@ from utils.postgres_client import get_postgres_pool
 
 @log_all_methods()
 class DispatchRegistry:
+    """Реестр отправленных сообщений по тайм-слотам и чатам.
+
+    Хранит информацию о том, какие сообщения уже были отправлены
+    в определённые временные слоты и чаты для предотвращения дубликатов.
+    """
+
     def __init__(self, storage_path: str | None = None, retention_days: int = 7) -> None:
+        """Инициализирует реестр отправленных сообщений.
+
+        Args:
+            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+            retention_days: Количество дней хранения записей в реестре (по умолчанию 7).
+        """
         self.logger = get_logger(__name__)
         self.retention_days = retention_days
 
     @staticmethod
     def _key(slot_date: str, slot_time: str, chat_id: int) -> str:
+        """Формирует ключ для записи в реестре.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: Идентификатор чата.
+
+        Returns:
+            Строковый ключ в формате "{slot_date}_{slot_time}:{chat_id}".
+        """
         return f"{slot_date}_{slot_time}:{chat_id}"
 
     async def is_dispatched(self, slot_date: str, slot_time: str, chat_id: int) -> bool:
-        """
-        Проверяет, было ли уже отправлено сообщение в указанный слот и чат.
+        """Проверяет, было ли уже отправлено сообщение в указанный слот и чат.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: Идентификатор чата для проверки.
+
+        Returns:
+            True если сообщение уже было отправлено, False иначе.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         pool = get_postgres_pool()
         key = self._key(slot_date, slot_time, chat_id)
@@ -43,8 +75,18 @@ class DispatchRegistry:
                 raise
 
     async def mark_dispatched(self, slot_date: str, slot_time: str, chat_id: int) -> None:
-        """
-        Помечает сочетание (дата, время, чат) как уже отправленное.
+        """Помечает сочетание (дата, время, чат) как уже отправленное.
+
+        Создаёт запись в реестре, если её ещё нет. При конфликте ключа
+        (дубликат) операция игнорируется.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: Идентификатор чата для пометки.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         from datetime import date as date_type
 
@@ -72,8 +114,13 @@ class DispatchRegistry:
                 raise
 
     async def cleanup_old(self) -> None:
-        """
-        Удаляет старые записи реестра старше `retention_days`.
+        """Удаляет старые записи реестра старше retention_days.
+
+        Удаляет все записи, у которых created_at меньше текущей даты
+        минус retention_days дней.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         cutoff_dt = datetime.utcnow() - timedelta(days=self.retention_days)
         pool = get_postgres_pool()

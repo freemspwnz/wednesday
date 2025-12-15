@@ -70,7 +70,12 @@ class ImageClientContainer(ITextToImageClient):
     # ------------------------------------------------------------------ #
 
     def get_client(self) -> ITextToImageClient | None:
-        """Возвращает текущий активный клиент (может быть None)."""
+        """Возвращает текущий активный клиент.
+
+        Returns:
+            Текущий активный клиент, реализующий ITextToImageClient, или None
+            если клиент не инициализирован.
+        """
         return self._client
 
     def set_initial_client(self, client: ITextToImageClient | None) -> None:
@@ -172,15 +177,19 @@ class ImageClientContainer(ITextToImageClient):
     # ------------------------------------------------------------------ #
 
     async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
-        """
-        Генерирует изображение по текстовому промпту через текущий активный клиент.
+        """Генерирует изображение по текстовому промпту через текущий активный клиент.
+
+        Проксирует вызов метода generate к текущему активному клиенту.
 
         Args:
-            prompt: Текстовое описание изображения.
-            user_id: Идентификатор пользователя (для трейсинга и логирования), опционально.
+            prompt: Текстовое описание изображения для генерации.
+            user_id: Идентификатор пользователя для трейсинга и логирования (опционально).
 
         Returns:
             Байтовое представление изображения или None при ошибке или отсутствии клиента.
+
+        Note:
+            Если клиент не инициализирован, логируется предупреждение и возвращается None.
         """
         client = self._client
         if client is None:
@@ -218,14 +227,19 @@ class ImageClientContainer(ITextToImageClient):
         return await client.check_api_status(save_models=save_models)
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
-        """
-        Возвращает список доступных моделей через текущий активный клиент.
+        """Возвращает список доступных моделей через текущий активный клиент.
+
+        Проксирует вызов метода get_available_models к текущему активному клиенту.
 
         Args:
             save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
 
         Returns:
             Список доступных моделей или пустой список при ошибке или отсутствии клиента.
+
+        Note:
+            Если клиент не инициализирован или не поддерживает метод, логируется
+            предупреждение и возвращается пустой список.
         """
         client = self._client
         if client is None:
@@ -246,14 +260,21 @@ class ImageClientContainer(ITextToImageClient):
         return await client.get_available_models(save_models=save_models)
 
     async def set_model(self, model_identifier: str) -> tuple[bool, str]:
-        """
-        Устанавливает текущую модель для генерации изображений через текущий активный клиент.
+        """Устанавливает текущую модель для генерации изображений через текущий активный клиент.
+
+        Проксирует вызов метода set_model к текущему активному клиенту.
 
         Args:
             model_identifier: ID модели или название (или часть названия).
 
         Returns:
-            Кортеж: (успех, сообщение).
+            Кортеж, содержащий:
+            - успех: True если модель установлена успешно.
+            - сообщение: Человекочитаемое сообщение о результате.
+
+        Note:
+            Если клиент не инициализирован или не поддерживает метод, логируется
+            предупреждение и возвращается (False, сообщение об ошибке).
         """
         client = self._client
         if client is None:
@@ -279,12 +300,18 @@ class ImageClientContainer(ITextToImageClient):
 
 @lru_cache(maxsize=1)
 def get_image_client_container() -> ImageClientContainer:
-    """
-    Глобальный singleton‑доступ к контейнеру клиента генерации изображений.
+    """Глобальный singleton-доступ к контейнеру клиента генерации изображений.
 
-    Все сервисы, которым нужен TTI‑клиент, должны зависеть от результата
-    этой функции (напрямую или через фабрику `create_image_client()`), а не
-    создавать `KandinskyClient` самостоятельно.
+    Возвращает глобальный singleton-экземпляр ImageClientContainer. При первом
+    вызове создаёт новый контейнер, при последующих возвращает тот же экземпляр.
+
+    Returns:
+        Глобальный singleton-экземпляр ImageClientContainer.
+
+    Note:
+        Все сервисы, которым нужен TTI-клиент, должны зависеть от результата
+        этой функции (напрямую или через фабрику `create_image_client()`), а не
+        создавать `KandinskyClient` самостоятельно.
     """
     container = ImageClientContainer()
     logger.info("Создан singleton ImageClientContainer для клиента генерации изображений")

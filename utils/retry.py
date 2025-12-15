@@ -41,8 +41,7 @@ _NO_RETRY_STATUS_CODES = {400, 401, 403}
 
 
 def _should_retry_http_error(exception: BaseException) -> bool:
-    """
-    Проверяет, нужно ли делать retry для HTTP-ошибки.
+    """Проверяет, нужно ли делать retry для HTTP-ошибки.
 
     Не делаем retry для:
     - 400 (Bad Request) - ошибка клиента
@@ -50,10 +49,11 @@ def _should_retry_http_error(exception: BaseException) -> bool:
     - 403 (Forbidden) - нет доступа
 
     Args:
-        exception: Исключение для проверки
+        exception: Исключение для проверки (может быть aiohttp.ClientResponseError
+            или другим типом с атрибутом status).
 
     Returns:
-        True если нужно делать retry, False иначе
+        True если нужно делать retry, False иначе.
     """
     # Проверяем aiohttp.ClientResponseError
     if isinstance(exception, aiohttp.ClientResponseError):
@@ -77,14 +77,13 @@ class _RetryIfNetworkError(retry_base):
     """
 
     def __call__(self, retry_state: RetryCallState) -> bool:
-        """
-        Проверяет, является ли исключение сетевой ошибкой, для которой нужен retry.
+        """Проверяет, является ли исключение сетевой ошибкой, для которой нужен retry.
 
         Args:
-            retry_state: Состояние retry от tenacity
+            retry_state: Состояние retry от tenacity с информацией о попытке и исключении.
 
         Returns:
-            True если нужно делать retry, False иначе
+            True если нужно делать retry, False иначе.
         """
         if not retry_state.outcome or not retry_state.outcome.failed:
             return False

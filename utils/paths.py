@@ -38,33 +38,36 @@ PROMPTS_CONTAINER_PATH: str = "/app/data/prompts"
 
 
 def resolve_frog_images_dir() -> Path:
-    """
-    Возвращает путь к директории с изображениями жабы.
+    """Возвращает путь к директории с изображениями жабы.
 
-    При локальном запуске это <project_root>/data/frogs.
-    В контейнере при WORKDIR=/app путь будет /app/data/frogs.
+    Returns:
+        Путь к директории с изображениями. При локальном запуске это
+        <project_root>/data/frogs. В контейнере при WORKDIR=/app путь будет
+        /app/data/frogs.
     """
 
     return Path(FROG_IMAGES_DIR)
 
 
 def resolve_logs_dir() -> Path:
-    """
-    Возвращает путь к директории с логами.
+    """Возвращает путь к директории с логами.
 
-    При локальном запуске это <project_root>/logs.
-    В контейнере при WORKDIR=/app путь будет /app/logs.
+    Returns:
+        Путь к директории с логами. При локальном запуске это
+        <project_root>/logs. В контейнере при WORKDIR=/app путь будет
+        /app/logs.
     """
 
     return Path(LOGS_DIR)
 
 
 def resolve_prompts_dir() -> Path:
-    """
-    Возвращает путь к директории с сохранёнными промптами GigaChat.
+    """Возвращает путь к директории с сохранёнными промптами GigaChat.
 
-    При локальном запуске это <project_root>/data/prompts.
-    В контейнере при WORKDIR=/app путь будет /app/data/prompts.
+    Returns:
+        Путь к директории с промптами. При локальном запуске это
+        <project_root>/data/prompts. В контейнере при WORKDIR=/app путь будет
+        /app/data/prompts.
     """
 
     return Path(PROMPTS_DIR)

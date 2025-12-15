@@ -3,6 +3,8 @@
 Содержит функции для обработки различных команд пользователей.
 """
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime
@@ -38,14 +40,27 @@ T = TypeVar("T")
 
 @log_all_methods()
 class CommandHandlers:
-    """
-    Класс для обработки команд Telegram бота.
+    """Класс для обработки команд Telegram бота.
 
-    Обеспечивает:
-    - Обработку команды /start
-    - Обработку команды /help
-    - Обработку команды /frog (ручная генерация жабы)
-    - Обработку команды /status (статус бота)
+    Обеспечивает обработку всех команд пользователей и администраторов:
+
+    Пользовательские команды:
+    - /start - приветствие и основная информация
+    - /help - справка по командам (разная для админов и пользователей)
+    - /frog - ручная генерация изображения жабы с rate limiting
+
+    Административные команды:
+    - /status - расширенный статус бота и систем
+    - /log - отправка логов администратору
+    - /force_send - принудительная отправка изображения в чат(ы)
+    - /add_chat, /remove_chat, /list_chats - управление списком рассылки
+    - /mod, /unmod, /list_mods - управление администраторами
+    - /set_frog_limit, /set_frog_used - управление лимитами генераций
+    - /set_kandinsky_model, /set_gigachat_model, /list_models - управление моделями
+    - /stop - остановка бота
+
+    Все команды включают обработку ошибок, rate limiting (где применимо) и
+    логирование операций.
     """
 
     def __init__(
@@ -53,12 +68,18 @@ class CommandHandlers:
         image_generator: ImageGenerator,
         next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
-        """
-        Инициализация обработчиков команд.
+        """Инициализирует обработчики команд.
+
+        Создает экземпляр CommandHandlers с необходимыми зависимостями
+        и настраивает rate limiting для команды /frog.
 
         Args:
-            image_generator: Экземпляр генератора изображений
-            next_run_provider: Функция для получения времени следующего запуска
+            image_generator: Экземпляр генератора изображений, используемый
+                для генерации изображений жабы по команде /frog.
+            next_run_provider: Опциональная функция для получения времени
+                следующего запуска автоматической отправки. Используется для
+                отображения информации о следующей отправке в командах /start и /help.
+                Если None, информация о следующей отправке не отображается.
         """
         self.logger = get_logger(__name__)
         self.logger.info("Начало инициализации CommandHandlers")
@@ -78,7 +99,24 @@ class CommandHandlers:
         self.logger.info("CommandHandlers успешно инициализирован")
 
     async def set_frog_limit_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin: установить порог ручных генераций /frog (максимум 100). Использование: /set_frog_limit <threshold>"""
+        """Обработчик команды /set_frog_limit.
+
+        Устанавливает порог ручных генераций /frog (максимум 100).
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к данным приложения через context.application.bot_data.
+
+        Side Effects:
+            - Вызывает usage.set_frog_threshold() для установки нового порога.
+            - Отправляет ответное сообщение пользователю с результатом операции.
+
+        Raises:
+            ValueError: Если переданный аргумент не является положительным числом.
+        """
         self.logger.info("Начало выполнения команды set_frog_limit_command")
         if not update.message or not update.effective_user:
             self.logger.warning("set_frog_limit_command: update.message или update.effective_user отсутствует")
@@ -127,7 +165,24 @@ class CommandHandlers:
             raise
 
     async def set_frog_used_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin: установить текущее значение выработки /frog за месяц. Использование: /set_frog_used <count>"""
+        """Обработчик команды /set_frog_used.
+
+        Устанавливает текущее значение выработки /frog за месяц.
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к данным приложения через context.application.bot_data.
+
+        Side Effects:
+            - Вызывает usage.set_month_total() для установки текущего использования.
+            - Отправляет ответное сообщение пользователю с информацией о лимитах.
+
+        Raises:
+            ValueError: Если переданный аргумент не является неотрицательным числом.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -157,7 +212,23 @@ class CommandHandlers:
             await update.message.reply_text("❌ Неверный параметр. Использование: /set_frog_used <count>")
 
     async def admin_log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: отправить логи. Использование: /log [count] (1..10). Без аргумента — последний файл."""
+        """Обработчик команды /log.
+
+        Отправляет логи администратору. Без аргумента отправляет последний файл,
+        с аргументом [count] отправляет логи за N дней (1..10).
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении,
+                пользователе и чате, из которого отправлена команда.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к боту для отправки файлов через context.bot.
+
+        Side Effects:
+            - Читает файлы логов из директории logs/.
+            - Отправляет файлы логов в чат через context.bot.send_document().
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user or not update.effective_chat:
             return
 
@@ -280,7 +351,23 @@ class CommandHandlers:
             pass
 
     async def stop_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: остановить бота полностью."""
+        """Обработчик команды /stop.
+
+        Останавливает бота полностью. Команда доступна только администраторам.
+        После выполнения команды основной бот останавливается и запускается
+        SupportBot для обслуживания резервных функций.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении,
+                пользователе и чате, из которого отправлена команда.
+            context: Контекст бота, предоставляющий доступ к экземпляру бота
+                через context.application.bot_data.get("bot") для остановки.
+
+        Side Effects:
+            - Сохраняет метаданные сообщения для последующего редактирования.
+            - Вызывает bot.stop() для остановки основного бота.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -406,13 +493,21 @@ class CommandHandlers:
         raise RuntimeError("Все попытки исчерпаны, но ошибка не была сохранена")
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """
-        Обработчик команды /start.
-        Приветствует пользователя и показывает основную информацию о боте.
+        """Обработчик команды /start.
+
+        Приветствует пользователя и показывает основную информацию о боте,
+        включая доступные команды и время следующей автоматической отправки
+        (если доступно).
 
         Args:
-            update: Объект обновления Telegram
-            context: Контекст бота
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота (не используется напрямую, но требуется
+                для совместимости с интерфейсом обработчиков команд).
+
+        Side Effects:
+            - Отправляет приветственное сообщение пользователю.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -450,14 +545,22 @@ class CommandHandlers:
             self.logger.error(f"Не удалось отправить приветственное сообщение после {3} попыток: {e}")
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """
-        Обработчик команды /help.
-        Показывает справку по командам. Для администраторов - расширенная админская справка,
-        для обычных пользователей - пользовательская справка.
+        """Обработчик команды /help.
+
+        Показывает справку по командам бота. Для администраторов отображается
+        расширенная админская справка со всеми доступными командами, для обычных
+        пользователей - пользовательская справка с базовыми командами.
 
         Args:
-            update: Объект обновления Telegram
-            context: Контекст бота
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота (не используется напрямую, но требуется
+                для совместимости с интерфейсом обработчиков команд).
+
+        Side Effects:
+            - Проверяет права администратора через admins_store.is_admin().
+            - Отправляет соответствующую справку (админскую или пользовательскую).
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -542,13 +645,27 @@ class CommandHandlers:
             self.logger.error(f"Не удалось отправить справку после {3} попыток: {e}")
 
     async def frog_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """
-        Обработчик команды /frog.
+        """Обработчик команды /frog.
+
         Генерирует и отправляет изображение жабы по запросу пользователя.
+        Команда защищена rate limiting (per-user и глобальный) и проверкой
+        месячного лимита генераций.
 
         Args:
-            update: Объект обновления Telegram
-            context: Контекст бота
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к хранилищу использования
+                через context.application.bot_data.get("usage") для проверки лимитов.
+
+        Side Effects:
+            - Проверяет глобальный и per-user rate limits.
+            - Проверяет месячный лимит генераций через usage.can_use_frog().
+            - Вызывает image_generator.generate_frog_image() для генерации изображения.
+            - Использует image_generator.get_random_saved_image() как fallback при ошибках.
+            - Вызывает usage.increment() для увеличения счетчика использования.
+            - Сохраняет изображение локально через image_generator.save_image_locally().
+            - Отправляет изображение пользователю и уведомления администраторам при ошибках.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -874,15 +991,27 @@ class CommandHandlers:
                     self.logger.error(f"Ошибка при отправке сообщений админам: {e}")
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """
-        Обработчик команды /status.
-        Показывает расширенный статус бота (только для администратора).
-        Включает информацию о статусе бота, планировщике, лимитах, активных чатах,
-        проверку API и метрики производительности.
+        """Обработчик команды /status.
+
+        Показывает расширенный статус бота, включая информацию о статусе бота,
+        планировщике, лимитах генераций, активных чатах, проверку API (Kandinsky и GigaChat)
+        и метрики производительности. Команда доступна только администраторам.
 
         Args:
-            update: Объект обновления Telegram
-            context: Контекст бота
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к хранилищам через
+                context.application.bot_data (usage, chats, metrics) и к боту
+                через context.bot для получения информации о боте.
+
+        Side Effects:
+            - Вызывает image_generator.check_api_status() для проверки Kandinsky API.
+            - Вызывает image_generator.text_client.check_api_status() для проверки GigaChat API.
+            - Получает информацию о лимитах через usage.get_limits_info().
+            - Получает список чатов через chats.list_chat_ids().
+            - Получает метрики через metrics.get_summary().
+            - Отправляет подробный статус пользователю.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -1052,13 +1181,20 @@ class CommandHandlers:
                 pass
 
     async def unknown_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """
-        Обработчик неизвестных команд.
-        Отправляет сообщение с подсказкой о доступных командах.
+        """Обработчик неизвестных команд.
+
+        Обрабатывает любые команды, которые не распознаны другими обработчиками.
+        Отправляет пользователю сообщение с подсказкой о доступных командах.
 
         Args:
-            update: Объект обновления Telegram
-            context: Контекст бота
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота (не используется напрямую, но требуется
+                для совместимости с интерфейсом обработчиков команд).
+
+        Side Effects:
+            - Отправляет сообщение с информацией о доступных командах пользователю.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -1087,7 +1223,27 @@ class CommandHandlers:
             self.logger.error(f"Не удалось отправить сообщение о неизвестной команде после {3} попыток: {e}")
 
     async def admin_force_send_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: принудительная отправка в чат."""
+        """Обработчик команды /force_send.
+
+        Выполняет принудительную отправку изображения жабы в указанный чат(ы)
+        или во все активные чаты. Команда доступна только администраторам.
+        Без аргументов показывает список активных чатов.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении,
+                пользователе и чате, из которого отправлена команда.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args, к хранилищу чатов через context.application.bot_data.get("chats"),
+                и к боту для отправки сообщений через context.bot.
+
+        Side Effects:
+            - Вызывает image_generator.generate_frog_image() для генерации нового изображения
+              (если лимит не исчерпан).
+            - Использует image_generator.get_random_saved_image() как fallback при недоступности генерации.
+            - Отправляет изображение в указанные чаты через context.bot.send_photo().
+            - Вызывает usage.increment() для увеличения счетчика использования.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1375,7 +1531,25 @@ class CommandHandlers:
             self.logger.error(f"Не удалось отправить итоговое сообщение после {3} попыток: {e}")
 
     async def admin_add_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: добавить чат в рассылку."""
+        """Обработчик команды /add_chat.
+
+        Добавляет чат в список рассылки для автоматических отправок.
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к хранилищу чатов через context.application.bot_data.get("chats").
+
+        Side Effects:
+            - Вызывает chats.add_chat() для добавления чата в хранилище.
+            - Отправляет ответное сообщение пользователю с результатом операции.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+
+        Raises:
+            ValueError: Если переданный chat_id не является числом.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1429,7 +1603,24 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
 
     async def admin_remove_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: удалить чат из рассылки."""
+        """Обработчик команды /remove_chat.
+
+        Удаляет чат из списка рассылки для автоматических отправок.
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к хранилищу чатов через context.application.bot_data.get("chats").
+
+        Side Effects:
+            - Вызывает chats.remove_chat() для удаления чата из хранилища.
+            - Отправляет ответное сообщение пользователю с результатом операции.
+
+        Raises:
+            ValueError: Если переданный chat_id не является числом.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1451,7 +1642,24 @@ class CommandHandlers:
             await update.message.reply_text("❌ Неверный chat_id (должен быть числом)")
 
     async def list_chats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: список активных чатов с ID."""
+        """Обработчик команды /list_chats.
+
+        Возвращает список всех активных чатов с их ID и названиями.
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении,
+                пользователе и чате, из которого отправлена команда.
+            context: Контекст бота, предоставляющий доступ к хранилищу чатов
+                через context.application.bot_data.get("chats") и к боту
+                для получения информации о чатах через context.bot.get_chat().
+
+        Side Effects:
+            - Вызывает chats.list_chat_ids() для получения списка ID чатов.
+            - Вызывает context.bot.get_chat() для каждого чата для получения названия.
+            - Отправляет форматированный список чатов пользователю.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1522,7 +1730,23 @@ class CommandHandlers:
             self.logger.error(f"Не удалось отправить список чатов после {3} попыток: {e}")
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: установить модель Kandinsky."""
+        """Обработчик команды /set_kandinsky_model.
+
+        Устанавливает модель Kandinsky для генерации изображений.
+        Можно указать как pipeline_id (число), так и название модели.
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к генератору изображений через image_generator.
+
+        Side Effects:
+            - Вызывает image_generator.image_client.set_model() для установки модели.
+            - Отправляет ответное сообщение пользователю с результатом операции.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1585,7 +1809,22 @@ class CommandHandlers:
             self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
 
     async def set_gigachat_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: установить модель GigaChat."""
+        """Обработчик команды /set_gigachat_model.
+
+        Устанавливает модель GigaChat для генерации текстовых промптов.
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к генератору изображений через image_generator.
+
+        Side Effects:
+            - Вызывает image_generator.text_client.set_model() для установки модели.
+            - Отправляет ответное сообщение пользователю с результатом операции.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1640,7 +1879,25 @@ class CommandHandlers:
             self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
 
     async def mod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: добавить администратора."""
+        """Обработчик команды /mod.
+
+        Предоставляет административные права указанному пользователю.
+        Команда доступна только существующим администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args для получения user_id нового администратора.
+
+        Side Effects:
+            - Вызывает admins_store.add_admin() для добавления пользователя в список администраторов.
+            - Отправляет ответное сообщение пользователю с результатом операции.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+
+        Raises:
+            ValueError: Если переданный user_id не является числом.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1697,7 +1954,26 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
 
     async def unmod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: удалить администратора."""
+        """Обработчик команды /unmod.
+
+        Удаляет административные права у указанного пользователя.
+        Главного администратора (из .env) удалить нельзя.
+        Команда доступна только существующим администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args для получения user_id администратора для удаления.
+
+        Side Effects:
+            - Вызывает admins_store.remove_admin() для удаления пользователя из списка администраторов.
+            - Отправляет ответное сообщение пользователю с результатом операции.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+
+        Raises:
+            ValueError: Если переданный user_id не является числом.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1770,7 +2046,23 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
 
     async def list_mods_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: список всех админов с ID."""
+        """Обработчик команды /list_mods.
+
+        Возвращает список всех администраторов бота с их ID.
+        Главный администратор (из .env) помечается специальной пометкой.
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота (не используется напрямую, но требуется
+                для совместимости с интерфейсом обработчиков команд).
+
+        Side Effects:
+            - Вызывает admins_store.list_all_admins() для получения списка администраторов.
+            - Отправляет форматированный список администраторов пользователю.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user:
             return
 
@@ -1825,7 +2117,24 @@ class CommandHandlers:
             raise
 
     async def list_models_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Admin команда: список всех доступных моделей Kandinsky и GigaChat."""
+        """Обработчик команды /list_models.
+
+        Возвращает список всех доступных моделей Kandinsky и GigaChat.
+        Текущая активная модель помечается звездочкой (⭐).
+        Команда доступна только администраторам.
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении
+                и пользователе, который отправил команду.
+            context: Контекст бота (не используется напрямую, но требуется
+                для совместимости с интерфейсом обработчиков команд).
+
+        Side Effects:
+            - Вызывает image_generator.check_api_status() для получения моделей Kandinsky.
+            - Вызывает image_generator.text_client.get_available_models() для получения моделей GigaChat.
+            - Отправляет форматированный список моделей пользователю.
+            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+        """
         if not update.message or not update.effective_user:
             return
 

@@ -72,7 +72,12 @@ class TextClientContainer(ITextToTextClient):
     # ------------------------------------------------------------------ #
 
     def get_client(self) -> ITextToTextClient | None:
-        """Возвращает текущий активный клиент (может быть None)."""
+        """Возвращает текущий активный клиент.
+
+        Returns:
+            Текущий активный клиент, реализующий ITextToTextClient, или None
+            если клиент не инициализирован.
+        """
         return self._client
 
     def set_initial_client(self, client: ITextToTextClient | None) -> None:
@@ -168,6 +173,20 @@ class TextClientContainer(ITextToTextClient):
     # ------------------------------------------------------------------ #
 
     async def generate(self, prompt: str, user_id: str | None = None) -> str | None:
+        """Генерирует текстовый ответ по текстовому промпту через текущий активный клиент.
+
+        Проксирует вызов метода generate к текущему активному клиенту.
+
+        Args:
+            prompt: Текстовый запрос/инструкция для модели.
+            user_id: Идентификатор пользователя для трейсинга и логирования (опционально).
+
+        Returns:
+            Сгенерированный текст или None при ошибке или отсутствии клиента.
+
+        Note:
+            Если клиент не инициализирован, логируется предупреждение и возвращается None.
+        """
         client = self._client
         if client is None:
             self._logger.warning(
@@ -178,6 +197,19 @@ class TextClientContainer(ITextToTextClient):
         return await client.generate(prompt, user_id=user_id)
 
     async def check_api_status(self) -> tuple[bool, str]:
+        """Проверяет статус API и валидность ключа без траты токенов (dry-run).
+
+        Проксирует вызов метода check_api_status к текущему активному клиенту.
+
+        Returns:
+            Кортеж, содержащий:
+            - успех_проверки: True если API доступен и ключ валиден.
+            - сообщение_о_статусе: Человекочитаемое сообщение о статусе.
+
+        Note:
+            Если клиент не инициализирован, логируется предупреждение и возвращается
+            (False, сообщение об ошибке).
+        """
         client = self._client
         if client is None:
             msg = "❌ Текстовый клиент не инициализирован (например, не задан GIGACHAT_AUTHORIZATION_KEY)"
@@ -186,6 +218,20 @@ class TextClientContainer(ITextToTextClient):
         return await client.check_api_status()
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
+        """Возвращает список доступных моделей через текущий активный клиент.
+
+        Проксирует вызов метода get_available_models к текущему активному клиенту.
+
+        Args:
+            save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
+
+        Returns:
+            Список доступных моделей или пустой список при ошибке или отсутствии клиента.
+
+        Note:
+            Если клиент не инициализирован, логируется предупреждение и возвращается
+            пустой список.
+        """
         client = self._client
         if client is None:
             self._logger.warning(
@@ -195,6 +241,22 @@ class TextClientContainer(ITextToTextClient):
         return await client.get_available_models(save_models=save_models)
 
     async def set_model(self, model_name: str) -> tuple[bool, str]:
+        """Устанавливает текущую модель для генерации текста через текущий активный клиент.
+
+        Проксирует вызов метода set_model к текущему активному клиенту.
+
+        Args:
+            model_name: Название модели для установки.
+
+        Returns:
+            Кортеж, содержащий:
+            - успех: True если модель установлена успешно.
+            - сообщение: Человекочитаемое сообщение о результате.
+
+        Note:
+            Если клиент не инициализирован, логируется предупреждение и возвращается
+            (False, сообщение об ошибке).
+        """
         client = self._client
         if client is None:
             msg = "❌ Текстовый клиент не инициализирован, смена модели невозможна"
@@ -208,12 +270,18 @@ class TextClientContainer(ITextToTextClient):
 
 @lru_cache(maxsize=1)
 def get_text_client_container() -> TextClientContainer:
-    """
-    Глобальный singleton‑доступ к контейнеру текстового клиента.
+    """Глобальный singleton-доступ к контейнеру текстового клиента.
 
-    Все сервисы, которым нужен LLM‑клиент, должны зависеть от результата
-    этой функции (напрямую или через фабрику `create_text_client()`), а не
-    создавать `GigaChatTextClient` самостоятельно.
+    Возвращает глобальный singleton-экземпляр TextClientContainer. При первом
+    вызове создаёт новый контейнер, при последующих возвращает тот же экземпляр.
+
+    Returns:
+        Глобальный singleton-экземпляр TextClientContainer.
+
+    Note:
+        Все сервисы, которым нужен LLM-клиент, должны зависеть от результата
+        этой функции (напрямую или через фабрику `create_text_client()`), а не
+        создавать `GigaChatTextClient` самостоятельно.
     """
     container = TextClientContainer()
     logger.info("Создан singleton TextClientContainer для текстового LLM‑клиента")

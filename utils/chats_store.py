@@ -23,12 +23,26 @@ class ChatsStore:
     """
 
     def __init__(self, storage_path: str | None = None) -> None:
+        """Инициализирует репозиторий чатов.
+
+        Args:
+            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+        """
         # Параметр storage_path оставлен для обратной совместимости и игнорируется.
         self.logger = get_logger(__name__)
 
     async def add_chat(self, chat_id: int, title: str | None = None) -> None:
-        """
-        Добавляет или обновляет чат в списке рассылки.
+        """Добавляет или обновляет чат в списке рассылки.
+
+        Если чат с указанным chat_id уже существует, обновляет его название.
+        Если чат не существует, создаёт новую запись.
+
+        Args:
+            chat_id: Идентификатор чата для добавления или обновления.
+            title: Название чата. Если не указано, используется пустая строка.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -49,8 +63,13 @@ class ChatsStore:
                 raise
 
     async def remove_chat(self, chat_id: int) -> None:
-        """
-        Удаляет чат из списка рассылки.
+        """Удаляет чат из списка рассылки.
+
+        Args:
+            chat_id: Идентификатор чата для удаления.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -62,8 +81,13 @@ class ChatsStore:
                 raise
 
     async def list_chat_ids(self) -> list[int]:
-        """
-        Возвращает список ID всех зарегистрированных чатов.
+        """Возвращает список ID всех зарегистрированных чатов.
+
+        Returns:
+            Список идентификаторов чатов, отсортированный по chat_id.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:

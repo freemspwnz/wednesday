@@ -28,17 +28,34 @@ class UsageTracker:
         monthly_quota: int = 100,
         frog_threshold: int = 70,
     ) -> None:
+        """Инициализирует трекер использования генераций.
+
+        Args:
+            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+            monthly_quota: Месячная квота генераций (по умолчанию 100).
+            frog_threshold: Порог для ручных генераций /frog (по умолчанию 70).
+        """
         self.logger = get_logger(__name__)
         self.monthly_quota = int(monthly_quota)
         self.frog_threshold = int(frog_threshold)
 
     @staticmethod
     def _month_key(dt: datetime) -> str:
+        """Формирует ключ месяца в формате YYYY-MM.
+
+        Args:
+            dt: Дата для формирования ключа.
+
+        Returns:
+            Строка в формате YYYY-MM (например, "2024-01").
+        """
         return dt.strftime("%Y-%m")
 
     async def _ensure_settings_row(self) -> None:
-        """
-        Гарантирует наличие строки настроек (id=1) с актуальными значениями квот.
+        """Гарантирует наличие строки настроек (id=1) с актуальными значениями квот.
+
+        Создаёт или обновляет строку с id=1 в таблице usage_settings
+        с текущими значениями monthly_quota и frog_threshold.
         """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -55,8 +72,17 @@ class UsageTracker:
             )
 
     async def increment(self, count: int = 1, when: datetime | None = None) -> int:
-        """
-        Увеличивает счётчик генераций за месяц и возвращает новое значение.
+        """Увеличивает счётчик генераций за месяц и возвращает новое значение.
+
+        Args:
+            count: Количество генераций для добавления (по умолчанию 1).
+            when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Новое значение счётчика генераций за месяц.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_settings_row()
         dt = when or datetime.utcnow()
@@ -82,8 +108,16 @@ class UsageTracker:
         return new_value
 
     async def get_month_total(self, when: datetime | None = None) -> int:
-        """
-        Возвращает общее количество генераций за месяц.
+        """Возвращает общее количество генераций за месяц.
+
+        Args:
+            when: Дата для получения статистики. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Количество генераций за указанный месяц. Если записей нет, возвращает 0.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_settings_row()
         dt = when or datetime.utcnow()
@@ -97,8 +131,10 @@ class UsageTracker:
         return int(row["count"]) if row is not None else 0
 
     async def _load_settings(self) -> None:
-        """
-        Обновляет значения квот из таблицы `usage_settings`.
+        """Обновляет значения квот из таблицы usage_settings.
+
+        Загружает актуальные значения monthly_quota и frog_threshold
+        из базы данных и обновляет соответствующие атрибуты объекта.
         """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -110,8 +146,17 @@ class UsageTracker:
             self.frog_threshold = int(row["frog_threshold"])
 
     async def can_use_frog(self, when: datetime | None = None) -> bool:
-        """
-        Проверяет, не превышен ли порог ручных /frog для месяца.
+        """Проверяет, не превышен ли порог ручных /frog для месяца.
+
+        Args:
+            when: Дата для проверки. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            True если можно использовать команду /frog (не превышен порог),
+            False иначе.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_settings_row()
         await self._load_settings()
@@ -119,8 +164,19 @@ class UsageTracker:
         return total < self.frog_threshold
 
     async def get_limits_info(self, when: datetime | None = None) -> tuple[int, int, int]:
-        """
-        Возвращает кортеж (total, frog_threshold, monthly_quota) для текущего месяца.
+        """Возвращает информацию о лимитах использования для месяца.
+
+        Args:
+            when: Дата для получения информации. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Кортеж (total, frog_threshold, monthly_quota), где:
+            - total: текущее количество использованных генераций
+            - frog_threshold: порог для ручных генераций /frog
+            - monthly_quota: месячная квота генераций
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_settings_row()
         await self._load_settings()
@@ -128,9 +184,17 @@ class UsageTracker:
         return total, self.frog_threshold, self.monthly_quota
 
     async def set_month_total(self, total: int, when: datetime | None = None) -> int:
-        """
-        Устанавливает текущее значение использования за месяц в абсолютном виде.
-        Возвращает установленное значение.
+        """Устанавливает текущее значение использования за месяц в абсолютном виде.
+
+        Args:
+            total: Абсолютное значение счётчика генераций для установки.
+            when: Дата для установки значения. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Установленное значение счётчика.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_settings_row()
         dt = when or datetime.utcnow()
@@ -151,9 +215,18 @@ class UsageTracker:
         return value
 
     async def set_frog_threshold(self, threshold: int) -> int:
-        """
-        Устанавливает порог ручных генераций (/frog) на текущий месяц.
-        Порог ограничивается диапазоном [0, monthly_quota]. Возвращает установленное значение.
+        """Устанавливает порог ручных генераций (/frog).
+
+        Порог автоматически ограничивается диапазоном [0, monthly_quota].
+
+        Args:
+            threshold: Новое значение порога для ручных генераций.
+
+        Returns:
+            Установленное значение порога (после ограничения диапазоном).
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_settings_row()
         threshold = max(int(threshold), 0)

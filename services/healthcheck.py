@@ -45,7 +45,18 @@ async def log_requests(
     request: Request,
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
-    """Middleware для логирования HTTP запросов."""
+    """Middleware для логирования HTTP запросов.
+
+    Логирует все HTTP запросы к healthcheck эндпоинту с информацией о методе,
+    пути, статус-коде и времени выполнения.
+
+    Args:
+        request: Входящий HTTP запрос.
+        call_next: Следующий обработчик в цепочке middleware.
+
+    Returns:
+        HTTP ответ от следующего обработчика.
+    """
     start_time = time.time()
     response = await call_next(request)
     latency_ms = (time.time() - start_time) * 1000
@@ -61,16 +72,20 @@ async def log_requests(
 
 
 async def _check_redis() -> dict[str, Any]:
-    """
-    Выполняет проверку доступности Redis.
+    """Выполняет проверку доступности Redis.
 
-    Возвращает структуру:
-        {
-            "status": "up" | "down",
-            "using_fallback": bool,
-            "latency_ms": float | None,
-            "details": str | None,
-        }
+    Проверяет доступность Redis через ping команду. Измеряет латентность запроса.
+
+    Returns:
+        Словарь с результатами проверки, содержащий:
+        - status: Статус Redis ("up" или "down").
+        - using_fallback: Флаг использования fallback клиента (всегда False).
+        - latency_ms: Латентность ping запроса в миллисекундах.
+        - details: Детали ошибки (если есть) или None.
+
+    Raises:
+        RedisError: При ошибке подключения к Redis.
+        Exception: При неожиданных ошибках.
     """
     started = time.monotonic()
 
@@ -116,15 +131,20 @@ async def _check_redis() -> dict[str, Any]:
 
 
 async def _check_postgres() -> dict[str, Any]:
-    """
-    Выполняет проверку доступности Postgres.
+    """Выполняет проверку доступности Postgres.
 
-    Возвращает структуру:
-        {
-            "status": "up" | "down",
-            "latency_ms": float | None,
-            "details": str | None,
-        }
+    Проверяет доступность Postgres через простой запрос SELECT 1. Измеряет
+    латентность запроса.
+
+    Returns:
+        Словарь с результатами проверки, содержащий:
+        - status: Статус Postgres ("up" или "down").
+        - latency_ms: Латентность запроса в миллисекундах.
+        - details: Детали ошибки (если есть) или None.
+
+    Raises:
+        asyncpg.PostgresError: При ошибке подключения или выполнения запроса.
+        Exception: При неожиданных ошибках.
     """
     started = time.monotonic()
 
@@ -168,21 +188,26 @@ async def _check_postgres() -> dict[str, Any]:
 
 
 async def _check_metrics_stream() -> dict[str, Any]:
-    """
-    Проверяет доступность основной бизнес‑очереди Redis Stream `metrics:events`.
+    """Проверяет доступность основной бизнес‑очереди Redis Stream `metrics:events`.
 
-    Возвращает структуру:
-        {
-            "status": "up" | "down",
-            "latency_ms": float | None,
-            "details": str | None,
-        }
+    Выполняет проверку через команду XINFO STREAM для проверки существования
+    и доступности очереди метрик.
 
-    Логика:
-    - если Redis недоступен — очередь считаем "down";
-    - если команда XINFO STREAM завершилась успешно — "up";
-    - если ключ отсутствует (ERR no such key) — считаем "down", так как
-      это важная очередь бизнес‑метрик.
+    Returns:
+        Словарь с результатами проверки, содержащий:
+        - status: Статус очереди ("up" или "down").
+        - latency_ms: Латентность запроса в миллисекундах.
+        - details: Детали ошибки (если есть) или None.
+
+    Note:
+        - Если Redis недоступен — очередь считается "down".
+        - Если команда XINFO STREAM завершилась успешно — "up".
+        - Если ключ отсутствует (ERR no such key) — считается "down", так как
+          это важная очередь бизнес‑метрик.
+
+    Raises:
+        RedisError: При ошибке подключения к Redis или выполнения команды.
+        Exception: При неожиданных ошибках.
     """
     started = time.monotonic()
 
@@ -230,16 +255,20 @@ async def _check_metrics_stream() -> dict[str, Any]:
 
 
 async def _check_celery() -> dict[str, Any]:
-    """
-    Выполняет проверку доступности Celery workers.
+    """Выполняет проверку доступности Celery workers.
 
-    Возвращает структуру:
-        {
-            "status": "up" | "down",
-            "workers_count": int,
-            "latency_ms": float | None,
-            "details": str | None,
-        }
+    Проверяет доступность Celery workers через ping команду. Подсчитывает
+    количество активных workers.
+
+    Returns:
+        Словарь с результатами проверки, содержащий:
+        - status: Статус Celery workers ("up" или "down").
+        - workers_count: Количество активных workers.
+        - latency_ms: Латентность ping запроса в миллисекундах.
+        - details: Детали ошибки (если есть) или None.
+
+    Raises:
+        Exception: При ошибке проверки workers (таймаут, недоступность и т.д.).
     """
     started = time.monotonic()
 
@@ -283,20 +312,25 @@ async def _check_celery() -> dict[str, Any]:
 
 
 async def _build_health_payload() -> dict[str, Any]:
-    """
-    Выполняет все проверки и формирует итоговый JSON‑ответ healthcheck.
+    """Выполняет все проверки и формирует итоговый JSON‑ответ healthcheck.
 
-    Структура ответа:
-        {
-            "status": "up" | "down",
-            "redis": {...},
-            "postgres": {...},
-            "celery": {...},
-            "queues": {
-                "metrics_events": {...}
-            },
-            "latency_ms": float
-        }
+    Выполняет проверки всех критичных зависимостей (Redis, Postgres, очередь
+    метрик) и формирует агрегированный ответ. Celery не считается критичным
+    для основного healthcheck бота.
+
+    Returns:
+        Словарь с результатами всех проверок, содержащий:
+        - status: Общий статус ("up" или "down").
+        - redis: Результаты проверки Redis.
+        - postgres: Результаты проверки Postgres.
+        - celery: Результаты проверки Celery workers.
+        - queues: Словарь с результатами проверки очередей:
+          - metrics_events: Результаты проверки очереди метрик.
+        - latency_ms: Общее время выполнения всех проверок в миллисекундах.
+
+    Note:
+        Общий статус "up" только если все критичные зависимости (Redis, Postgres,
+        metrics:events) в состоянии "up".
     """
     started = time.monotonic()
     redis_status = await _check_redis()
@@ -364,12 +398,20 @@ async def _build_health_payload() -> dict[str, Any]:
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    """
-    Основной HTTP‑эндпоинт healthcheck.
+    """Основной HTTP‑эндпоинт healthcheck.
 
-    Возвращает:
-    - HTTP 200 и status="up", если все критические зависимости доступны;
-    - HTTP 503 и status="down" в противном случае.
+    Выполняет проверку всех критичных зависимостей бота и возвращает агрегированный
+    статус. Используется для Docker HEALTHCHECK, Kubernetes liveness/readiness probes
+    и внешних систем мониторинга.
+
+    Returns:
+        JSONResponse с результатами проверки:
+        - HTTP 200 и status="up", если все критические зависимости доступны.
+        - HTTP 503 и status="down" в противном случае.
+
+    Note:
+        Критичными зависимостями считаются: Redis, Postgres и очередь metrics:events.
+        Celery workers не являются критичными для основного healthcheck.
     """
     payload = await _build_health_payload()
     http_status = 200 if payload.get("status") == "up" else 503

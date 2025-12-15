@@ -16,7 +16,7 @@ import asyncio
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from services.clients import ITextToImageClient, ITextToTextClient
 from services.clients.factory import create_image_client, create_text_client
@@ -158,24 +158,44 @@ class ImageGenerator:
 
     @property
     def image_client(self) -> ITextToImageClient:
-        """Возвращает клиент генерации изображений."""
+        """Возвращает клиент генерации изображений.
+
+        Returns:
+            Экземпляр клиента, реализующего интерфейс ITextToImageClient.
+        """
         return self._image_client
 
     @property
     def text_client(self) -> ITextToTextClient | None:
-        """Возвращает клиент генерации текста."""
+        """Возвращает клиент генерации текста.
+
+        Returns:
+            Экземпляр клиента, реализующего интерфейс ITextToTextClient, или None
+            если текстовый клиент не настроен.
+        """
         return self._text_client
 
     async def generate_frog_image(
         self,
         user_id: int | None = None,
-        metrics: Optional["Metrics"] = None,
+        metrics: "Metrics" | None = None,
     ) -> tuple[bytes, str] | None:
-        """
-        Генерирует изображение жабы с помощью Kandinsky API.
+        """Генерирует изображение жабы с помощью Kandinsky API.
+
+        Выполняет полный цикл генерации изображения: проверка circuit breaker,
+        генерация промпта, проверка кэша, генерация через API, сохранение в хранилище
+        и запись метрик.
+
+        Args:
+            user_id: Идентификатор пользователя для логирования и метрик (опционально).
+            metrics: Экземпляр Metrics для записи метрик генерации (опционально).
 
         Returns:
-            Кортеж (изображение в байтах, случайная подпись) или None при ошибке
+            Кортеж (изображение в байтах, случайная подпись) или None при ошибке.
+
+        Note:
+            Метод автоматически использует кэш изображений по prompt_hash для
+            оптимизации повторных генераций с одинаковыми промптами.
         """
         import time
 
@@ -656,14 +676,20 @@ class ImageGenerator:
         self,
         save_models: bool = True,
     ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
-        """
-        Проверяет статус API и валидность ключа без генерации изображения (dry-run).
+        """Проверяет статус API и валидность ключа без генерации изображения (dry-run).
 
         DEPRECATED: Используйте напрямую `image_generator.image_client.check_api_status()`.
         Этот метод сохранён для обратной совместимости.
 
+        Args:
+            save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
+
         Returns:
-            Кортеж (успех_проверки, сообщение_о_статусе, список_моделей, (текущий_pipeline_id, текущее_имя))
+            Кортеж, содержащий:
+            - успех_проверки: True если API доступен и ключ валиден.
+            - сообщение_о_статусе: Человекочитаемое сообщение о статусе.
+            - список_моделей: Список доступных моделей.
+            - (текущий_pipeline_id, текущее_имя): ID и название текущей модели.
         """
         self.logger.warning(
             "ImageGenerator.check_api_status() устарел, используйте image_client.check_api_status() напрямую",
@@ -681,17 +707,20 @@ class ImageGenerator:
         return None
 
     async def _generate_prompt(self) -> str | None:
-        """
-        Генерирует промпт для Kandinsky через текстовый клиент или использует fallback.
+        """Генерирует промпт для Kandinsky через текстовый клиент или использует fallback.
 
-        Порядок:
+        Выполняет генерацию промпта с использованием многоуровневой стратегии fallback:
         1. Попытка получить промпт из абстрактного `ITextToTextClient` (по умолчанию GigaChat).
         2. При любой ошибке/пустом ответе — берём случайный промпт из таблицы `prompts`.
         3. Если в БД нет данных — используем файловый fallback из `data/prompts/`.
         4. Если и файлов нет — вызывающий код использует статический fallback.
 
-        При любом успешно выбранном промпте он регистрируется в таблице `prompts`
-        (raw + normalized + hash), чтобы БД оставалась каноническим источником метаданных.
+        Returns:
+            Сгенерированный промпт в виде строки или None, если все источники недоступны.
+
+        Note:
+            При любом успешно выбранном промпте он регистрируется в таблице `prompts`
+            (raw + normalized + hash), чтобы БД оставалась каноническим источником метаданных.
         """
         prompts_store = PromptsStore()
         prompt: str | None = None
@@ -767,11 +796,13 @@ class ImageGenerator:
 
     @staticmethod
     def _get_fallback_prompt() -> str:
-        """
-        Возвращает промпт из статического списка (fallback).
+        """Возвращает промпт из статического списка (fallback).
+
+        Используется когда не удалось получить промпт через текстовый клиент
+        или из базы данных. Выбирает случайный промпт и стиль из конфигурации.
 
         Returns:
-            Промпт для генерации изображения
+            Промпт для генерации изображения в формате строки.
         """
         # Выбираем случайный промпт и стиль для разнообразия
         frog_prompt = random.choice(ImageConfig.FROG_PROMPTS)
@@ -781,11 +812,13 @@ class ImageGenerator:
         return f"{frog_prompt}, {style}, high quality, detailed, Wednesday frog meme"
 
     def get_random_caption(self) -> str:
-        """
-        Возвращает случайную подпись для изображения.
+        """Возвращает случайную подпись для изображения.
+
+        Выбирает случайную подпись из предопределённого списка подписей для
+        изображений жабы.
 
         Returns:
-            Случайная подпись из списка доступных
+            Случайная подпись из списка доступных подписей.
         """
         return random.choice(self.captions)
 
@@ -796,20 +829,28 @@ class ImageGenerator:
         prefix: str = "frog",
         max_files: int = MAX_FILES_DEFAULT,
     ) -> str:
-        """
-        # ВАЖНО: по умолчанию используем относительный путь `data/frogs`.
-        # Внутри Docker-контейнера при WORKDIR=/app это соответствует
-        # абсолютному пути /app/data/frogs, который примонтирован как volume.
-        Сохраняет байты изображения на диск.
-        При достижении лимита max_files удаляет самые старые файлы.
+        """Сохраняет байты изображения на диск.
+
+        Сохраняет изображение в указанную папку с временной меткой в имени файла.
+        При достижении лимита max_files автоматически удаляет самые старые файлы.
 
         Args:
-            image_data: Содержимое изображения в байтах
-            folder: Папка для сохранения
-            prefix: Префикс имени файла
-            max_files: Максимальное количество файлов в папке (по умолчанию 30)
+            image_data: Содержимое изображения в байтах.
+            folder: Папка для сохранения (по умолчанию FROG_IMAGES_DIR).
+            prefix: Префикс имени файла (по умолчанию "frog").
+            max_files: Максимальное количество файлов в папке (по умолчанию 30).
+
         Returns:
-            Путь к сохраненному файлу или пустая строка при ошибке
+            Путь к сохраненному файлу или пустая строка при ошибке.
+
+        Note:
+            По умолчанию используется относительный путь `data/frogs`. Внутри
+            Docker-контейнера при WORKDIR=/app это соответствует абсолютному пути
+            /app/data/frogs, который примонтирован как volume.
+
+        Raises:
+            PermissionError: При отсутствии прав на запись в директорию.
+            OSError: При ошибках файловой системы (недостаточно места и т.д.).
         """
         try:
             # Разрешаем путь через единый helper, чтобы обеспечить единообразное
@@ -891,14 +932,22 @@ class ImageGenerator:
             return ""
 
     def get_random_saved_image(self, folder: str = FROG_IMAGES_DIR) -> tuple[bytes, str] | None:
-        """
-        Получает случайное изображение из сохраненных файлов.
+        """Получает случайное изображение из сохраненных файлов.
+
+        Выбирает случайный PNG файл из указанной папки и возвращает его содержимое
+        вместе со случайной подписью.
 
         Args:
-            folder: Папка с сохраненными изображениями
+            folder: Папка с сохраненными изображениями (по умолчанию FROG_IMAGES_DIR).
 
         Returns:
-            Кортеж (изображение в байтах, случайная подпись) или None если нет сохраненных изображений
+            Кортеж (изображение в байтах, случайная подпись) или None если:
+            - папка не существует.
+            - в папке нет PNG файлов.
+            - произошла ошибка при чтении файла.
+
+        Raises:
+            Exception: При ошибке чтения файла или доступа к файловой системе.
         """
         try:
             path = resolve_frog_images_dir() if folder == FROG_IMAGES_DIR else Path(folder)

@@ -22,11 +22,29 @@ class AdminsStore:
     """
 
     def __init__(self, storage_path: str | None = None) -> None:
+        """Инициализирует репозиторий администраторов.
+
+        Args:
+            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+        """
         # storage_path оставлен для обратной совместимости и игнорируется.
         self.logger = get_logger(__name__)
 
     async def is_admin(self, user_id: int) -> bool:
-        """Проверяет, является ли пользователь администратором."""
+        """Проверяет, является ли пользователь администратором.
+
+        Проверяет наличие пользователя в таблице admins или сравнивает
+        с главным администратором из переменной окружения ADMIN_CHAT_ID.
+
+        Args:
+            user_id: Идентификатор пользователя для проверки.
+
+        Returns:
+            True если пользователь является администратором, False иначе.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         # Главный админ из .env всегда имеет права
         main_admin = config.admin_chat_id
         if main_admin and int(main_admin) == user_id:
@@ -42,7 +60,17 @@ class AdminsStore:
         return row is not None
 
     async def add_admin(self, user_id: int) -> bool:
-        """Добавляет администратора. Возвращает True если добавлен, False если уже был."""
+        """Добавляет администратора в таблицу admins.
+
+        Args:
+            user_id: Идентификатор пользователя для добавления в список администраторов.
+
+        Returns:
+            True если администратор был добавлен, False если он уже существовал.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
             try:
@@ -66,7 +94,17 @@ class AdminsStore:
                 raise
 
     async def remove_admin(self, user_id: int) -> bool:
-        """Удаляет администратора. Возвращает True если удален, False если не был админом."""
+        """Удаляет администратора из таблицы admins.
+
+        Args:
+            user_id: Идентификатор пользователя для удаления из списка администраторов.
+
+        Returns:
+            True если администратор был удалён, False если он не был администратором.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
             try:
@@ -82,7 +120,17 @@ class AdminsStore:
                 raise
 
     async def list_admins(self) -> list[int]:
-        """Возвращает список всех админов (исключая главного админа из .env)."""
+        """Возвращает список всех администраторов из таблицы admins.
+
+        Главный администратор из переменной окружения ADMIN_CHAT_ID не включается
+        в результат.
+
+        Returns:
+            Список идентификаторов администраторов, отсортированный по user_id.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
             try:
@@ -93,7 +141,18 @@ class AdminsStore:
                 raise
 
     async def list_all_admins(self) -> list[int]:
-        """Возвращает список всех админов, включая главного из .env."""
+        """Возвращает список всех администраторов, включая главного из .env.
+
+        Включает администраторов из таблицы admins и главного администратора
+        из переменной окружения ADMIN_CHAT_ID (если задан).
+
+        Returns:
+            Список идентификаторов всех администраторов. Главный администратор
+            (если задан) всегда находится в начале списка.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         admin_ids = await self.list_admins()
         main_admin = config.admin_chat_id
         if main_admin:

@@ -22,12 +22,19 @@ class ModelsStore:
     """
 
     def __init__(self, storage_path: str | None = None) -> None:
+        """Инициализирует репозиторий моделей.
+
+        Args:
+            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+        """
         self.logger = get_logger(__name__)
 
     @staticmethod
     async def _ensure_rows() -> None:
-        """
-        Гарантирует наличие базовых строк (id=1) в таблицах моделей.
+        """Гарантирует наличие базовых строк (id=1) в таблицах моделей.
+
+        Создаёт строки с id=1 в таблицах models_kandinsky и models_gigachat,
+        если их ещё нет. Используется перед операциями обновления моделей.
         """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -39,7 +46,15 @@ class ModelsStore:
             )
 
     async def set_kandinsky_model(self, pipeline_id: str, pipeline_name: str) -> None:
-        """Устанавливает текущую модель Kandinsky."""
+        """Устанавливает текущую модель Kandinsky.
+
+        Args:
+            pipeline_id: Идентификатор pipeline модели Kandinsky.
+            pipeline_name: Название pipeline модели Kandinsky.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_rows()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -55,7 +70,15 @@ class ModelsStore:
             )
 
     async def get_kandinsky_model(self) -> tuple[str | None, str | None]:
-        """Возвращает текущую модель Kandinsky (pipeline_id, pipeline_name)."""
+        """Возвращает текущую модель Kandinsky.
+
+        Returns:
+            Кортеж (pipeline_id, pipeline_name) текущей модели Kandinsky.
+            Если модель не установлена, возвращает (None, None).
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_rows()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -71,7 +94,14 @@ class ModelsStore:
         return row["current_pipeline_id"], row["current_pipeline_name"]
 
     async def set_gigachat_model(self, model_name: str) -> None:
-        """Устанавливает текущую модель GigaChat."""
+        """Устанавливает текущую модель GigaChat.
+
+        Args:
+            model_name: Название модели GigaChat для установки.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_rows()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -81,7 +111,14 @@ class ModelsStore:
             )
 
     async def get_gigachat_model(self) -> str | None:
-        """Возвращает текущую модель GigaChat."""
+        """Возвращает текущую модель GigaChat.
+
+        Returns:
+            Название текущей модели GigaChat или None, если модель не установлена.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_rows()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -92,11 +129,17 @@ class ModelsStore:
         return str(model) if isinstance(model, str) else None
 
     async def set_kandinsky_available_models(self, models: list[dict[str, Any]] | list[str]) -> None:
-        """
-        Сохраняет список доступных моделей Kandinsky.
+        """Сохраняет список доступных моделей Kandinsky.
+
+        Форматирует модели в строки вида "Name (ID: xxx)" для совместимости
+        с существующим кодом.
 
         Args:
-            models: Список моделей (словари с полями 'id' и 'name' или строки)
+            models: Список моделей. Может быть списком словарей с полями
+                'id' и 'name' или списком строк.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
         # Сохраняем модели как список строк в формате "Name (ID: xxx)" для совместимости
@@ -121,11 +164,14 @@ class ModelsStore:
             pass
 
     async def get_kandinsky_available_models(self) -> list[str]:
-        """
-        Возвращает список доступных моделей Kandinsky.
+        """Возвращает список доступных моделей Kandinsky.
 
         Returns:
-            Список строк моделей в формате "Name (ID: xxx)"
+            Список строк моделей в формате "Name (ID: xxx)".
+            Если модели не установлены, возвращает пустой список.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
         pool = get_postgres_pool()
@@ -139,11 +185,13 @@ class ModelsStore:
         return list(models)
 
     async def set_gigachat_available_models(self, models: list[str]) -> None:
-        """
-        Сохраняет список доступных моделей GigaChat.
+        """Сохраняет список доступных моделей GigaChat.
 
         Args:
-            models: Список названий моделей
+            models: Список названий моделей GigaChat.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
         pool = get_postgres_pool()
@@ -158,11 +206,14 @@ class ModelsStore:
             pass
 
     async def get_gigachat_available_models(self) -> list[str]:
-        """
-        Возвращает список доступных моделей GigaChat.
+        """Возвращает список доступных моделей GigaChat.
 
         Returns:
-            Список названий моделей
+            Список названий моделей GigaChat.
+            Если модели не установлены, возвращает пустой список.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
         pool = get_postgres_pool()

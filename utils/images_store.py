@@ -38,7 +38,15 @@ _PNG_SUFFIX: Final[str] = ".png"
 
 @dataclass(slots=True)
 class ImageRecord:
-    """Структура данных одной записи из таблицы images."""
+    """Структура данных одной записи из таблицы images.
+
+    Attributes:
+        id: Уникальный идентификатор записи в базе данных.
+        image_hash: SHA256-хеш содержимого файла изображения (hex, 64 символа).
+        prompt_hash: SHA256-хеш нормализованного промпта (FK на prompts.prompt_hash).
+        path: Путь к файлу внутри контейнера (/app/data/frogs/<image_hash>.png).
+        created_at: Временная метка создания записи.
+    """
 
     id: int
     image_hash: str
@@ -59,11 +67,19 @@ class ImagesStore:
     """
 
     def __init__(self) -> None:
+        """Инициализирует репозиторий изображений."""
         self._logger = get_logger(__name__)
 
     @staticmethod
     def _row_to_record(row: object) -> ImageRecord:
-        """Преобразует asyncpg.Record в ImageRecord."""
+        """Преобразует asyncpg.Record в ImageRecord.
+
+        Args:
+            row: Запись из базы данных (asyncpg.Record).
+
+        Returns:
+            Объект ImageRecord с данными из записи.
+        """
 
         return ImageRecord(
             id=int(row["id"]),  # type: ignore[index]
@@ -75,17 +91,27 @@ class ImagesStore:
 
     @staticmethod
     def _compute_hash(image_bytes: bytes) -> str:
-        """Возвращает sha256‑хеш содержимого изображения в hex‑виде."""
+        """Вычисляет SHA256-хеш содержимого изображения.
+
+        Args:
+            image_bytes: Байты изображения для хеширования.
+
+        Returns:
+            SHA256-хеш в hex-представлении (64 символа).
+        """
 
         return sha256(image_bytes).hexdigest()
 
     @staticmethod
     def _filesystem_path_for_hash(image_hash: str) -> Path:
-        """
-        Возвращает путь на файловой системе для данного image_hash.
+        """Возвращает путь на файловой системе для данного image_hash.
 
-        Локально это `<project_root>/data/frogs/<image_hash>.png`,
-        внутри контейнера — тот же путь, так как WORKDIR=/app.
+        Args:
+            image_hash: SHA256-хеш изображения в hex-представлении.
+
+        Returns:
+            Путь к файлу изображения. Локально это `<project_root>/data/frogs/<image_hash>.png`,
+            внутри контейнера — тот же путь, так как WORKDIR=/app.
         """
 
         base_dir = resolve_frog_images_dir()
@@ -93,24 +119,38 @@ class ImagesStore:
 
     @staticmethod
     def _container_path_for_hash(image_hash: str) -> str:
-        """
-        Возвращает путь, под которым файл будет виден внутри контейнера.
+        """Возвращает путь, под которым файл будет виден внутри контейнера.
 
-        Всегда имеет вид `/app/data/frogs/<image_hash>.png`, независимо от
-        текущего рабочего каталога процесса.
+        Args:
+            image_hash: SHA256-хеш изображения в hex-представлении.
+
+        Returns:
+            Абсолютный путь внутри контейнера в формате `/app/data/frogs/<image_hash>.png`.
         """
 
         return f"{FROG_IMAGES_CONTAINER_PATH}/{image_hash}{_PNG_SUFFIX}"
 
     @staticmethod
     def _ensure_dir(path: Path) -> None:
-        """Создаёт директорию, если её ещё нет."""
+        """Создаёт директорию, если её ещё нет.
+
+        Args:
+            path: Путь к директории для создания (создаются все родительские директории).
+        """
 
         path.parent.mkdir(parents=True, exist_ok=True)
 
     async def get_by_prompt_hash(self, prompt_hash: str) -> ImageRecord | None:
-        """
-        Возвращает изображение по prompt_hash или None, если записи нет.
+        """Возвращает изображение по prompt_hash.
+
+        Ищет изображение, связанное с указанным промптом через prompt_hash.
+        Используется для проверки наличия кешированного изображения.
+
+        Args:
+            prompt_hash: SHA256-хеш нормализованного промпта.
+
+        Returns:
+            ImageRecord если изображение найдено, None иначе.
         """
 
         pool = get_postgres_pool()
@@ -136,26 +176,45 @@ class ImagesStore:
         return record
 
     def load_image_bytes(self, record: ImageRecord) -> bytes:
-        """
-        Загружает байты изображения по записи из БД.
+        """Загружает байты изображения по записи из БД.
 
         Для надёжности путь на файловой системе вычисляется по image_hash,
         а не по полю path (path используется как "канонический" контейнерный путь).
+
+        Args:
+            record: Запись ImageRecord с метаданными изображения.
+
+        Returns:
+            Байты изображения из файла.
+
+        Raises:
+            FileNotFoundError: Если файл изображения не найден на диске.
+            OSError: При ошибке чтения файла.
         """
 
         fs_path = self._filesystem_path_for_hash(record.image_hash)
         return fs_path.read_bytes()
 
     async def get_or_create_image(self, prompt_hash: str, image_bytes: bytes) -> ImageRecord:
-        """
-        Гарантированно возвращает запись об изображении для данного prompt_hash.
+        """Гарантированно возвращает запись об изображении для данного prompt_hash.
 
         Алгоритм:
-        1. Считает image_hash = sha256(image_bytes).
-        2. Сохраняет файл по временного пути и делает атомарный os.replace в
+        1. Вычисляет image_hash = sha256(image_bytes).
+        2. Сохраняет файл по временному пути и делает атомарный os.replace в
            `<data/frogs>/<image_hash>.png`, избегая перезаписи уже существующего файла.
         3. Вставляет запись в таблицу `images`. При duplicate key (prompt_hash или image_hash)
            читает существующую запись и возвращает её.
+
+        Args:
+            prompt_hash: SHA256-хеш нормализованного промпта.
+            image_bytes: Байты изображения для сохранения.
+
+        Returns:
+            ImageRecord с метаданными изображения (существующая или новая запись).
+
+        Raises:
+            RuntimeError: При крайне маловероятной ошибке конкурентной вставки.
+            Exception: При ошибке доступа к базе данных или файловой системе.
         """
 
         image_hash = self._compute_hash(image_bytes)

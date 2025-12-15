@@ -1,594 +1,337 @@
-# Инструкция по установке и настройке Wednesday Frog Bot 🐸
+# Инструкция по установке Wednesday Frog Bot 🐸
 
-Полное руководство по установке, настройке и запуску Wednesday Frog Bot.
+Быстрое руководство по локальному запуску проекта для разработки с использованием Docker Compose.
 
 ## Содержание
 
 1. [Требования](#требования)
-2. [Получение токенов и ключей](#получение-токенов-и-ключей)
-3. [Установка](#установка)
-4. [Настройка](#настройка)
-5. [Запуск](#запуск)
-6. [Использование](#использование)
-7. [Мониторинг и логи](#мониторинг-и-логи)
-8. [Автоматический запуск](#автоматический-запуск)
-9. [Устранение неполадок](#устранение-неполадок)
-10. [Безопасность](#безопасность)
+2. [Шаг 1: Клонирование и Конфигурация](#шаг-1-клонирование-и-конфигурация)
+3. [Шаг 2: Сборка и Запуск](#шаг-2-сборка-и-запуск)
+4. [Шаг 3: Миграция Базы Данных (Первый Запуск)](#шаг-3-миграция-базы-данных-первый-запуск)
+5. [Шаг 4: Тестирование](#шаг-4-тестирование)
+6. [Дальнейшие шаги](#дальнейшие-шаги)
 
 ## Требования
 
-### Системные требования
+Для локальной разработки вам понадобятся:
 
-- **Python 3.8+** (рекомендуется Python 3.11+)
+- **Docker** (версия 20.10+)
+- **Docker Compose** (версия 2.0+)
+- **Python 3.10+** (для локальных скриптов и утилит)
 - **Git** (для клонирования репозитория)
-- **Доступ к интернету** для работы с API
-- **100MB свободного места** на диске
 
-### Проверка Python
+### Проверка установки
 
-**Linux/macOS:**
 ```bash
+# Проверка Docker
+docker --version
+
+# Проверка Docker Compose
+docker compose version
+
+# Проверка Python (опционально, для локальных скриптов)
 python3 --version
 ```
 
-**Windows:**
-```cmd
-python --version
-```
+## Шаг 1: Клонирование и Конфигурация
 
-Если Python не установлен, скачайте его с [python.org](https://www.python.org/downloads/).
+### 1.1. Клонирование репозитория
 
-## Получение токенов и ключей
-
-### 1. Telegram Bot Token
-
-1. Найдите [@BotFather](https://t.me/BotFather) в Telegram
-2. Отправьте команду `/newbot`
-3. Следуйте инструкциям для создания бота
-4. Сохраните полученный токен
-5. (Опционально) Установите описание и картинку бота
-
-### 2. Kandinsky API Keys (Fusion Brain)
-
-1. Перейдите на [https://fusionbrain.ai](https://fusionbrain.ai)
-2. Зарегистрируйтесь или войдите
-3. Перейдите в раздел "API"
-4. Скопируйте:
-   - **API Key**
-   - **Secret Key**
-
-### 3. Chat ID
-
-#### Для личного чата:
-
-1. Найдите бота [@userinfobot](https://t.me/userinfobot) в Telegram
-2. Отправьте ему любое сообщение
-3. Скопируйте ваш Chat ID (чистое число)
-
-#### Для группы:
-
-1. Добавьте бота в группу
-2. Добавьте бота [@userinfobot](https://t.me/userinfobot) в группу
-3. Отправьте любое сообщение в группу
-4. @userinfobot покажет Chat ID группы
-
-#### Для канала:
-
-1. Добавьте бота как администратора канала с правом отправки сообщений
-2. Отправьте любое сообщение в канал
-3. Получите Chat ID через [@getidsbot](https://t.me/getidsbot) или API
-
-### 4. Admin Chat ID (опционально)
-
-Для использования админ-команд:
-
-1. Получите ваш Chat ID (см. выше)
-2. Добавьте его в конфигурацию как `ADMIN_CHAT_ID`
-
-## Установка
-
-### 1. Клонирование репозитория
-
-**Linux/macOS:**
 ```bash
 git clone https://github.com/your-username/wednesday-tg-bot.git
 cd wednesday-tg-bot
 ```
 
-**Windows:**
-```cmd
-git clone https://github.com/your-username/wednesday-tg-bot.git
-cd wednesday-tg-bot
-```
-
-### 2. Создание виртуального окружения
-
-**Linux/macOS:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-**Windows:**
-```cmd
-python -m venv venv
-venv\Scripts\activate
-```
-
-### 3. Установка зависимостей
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Проверка установки
-
-```bash
-python main.py --help
-```
-
-Если ошибок нет — установка прошла успешно.
-
-## Настройка
-
-### 1. Создание файла конфигурации
+### 1.2. Создание файла конфигурации
 
 Скопируйте пример конфигурации:
 
-**Linux/macOS:**
 ```bash
 cp env_example.txt .env
 ```
 
-**Windows:**
-```cmd
-copy env_example.txt .env
-```
+### 1.3. Настройка переменных окружения
 
-### 2. Редактирование конфигурации
-
-Откройте файл `.env` в любом текстовом редакторе и заполните переменные:
+Откройте файл `.env` и заполните **минимально необходимые** переменные:
 
 ```env
 # === ОБЯЗАТЕЛЬНЫЕ ПЕРЕМЕННЫЕ ===
 
-# Токен Telegram бота
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+# Токен Telegram бота (получите у @BotFather)
+TELEGRAM_BOT_TOKEN=your_bot_token_here
 
-# API ключи для Kandinsky
+# API ключи Kandinsky (получите на https://fusionbrain.ai)
 KANDINSKY_API_KEY=your_kandinsky_api_key_here
 KANDINSKY_SECRET_KEY=your_kandinsky_secret_key_here
 
 # ID чата для отправки сообщений
-CHAT_ID=123456789
+CHAT_ID=your_chat_id_here
 
-# === НАСТРОЙКИ ПЛАНИРОВЩИКА ===
+# === НАСТРОЙКИ POSTGRES ===
 
-# Времена отправки в среду (через запятую)
-SCHEDULER_SEND_TIMES=09:00,12:00,18:00
+# Имя пользователя PostgreSQL
+POSTGRES_USER=wednesday_user
 
-# Часовой пояс
-SCHEDULER_TZ=Europe/Moscow
+# Пароль пользователя PostgreSQL
+POSTGRES_PASSWORD=your_secure_password_here
 
-# День недели (0=понедельник, 2=среда)
-SCHEDULER_WEDNESDAY_DAY=2
+# Имя базы данных
+POSTGRES_DB=wednesdaydb
 
-# === ЛОГИРОВАНИЕ ===
+# Хост PostgreSQL (для docker-compose используйте 'postgres')
+POSTGRES_HOST=postgres
 
-# Уровень логирования
-LOG_LEVEL=INFO
+# Порт PostgreSQL
+POSTGRES_PORT=5432
 
-# === API НАСТРОЙКИ ===
+# === НАСТРОЙКИ REDIS ===
 
-# Таймаут генерации изображения (секунды)
-GENERATION_TIMEOUT=60
+# Хост Redis (для docker-compose используйте 'redis')
+REDIS_HOST=redis
 
-# Максимум попыток генерации
-MAX_RETRIES=3
+# Порт Redis
+REDIS_PORT=6379
 
-# === АДМИН ===
-
-# ID администратора (опционально)
-ADMIN_CHAT_ID=123456789
-
-# === ХРАНИЛИЩА ДАННЫХ (опционально) ===
-
-CHATS_STORAGE=data/chats.json
-USAGE_STORAGE=data/usage_stats.json
-DISPATCH_REGISTRY_STORAGE=data/dispatch_registry.json
-METRICS_STORAGE=data/metrics.json
-
-# === ПРОКСИ (опционально) ===
-
-# HTTPS_PROXY=http://proxy:port
-# HTTP_PROXY=http://proxy:port
-
-# === ТЕСТОВЫЙ РЕЖИМ (опционально) ===
-
-# SCHEDULER_TEST_MINUTES=0
+# Пароль Redis (опционально, но рекомендуется)
+REDIS_PASSWORD=your_redis_password_here
 ```
 
-### 3. Проверка конфигурации
+**Примечание:** Полный список доступных переменных и их описание см. в файле `env_example.txt`.
+
+### 1.4. Создание файлов secrets
+
+Docker Compose использует secrets для безопасного хранения паролей. Создайте директорию и файлы:
 
 ```bash
-python -c "from utils.config import config; print('✓ Конфигурация OK')"
+mkdir -p secrets
+
+# Создайте файл с паролем PostgreSQL
+echo "your_secure_postgres_password_here" > secrets/postgres_password
+
+# Создайте файл с паролем Redis
+echo "your_secure_redis_password_here" > secrets/redis_password
+
+# Создайте файл с паролем Grafana (опционально, для мониторинга)
+echo "admin" > secrets/grafana_admin_password
+
+# Установите безопасные права доступа
+chmod 600 secrets/postgres_password secrets/redis_password secrets/grafana_admin_password
 ```
 
-## Запуск
+**Важно:** Убедитесь, что пароли в `secrets/*` совпадают с паролями в `.env` (или используйте одинаковые значения для упрощения).
 
-### Вариант A. Запуск через docker-compose (Postgres + Redis + бот + Docker volumes)
+## Шаг 2: Сборка и Запуск
 
-1. Убедитесь, что `.env` создан и заполнен.
-2. Запустите стек сервисов (Postgres, Redis, бот и именованные тома для файлов):
+### 2.1. Сборка и запуск всех сервисов
+
+Основная команда для сборки Docker-образов и запуска всех сервисов:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.yml up -d --build
 ```
 
-Будут подняты три сервиса:
-- `postgres` — PostgreSQL для всех персистентных данных бота (чаты, usage, метрики, админы, модели, реестр рассылок);
-- `redis` — Redis для кэша, rate limiter’а, circuit breaker’а и временного состояния;
-- `bot` — непосредственно Wednesday Frog Bot.
+Эта команда:
+- Соберёт Docker-образ бота (`wednesday-bot:local`)
+- Запустит все необходимые сервисы в фоновом режиме (`-d`)
+- Создаст и подключит необходимые Docker volumes
 
-Также будут автоматически созданы и подключены тома:
+### 2.2. Запущенные сервисы
 
-- `frog_images` → монтируется в контейнер по пути `/app/data/frogs` и хранит все сгенерированные изображения жабы.
-- `logs` → монтируется в контейнер по пути `/app/logs` и содержит файлы логов (`wednesday_bot_YYYY-MM-DD.log` и архивы).
-- `prompt_storage` → монтируется в контейнер по пути `/app/data/prompts` и используется файловым хранилищем промптов GigaChat.
-  Промпты **не** хранятся внутри Docker‑образа, а всегда пишутся в volume `prompt_storage`.
+После выполнения команды будут запущены следующие сервисы:
 
-3. Просмотрите логи бота:
+- **`postgres`** — PostgreSQL 16 для хранения всех персистентных данных (чаты, метрики, админы, модели, реестр рассылок)
+- **`redis`** — Redis 7 для кэша, rate limiter'а, circuit breaker'а и временного состояния
+- **`bot`** — Wednesday Frog Bot (основной сервис)
+- **`celery_worker`** — Celery worker для выполнения фоновых задач (генерация изображений, отправка сообщений)
+- **`celery_beat`** — Celery beat для планирования периодических задач (отправка по средам)
+
+**Опциональные сервисы мониторинга** (также запускаются автоматически):
+- **`loki`** — Система сбора логов
+- **`grafana`** — Дашборды и визуализация (доступна на http://localhost:3000)
+- **`prometheus`** — Сбор метрик
+- **`promtail`** — Агент для отправки логов в Loki
+
+### 2.3. Проверка статуса сервисов
 
 ```bash
+# Просмотр статуса всех сервисов
+docker compose ps
+
+# Просмотр логов бота в реальном времени
 docker compose logs -f bot
+
+# Просмотр логов всех сервисов
+docker compose logs -f
 ```
 
-4. При первом развёртывании (и при изменении схемы) рекомендуется явно прогнать миграции
-   против целевой базы данных:
+### 2.4. Docker Volumes
+
+При запуске автоматически создаются и подключаются следующие именованные тома:
+
+- **`frog_images`** → `/app/data/frogs` — хранит все сгенерированные изображения жабы
+- **`prompt_storage`** → `/app/data/prompts` — файловое хранилище промптов GigaChat
+- **`beat_data`** → `/app/data/beat` — состояние расписания Celery Beat
+- **`postgres_data`** — данные PostgreSQL
+- **`redis_data`** — данные Redis
+
+## Шаг 3: Миграция Базы Данных (Первый Запуск)
+
+При первом запуске необходимо инициализировать схему базы данных. Функция `ensure_schema()` идемпотентна и безопасна для повторного запуска.
+
+### 3.1. Выполнение миграций
 
 ```bash
-POSTGRES_USER=your_postgres_user \
-POSTGRES_PASSWORD=your_postgres_password \
-POSTGRES_DB=wednesdaydb \
-POSTGRES_HOST=localhost \
-POSTGRES_PORT=5432 \
 make migrate
 ```
 
-### Вариант B. Нативный запуск
+Эта команда:
+- Запустит контейнер бота в одноразовом режиме (`--rm`)
+- Выполнит инициализацию схемы PostgreSQL
+- Создаст все необходимые таблицы и индексы
+- Автоматически удалит контейнер после завершения
 
-**Linux/macOS:**
-```bash
-python main.py
-```
+**Примечание:** Миграции также автоматически выполняются при старте бота, но явный запуск рекомендуется для проверки корректности подключения к БД.
 
-**Windows:**
-```cmd
-python main.py
-```
-
-Вы увидите сообщение о запуске и отправку приветственного сообщения в чат.
-
-### Фоновый запуск (Linux/macOS)
+### 3.2. Проверка подключения к базе данных
 
 ```bash
-nohup python main.py > bot.log 2>&1 &
+# Подключение к PostgreSQL через контейнер
+docker compose exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+
+# Или проверка через Python в контейнере бота
+docker compose exec bot python3 -c "from utils.postgres_client import init_postgres_pool; import asyncio; asyncio.run(init_postgres_pool())"
 ```
 
-### Запуск с screen (Linux/macOS)
+## Шаг 4: Тестирование
+
+### 4.1. Запуск тестов
+
+Для запуска тестов используется отдельный тестовый стек (см. `tests/docker-compose.test.yml`):
 
 ```bash
-screen -dmS wednesday-bot python main.py
-# Для просмотра: screen -r wednesday-bot
-```
+# Запуск unit-тестов (локально, без контейнеров)
+make test-unit
 
-## Использование
+# Запуск integration-тестов (требует поднятия тестовых контейнеров)
+make test-integration
 
-### Базовые команды
-
-- `/start` — Приветствие и информация о боте
-- `/help` — Справка по командам
-- `/frog` — Сгенерировать жабу сейчас
-
-### Админ-команды (если настроен ADMIN_CHAT_ID)
-
-- `/status` — Статус бота (dry-run API, метрики, текущие модели)
-- `/force_send` — Принудительная отправка
-- `/add_chat <chat_id>` — Добавить чат в рассылку
-- `/remove_chat <chat_id>` — Удалить чат из рассылки
-- `/list_chats` — Список активных чатов
-- `/set_kandinsky_model <pipeline_id|name>` — Установить модель Kandinsky
-- `/set_gigachat_model <model_name>` — Установить модель GigaChat
-- `/list_models` — Показать доступные модели
-- `/mod <user_id>` — Выдать права админа
-- `/unmod <user_id>` — Убрать права админа
-- `/list_mods` — Список администраторов
-
-### Добавление бота в группу/канал
-
-1. Добавьте бота в группу или канал
-2. Дайте ему права на отправку сообщений
-3. Бот автоматически отправит приветствие
-4. Группа/канал будет добавлен в рассылку автоматически
-
-## Мониторинг и логи
-
-### Просмотр логов в реальном времени
-
-**Linux/macOS (нативный запуск):**
-```bash
-tail -f logs/wednesday_bot_$(date +%Y-%m-%d).log
-```
-
-**Через docker compose (логи внутри контейнера, каталог /app/logs):**
-```bash
-docker compose logs -f bot
-```
-
-### Последние 50 строк логов
-
-**Linux/macOS:**
-```bash
-tail -50 logs/wednesday_bot_$(date +%Y-%m-%d).log
-```
-
-**Windows:**
-```cmd
-type logs\wednesday_bot_2025-01-01.log | more
-```
-
-### Проверка статуса процесса
-
-**Linux/macOS:**
-```bash
-ps aux | grep python
-```
-
-**Windows:**
-```cmd
-tasklist | findstr python
-```
-
-### Проверка метрик и статистики использования
-
-Все метрики (`utils.metrics.Metrics`) и статистика использования (`utils.usage_tracker.UsageTracker`) теперь хранятся в PostgreSQL.
-Для быстрой проверки можно выполнить запросы к таблицам `metrics`, `usage_stats`, `usage_settings` в вашей базе бота.
-
-## Автоматический запуск
-
-### Linux (systemd)
-
-1. Создайте файл `/etc/systemd/system/wednesday-bot.service`:
-
-```ini
-[Unit]
-Description=Wednesday Frog Bot
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/path/to/wednesday-tg-bot
-Environment="PATH=/path/to/wednesday-tg-bot/venv/bin"
-ExecStart=/path/to/wednesday-tg-bot/venv/bin/python main.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-2. Активируйте и запустите сервис:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable wednesday-bot
-sudo systemctl start wednesday-bot
-```
-
-3. Проверьте статус:
-
-```bash
-sudo systemctl status wednesday-bot
-```
-
-### macOS (launchd)
-
-1. Создайте файл `~/Library/LaunchAgents/wednesday.bot.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>wednesday.bot</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/path/to/wednesday-tg-bot/venv/bin/python</string>
-        <string>/path/to/wednesday-tg-bot/main.py</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/path/to/wednesday-tg-bot</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>
-```
-
-2. Загрузите и запустите:
-
-```bash
-launchctl load ~/Library/LaunchAgents/wednesday.bot.plist
-launchctl start wednesday.bot
-```
-
-### Windows (Task Scheduler)
-
-1. Откройте Task Scheduler
-2. Создайте Basic Task
-3. Укажите:
-   - Trigger: "At startup" или "Daily"
-   - Action: "Start a program"
-   - Program: путь к `python.exe`
-   - Arguments: `main.py`
-   - Start in: путь к папке проекта
-
-## Устранение неполадок
-
-### Бот не запускается
-
-1. **Проверьте Python версию:**
-```bash
-python --version  # Должно быть 3.8+
-```
-
-2. **Проверьте зависимости:**
-```bash
-pip list | grep telegram
-pip list | grep loguru
-```
-
-3. **Проверьте конфигурацию:**
-```bash
-python -c "from utils.config import config; print(config.telegram_token)"
-```
-
-4. **Проверьте логи:**
-```bash
-tail -100 logs/wednesday_bot_*.log
-```
-
-### Бот не отправляет сообщения
-
-1. **Проверьте Chat ID:**
-   - Отправьте сообщение боту из чата
-   - Проверьте логи на наличие Chat ID
-
-2. **Проверьте права бота:**
-   - В группе: у бота должны быть права на отправку сообщений
-   - В канале: бот должен быть администратором
-
-3. **Проверьте подключение:**
-```bash
-ping api.telegram.org
-```
-
-### Ошибки генерации изображений
-
-1. **Проверьте API ключи Kandinsky:**
-```bash
-python -c "from utils.config import config; print('API Key:', config.kandinsky_api_key[:10])"
-```
-
-2. **Проверьте квоту API:**
-   - Войдите на [fusionbrain.ai](https://fusionbrain.ai)
-   - Проверьте лимиты и оставшуюся квоту
-
-3. **Проверьте прокси/сертификаты (если используется):**
-```bash
-curl -x your-proxy:port https://api.fusionbrain.ai
-```
-
-4. **GigaChat SSL:**
-```bash
-# Убедитесь, что указан правильный путь к сертификату
-grep GIGACHAT_CERT_PATH .env || echo "Не указан GIGACHAT_CERT_PATH"
-```
-
-### Очистка данных и резервное копирование volumes
-
-**Через docker-compose (dev‑режим, удаление всех данных Postgres/Redis/файловых томов):**
-```bash
-docker compose down -v  # удалит тома Postgres, Redis и все именованные тома (включая frog_images, logs, prompt_storage)
-```
-
-**Очистить только логи (нативный запуск):**
-```bash
-rm logs/*.log
-```
-
-**Резервное копирование изображений, логов и промптов (Docker volumes):**
-
-```bash
-# Бэкап тома с изображениями
-docker run --rm -v wednesday_tg_bot_frog_images:/data -v "$PWD":/backup alpine \
-  sh -c "cd /data && tar czf /backup/frog_images_backup.tgz ."
-
-# Бэкап тома с логами
-docker run --rm -v wednesday_tg_bot_logs:/data -v "$PWD":/backup alpine \
-  sh -c "cd /data && tar czf /backup/logs_backup.tgz ."
-
-# Бэкап тома с файловыми промптами GigaChat
-docker run --rm -v wednesday_tg_bot_prompt_storage:/data -v "$PWD":/backup alpine \
-  sh -c "cd /data && tar czf /backup/prompt_storage_backup.tgz ."
-```
-
-## Тесты и CI
-
-- Запуск тестов локально (с использованием `docker-compose.test.yml`):
-
-```bash
-make test        # базовый набор тестов
-make test-cov    # тесты + покрытие
-```
-
-- Запуск строгой проверки типов и линтера:
-
-```bash
-make lint
-make type
-```
-
-- Полный локальный CI-пайплайн:
-
-```bash
+# Запуск всех тестов через полный CI-пайплайн
 make ci
 ```
 
-В репозитории настроен workflow GitHub Actions `.github/workflows/ci.yml`, который:
+### 4.2. Запуск тестов через Docker Compose
 
-- поднимает сервисные контейнеры Postgres и Redis в job;
-- выполняет миграции (`make migrate`);
-- запускает pytest (`make test-cov`);
-- собирает Docker-образ с помощью `make build`.
+Если вы хотите запустить тесты в основном контейнере бота:
 
-### Перезапуск бота
-
-**Linux/macOS:**
 ```bash
-pkill -f "python main.py"
-python main.py
+# Убедитесь, что pytest установлен в образе
+docker compose run --rm bot pytest tests/ -v
 ```
 
-**Windows:**
-```cmd
-taskkill /F /IM python.exe savings
-python main.py
+**Примечание:** Для полного набора тестов рекомендуется использовать команды из `Makefile`, которые используют специализированный тестовый стек.
+
+### 4.3. Проверка качества кода
+
+```bash
+# Линтинг
+make lint
+
+# Проверка типов
+make type
+
+# Проверка форматирования
+make format-check
 ```
 
-## Безопасность
+## Дальнейшие шаги
 
-### Защита токенов
+### Полезные команды
 
-- ✅ Никогда не коммитьте `.env` в Git
-- ✅ Используйте разные токены для dev/prod
-- ✅ Регулярно обновляйте токены
-- ✅ Ограничьте права доступа к файлу `.env`
+```bash
+# Остановка всех сервисов
+docker compose down
 
-### Ограничение доступа
+# Остановка с удалением volumes (⚠️ удалит все данные!)
+docker compose down -v
 
-- ✅ Ограничьте доступ к папке с ботом: `chmod 700 wednesday-tg-bot`
-- ✅ Запускайте бота от отдельного пользователя
-- ✅ Настройте файрвол при необходимости
+# Перезапуск конкретного сервиса
+docker compose restart bot
 
-### Мониторинг безопасности
+# Просмотр логов конкретного сервиса
+docker compose logs -f celery_worker
 
-- ✅ Периодически проверяйте логи на подозрительную активность
-- ✅ Ограничьте админ-команды только вашему Chat ID
-- ✅ Следите за использованием API (rate limits)
+# Выполнение команды в контейнере
+docker compose exec bot python3 -c "print('Hello from container')"
+```
+
+### Дополнительная документация
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Подробное описание архитектуры проекта
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — Инструкции по развёртыванию в продакшн
+- **[MONITORING.md](MONITORING.md)** — Настройка мониторинга и метрик
+- **[API_REFERENCE.md](API_REFERENCE.md)** — Справочник по API и командам бота
+
+### Получение токенов и ключей
+
+Если вы ещё не получили необходимые токены:
+
+1. **Telegram Bot Token:**
+   - Найдите [@BotFather](https://t.me/BotFather) в Telegram
+   - Отправьте команду `/newbot` и следуйте инструкциям
+
+2. **Kandinsky API Keys:**
+   - Зарегистрируйтесь на [https://fusionbrain.ai](https://fusionbrain.ai)
+   - Перейдите в раздел "API" и скопируйте API Key и Secret Key
+
+3. **Chat ID:**
+   - Для личного чата: используйте [@userinfobot](https://t.me/userinfobot)
+   - Для группы/канала: добавьте [@userinfobot](https://t.me/userinfobot) в группу/канал
+
+### Устранение неполадок
+
+#### Бот не запускается
+
+1. Проверьте логи:
+   ```bash
+   docker compose logs bot
+   ```
+
+2. Проверьте, что все сервисы запущены:
+   ```bash
+   docker compose ps
+   ```
+
+3. Убедитесь, что файлы secrets созданы:
+   ```bash
+   ls -la secrets/
+   ```
+
+#### Ошибки подключения к базе данных
+
+1. Проверьте, что PostgreSQL запущен и здоров:
+   ```bash
+   docker compose ps postgres
+   docker compose logs postgres
+   ```
+
+2. Проверьте переменные окружения в `.env`:
+   ```bash
+   grep POSTGRES .env
+   ```
+
+3. Убедитесь, что пароль в `secrets/postgres_password` совпадает с `POSTGRES_PASSWORD` в `.env`
+
+#### Ошибки при выполнении миграций
+
+1. Убедитесь, что база данных доступна:
+   ```bash
+   docker compose exec postgres pg_isready -U ${POSTGRES_USER}
+   ```
+
+2. Проверьте права доступа к файлам secrets:
+   ```bash
+   chmod 600 secrets/postgres_password
+   ```
 
 ---
 

@@ -41,12 +41,13 @@ class PromptCache:
         prefix: str = "prompt:",
         default_ttl: int = 3600,
     ) -> None:
-        """
+        """Инициализирует кэш промптов.
+
         Args:
             redis_client: Экземпляр redis.asyncio.Redis или совместимого клиента.
                 Если None — будет использован глобальный клиент через `get_redis()`.
-            prefix: Префикс для всех ключей этого кэша.
-            default_ttl: Время жизни записей по умолчанию (в секундах).
+            prefix: Префикс для всех ключей этого кэша (по умолчанию "prompt:").
+            default_ttl: Время жизни записей по умолчанию в секундах (по умолчанию 3600).
         """
         backend = redis_client or get_redis()
         self._redis: RedisBackend = backend
@@ -59,12 +60,19 @@ class PromptCache:
         return f"{self._prefix}{key}"
 
     async def set(self, key: str, prompt: dict | str, ttl: int | None = None) -> None:
-        """
-        Сохраняет промпт с TTL.
+        """Сохраняет промпт с TTL.
 
-        Использует:
-        - SET с параметром EX в Redis;
-        - in‑memory fallback при RedisError.
+        Сохраняет промпт в Redis с указанным временем жизни. При ошибке Redis
+        автоматически переходит на in-memory fallback.
+
+        Args:
+            key: Ключ для сохранения промпта (без префикса).
+            prompt: Промпт для сохранения (словарь или строка).
+            ttl: Время жизни записи в секундах. Если None, используется default_ttl.
+
+        Note:
+            Использует SET с параметром EX в Redis. При RedisError автоматически
+            переходит на in-memory fallback для обеспечения отказоустойчивости.
         """
         full_key = self._key(key)
         payload = json.dumps(prompt, ensure_ascii=False)
@@ -79,8 +87,19 @@ class PromptCache:
             await self._fallback.set(full_key, payload, ex=ttl_value)
 
     async def get(self, key: str) -> dict | str | None:
-        """
-        Возвращает сохранённый промпт или None.
+        """Возвращает сохранённый промпт или None.
+
+        Извлекает промпт из кэша по ключу. При ошибке Redis автоматически
+        проверяет in-memory fallback.
+
+        Args:
+            key: Ключ для получения промпта (без префикса).
+
+        Returns:
+            Сохранённый промпт (словарь или строка) или None, если ключ не найден.
+
+        Note:
+            При ошибке Redis автоматически переходит на in-memory fallback.
         """
         full_key = self._key(key)
 
@@ -109,8 +128,15 @@ class PromptCache:
         return str(loaded)
 
     async def delete(self, key: str) -> None:
-        """
-        Удаляет запись из кэша.
+        """Удаляет запись из кэша.
+
+        Удаляет промпт из Redis и из in-memory fallback.
+
+        Args:
+            key: Ключ для удаления (без префикса).
+
+        Note:
+            При ошибке Redis удаление выполняется только в fallback кэше.
         """
         full_key = self._key(key)
         try:
@@ -122,8 +148,19 @@ class PromptCache:
         await self._fallback.delete(full_key)
 
     async def exists(self, key: str) -> bool:
-        """
-        Проверяет наличие ключа в кэше.
+        """Проверяет наличие ключа в кэше.
+
+        Проверяет существование ключа в Redis. При ошибке Redis проверяет
+        in-memory fallback.
+
+        Args:
+            key: Ключ для проверки (без префикса).
+
+        Returns:
+            True если ключ существует, False в противном случае.
+
+        Note:
+            При ошибке Redis проверка выполняется только в fallback кэше.
         """
         full_key = self._key(key)
         try:
@@ -136,12 +173,24 @@ class PromptCache:
         return bool(exists_val)
 
     async def keys(self, pattern: str = "*") -> list[str]:
-        """
-        Возвращает список ключей (без префикса) по шаблону.
+        """Возвращает список ключей (без префикса) по шаблону.
 
-        Важно:
-        - Это вспомогательный метод и не должен использоваться в "горячем" пути,
-          так как операция KEYS в Redis — потенциально тяжёлая.
+        Выполняет поиск ключей в Redis по шаблону. Возвращает список ключей
+        без префикса.
+
+        Args:
+            pattern: Шаблон для поиска ключей (по умолчанию "*" для всех ключей).
+
+        Returns:
+            Список ключей без префикса, соответствующих шаблону.
+
+        Warning:
+            Это вспомогательный метод и не должен использоваться в "горячем" пути,
+            так как операция KEYS в Redis — потенциально тяжёлая и может блокировать
+            сервер при большом количестве ключей.
+
+        Note:
+            При ошибке Redis поиск выполняется только в fallback кэше.
         """
         prefixed_pattern = f"{self._prefix}{pattern}"
         try:

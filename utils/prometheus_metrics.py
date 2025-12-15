@@ -83,11 +83,11 @@ FROG_GENERATION_QUEUE_LENGTH: Final[Gauge] = Gauge(
 
 
 def set_generation_queue_length(length: int, source: str = "bot") -> None:
-    """
-    Обновляет Gauge длины очереди генераций.
+    """Обновляет Gauge длины очереди генераций.
 
     Args:
         length: Текущее количество ожидающих задач генерации.
+            Отрицательные значения автоматически преобразуются в 0.
         source: Источник очереди (по умолчанию 'bot'; может быть 'scheduler' и т.п.).
     """
     length = max(length, 0)

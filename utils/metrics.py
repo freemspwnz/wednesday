@@ -32,10 +32,12 @@ async def record_metric(  # noqa: PLR0913
     latency_ms: int | None = None,
     status: str | None = None,
 ) -> None:
-    """
-    Публикует единичное событие метрики в очередь (Redis Stream).
+    """Публикует единичное событие метрики в очередь (Redis Stream).
 
-    Параметры:
+    Событие публикуется в Redis Stream `metrics:events` и дополнительно
+    сохраняется в таблицу metrics_events PostgreSQL для SQL-запросов.
+
+    Args:
         db: Необязательный объект с методом execute (asyncpg.Connection или пул).
             Если не указан, может использоваться как fallback для прямой
             записи в Postgres при недоступности очереди.
@@ -46,7 +48,7 @@ async def record_metric(  # noqa: PLR0913
         latency_ms: Латентность в миллисекундах.
         status: Статус события ('ok', 'error', 'cached', 'started' и т.п.).
 
-    Примечание по производительности:
+    Note:
         В текущей реализации событие публикуется в Redis Stream
         `metrics:events` с помощью быстрой команды XADD, что минимально
         влияет на горячий путь. При необходимости дальнейшего масштабирования
@@ -152,12 +154,19 @@ class Metrics:
     """
 
     def __init__(self, storage_path: str | None = None) -> None:
+        """Инициализирует репозиторий метрик.
+
+        Args:
+            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+        """
         self.logger = get_logger(__name__)
 
     @staticmethod
     async def _ensure_row() -> None:
-        """
-        Гарантирует наличие базовой строки метрик (id=1).
+        """Гарантирует наличие базовой строки метрик (id=1).
+
+        Создаёт строку с id=1 в таблице metrics, если её ещё нет.
+        Используется перед операциями обновления метрик.
         """
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -170,6 +179,11 @@ class Metrics:
             )
 
     async def increment_generation_success(self) -> None:
+        """Увеличивает счётчик успешных генераций изображений.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -178,6 +192,11 @@ class Metrics:
             )
 
     async def increment_generation_failed(self) -> None:
+        """Увеличивает счётчик неудачных генераций изображений.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -186,6 +205,11 @@ class Metrics:
             )
 
     async def increment_generation_retry(self) -> None:
+        """Увеличивает счётчик повторных попыток генерации изображений.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -194,6 +218,14 @@ class Metrics:
             )
 
     async def add_generation_time(self, seconds: float) -> None:
+        """Добавляет время генерации к общему времени генераций.
+
+        Args:
+            seconds: Время генерации в секундах для добавления.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -203,6 +235,11 @@ class Metrics:
             )
 
     async def increment_dispatch_success(self) -> None:
+        """Увеличивает счётчик успешных отправок сообщений.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -211,6 +248,11 @@ class Metrics:
             )
 
     async def increment_dispatch_failed(self) -> None:
+        """Увеличивает счётчик неудачных отправок сообщений.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -219,6 +261,11 @@ class Metrics:
             )
 
     async def increment_circuit_breaker_trip(self) -> None:
+        """Увеличивает счётчик срабатываний circuit breaker.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -227,6 +274,22 @@ class Metrics:
             )
 
     async def get_summary(self) -> dict[str, Any]:
+        """Возвращает сводку всех метрик производительности.
+
+        Returns:
+            Словарь с ключами:
+            - generations_total: общее количество генераций
+            - generations_success: количество успешных генераций
+            - generations_failed: количество неудачных генераций
+            - generations_retries: количество повторных попыток
+            - average_generation_time: среднее время генерации в секундах (строка)
+            - dispatches_success: количество успешных отправок
+            - dispatches_failed: количество неудачных отправок
+            - circuit_breaker_trips: количество срабатываний circuit breaker
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
         await self._ensure_row()
         pool = get_postgres_pool()
         async with pool.acquire() as conn:
@@ -281,12 +344,23 @@ class Metrics:
 
 
 async def get_daily_generation_stats(days: int = 7) -> list[dict[str, Any]]:
-    """
-    Возвращает агрегированную статистику генераций по дням за последние N дней.
+    """Возвращает агрегированную статистику генераций по дням.
 
     Для каждого дня рассчитываются:
     - количество успешных генераций;
     - средняя латентность (ms) по успешным генерациям.
+
+    Args:
+        days: Количество дней для анализа (по умолчанию 7).
+
+    Returns:
+        Список словарей с ключами:
+        - day: дата (datetime)
+        - generations_ok: количество успешных генераций
+        - avg_latency_ms: средняя латентность в миллисекундах (или None)
+
+    Raises:
+        Exception: При ошибке доступа к базе данных PostgreSQL.
     """
     pool = get_postgres_pool()
     async with pool.acquire() as conn:
@@ -323,11 +397,19 @@ async def get_daily_generation_stats(days: int = 7) -> list[dict[str, Any]]:
 
 
 async def get_top_prompts(limit: int = 10) -> list[dict[str, Any]]:
-    """
-    Возвращает топ промптов по количеству успешных генераций.
+    """Возвращает топ промптов по количеству успешных генераций.
 
     Args:
-        limit: Максимальное количество строк в выдаче.
+        limit: Максимальное количество строк в выдаче (по умолчанию 10).
+
+    Returns:
+        Список словарей с ключами:
+        - prompt_hash: хэш промпта
+        - generations_ok: количество успешных генераций
+        - avg_latency_ms: средняя латентность в миллисекундах (или None)
+
+    Raises:
+        Exception: При ошибке доступа к базе данных PostgreSQL.
     """
     pool = get_postgres_pool()
     async with pool.acquire() as conn:

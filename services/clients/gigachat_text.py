@@ -179,12 +179,21 @@ class GigaChatTextClient(ITextToTextClient):
     async def generate(self, prompt: str, user_id: str | None = None) -> str | None:
         """Генерирует промпт для Kandinsky через GigaChat API.
 
+        Выполняет запрос к GigaChat API для генерации промпта для генерации изображения
+        Wednesday Frog. Использует системное сообщение и пользовательский запрос из
+        конфигурации.
+
         Args:
             prompt: Высокоуровневое описание задачи (для логов, не используется в запросе).
-            user_id: Идентификатор пользователя (для логирования), опционально.
+            user_id: Идентификатор пользователя для логирования (опционально).
 
         Returns:
-            Сгенерированный промпт или None при ошибке.
+            Сгенерированный промпт в виде строки или None при ошибке.
+
+        Raises:
+            TimeoutError: При таймауте запроса к API.
+            aiohttp.ClientConnectorError: При ошибке подключения к API.
+            aiohttp.ClientError: При других ошибках HTTP-клиента.
         """
         bound = logger.bind(event="gigachat_generate", user_id=user_id)
         bound.info("Запрос генерации промпта через GigaChat API")
@@ -258,8 +267,16 @@ class GigaChatTextClient(ITextToTextClient):
     async def check_api_status(self) -> tuple[bool, str]:
         """Проверяет статус GigaChat API без траты токенов (dry-run).
 
+        Выполняет проверку доступности API и валидности ключа авторизации через
+        попытку получения access token.
+
         Returns:
-            Кортеж: (успех_проверки, сообщение_о_статусе)
+            Кортеж, содержащий:
+            - успех_проверки: True если API доступен и ключ валиден.
+            - сообщение_о_статусе: Человекочитаемое сообщение о статусе.
+
+        Raises:
+            Exception: При ошибке проверки статуса.
         """
         bound = logger.bind(event="gigachat_check_status")
         bound.info("Проверка статуса GigaChat API")
@@ -280,11 +297,18 @@ class GigaChatTextClient(ITextToTextClient):
     async def get_available_models(self, save_models: bool = True) -> list[str]:
         """Возвращает список доступных моделей GigaChat через API.
 
+        Выполняет запрос к API для получения списка доступных моделей GigaChat.
+
         Args:
             save_models: Сохранять ли полученный список в хранилище (по умолчанию True).
 
         Returns:
-            Список доступных моделей. В случае ошибки возвращает fallback-список.
+            Список доступных моделей. В случае ошибки возвращает fallback-список
+            стандартных моделей GigaChat.
+
+        Note:
+            При любой ошибке (таймаут, ошибка подключения и т.д.) возвращается
+            fallback-список стандартных моделей для обеспечения отказоустойчивости.
         """
         bound = logger.bind(event="gigachat_get_models", save_models=save_models)
         bound.info("Запрос списка моделей GigaChat")
@@ -372,11 +396,19 @@ class GigaChatTextClient(ITextToTextClient):
     async def set_model(self, model_name: str) -> tuple[bool, str]:
         """Устанавливает текущую модель GigaChat.
 
+        Проверяет доступность указанной модели и сохраняет её в хранилище для
+        использования в последующих запросах.
+
         Args:
-            model_name: Название модели.
+            model_name: Название модели для установки.
 
         Returns:
-            Кортеж: (успех, сообщение)
+            Кортеж, содержащий:
+            - успех: True если модель установлена успешно.
+            - сообщение: Человекочитаемое сообщение о результате.
+
+        Raises:
+            Exception: При ошибке установки модели (например, ошибка доступа к хранилищу).
         """
         bound = logger.bind(event="gigachat_set_model", model_name=model_name)
         bound.info("Установка модели GigaChat")
@@ -404,11 +436,14 @@ class GigaChatTextClient(ITextToTextClient):
     # ------------------------------------------------------------------ #
 
     async def aclose(self) -> None:
-        """
-        Явно закрывает внутренний aiohttp.ClientSession.
+        """Явно закрывает внутренний aiohttp.ClientSession.
 
-        Рекомендуется вызывать при завершении приложения, чтобы избежать
-        предупреждений о незакрытых соединениях.
+        Закрывает HTTP-сессию и освобождает все связанные ресурсы. Рекомендуется
+        вызывать при завершении приложения, чтобы избежать предупреждений о
+        незакрытых соединениях.
+
+        Note:
+            Ошибки при закрытии логируются, но не пробрасываются наружу.
         """
         try:
             await self._session.close()
