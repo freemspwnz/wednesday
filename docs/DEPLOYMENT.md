@@ -4,17 +4,17 @@
 
 ## Содержание
 
-1. [Требования к инфраструктуре](#требования-к-инфраструктуре)
-2. [Продакшен Docker Compose конфигурация](#продакшен-docker-compose-конфигурация)
-3. [Настройка окружения](#настройка-окружения)
-4. [Процедура развертывания (Первый запуск)](#процедура-развертывания-первый-запуск)
-5. [Обновление бота (Без downtime)](#обновление-бота-без-downtime)
-6. [Backup и Restore](#backup-и-restore)
+1. [Требования к инфраструктуре](#infrastructure-requirements)
+2. [Продакшен Docker Compose конфигурация](#production-docker-compose-config)
+3. [Настройка окружения](#environment-configuration)
+4. [Процедура развертывания (Первый запуск)](#deployment-first-run)
+5. [Обновление бота (Без downtime)](#zero-downtime-updates)
+6. [Backup и Restore](#backup-and-restore)
 7. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Требования к инфраструктуре
+## Требования к инфраструктуре {#infrastructure-requirements}
 
 ### Минимальные требования к ресурсам
 
@@ -74,7 +74,7 @@ docker system info | grep -E "CPUs|Total Memory"
 
 ---
 
-## Продакшен Docker Compose конфигурация
+## Продакшен Docker Compose конфигурация {#production-docker-compose-config}
 
 ### Файл `docker-compose.yml`
 
@@ -428,7 +428,7 @@ secrets:
 
 ---
 
-## Настройка окружения
+## Настройка окружения {#environment-configuration}
 
 ### Файл `.env`
 
@@ -582,7 +582,7 @@ print('Все обязательные переменные установлен
 
 ---
 
-## Процедура развертывания (Первый запуск)
+## Процедура развертывания (Первый запуск) {#deployment-first-run}
 
 ### Шаг 1: Клонирование репозитория
 
@@ -728,7 +728,7 @@ docker compose -f docker-compose.yml logs --tail=50 bot celery-worker celery-bea
 
 ---
 
-## Обновление бота (Без downtime)
+## Обновление бота (Без downtime) {#zero-downtime-updates}
 
 ### Шаг 1: Получение обновлений
 
@@ -835,7 +835,7 @@ docker compose -f docker-compose.yml up -d --no-deps bot celery-worker celery-be
 
 ---
 
-## Backup и Restore
+## Backup и Restore {#backup-and-restore}
 
 ### Backup PostgreSQL
 
@@ -1011,7 +1011,7 @@ echo "Полный backup создан: ${BACKUP_DIR}/full_backup_${DATE}.tar.gz
 
 ---
 
-## Troubleshooting
+## Troubleshooting {#troubleshooting}
 
 ### Проблема: Бот не отвечает
 
@@ -1274,8 +1274,8 @@ docker system prune -a --volumes
 
 - [Архитектура проекта](ARCHITECTURE.md)
 - [Руководство по установке](INSTALLATION.md)
-- [Руководство по тестированию](../tests/README.md)
-- [Changelog](../CHANGELOG.md)
+- [Руководство по тестированию](tests/README.md)
+- [Changelog](CHANGELOG.md)
 
 ---
 

@@ -1,4 +1,30 @@
 # CHANGELOG
+
+## [Unreleased] — Автоматическая документация MkDocs/mkdocstrings и стабилизация ссылок
+
+### Добавлено
+
+- **Инфраструктура MkDocs**:
+  - Конфигурация `mkdocs.yml` c темой Material, навигацией по основным документам и русской локалью.
+  - Подключение `mkdocstrings[python]` для автоматического извлечения API-документации из docstrings.
+  - Новый авто‑генерируемый справочник `docs/API_REFERENCE_AUTO.md` c разделами для `bot.handlers.CommandHandlers`, `services.image_generator.ImageGenerator`, `services.celery_tasks`, `bot.wednesday_bot.WednesdayBot`, `services.scheduler.TaskScheduler` и ключевых утилит.
+  - Главная страница документации `docs/index.md` с навигацией по разделам.
+- **Интеграция в пайплайн разработки**:
+  - Цели `docs-serve`, `docs-build` и алиас `docs` в `Makefile` для локального просмотра и сборки документации (`mkdocs serve`/`mkdocs build`).
+- **Структура docs/**:
+  - Символические ссылки из корня репозитория в `docs/` для включения внешних Markdown-файлов в сайт без дублирования содержимого (например, история изменений и руководство по тестам).
+
+### Изменено
+
+- **Якоря и внутренние ссылки**:
+  - Для ключевых документов (`docs/INSTALLATION.md`, `docs/DEPLOYMENT.md`, `docs/TESTING_GUIDE.md`, `docs/MONITORING.md`) добавлены явные стабильные ASCII-якоря в формате `{#anchor-id}` и обновлены все внутренние ссылки, чтобы использовать новые ID.
+  - Удалены относительные ссылки, выходящие за пределы `docs/` (типа `../...`), ссылки приведены к внутренним путям MkDocs с учётом новой структуры.
+  - Обновлены ссылки в `docs/PROJECT_SUMMARY.md` и релиз-нотах для согласованности с корнем документации `docs/`.
+- **Зависимости**:
+  - В `requirements.txt` и `pyproject.toml` добавлены зависимости `mkdocs`, `mkdocstrings[python]` и `mkdocs-material` для поддержки новой системы документации.
+
+---
+
 ## [6.8.0] 2025-12-15 — Документация архитектуры, развертывания, API, мониторинга, логирования и тестирования: добавлены ARCHITECTURE.md, DEPLOYMENT.md, API_REFERENCE.md, MONITORING.md, LOKI_PROMTAIL_SCHEMA.md; обновлены TYPING_GUIDE.md и TESTING_GUIDE.md
 
 ### Добавлено

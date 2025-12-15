@@ -1,0 +1,140 @@
+site_name: Wednesday Frog Bot Documentation
+site_description: Документация для Telegram-бота Wednesday Frog с автоматической генерацией изображений
+site_author: Wednesday Frog Team
+# site_url: https://github.com/Freemspwnz/wednesday
+
+# Настройка темы Material
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: green
+      accent: green
+      toggle:
+        icon: material/brightness-7
+        name: Переключить на темную тему
+    - scheme: slate
+      primary: green
+      accent: green
+      toggle:
+        icon: material/brightness-4
+        name: Переключить на светлую тему
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.code.copy
+  language: ru
+
+# Навигация
+nav:
+  - Главная: index.md
+  - Установка: INSTALLATION.md
+  - Развертывание: DEPLOYMENT.md
+  - Архитектура: ARCHITECTURE.md
+  - Справочник API (Авто): API_REFERENCE_AUTO.md
+  - Справочник API (Ручной): API_REFERENCE.md
+  - Мониторинг: MONITORING.md
+  - Тестирование: TESTING_GUIDE.md
+  - Типизация: TYPING_GUIDE.md
+  - История изменений: CHANGELOG.md
+  - Тесты: tests/README.md
+  - Обзор проекта: PROJECT_SUMMARY.md
+  - Логи и метрики:
+    - Loki/Promtail: LOKI_PROMTAIL_SCHEMA.md
+  - Release Notes:
+    - release-notes/v6.8.0.md
+    - release-notes/v6.7.13.md
+    - release-notes/v6.7.12.md
+    - release-notes/v6.7.11.md
+    - release-notes/v6.7.10.md
+    - release-notes/v6.7.9.md
+    - release-notes/v6.7.8.md
+    - release-notes/v6.7.7.md
+    - release-notes/v6.7.6.md
+    - release-notes/v6.7.5.md
+    - release-notes/v6.7.4.md
+    - release-notes/v6.7.3.md
+    - release-notes/v6.7.2.md
+    - release-notes/v6.7.1.md
+    - release-notes/v6.7.0.md
+    - release-notes/v6.6.0.md
+    - release-notes/v6.5.1.md
+    - release-notes/v6.5.0.md
+    - release-notes/v6.4.3.md
+    - release-notes/v6.4.2.md
+    - release-notes/v6.4.1.md
+    - release-notes/v6.4.0.md
+    - release-notes/v6.3.0.md
+    - release-notes/v6.2.1.md
+    - release-notes/v6.2.0.md
+    - release-notes/v6.1.0.md
+    - release-notes/v6.0.0.md
+    - release-notes/v5.1.0.md
+    - release-notes/v5.0.0.md
+    - release-notes/v4.0.0.md
+    - release-notes/v3.0.0.md
+    - release-notes/v2.0.0.md
+    - release-notes/v1.0.0.md
+
+# Плагины
+plugins:
+  # - link-check
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          # Путь к исходному коду (модули находятся в корне проекта)
+          paths: [.]
+          options:
+            # Стиль docstrings (Google/Numpy)
+            docstring_style: google
+            # Показывать заголовок корневого модуля
+            show_root_heading: true
+            # Не показывать полный путь в заголовке
+            show_root_full_path: false
+            # Не показывать члены, не входящие в объект
+            show_root_members_not_in_object: false
+            # Не показывать корневой элемент в TOC
+            show_root_toc_entry: false
+            # Показывать заголовки категорий
+            show_category_heading: true
+            # Порядок членов как в исходном коде
+            members_order: source
+            # Показывать исходный код
+            show_source: true
+            # Группировать по категориям
+            group_by_category: true
+            # Показывать подписи типов
+            show_signature_annotations: true
+            # Разделитель для путей
+            docstring_section_style: table
+
+# Дополнительные настройки
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+
+# Игнорируемые файлы
+exclude_docs: |
+  dev/
+  sql/

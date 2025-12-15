@@ -4,15 +4,15 @@
 
 ## Содержание
 
-1. [Обзор стека наблюдаемости](#обзор-стека-наблюдаемости)
-2. [Мониторинг метрик (Prometheus & Grafana)](#мониторинг-метрик-prometheus--grafana)
-3. [Логирование (Loki & Promtail)](#логирование-loki--promtail)
-4. [Алерты (Alerting)](#алерты-alerting)
-5. [Конфигурация](#конфигурация)
+1. [Обзор стека наблюдаемости](#observability-overview)
+2. [Мониторинг метрик (Prometheus & Grafana)](#metrics-monitoring-prometheus-grafana)
+3. [Логирование (Loki & Promtail)](#logging-loki-promtail)
+4. [Алерты (Alerting)](#alerting)
+5. [Конфигурация](#configuration)
 
 ---
 
-## Обзор стека наблюдаемости
+## Обзор стека наблюдаемости {#observability-overview}
 
 ### Компоненты стека
 
@@ -56,7 +56,7 @@ Wednesday Frog Bot использует современный стек набл
 
 ---
 
-## Мониторинг метрик (Prometheus & Grafana)
+## Мониторинг метрик (Prometheus & Grafana) {#metrics-monitoring-prometheus-grafana}
 
 ### Доступные метрики
 
@@ -207,7 +207,7 @@ Wednesday Frog Bot использует современный стек набл
 
 ---
 
-## Логирование (Loki & Promtail)
+## Логирование (Loki & Promtail) {#logging-loki-promtail}
 
 ### Структура логов
 
@@ -350,7 +350,7 @@ sum by (status) (
 
 ---
 
-## Алерты (Alerting)
+## Алерты (Alerting) {#alerting}
 
 ### Основные правила
 
@@ -588,7 +588,7 @@ receivers:
 
 ---
 
-## Конфигурация
+## Конфигурация {#configuration}
 
 ### Расположение конфигурационных файлов
 

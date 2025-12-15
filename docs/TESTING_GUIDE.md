@@ -4,18 +4,18 @@
 
 ## Содержание
 
-1. [Инструменты и Среда](#инструменты-и-среда)
-2. [Мокирование внешних зависимостей](#мокирование-внешних-зависимостей)
-3. [Тестирование бизнес-логики (services/)](#тестирование-бизнес-логики-services)
-4. [Тестирование обработчиков (bot/)](#тестирование-обработчиков-bot)
-5. [Фикстуры (Fixtures)](#фикстуры-fixtures)
-6. [Маркеры тестов](#маркеры-тестов)
-7. [Правила написания тестов](#правила-написания-тестов)
-8. [CI/Pre-commit проверки](#cipre-commit-проверки)
+1. [Инструменты и Среда](#tools-and-environment)
+2. [Мокирование внешних зависимостей](#mocking-external-dependencies)
+3. [Тестирование бизнес-логики (services/)](#testing-business-logic-services)
+4. [Тестирование обработчиков (bot/)](#testing-handlers-bot)
+5. [Фикстуры (Fixtures)](#fixtures)
+6. [Маркеры тестов](#test-markers)
+7. [Правила написания тестов](#test-writing-rules)
+8. [CI/Pre-commit проверки](#ci-pre-commit-checks)
 
 ---
 
-## Инструменты и Среда
+## Инструменты и Среда {#tools-and-environment}
 
 ### Используемые инструменты
 
@@ -126,7 +126,7 @@ open htmlcov/index.html
 
 ---
 
-## Мокирование внешних зависимостей
+## Мокирование внешних зависимостей {#mocking-external-dependencies}
 
 ### Базы данных (PostgreSQL)
 
@@ -396,7 +396,7 @@ async def test_generator_with_partial_mock(monkeypatch):
 
 ---
 
-## Тестирование бизнес-логики (services/)
+## Тестирование бизнес-логики (services/) {#testing-business-logic-services}
 
 ### Dependency Injection для подмены зависимостей
 
@@ -522,7 +522,7 @@ async def test_image_generator_with_db_cache(cleanup_tables, monkeypatch):
 
 ---
 
-## Тестирование обработчиков (bot/)
+## Тестирование обработчиков (bot/) {#testing-handlers-bot}
 
 ### Симуляция событий Telegram
 
@@ -672,7 +672,7 @@ async def test_handler_with_retry_stub(fake_update, fake_context, async_retry_st
 
 ---
 
-## Фикстуры (Fixtures)
+## Фикстуры (Fixtures) {#fixtures}
 
 ### Autouse фикстуры
 
@@ -885,7 +885,7 @@ def test_config_reload(reload_config):
 
 ---
 
-## Маркеры тестов
+## Маркеры тестов {#test-markers}
 
 ### Основные маркеры типов тестов
 
@@ -1215,7 +1215,7 @@ def test_something(session_env_defaults, base_env, patch_models_store):
 
 ---
 
-## Правила написания тестов
+## Правила написания тестов {#test-writing-rules}
 
 ### Unit-тесты
 
@@ -1352,7 +1352,7 @@ async def test_chats_store_add_chat(cleanup_tables):
 
 ---
 
-## CI/Pre-commit проверки
+## CI/Pre-commit проверки {#ci-pre-commit-checks}
 
 ### Автоматические проверки
 
@@ -1484,6 +1484,6 @@ def test_celery(celery_worker_ready):
 
 ## Дополнительные ресурсы
 
-- [tests/README.md](../tests/README.md) — краткое руководство по тестам
+- [tests/README.md](tests/README.md) — краткое руководство по тестам
 - [pytest документация](https://docs.pytest.org/) — официальная документация pytest
 - [pytest-asyncio документация](https://pytest-asyncio.readthedocs.io/) — документация по async тестам

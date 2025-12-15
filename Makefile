@@ -35,7 +35,8 @@ TEST_CELERY_MARK_EXPR ?= celery
 .PHONY: help lint format format-check type \
 	test-unit test-integration test-e2e test-e2e-infra test-infra \
 	test-slow test-celery \
-	test-up test-down coverage-merge junit-merge clean ci ci-full build migrate run
+	test-up test-down coverage-merge junit-merge clean ci ci-full build migrate run \
+	docs docs-serve docs-build
 
 # ============================================================================
 # Help
@@ -304,3 +305,22 @@ build: ## Собрать Docker-образ бота
 # Запуск бота в Docker-контейнерах (с пересборкой образа)
 run: ## Запустить бота в Docker-контейнерах
 	@./scripts/docker_run_bot.sh
+
+# ============================================================================
+# Документация MkDocs
+# ============================================================================
+
+# Локальный сервер для просмотра документации
+docs-serve: ## Запустить локальный сервер MkDocs (http://127.0.0.1:8000)
+	@echo "=== Запуск локального сервера MkDocs ==="
+	@SITE_URL="" mkdocs serve
+	@echo "✓ Сервер остановлен"
+
+# Сборка статической документации
+docs-build: ## Собрать статическую документацию MkDocs в директорию site/
+	@echo "=== Сборка документации MkDocs ==="
+	@SITE_URL="https://github.com/Freemspwnz/wednesday" mkdocs build
+	@echo "✓ Документация собрана в директорию site/"
+
+# Алиас для сборки документации
+docs: docs-build ## Алиас для docs-build
