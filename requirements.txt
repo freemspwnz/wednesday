@@ -77,3 +77,4 @@ yarl==1.22.0
 mkdocs>=1.5.0
 mkdocstrings[python]>=0.24.0
 mkdocs-material>=9.5.0
+mkdocs-link-check>=0.9.0

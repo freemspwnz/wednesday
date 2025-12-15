@@ -239,6 +239,8 @@ ci: ## Полный CI пайплайн (быстрые тесты, 209 тест
 	$(MAKE) lint; \
 	$(MAKE) format-check; \
 	$(MAKE) type; \
+	echo "=== Сборка документации MkDocs ==="; \
+	$(MAKE) docs-build; \
 	echo "=== Unit тесты (локально, без контейнеров) ==="; \
 	$(MAKE) test-unit; \
 	echo "=== Запуск тестовых контейнеров (один раз) ==="; \
@@ -266,6 +268,8 @@ ci-full: ## Полный CI пайплайн со всеми тестами (231
 	$(MAKE) lint; \
 	$(MAKE) format-check; \
 	$(MAKE) type; \
+	echo "=== Сборка документации MkDocs ==="; \
+	$(MAKE) docs-build; \
 	echo "=== Unit тесты (локально, без контейнеров) ==="; \
 	$(MAKE) test-unit; \
 	echo "=== Запуск тестовых контейнеров (один раз) ==="; \

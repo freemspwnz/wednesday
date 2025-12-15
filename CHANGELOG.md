@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased] — Автоматическая документация MkDocs/mkdocstrings и стабилизация ссылок
+## [Unreleased] — Автоматическая документация MkDocs/mkdocstrings, стабилизация ссылок и проверка сборки docs в CI
 
 ### Добавлено
 
@@ -13,6 +13,8 @@
   - Цели `docs-serve`, `docs-build` и алиас `docs` в `Makefile` для локального просмотра и сборки документации (`mkdocs serve`/`mkdocs build`).
 - **Структура docs/**:
   - Символические ссылки из корня репозитория в `docs/` для включения внешних Markdown-файлов в сайт без дублирования содержимого (например, история изменений и руководство по тестам).
+- **CI для документации**:
+  - Reusable workflow `.github/workflows/jobs/check-docs.yml` для сборки документации через `make docs-build` в GitHub Actions.
 
 ### Изменено
 
@@ -22,6 +24,10 @@
   - Обновлены ссылки в `docs/PROJECT_SUMMARY.md` и релиз-нотах для согласованности с корнем документации `docs/`.
 - **Зависимости**:
   - В `requirements.txt` и `pyproject.toml` добавлены зависимости `mkdocs`, `mkdocstrings[python]` и `mkdocs-material` для поддержки новой системы документации.
+  - В `requirements.txt` добавлен `mkdocs-link-check` для проверки ссылок при сборке документации.
+- **CI пайплайн**:
+  - Цели `ci` и `ci-full` в `Makefile` расширены шагом `docs-build` для проверки успешной сборки документации как части локального CI.
+  - Основной workflow `.github/workflows/ci.yml` дополнен job `check-docs`, использующим reusable workflow для сборки документации в GitHub Actions.
 
 ---
 
