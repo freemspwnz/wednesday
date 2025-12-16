@@ -509,7 +509,7 @@ def reload_config() -> Generator[Callable[[], Any], None, None]:
 @pytest.fixture
 def fake_update() -> Any:
     """Создает простую структуру Update с асинхронным reply_text."""
-    status_message = SimpleNamespace(delete=AsyncMock())
+    status_message = SimpleNamespace(delete=AsyncMock(), message_id=1)
     reply_text = AsyncMock(return_value=status_message)
     reply_photo = AsyncMock(return_value=SimpleNamespace(delete=AsyncMock()))
     message = SimpleNamespace(

@@ -131,11 +131,7 @@ async def test_frog_command_success(
     async_retry_stub: Any,
     monkeypatch: Any,
 ) -> None:
-    class DummyGenerator:
-        def __init__(self) -> None:
-            self.generate_frog_image = AsyncMock(return_value=(b"image", "caption"))
-            self.save_image_locally = MagicMock(return_value="saved")
-            self.get_random_saved_image = MagicMock(return_value=None)
+    """Успешный сценарий /frog: задача ставится в Celery очередь."""
 
     class DummyUsage:
         def __init__(self) -> None:
@@ -149,11 +145,9 @@ async def test_frog_command_success(
         async def get_limits_info(self) -> tuple[int, int, int]:
             return self.count, self.frog_threshold, self.monthly_quota
 
-        async def increment(self, value: int) -> None:
-            self.count += value
-
-    generator = DummyGenerator()
-    handler = CommandHandlers(image_generator=generator, next_run_provider=None)  # type: ignore[arg-type]
+    # image_generator в обработчике больше не используется напрямую для /frog,
+    # достаточно простого MagicMock
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
     async_retry_stub(handler)
 
     class _AdminNo:
@@ -167,21 +161,41 @@ async def test_frog_command_success(
 
     fake_context.application.bot_data["usage"] = DummyUsage()
 
+    # Добавляем chat_id в fake_update.message для совместимости с новым кодом
+    fake_update.message.chat_id = fake_update.effective_chat.id
+
+    # Мокаем отправку задачи в Celery
+    from services.celery_app import celery_app
+
+    send_task_mock = MagicMock()
+    monkeypatch.setattr(celery_app, "send_task", send_task_mock)
+
     await handler.frog_command(fake_update, fake_context)
 
-    fake_update.message.reply_photo.assert_awaited_once()
-    generator.save_image_locally.assert_called_once()
-    assert fake_context.application.bot_data["usage"].count == 1
-    fake_update.message.reply_text.return_value.delete.assert_awaited_once()
+    # Проверяем, что отправлено статусное сообщение
+    fake_update.message.reply_text.assert_awaited()
+    status_call = fake_update.message.reply_text.await_args
+    status_text = status_call.kwargs.get("text", status_call.args[0])
+    assert "Генерирую жабу" in status_text
+
+    # Проверяем, что Celery-задача поставлена в очередь
+    send_task_mock.assert_called_once()
+    task_args, task_kwargs = send_task_mock.call_args
+    assert task_args[0] == "wednesday.send_frog_manual"
+    # args=[chat_id, user_id, status_message_id]
+    call_args = task_kwargs["args"]
+    assert call_args[0] == fake_update.effective_chat.id
+    assert call_args[1] == fake_update.effective_user.id
 
 
 @pytest.mark.asyncio
-async def test_frog_command_usage_limit(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
-    class DummyGenerator:
-        def __init__(self) -> None:
-            self.generate_frog_image = AsyncMock(return_value=(b"image", "caption"))
-            self.save_image_locally = MagicMock(return_value="saved")
-            self.get_random_saved_image = MagicMock(return_value=None)
+async def test_frog_command_usage_limit(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    monkeypatch: Any,
+) -> None:
+    """При превышении лимита /frog задача в Celery не ставится, а юзеру возвращается сообщение."""
 
     class LimitedUsage:
         def __init__(self) -> None:
@@ -194,8 +208,7 @@ async def test_frog_command_usage_limit(fake_update: Any, fake_context: Any, asy
         async def get_limits_info(self) -> tuple[int, int, int]:
             return 70, self.frog_threshold, self.monthly_quota
 
-    generator = DummyGenerator()
-    handler = CommandHandlers(image_generator=generator, next_run_provider=None)  # type: ignore[arg-type]
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
     async_retry_stub(handler)
 
     class _AdminNo2:
@@ -206,12 +219,22 @@ async def test_frog_command_usage_limit(fake_update: Any, fake_context: Any, asy
 
     fake_context.application.bot_data["usage"] = LimitedUsage()
 
+    # Добавляем chat_id для совместимости
+    fake_update.message.chat_id = fake_update.effective_chat.id
+
+    from services.celery_app import celery_app
+
+    send_task_mock = MagicMock()
+    monkeypatch.setattr(celery_app, "send_task", send_task_mock)
+
     await handler.frog_command(fake_update, fake_context)
 
     call = fake_update.message.reply_text.await_args
     message = call.kwargs.get("text", call.args[0])
     assert "Лимит ручных генераций" in message
-    assert fake_update.message.reply_photo.await_count == 0
+
+    # Убедимся, что задача в Celery не ставилась
+    assert send_task_mock.call_count == 0
 
 
 @pytest.mark.integration
