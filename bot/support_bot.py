@@ -424,6 +424,8 @@ class SupportBot(BaseHandlers):
     async def _is_admin(self, user_id: int) -> bool:
         """Проверяет, является ли пользователь администратором.
 
+        Использует `self.admins_store` из `BaseHandlers` для проверки прав администратора.
+
         Args:
             user_id: ID пользователя Telegram для проверки прав администратора.
 
@@ -529,6 +531,7 @@ class SupportBot(BaseHandlers):
             for lf in sorted(selected, key=lambda p: p.name):
                 self.logger.info(f"SupportBot отправляет лог-файл: {lf.name} ({lf.stat().st_size} bytes)")
                 try:
+                    # Используем _send_log_file из BaseHandlers для отправки лог-файла
                     await self._send_log_file(
                         bot=context.bot,
                         chat_id=update.effective_chat.id,

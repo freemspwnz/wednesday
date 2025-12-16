@@ -13,6 +13,8 @@
   - Заменены все обращения к `self.admins` на `self.admins_store` в методах `_is_admin`, `start` и `stop`
   - Заменены все прямые вызовы `retry_on_connect_error` на использование `self._retry_on_connect_error` из `BaseHandlers` для консистентности
   - Удален импорт `retry_on_connect_error` из `utils.telegram_retry` (используется метод из `BaseHandlers`)
+  - Обновлен docstring метода `_is_admin`: указано использование `self.admins_store` из `BaseHandlers`
+  - Добавлены комментарии в местах использования методов из `BaseHandlers` для ясности
 
 - **Унификация retry-политики в SupportBot**:
   - Добавлен импорт `retry_on_connect_error` из `utils.telegram_retry` в `SupportBot`
