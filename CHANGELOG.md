@@ -6,6 +6,11 @@
 
 - **Использование BaseHandlers для переиспользования общих методов в SupportBot**:
   - Создан минимальный `BotServices` в `SupportBot.__init__` с полями `settings` и `rate_limiter` для использования `BaseHandlers`
+  - Изменено объявление класса `SupportBot` для наследования от `BaseHandlers`
+  - Обновлен порядок инициализации: сначала создаются все компоненты, затем вызывается `super().__init__(services)`
+  - Удалено дублирующее поле `self.logger` (используется из `BaseHandlers`)
+  - Удалено дублирующее поле `self.admins` (используется `self.admins_store` из `BaseHandlers`)
+  - Заменены все обращения к `self.admins` на `self.admins_store` в методах `_is_admin`, `start` и `stop`
 
 - **Унификация retry-политики в SupportBot**:
   - Добавлен импорт `retry_on_connect_error` из `utils.telegram_retry` в `SupportBot`
