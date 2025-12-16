@@ -450,12 +450,12 @@ class CommandHandlers:
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении,
                 пользователе и чате, из которого отправлена команда.
-            context: Контекст бота, предоставляющий доступ к экземпляру бота
-                через context.application.bot_data.get("bot") для остановки.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args.
 
         Side Effects:
             - Сохраняет метаданные сообщения для последующего редактирования.
-            - Вызывает bot.stop() для остановки основного бота.
+            - Вызывает bot_controller.stop() для остановки основного бота через DI.
             - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
@@ -504,20 +504,20 @@ class CommandHandlers:
 
         # Сохраняем метаданные сообщения в экземпляр основного бота (только для не-админ чатов)
         try:
-            bot_instance = context.application.bot_data.get("bot")
-            if (not is_admin_chat) and bot_instance is not None and status_msg is not None and update.effective_chat:
-                bot_instance.pending_shutdown_edit = {
+            bot_controller = self.services.bot_controller
+            if (not is_admin_chat) and bot_controller is not None and status_msg is not None and update.effective_chat:
+                bot_controller.pending_shutdown_edit = {
                     "chat_id": update.effective_chat.id,
                     "message_id": getattr(status_msg, "message_id", None),
                 }
         except Exception:
             pass
 
-        # Получаем экземпляр основного бота из bot_data и останавливаем его
+        # Получаем экземпляр основного бота через DI и останавливаем его
         try:
-            bot_instance = context.application.bot_data.get("bot")
-            if bot_instance is not None:
-                await bot_instance.stop()
+            bot_controller = self.services.bot_controller
+            if bot_controller is not None:
+                await bot_controller.stop()
             else:
                 # Фоллбек: попытаться аккуратно остановить приложение
                 try:
@@ -530,7 +530,7 @@ class CommandHandlers:
                 except Exception:
                     pass
         except Exception as e:
-            self.logger.error(f"Ошибка при попытке остановить бота через /stop: {e}")
+            self.logger.error(f"Ошибка при попытке остановить бота через /stop: {e}", exc_info=True)
 
     async def _retry_on_connect_error(  # noqa: PLR6301
         self,

@@ -18,6 +18,10 @@
   - Удален неиспользуемый импорт `config` из `bot/handlers.py`
   - Добавлено поле `bot_controller: WednesdayBot | None` в `BotServices` для доступа к экземпляру бота через DI
   - Инициализация `bot_controller` в `WednesdayBot.__init__` через `self.services.bot_controller = self`
+  - Замена чтения `context.application.bot_data.get("bot")` на `self.services.bot_controller` в `stop_command`
+  - Замена сохранения `pending_shutdown_edit` через `bot_instance.pending_shutdown_edit` на `self.services.bot_controller.pending_shutdown_edit`
+  - Замена `bot_instance.stop()` на `await self.services.bot_controller.stop()`
+  - Обновлен docstring `stop_command`, убрано упоминание `bot_data`
 
 - **Горизонтальное масштабирование rate limiting для команды /frog**:
   - Переведён rate limiting команды `/frog` с локальных словарей на Redis через `RateLimiter`
