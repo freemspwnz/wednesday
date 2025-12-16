@@ -94,13 +94,6 @@ class CommandHandlers:
         self.logger.info("Инициализация хранилища админов")
         self.admins_store: AdminsStore = AdminsStore()
 
-        # Rate limiting для /frog
-        self._frog_rate_limit: dict[int, float] = {}  # {user_id: last_call_timestamp}
-        self._frog_rate_limit_minutes: int = FROG_RATE_LIMIT_MINUTES
-        self._global_frog_rate_limit: dict[float, int] = {}  # {timestamp: count}
-        self._global_frog_rate_limit_window: int = FROG_RATE_LIMIT_WINDOW_SECONDS
-        self._global_frog_rate_limit_max: int = FROG_RATE_LIMIT_MAX_REQUESTS
-
         self.logger.info("CommandHandlers успешно инициализирован")
 
     async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
@@ -744,7 +737,7 @@ class CommandHandlers:
                 Информация о лимитах и использовании берётся из self.services.usage.
 
         Side Effects:
-            - Проверяет глобальный и per-user rate limits.
+            - Проверяет глобальный и per-user rate limits через Redis.
             - Проверяет месячный лимит генераций через usage.can_use_frog().
             - Отправляет статусное сообщение пользователю.
             - Ставит Celery-задачу wednesday.send_frog_manual в очередь.
@@ -756,18 +749,30 @@ class CommandHandlers:
         chat_id = update.message.chat_id
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
-        # Rate limit: глобальный
-        import time
+        # Создаем лимитеры для /frog с нужными параметрами
+        from services.rate_limiter import RateLimiter
 
-        now = time.time()
-        self._global_frog_rate_limit = {
-            ts: cnt
-            for ts, cnt in self._global_frog_rate_limit.items()
-            if now - ts < self._global_frog_rate_limit_window
-        }
-        recent_count = sum(self._global_frog_rate_limit.values())
-        if recent_count >= self._global_frog_rate_limit_max:
-            self.logger.warning(f"Глобальный rate limit /frog: {recent_count}/{self._global_frog_rate_limit_max}")
+        # Глобальный лимитер: окно FROG_RATE_LIMIT_WINDOW_SECONDS, лимит FROG_RATE_LIMIT_MAX_REQUESTS
+        global_limiter = RateLimiter(
+            prefix="frog:global:",
+            window=FROG_RATE_LIMIT_WINDOW_SECONDS,
+            limit=FROG_RATE_LIMIT_MAX_REQUESTS,
+        )
+
+        # Per-user лимитер: окно FROG_RATE_LIMIT_MINUTES * 60 секунд, лимит 1
+        user_limiter = RateLimiter(
+            prefix="frog:user:",
+            window=FROG_RATE_LIMIT_MINUTES * SECONDS_PER_MINUTE,
+            limit=1,
+        )
+
+        # Rate limit: глобальный
+        global_key = "global"
+        if not await global_limiter.is_allowed(global_key):
+            self.logger.warning(
+                f"Глобальный rate limit /frog превышен: {FROG_RATE_LIMIT_MAX_REQUESTS} "
+                f"запросов за {FROG_RATE_LIMIT_WINDOW_SECONDS}с",
+            )
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
@@ -784,16 +789,14 @@ class CommandHandlers:
 
         # Rate limit: per-user (пропускаем для админа)
         if not is_admin:
-            last_call = self._frog_rate_limit.get(user_id, 0)
-            if now - last_call < self._frog_rate_limit_minutes * SECONDS_PER_MINUTE:
-                remaining = int(
-                    self._frog_rate_limit_minutes * SECONDS_PER_MINUTE - (now - last_call),
-                )
-                self.logger.info(f"Rate limit для пользователя {user_id}: {remaining}с осталось")
+            user_key = str(user_id)
+            if not await user_limiter.is_allowed(user_key):
+                remaining_seconds = FROG_RATE_LIMIT_MINUTES * SECONDS_PER_MINUTE
+                self.logger.info(f"Rate limit для пользователя {user_id}: {remaining_seconds}с осталось")
                 try:
                     await self._retry_on_connect_error(
                         update.message.reply_text,
-                        f"⏰ Повторная генерация доступна через {remaining}с",
+                        f"⏰ Повторная генерация доступна через {remaining_seconds}с",
                         max_retries=MAX_RETRIES_DEFAULT,
                         delay=RETRY_DELAY_DEFAULT,
                     )
@@ -802,10 +805,6 @@ class CommandHandlers:
                         f"Не удалось отправить сообщение о rate limit после {MAX_RETRIES_DEFAULT} попыток: {e}",
                     )
                 return
-
-            self._frog_rate_limit[user_id] = now
-
-        self._global_frog_rate_limit[now] = self._global_frog_rate_limit.get(now, 0) + 1
 
         # Проверяем лимит генераций
         usage = self.services.usage

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Изменено
+
+- **Горизонтальное масштабирование rate limiting для команды /frog**:
+  - Переведён rate limiting команды `/frog` с локальных словарей на Redis через `RateLimiter`
+  - Per-user лимит использует ключ `frog:user:{user_id}` с окном `FROG_RATE_LIMIT_MINUTES * 60` секунд и лимитом 1
+  - Глобальный лимит использует ключ `frog:global:global` с окном `FROG_RATE_LIMIT_WINDOW_SECONDS` и лимитом `FROG_RATE_LIMIT_MAX_REQUESTS`
+  - Сохранена логика пропуска per-user лимита для администраторов
+  - Удалены локальные поля `_frog_rate_limit`, `_frog_rate_limit_minutes`, `_global_frog_rate_limit`, `_global_frog_rate_limit_window`, `_global_frog_rate_limit_max` из `CommandHandlers.__init__`
+  - Rate limiting теперь поддерживает горизонтальное масштабирование при работе нескольких инстансов бота
+
+---
+
 ## [6.12.0] 2025-12-16 — Архитектурный рефакторинг хендлеров, DI через BotServices и стабилизация async-I/O
 
 ### Изменено
