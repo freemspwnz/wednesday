@@ -82,6 +82,17 @@
   - Удалены локальные поля `_frog_rate_limit`, `_frog_rate_limit_minutes`, `_global_frog_rate_limit`, `_global_frog_rate_limit_window`, `_global_frog_rate_limit_max` из `CommandHandlers.__init__`
   - Rate limiting теперь поддерживает горизонтальное масштабирование при работе нескольких инстансов бота
 
+- **Обновление документации ARCHITECTURE.md**:
+  - Добавлен раздел "Dependency Injection" с описанием использования `BotServices` для всех зависимостей
+  - Указано, что `bot_data` больше не используется для DI
+  - Описан `AppSettings` как способ доступа к конфигурации через DI
+  - Обновлен раздел "Rate Limiting" с указанием, что все лимиты реализуются через `RateLimiter` (Redis)
+  - Описана стратегия fail-open при недоступности Redis
+  - Добавлен раздел "Retry Policy" с описанием использования `utils/telegram_retry` для PTB-хендлеров и Celery-retry для Celery-тасок
+  - Добавлен раздел "Handler Architecture" с описанием структуры `BaseHandlers` → `UserHandlers` / `AdminHandlers` / `ModelHandlers`
+  - Указано, что `CommandHandlers` удален
+  - Обновлены диаграммы компонентов и sequence-диаграммы для отражения новой архитектуры хендлеров
+
 ---
 
 ## [6.12.0] 2025-12-16 — Архитектурный рефакторинг хендлеров, DI через BotServices и стабилизация async-I/O
