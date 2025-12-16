@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from services.app_settings import AppSettings
 from services.image_generator import ImageGenerator
 from services.prompt_cache import PromptCache
 from services.rate_limiter import RateLimiter
@@ -36,3 +37,4 @@ class BotServices:
     prompt_cache: PromptCache
     user_state_store: UserStateStore
     rate_limiter: RateLimiter
+    settings: AppSettings | None = None
