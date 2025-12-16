@@ -17,6 +17,7 @@
   - Замена прямого чтения `config.admin_chat_id` на `self.services.settings.admin_chat_id` в `admin_force_send_command` и `list_mods_command`
   - Удален неиспользуемый импорт `config` из `bot/handlers.py`
   - Добавлено поле `bot_controller: WednesdayBot | None` в `BotServices` для доступа к экземпляру бота через DI
+  - Инициализация `bot_controller` в `WednesdayBot.__init__` через `self.services.bot_controller = self`
 
 - **Горизонтальное масштабирование rate limiting для команды /frog**:
   - Переведён rate limiting команды `/frog` с локальных словарей на Redis через `RateLimiter`

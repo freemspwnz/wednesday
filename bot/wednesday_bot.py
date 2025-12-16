@@ -136,6 +136,8 @@ class WednesdayBot:
             rate_limiter=self.rate_limiter,
             settings=app_settings,
         )
+        # Устанавливаем ссылку на экземпляр бота для команд управления
+        self.services.bot_controller = self
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
         self.pending_startup_edit: dict[str, Any] | None = None
         # Данные для пост-остановки (например, редактирование сообщения об остановке)
