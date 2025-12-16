@@ -4,6 +4,15 @@
 
 ### Изменено
 
+- **Приведение SupportBot в соответствие с DI и AppSettings**:
+  - Удалена публикация в `bot_data` из метода `start` в `SupportBot`
+  - Добавлен комментарий о том, что все зависимости доступны через экземпляр `SupportBot`, `bot_data` больше не используется для DI
+  - Интегрирован `AppSettings` в `SupportBot.__init__` для доступа к настройкам через DI
+  - Обновлен docstring класса `SupportBot` с упоминанием использования `AppSettings`
+  - Заменены все прямые чтения `config.admin_chat_id` на `self.settings.admin_chat_id` в методах `start`, `stop` и `start_main_command`
+  - Удалены ленивые импорты `from utils.config import config as _cfg` из методов
+  - Импорт `config` оставлен только для `config.telegram_token` в `__init__` (точка входа)
+
 - **Расщепление и удаление CommandHandlers — создание BaseHandlers для общих методов**:
   - Создан базовый класс `BaseHandlers` в `bot/base_handlers.py` с общими утилитарными методами
   - Перенесены общие методы из `CommandHandlers`: `_is_super_admin`, `_safe_reply_text`, `_retry_on_connect_error`, `_extract_target_user_id`, `_send_log_file`

@@ -44,6 +44,9 @@ class SupportBot:
     Важно: SupportBot никогда не должен работать одновременно с основным ботом,
     так как они используют один и тот же Telegram токен и будут конфликтовать
     при попытке получить обновления (getUpdates).
+
+    Использует AppSettings для доступа к настройкам приложения через DI,
+    вместо прямого чтения из глобального config.
     """
 
     def __init__(self, request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None) -> None:
@@ -81,6 +84,10 @@ class SupportBot:
         # В случае недоступности Redis лимитер автоматически работает в in‑memory
         # режиме и не блокирует админа.
         self.rate_limiter: RateLimiter = RateLimiter(prefix="rate:support:", window=60, limit=20)
+        # Настройки приложения для доступа к конфигурации через DI
+        from services.app_settings import AppSettings
+
+        self.settings: AppSettings = AppSettings.from_config(config)
 
     def setup_handlers(self) -> None:
         """Настраивает обработчики команд для SupportBot.
@@ -118,9 +125,7 @@ class SupportBot:
         self.logger.info("Запуск бота-поддержки (SupportBot)")
         self.setup_handlers()
 
-        # Кладем self в bot_data на всякий случай
-        self.application.bot_data["support_bot"] = self
-        self.application.bot_data["rate_limiter"] = self.rate_limiter
+        # Все зависимости доступны через экземпляр SupportBot, bot_data больше не используется для DI
 
         # Этап 1: initialize с ретраями
         init_attempts = 4
@@ -210,12 +215,9 @@ class SupportBot:
                 # Пропускаем редактирование, если это админ-чат
                 skip_admin_edit = False
                 try:
-                    from utils.config import config as _cfg
-
-                    admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
-                    if admin_chat_id_env:
+                    if self.settings.admin_chat_id and chat_id is not None:
                         try:
-                            skip_admin_edit = int(str(admin_chat_id_env)) == int(str(chat_id))
+                            skip_admin_edit = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
                         except Exception:
                             skip_admin_edit = False
                 except Exception:
@@ -292,12 +294,9 @@ class SupportBot:
                 # Пропускаем для админского чата
                 is_admin_chat = False
                 try:
-                    from utils.config import config as _cfg
-
-                    admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
-                    if admin_chat_id_env and chat_id is not None:
+                    if self.settings.admin_chat_id and chat_id is not None:
                         try:
-                            is_admin_chat = int(str(admin_chat_id_env)) == int(str(chat_id))
+                            is_admin_chat = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
                         except Exception:
                             is_admin_chat = False
                 except Exception:
@@ -537,12 +536,9 @@ class SupportBot:
         # В админ-чате не отправляем изменяемое статусное сообщение
         is_admin_chat = False
         try:
-            from utils.config import config as _cfg
-
-            admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
-            if admin_chat_id_env and chat_id is not None:
+            if self.settings.admin_chat_id and chat_id is not None:
                 try:
-                    is_admin_chat = int(str(admin_chat_id_env)) == int(str(chat_id))
+                    is_admin_chat = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
                 except Exception:
                     is_admin_chat = False
         except Exception:
