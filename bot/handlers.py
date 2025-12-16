@@ -99,6 +99,68 @@ class CommandHandlers:
 
         self.logger.info("CommandHandlers успешно инициализирован")
 
+    async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
+        """Извлекает target_user_id из reply или аргументов команды.
+
+        Проверяет приоритеты:
+        1. reply_to_message.from_user.id (если есть reply)
+        2. context.args[0] (если ровно один аргумент и это число)
+
+        Args:
+            update: Объект обновления Telegram.
+            context: Контекст бота с аргументами команды.
+
+        Returns:
+            user_id как int, если успешно определён, иначе None.
+        """
+        # Приоритет 1: reply на сообщение
+        if update.message and update.message.reply_to_message:
+            reply_user = update.message.reply_to_message.from_user
+            if reply_user:
+                target_id = int(reply_user.id)
+                self.logger.debug(f"_extract_target_user_id: найден через reply: {target_id}")
+                return target_id
+
+        # Приоритет 2: аргумент команды
+        if context.args:
+            if len(context.args) != 1:
+                self.logger.debug(
+                    f"_extract_target_user_id: неверное количество аргументов: {len(context.args)}",
+                )
+                return None
+
+            try:
+                target_id = int(context.args[0])
+                self.logger.debug(f"_extract_target_user_id: найден через аргумент: {target_id}")
+                return target_id
+            except ValueError as e:
+                self.logger.warning(f"_extract_target_user_id: не удалось преобразовать аргумент в int: {e}")
+                return None
+
+        return None
+
+    def _is_super_admin(self, user_id: int) -> bool:
+        """Проверяет, является ли пользователь главным администратором.
+
+        Сравнивает user_id с config.admin_chat_id (из .env).
+
+        Args:
+            user_id: Идентификатор пользователя для проверки.
+
+        Returns:
+            True если user_id совпадает с admin_chat_id, False иначе.
+        """
+        admin_chat_id = config.admin_chat_id
+        if not admin_chat_id:
+            return False
+
+        try:
+            main_admin_id = int(admin_chat_id)
+            return main_admin_id == user_id
+        except (ValueError, TypeError) as e:
+            self.logger.warning(f"_is_super_admin: ошибка при преобразовании admin_chat_id в int: {e}")
+            return False
+
     async def set_frog_limit_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_limit.
 
@@ -599,8 +661,12 @@ class CommandHandlers:
                 "• /force_send — принудительная отправка в подключенные чаты\n"
                 "• /set_kandinsky_model <pipeline_id> — установить модель Kandinsky\n"
                 "• /set_gigachat_model <model_name> — установить модель GigaChat\n"
-                "• /mod <user_id> — предоставить админ-права пользователю\n"
-                "• /unmod <user_id> — удалить админ-права у пользователя\n"
+                "• /mod <user_id> или ответ на сообщение — предоставить админ-права "
+                "пользователю (только главный админ)\n"
+                "• /unmod <user_id> или ответ на сообщение — удалить админ-права у "
+                "пользователя (только главный админ)\n"
+                "• /unmod без аргументов — показать список всех админов "
+                "(только главный админ)\n"
                 "• /list_mods — список всех админов с ID\n"
                 "• /set_frog_limit <threshold> — порог ручных /frog (1..100, не выше квоты)\n"
                 "• /set_frog_used <count> — установить текущее число ручных /frog за месяц\n"
@@ -1676,7 +1742,11 @@ class CommandHandlers:
         """Обработчик команды /mod.
 
         Предоставляет административные права указанному пользователю.
-        Команда доступна только существующим администраторам.
+        Команда доступна только главному администратору (Super Admin).
+
+        Поддерживает два способа указания целевого пользователя:
+        - Ответ на сообщение пользователя (reply)
+        - Аргумент команды: /mod <user_id>
 
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
@@ -1688,18 +1758,20 @@ class CommandHandlers:
             - Вызывает admins_store.add_admin() для добавления пользователя в список администраторов.
             - Отправляет ответное сообщение пользователю с результатом операции.
             - Использует _retry_on_connect_error() для обработки сетевых ошибок.
-
-        Raises:
-            ValueError: Если переданный user_id не является числом.
         """
         if not update.message or not update.effective_user:
             return
 
-        if not await self.admins_store.is_admin(update.effective_user.id):
+        user_id = update.effective_user.id
+        self.logger.info(f"Получена команда /mod от пользователя {user_id}")
+
+        # Проверка прав: только главный администратор
+        if not self._is_super_admin(user_id):
+            self.logger.warning(f"mod_command: пользователь {user_id} не является главным администратором")
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    "❌ Доступно только администратору",
+                    "❌ Доступно только главному администратору",
                     max_retries=3,
                     delay=2,
                 )
@@ -1707,11 +1779,15 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
-        if not context.args or len(context.args) == 0:
+        # Извлекаем target_user_id из reply или аргументов
+        target_user_id = await self._extract_target_user_id(update, context)
+
+        if target_user_id is None:
+            self.logger.warning("mod_command: не удалось определить target_user_id")
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    "📝 Использование: /mod <user_id>",
+                    "📝 Использование: ответьте на сообщение пользователя командой /mod или вызовите: /mod <user_id>",
                     max_retries=3,
                     delay=2,
                 )
@@ -1719,40 +1795,43 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об использовании команды после {3} попыток: {e}")
             return
 
-        try:
-            user_id = int(context.args[0])
-            success = await self.admins_store.add_admin(user_id)
-            if success:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"✅ Пользователь {user_id} получил админ-права",
-                    max_retries=3,
-                    delay=2,
-                )
-            else:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"ℹ️ Пользователь {user_id} уже является администратором",
-                    max_retries=3,
-                    delay=2,
-                )
-        except ValueError:
+        self.logger.info(f"mod_command: попытка добавить админа {target_user_id} пользователем {user_id}")
+
+        # Добавляем администратора
+        success = await self.admins_store.add_admin(target_user_id)
+        if success:
+            self.logger.info(f"mod_command: пользователь {target_user_id} успешно добавлен как администратор")
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    "❌ Неверный user_id (должен быть числом)",
+                    f"✅ Пользователь {target_user_id} получил админ‑права",
                     max_retries=3,
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+                self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
+        else:
+            self.logger.info(f"mod_command: пользователь {target_user_id} уже является администратором")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"ℹ️ Пользователь {target_user_id} уже является администратором",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception as e:
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
 
     async def unmod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /unmod.
 
-        Удаляет административные права у указанного пользователя.
+        Удаляет административные права у указанного пользователя или показывает список админов.
         Главного администратора (из .env) удалить нельзя.
-        Команда доступна только существующим администраторам.
+        Команда доступна только главному администратору (Super Admin).
+
+        Поддерживает два режима:
+        - Без аргументов/reply: показывает список всех администраторов
+        - С reply или аргументом: удаляет админ-права у указанного пользователя
 
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
@@ -1762,20 +1841,24 @@ class CommandHandlers:
 
         Side Effects:
             - Вызывает admins_store.remove_admin() для удаления пользователя из списка администраторов.
+            - Вызывает admins_store.list_all_admins() для получения списка администраторов.
+            - Вызывает context.bot.get_chat() для получения информации о пользователях.
             - Отправляет ответное сообщение пользователю с результатом операции.
             - Использует _retry_on_connect_error() для обработки сетевых ошибок.
-
-        Raises:
-            ValueError: Если переданный user_id не является числом.
         """
         if not update.message or not update.effective_user:
             return
 
-        if not await self.admins_store.is_admin(update.effective_user.id):
+        user_id = update.effective_user.id
+        self.logger.info(f"Получена команда /unmod от пользователя {user_id}")
+
+        # Проверка прав: только главный администратор
+        if not self._is_super_admin(user_id):
+            self.logger.warning(f"unmod_command: пользователь {user_id} не является главным администратором")
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    "❌ Доступно только администратору",
+                    "❌ Доступно только главному администратору",
                     max_retries=3,
                     delay=2,
                 )
@@ -1783,61 +1866,117 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
-        if not context.args or len(context.args) == 0:
+        # Извлекаем target_user_id из reply или аргументов
+        target_user_id = await self._extract_target_user_id(update, context)
+
+        # Если target_user_id не определён - показываем список админов
+        if target_user_id is None:
+            self.logger.info("unmod_command: target_user_id не определён, показываем список админов")
             try:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    "📝 Использование: /unmod <user_id>",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об использовании команды после {3} попыток: {e}")
-            return
+                admins = await self.admins_store.list_all_admins()
+                if not admins:
+                    try:
+                        await self._retry_on_connect_error(
+                            update.message.reply_text,
+                            "📭 Нет администраторов",
+                            max_retries=3,
+                            delay=2,
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                    return
 
-        try:
-            user_id = int(context.args[0])
-            # Проверяем, не пытаются ли удалить главного админа
-            from utils.config import config
+                admin_list = []
+                for admin_id in admins:
+                    try:
+                        chat = await context.bot.get_chat(admin_id)
+                        # Формируем имя с разумным fallback
+                        name_parts = []
+                        if hasattr(chat, "full_name") and chat.full_name:
+                            name_parts.append(chat.full_name)
+                        elif hasattr(chat, "first_name") and chat.first_name:
+                            name_parts.append(chat.first_name)
+                        name = " ".join(name_parts) if name_parts else "Unknown"
 
-            main_admin = config.admin_chat_id
-            if main_admin and int(main_admin) == user_id:
+                        # Добавляем username если есть
+                        username_text = ""
+                        if hasattr(chat, "username") and chat.username:
+                            username_text = f" (@{chat.username})"
+
+                        # Помечаем главного админа
+                        is_main = " (главный)" if self._is_super_admin(admin_id) else ""
+
+                        admin_list.append(f"• ID: {admin_id} ({name}{username_text}){is_main}")
+                    except Exception as e:
+                        self.logger.warning(f"Не удалось получить информацию о чате {admin_id}: {e}")
+                        is_main = " (главный)" if self._is_super_admin(admin_id) else ""
+                        admin_list.append(f"• ID: {admin_id} (не удалось получить информацию){is_main}")
+
+                message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
                 try:
                     await self._retry_on_connect_error(
                         update.message.reply_text,
-                        "❌ Нельзя удалить главного администратора (из .env)",
+                        message,
                         max_retries=3,
                         delay=2,
                     )
+                    self.logger.info(f"Отправлен список из {len(admins)} администраторов пользователю {user_id}")
                 except Exception as e:
-                    self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
-                return
+                    self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}")
+            except Exception as e:
+                self.logger.error(f"Ошибка при получении списка админов: {e}", exc_info=True)
+                try:
+                    await self._retry_on_connect_error(
+                        update.message.reply_text,
+                        "❌ Ошибка при получении списка администраторов",
+                        max_retries=3,
+                        delay=2,
+                    )
+                except Exception:
+                    pass
+            return
 
-            success = await self.admins_store.remove_admin(user_id)
-            if success:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"✅ У пользователя {user_id} удалены админ-права",
-                    max_retries=3,
-                    delay=2,
-                )
-            else:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"ℹ️ Пользователь {user_id} не является администратором",
-                    max_retries=3,
-                    delay=2,
-                )
-        except ValueError:
+        # Ветка удаления админа
+        self.logger.info(f"unmod_command: попытка удалить админа {target_user_id} пользователем {user_id}")
+
+        # Проверяем, не пытаются ли удалить главного админа
+        if self._is_super_admin(target_user_id):
+            self.logger.warning(f"unmod_command: попытка удалить главного администратора {target_user_id}")
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    "❌ Неверный user_id (должен быть числом)",
+                    "❌ Нельзя удалить главного администратора (из .env)",
                     max_retries=3,
                     delay=2,
                 )
             except Exception as e:
                 self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+            return
+
+        # Удаляем админа
+        success = await self.admins_store.remove_admin(target_user_id)
+        if success:
+            self.logger.info(f"unmod_command: пользователь {target_user_id} успешно удалён из админов")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"✅ У пользователя {target_user_id} удалены админ‑права",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception as e:
+                self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
+        else:
+            self.logger.info(f"unmod_command: пользователь {target_user_id} не является администратором")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"ℹ️ Пользователь {target_user_id} не является администратором",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception as e:
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
 
     async def list_mods_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_mods.
