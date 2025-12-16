@@ -17,6 +17,10 @@
   - `AdminHandlers` теперь наследуется от `BaseHandlers` вместо делегирования в `CommandHandlers`
   - Удалено делегирование и поле `self._core` из `AdminHandlers`
   - Обновлен `__init__` в `AdminHandlers`: принимает только `services` и `next_run_provider`, инициализирует `BaseHandlers`
+  - Перенесена полная реализация модельных команд в `ModelHandlers`: `set_kandinsky_model_command`, `set_gigachat_model_command`, `list_models_command`
+  - `ModelHandlers` теперь наследуется от `BaseHandlers` вместо делегирования в `CommandHandlers`
+  - Удалено делегирование и поле `self._core` из `ModelHandlers`
+  - Обновлен `__init__` в `ModelHandlers`: принимает только `services` и `next_run_provider`, инициализирует `BaseHandlers`
 
 - **Унификация политики Retry — расширение utils/telegram_retry для поддержки retry_after**:
   - Добавлена обработка `TelegramError` с кодом 429 (rate limit) в функцию `retry_on_connect_error`
