@@ -349,6 +349,12 @@ class SupportBot:
         except Exception as e:
             self.logger.warning(f"Ошибка при остановке приложения SupportBot: {e}")
 
+        # Завершаем жизненный цикл приложения, освобождая все ресурсы PTB
+        try:
+            await self.application.shutdown()
+        except Exception as e:
+            self.logger.warning(f"Ошибка при shutdown приложения SupportBot: {e}")
+
     async def maintenance_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик неизвестных команд.
 

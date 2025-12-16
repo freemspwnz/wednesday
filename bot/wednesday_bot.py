@@ -1270,6 +1270,12 @@ class WednesdayBot:
             except Exception as e:
                 self.logger.warning(f"Ошибка при остановке приложения: {e}")
 
+            # Финальный шаг жизненного цикла PTB: корректный shutdown приложения
+            try:
+                await self.application.shutdown()
+            except Exception as e:
+                self.logger.warning(f"Ошибка при shutdown приложения: {e}")
+
             self.logger.info("Бот успешно остановлен")
 
         except Exception as e:
