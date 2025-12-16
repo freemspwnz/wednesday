@@ -16,6 +16,7 @@ from bot.handlers import CommandHandlers
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
+from services.app_settings import AppSettings
 from services.bot_services import BotServices
 from services.image_generator import ImageGenerator
 from services.prompt_cache import PromptCache
@@ -119,6 +120,9 @@ class WednesdayBot:
         self.user_state_store: UserStateStore = UserStateStore()
         self.rate_limiter: RateLimiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
 
+        # Создаем настройки приложения из config
+        app_settings = AppSettings.from_config(config)
+
         # Собираем все сервисы в явный контейнер зависимостей
         self.services: BotServices = BotServices(
             image_generator=self.image_generator,
@@ -130,6 +134,7 @@ class WednesdayBot:
             prompt_cache=self.prompt_cache,
             user_state_store=self.user_state_store,
             rate_limiter=self.rate_limiter,
+            settings=app_settings,
         )
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
         self.pending_startup_edit: dict[str, Any] | None = None
@@ -296,10 +301,8 @@ class WednesdayBot:
                 if self.scheduler:
                     configured_times: list[str] = list(self.scheduler.send_times or [])
                 else:
-                    # Используем конфигурацию из config для Celery
-                    from utils.config import config
-
-                    configured_times = config.scheduler_send_times
+                    # Используем конфигурацию из settings для Celery
+                    configured_times = self.services.settings.scheduler_send_times
             except Exception:
                 configured_times = []
             resolved_slot: str | None = None
@@ -307,9 +310,9 @@ class WednesdayBot:
                 try:
                     candidates: list[tuple[datetime, str]] = []
                     for t in configured_times:
-                        from utils.config import TIME_FORMAT_LENGTH
+                        time_format_length = self.services.settings.time_format_length
 
-                        if len(t) == TIME_FORMAT_LENGTH and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit():
+                        if len(t) == time_format_length and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit():
                             h, m = int(t[:2]), int(t[3:])
                             candidate_dt = now.replace(hour=h, minute=m, second=0, microsecond=0)
                             if candidate_dt <= now:

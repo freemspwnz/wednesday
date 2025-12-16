@@ -9,6 +9,9 @@
   - `AppSettings` содержит поля: `admin_chat_id`, `chat_id`, `scheduler_send_times`, `frog_rate_limit_minutes`, `frog_rate_limit_window_seconds`, `frog_rate_limit_max_requests`, `scheduler_tz`, `time_format_length`
   - Добавлен метод `from_config` для инициализации из глобального `Config`
   - Добавлено поле `settings: AppSettings` в `BotServices` для доступа к настройкам через DI
+  - Инициализация `AppSettings` в `WednesdayBot.__init__` через `AppSettings.from_config(config)`
+  - Замена чтения `config.scheduler_send_times` на `self.services.settings.scheduler_send_times` в `send_wednesday_frog`
+  - Замена чтения `TIME_FORMAT_LENGTH` на `self.services.settings.time_format_length` в `send_wednesday_frog`
 
 - **Горизонтальное масштабирование rate limiting для команды /frog**:
   - Переведён rate limiting команды `/frog` с локальных словарей на Redis через `RateLimiter`

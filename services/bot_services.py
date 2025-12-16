@@ -37,4 +37,4 @@ class BotServices:
     prompt_cache: PromptCache
     user_state_store: UserStateStore
     rate_limiter: RateLimiter
-    settings: AppSettings | None = None
+    settings: AppSettings

@@ -148,6 +148,7 @@ async def test_command_handlers_start_help(
         prompt_cache=MagicMock(),
         user_state_store=MagicMock(),
         rate_limiter=MagicMock(),
+        settings=MagicMock(),
     )
     handler = CommandHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)
