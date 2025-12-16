@@ -22,6 +22,8 @@
   - Замена сохранения `pending_shutdown_edit` через `bot_instance.pending_shutdown_edit` на `self.services.bot_controller.pending_shutdown_edit`
   - Замена `bot_instance.stop()` на `await self.services.bot_controller.stop()`
   - Обновлен docstring `stop_command`, убрано упоминание `bot_data`
+  - Удалена публикация всех зависимостей в `bot_data` в методе `start` (`usage`, `chats`, `metrics`, `prompt_cache`, `user_state_store`, `rate_limiter`, `services`, `bot`)
+  - Добавлен комментарий о том, что все зависимости доступны через `BotServices`
 
 - **Горизонтальное масштабирование rate limiting для команды /frog**:
   - Переведён rate limiting команды `/frog` с локальных словарей на Redis через `RateLimiter`

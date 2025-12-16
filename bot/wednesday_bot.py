@@ -885,17 +885,7 @@ class WednesdayBot:
             # Инициализируем приложение асинхронно
             await self.application.initialize()
 
-            # Положим трекеры и контейнер зависимостей в bot_data, чтобы команды ими пользовались
-            self.application.bot_data["usage"] = self.usage
-            self.application.bot_data["chats"] = self.chats
-            self.application.bot_data["metrics"] = self.metrics
-            # Redis‑обёртки тоже доступны обработчикам через bot_data:
-            self.application.bot_data["prompt_cache"] = self.prompt_cache
-            self.application.bot_data["user_state_store"] = self.user_state_store
-            self.application.bot_data["rate_limiter"] = self.rate_limiter
-            # Контейнер зависимостей и ссылка на бота для управленческих команд (/stop)
-            self.application.bot_data["services"] = self.services
-            self.application.bot_data["bot"] = self
+            # Все зависимости доступны через BotServices, bot_data больше не используется для DI
 
             # Ретраи запуска сети (start + polling)
             delay = 3
