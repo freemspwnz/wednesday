@@ -556,6 +556,7 @@ class CommandHandlers:
             *args,
             max_retries=max_retries,
             delay=delay,
+            handle_rate_limit=True,
             **kwargs,
         )
 

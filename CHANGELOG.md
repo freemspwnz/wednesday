@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Унификация политики Retry — расширение utils/telegram_retry для поддержки retry_after**:
+  - Добавлена обработка `TelegramError` с кодом 429 (rate limit) в функцию `retry_on_connect_error`
+  - Добавлен параметр `handle_rate_limit: bool = True` для включения обработки rate limit
+  - При обнаружении 429 и `handle_rate_limit=True` функция читает `retry_after` из атрибута ошибки или заголовков ответа
+  - Используется `retry_after` как задержка перед следующей попыткой вместо стандартного экспоненциального backoff
+  - Сохранена существующая логика для других сетевых ошибок (httpx, NetworkError, TimedOut)
+
 - **Завершение DI — создание AppSettings для настроек приложения**:
   - Добавлен dataclass `AppSettings` в `services/app_settings.py` для инкапсуляции настроек приложения
   - `AppSettings` содержит поля: `admin_chat_id`, `chat_id`, `scheduler_send_times`, `frog_rate_limit_minutes`, `frog_rate_limit_window_seconds`, `frog_rate_limit_max_requests`, `scheduler_tz`, `time_format_length`
