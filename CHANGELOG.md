@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Изменено
+
+- **Управление зависимостями бота (DI через BotServices)**:
+  - Добавлен отдельный контейнер зависимостей `BotServices` (`services/bot_services.py`), инкапсулирующий основные сервисы бота: генератор изображений (`ImageGenerator`), планировщик (`TaskScheduler | None`), хранилища (`UsageTracker`, `ChatsStore`, `DispatchRegistry`, `Metrics`), Redis‑обёртки (`PromptCache`, `UserStateStore`) и `RateLimiter`.
+  - `WednesdayBot` в конструкторе собирает все сервисы в единый объект `self.services: BotServices` и использует его как источник зависимостей для обработчиков команд; при этом ключевые объекты продолжают публиковаться в `application.bot_data` (`usage`, `chats`, `metrics`, `prompt_cache`, `user_state_store`, `rate_limiter`, `bot`, `services`) для сохранения обратной совместимости с существующим кодом.
+  - `CommandHandlers` переведён на явный DI‑интерфейс `CommandHandlers(services: BotServices, next_run_provider=...)`: внутри обработчиков доступ к хранилищам и метрикам осуществляется через `self.services.usage/chats/metrics`, а не через неявное чтение `context.application.bot_data[...]`, что упрощает статический анализ и модульное тестирование.
+  - Обновлены интеграционные и unit‑тесты (`tests/test_bot/test_handlers.py`, `tests/test_smoke_low_coverage.py`): создание `CommandHandlers` теперь выполняется через заглушки `services`/`BotServices`, а тесты, ранее вручную наполнявшие `context.application.bot_data["usage"/"chats"/"metrics"]`, переключены на работу с полями контейнера зависимостей.
+  - Обновлён раздел про тестирование обработчиков в `docs/TESTING_GUIDE.md`: примеры конструирования `CommandHandlers` и совет по использованию DI через `BotServices` вместо прямого доступа к `bot_data` для новых тестов и сервисов.
+
+---
+
 ## [6.11.0] 2025-12-16 — Доработка команд /mod и /unmod: поддержка reply, ограничение доступа для супер-админа и расширенное тестирование
 
 ### Добавлено

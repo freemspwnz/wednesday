@@ -12,6 +12,7 @@ from telegram.ext import Application, ChatMemberHandler, CommandHandler, Context
 from telegram.request import HTTPXRequest
 
 from bot.handlers import CommandHandlers
+from services.bot_services import BotServices
 from services.image_generator import ImageGenerator
 from services.prompt_cache import PromptCache
 from services.rate_limiter import RateLimiter
@@ -113,6 +114,19 @@ class WednesdayBot:
         self.prompt_cache: PromptCache = PromptCache()
         self.user_state_store: UserStateStore = UserStateStore()
         self.rate_limiter: RateLimiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
+
+        # Собираем все сервисы в явный контейнер зависимостей
+        self.services: BotServices = BotServices(
+            image_generator=self.image_generator,
+            scheduler=self.scheduler,
+            usage=self.usage,
+            chats=self.chats,
+            dispatch_registry=self.dispatch_registry,
+            metrics=self.metrics,
+            prompt_cache=self.prompt_cache,
+            user_state_store=self.user_state_store,
+            rate_limiter=self.rate_limiter,
+        )
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
         self.pending_startup_edit: dict[str, Any] | None = None
         # Данные для пост-остановки (например, редактирование сообщения об остановке)
@@ -124,7 +138,7 @@ class WednesdayBot:
         self.logger.info("Создание CommandHandlers")
         # Для get_next_run используем scheduler если он есть, иначе None (Celery управляет расписанием)
         get_next_run_fn = self.scheduler.get_next_run if self.scheduler else lambda: None
-        self.handlers: CommandHandlers = CommandHandlers(self.image_generator, get_next_run_fn)
+        self.handlers: CommandHandlers = CommandHandlers(self.services, get_next_run_fn)
 
         # ID чата для отправки сообщений
         self.chat_id: str | None = config.chat_id
@@ -758,7 +772,7 @@ class WednesdayBot:
             # Инициализируем приложение асинхронно
             await self.application.initialize()
 
-            # Положим трекеры в bot_data, чтобы команды им пользовались
+            # Положим трекеры и контейнер зависимостей в bot_data, чтобы команды ими пользовались
             self.application.bot_data["usage"] = self.usage
             self.application.bot_data["chats"] = self.chats
             self.application.bot_data["metrics"] = self.metrics
@@ -766,7 +780,8 @@ class WednesdayBot:
             self.application.bot_data["prompt_cache"] = self.prompt_cache
             self.application.bot_data["user_state_store"] = self.user_state_store
             self.application.bot_data["rate_limiter"] = self.rate_limiter
-            # Сохраняем ссылку на экземпляр бота для управленческих команд (/stop)
+            # Контейнер зависимостей и ссылка на бота для управленческих команд (/stop)
+            self.application.bot_data["services"] = self.services
             self.application.bot_data["bot"] = self
 
             # Ретраи запуска сети (start + polling)

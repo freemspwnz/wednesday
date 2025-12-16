@@ -532,7 +532,9 @@ async def test_image_generator_with_db_cache(cleanup_tables, monkeypatch):
 @pytest.mark.asyncio
 async def test_start_command(fake_update, fake_context, async_retry_stub):
     """Тест команды /start."""
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = MagicMock()
+    services.image_generator = MagicMock()
+    handler = CommandHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)
 
     await handler.start_command(fake_update, fake_context)
@@ -583,7 +585,9 @@ def fake_context():
 @pytest.mark.asyncio
 async def test_set_frog_limit_command(fake_update, fake_context):
     """Тест команды /set_frog_limit с аргументами."""
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = MagicMock()
+    services.image_generator = MagicMock()
+    handler = CommandHandlers(services=services, next_run_provider=None)
 
     # Настраиваем админ-права
     class AdminOk:
@@ -611,7 +615,9 @@ async def test_set_frog_limit_command(fake_update, fake_context):
 @pytest.mark.asyncio
 async def test_fsm_transition(fake_update, fake_context):
     """Тест FSM-перехода."""
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = MagicMock()
+    services.image_generator = MagicMock()
+    handler = CommandHandlers(services=services, next_run_provider=None)
 
     # Устанавливаем начальное состояние
     fake_context.user_data["state"] = "waiting_for_input"
@@ -636,7 +642,9 @@ async def test_status_command_with_postgres(fake_update, fake_context, cleanup_t
     from utils.metrics import Metrics
     from utils.usage_tracker import UsageTracker
 
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = MagicMock()
+    services.image_generator = MagicMock()
+    handler = CommandHandlers(services=services, next_run_provider=None)
 
     # Используем реальные хранилища
     usage = UsageTracker(storage_path="ignored.json")
@@ -663,7 +671,9 @@ async def test_status_command_with_postgres(fake_update, fake_context, cleanup_t
 @pytest.mark.asyncio
 async def test_handler_with_retry_stub(fake_update, fake_context, async_retry_stub):
     """Тест обработчика с отключённым retry."""
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = MagicMock()
+    services.image_generator = MagicMock()
+    handler = CommandHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)  # Отключает retry для теста
 
     await handler.start_command(fake_update, fake_context)
@@ -834,7 +844,9 @@ async def test_with_singleton_reset(reset_singletons):
 @pytest.mark.asyncio
 async def test_handler(fake_update, fake_context):
     """Тест обработчика с моками Telegram."""
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = MagicMock()
+    services.image_generator = MagicMock()
+    handler = CommandHandlers(services=services, next_run_provider=None)
     await handler.start_command(fake_update, fake_context)
     fake_update.message.reply_text.assert_awaited()
 ```
@@ -849,7 +861,9 @@ async def test_handler(fake_update, fake_context):
 @pytest.mark.asyncio
 async def test_handler(fake_update, fake_context, async_retry_stub):
     """Тест обработчика без retry."""
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = MagicMock()
+    services.image_generator = MagicMock()
+    handler = CommandHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)  # Отключает retry
     await handler.start_command(fake_update, fake_context)
 ```

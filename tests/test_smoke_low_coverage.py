@@ -8,6 +8,7 @@ import pytest
 
 from bot.handlers import CommandHandlers
 from services import prompt_cache as prompt_cache_module, rate_limiter as rate_limiter_module
+from services.bot_services import BotServices
 from services.clients import factory as clients_factory
 from utils.redis_client import _InMemoryRedis
 
@@ -137,7 +138,18 @@ async def test_command_handlers_start_help(
             return []
 
     monkeypatch.setattr("bot.handlers.AdminsStore", _AdminNo)
-    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    services = BotServices(
+        image_generator=MagicMock(),
+        scheduler=None,
+        usage=MagicMock(),
+        chats=MagicMock(),
+        dispatch_registry=MagicMock(),
+        metrics=MagicMock(),
+        prompt_cache=MagicMock(),
+        user_state_store=MagicMock(),
+        rate_limiter=MagicMock(),
+    )
+    handler = CommandHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)
 
     await handler.start_command(fake_update, fake_context)

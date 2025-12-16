@@ -14,8 +14,8 @@ import httpx
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from services.bot_services import BotServices
 from services.celery_app import celery_app
-from services.image_generator import ImageGenerator
 from utils.admins_store import AdminsStore
 from utils.config import config
 from utils.logger import get_logger, log_all_methods
@@ -66,7 +66,7 @@ class CommandHandlers:
 
     def __init__(
         self,
-        image_generator: ImageGenerator,
+        services: BotServices,
         next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
         """Инициализирует обработчики команд.
@@ -84,7 +84,8 @@ class CommandHandlers:
         """
         self.logger = get_logger(__name__)
         self.logger.info("Начало инициализации CommandHandlers")
-        self.image_generator: ImageGenerator = image_generator
+        self.services: BotServices = services
+        self.image_generator = services.image_generator
         self.next_run_provider: Callable[[], datetime | None] | None = next_run_provider
         # Инициализируем хранилище админов
         self.logger.info("Инициализация хранилища админов")
@@ -170,8 +171,8 @@ class CommandHandlers:
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
-            context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args и к данным приложения через context.application.bot_data.
+            context: Контекст бота, используемый для доступа к аргументам команды
+                через context.args. Данные об использовании берутся из self.services.usage.
 
         Side Effects:
             - Вызывает usage.set_frog_threshold() для установки нового порога.
@@ -204,7 +205,7 @@ class CommandHandlers:
                 raise ValueError(f"Порог должен быть положительным числом, получено: {raw}")
             # Ограничим максимумом MAX_FROG_THRESHOLD
             desired = min(raw, MAX_FROG_THRESHOLD)
-            usage = context.application.bot_data.get("usage")
+            usage = self.services.usage
             if usage:
                 new_threshold = await usage.set_frog_threshold(desired)
                 total, _threshold, quota = await usage.get_limits_info()
@@ -236,8 +237,8 @@ class CommandHandlers:
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
-            context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args и к данным приложения через context.application.bot_data.
+            context: Контекст бота, используемый для доступа к аргументам команды
+                через context.args. Данные об использовании берутся из self.services.usage.
 
         Side Effects:
             - Вызывает usage.set_month_total() для установки текущего использования.
@@ -260,7 +261,7 @@ class CommandHandlers:
             raw = int(context.args[0])
             if raw < 0:
                 raise ValueError
-            usage = context.application.bot_data.get("usage")
+            usage = self.services.usage
             if usage:
                 # Ограничим значением квоты
                 capped = min(raw, usage.monthly_quota)
@@ -721,8 +722,8 @@ class CommandHandlers:
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
-            context: Контекст бота, предоставляющий доступ к хранилищу использования
-                через context.application.bot_data.get("usage") для проверки лимитов.
+            context: Контекст бота, предоставляющий доступ к объекту бота и Celery‑контексту.
+                Информация о лимитах и использовании берётся из self.services.usage.
 
         Side Effects:
             - Проверяет глобальный и per-user rate limits.
@@ -788,8 +789,8 @@ class CommandHandlers:
 
         self._global_frog_rate_limit[now] = self._global_frog_rate_limit.get(now, 0) + 1
 
-        # Проверяем лимит генераций (храним в application.bot_data)
-        usage = context.application.bot_data.get("usage")
+        # Проверяем лимит генераций
+        usage = self.services.usage
         if usage and not await usage.can_use_frog():
             total, threshold, quota = await usage.get_limits_info()
             try:
@@ -860,9 +861,9 @@ class CommandHandlers:
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
-            context: Контекст бота, предоставляющий доступ к хранилищам через
-                context.application.bot_data (usage, chats, metrics) и к боту
-                через context.bot для получения информации о боте.
+            context: Контекст бота, предоставляющий доступ к Telegram‑боту через context.bot
+                для получения информации о боте. Хранилища (usage, chats, metrics)
+                берутся из self.services.*.
 
         Side Effects:
             - Вызывает image_generator.check_api_status() для проверки Kandinsky API.
@@ -944,7 +945,7 @@ class CommandHandlers:
                 gigachat_status = "⚠️  Не настроен (GIGACHAT_AUTHORIZATION_KEY не указан)"
 
             # Информация об использовании и лимитах
-            usage = context.application.bot_data.get("usage")
+            usage = self.services.usage
             usage_info = "N/A"
             if usage:
                 total, threshold, quota = await usage.get_limits_info()
@@ -952,13 +953,13 @@ class CommandHandlers:
                 usage_info = f"{total}/{quota} ({used_percent}%), порог: {threshold}"
 
             # Информация об активных чатах
-            chats = context.application.bot_data.get("chats")
+            chats = self.services.chats
             chats_info: str | int = "N/A"
             if chats:
                 chats_info = len(await chats.list_chat_ids())
 
             # Метрики производительности (из /health)
-            metrics = context.application.bot_data.get("metrics")
+            metrics = self.services.metrics
             metrics_text = "Не настроены"
             if metrics:
                 m_sum = await metrics.get_summary()
@@ -1093,8 +1094,9 @@ class CommandHandlers:
             update: Объект обновления Telegram, содержащий информацию о сообщении,
                 пользователе и чате, из которого отправлена команда.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args, к хранилищу чатов через context.application.bot_data.get("chats"),
-                и к боту для отправки сообщений через context.bot.
+                через context.args и к самому Telegram‑боту через context.bot.
+                Список целевых чатов и лимиты использования берутся из self.services.chats
+                и self.services.usage.
 
         Side Effects:
             - Вызывает image_generator.generate_frog_image() для генерации нового изображения
@@ -1122,20 +1124,7 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
-        chats = context.application.bot_data.get("chats")
-        if not chats:
-            self.logger.warning("Хранилище чатов не настроено")
-            try:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Хранилище чатов не настроено",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
-            return
-
+        chats = self.services.chats
         chat_ids = await chats.list_chat_ids()
         if not chat_ids:
             self.logger.info("Нет активных чатов")
@@ -1187,7 +1176,7 @@ class CommandHandlers:
         arg = context.args[0].strip().lower()
 
         # Проверяем лимит генераций
-        usage = context.application.bot_data.get("usage")
+        usage = self.services.usage
         can_generate = True
         if usage:
             can_generate = await usage.can_use_frog()
@@ -1400,7 +1389,7 @@ class CommandHandlers:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args и к хранилищу чатов через context.application.bot_data.get("chats").
+                через context.args. Хранилище чатов берётся из self.services.chats.
 
         Side Effects:
             - Вызывает chats.add_chat() для добавления чата в хранилище.
@@ -1439,18 +1428,17 @@ class CommandHandlers:
 
         try:
             chat_id = int(context.args[0])
-            chats = context.application.bot_data.get("chats")
-            if chats:
-                await chats.add_chat(chat_id, "Manually added")
-                try:
-                    await self._retry_on_connect_error(
-                        update.message.reply_text,
-                        f"✅ Чат {chat_id} добавлен в рассылку",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as e:
-                    self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
+            chats = self.services.chats
+            await chats.add_chat(chat_id, "Manually added")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"✅ Чат {chat_id} добавлен в рассылку",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception as e:
+                self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
         except ValueError:
             try:
                 await self._retry_on_connect_error(
@@ -1472,7 +1460,7 @@ class CommandHandlers:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args и к хранилищу чатов через context.application.bot_data.get("chats").
+                через context.args. Хранилище чатов берётся из self.services.chats.
 
         Side Effects:
             - Вызывает chats.remove_chat() для удаления чата из хранилища.
@@ -1494,10 +1482,9 @@ class CommandHandlers:
 
         try:
             chat_id = int(context.args[0])
-            chats = context.application.bot_data.get("chats")
-            if chats:
-                await chats.remove_chat(chat_id)
-                await update.message.reply_text(f"✅ Чат {chat_id} удалён из рассылки")
+            chats = self.services.chats
+            await chats.remove_chat(chat_id)
+            await update.message.reply_text(f"✅ Чат {chat_id} удалён из рассылки")
         except ValueError:
             await update.message.reply_text("❌ Неверный chat_id (должен быть числом)")
 
@@ -1510,9 +1497,9 @@ class CommandHandlers:
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении,
                 пользователе и чате, из которого отправлена команда.
-            context: Контекст бота, предоставляющий доступ к хранилищу чатов
-                через context.application.bot_data.get("chats") и к боту
+            context: Контекст бота, предоставляющий доступ к Telegram‑боту
                 для получения информации о чатах через context.bot.get_chat().
+                Список ID чатов берётся из self.services.chats.
 
         Side Effects:
             - Вызывает chats.list_chat_ids() для получения списка ID чатов.
@@ -1538,20 +1525,7 @@ class CommandHandlers:
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
-        chats = context.application.bot_data.get("chats")
-        if not chats:
-            self.logger.warning("Хранилище чатов не настроено")
-            try:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Хранилище чатов не настроено",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
-            return
-
+        chats = self.services.chats
         chat_ids = await chats.list_chat_ids()
         if not chat_ids:
             self.logger.info("Нет активных чатов")
@@ -1600,7 +1574,7 @@ class CommandHandlers:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args и к генератору изображений через image_generator.
+                через context.args. Генератор изображений берётся из self.image_generator.
 
         Side Effects:
             - Вызывает image_generator.image_client.set_model() для установки модели.
@@ -1678,7 +1652,7 @@ class CommandHandlers:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args и к генератору изображений через image_generator.
+                через context.args. Клиент GigaChat берётся из self.image_generator.text_client.
 
         Side Effects:
             - Вызывает image_generator.text_client.set_model() для установки модели.
