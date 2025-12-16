@@ -13,6 +13,9 @@ from telegram.ext import Application, ChatMemberHandler, CommandHandler, Context
 from telegram.request import HTTPXRequest
 
 from bot.handlers import CommandHandlers
+from bot.handlers_admin import AdminHandlers
+from bot.handlers_models import ModelHandlers
+from bot.handlers_user import UserHandlers
 from services.bot_services import BotServices
 from services.image_generator import ImageGenerator
 from services.prompt_cache import PromptCache
@@ -136,10 +139,17 @@ class WednesdayBot:
         self._stop_message_sent: bool = False
 
         # Создаем обработчики команд
-        self.logger.info("Создание CommandHandlers")
+        self.logger.info("Создание CommandHandlers и специализированных наборов хендлеров")
         # Для get_next_run используем scheduler если он есть, иначе None (Celery управляет расписанием)
         get_next_run_fn = self.scheduler.get_next_run if self.scheduler else lambda: None
+        # Базовый набор с полной логикой команд (совместимость с существующими тестами и Celery)
         self.handlers: CommandHandlers = CommandHandlers(self.services, get_next_run_fn)
+        # Узкоспециализированные наборы для регистрации в PTB по зонам ответственности
+        self.user_handlers: UserHandlers = UserHandlers(self.services, get_next_run_fn)
+        # Админские и пользовательские команды должны разделять общее состояние (лимиты, хранилища),
+        # поэтому используем единый контейнер сервисов и один и тот же next_run_provider.
+        self.admin_handlers: AdminHandlers = AdminHandlers(self.services, get_next_run_fn)
+        self.model_handlers: ModelHandlers = ModelHandlers(self.services, get_next_run_fn)
 
         # ID чата для отправки сообщений
         self.chat_id: str | None = config.chat_id
@@ -173,76 +183,70 @@ class WednesdayBot:
         """
         self.logger.info("Начало настройки обработчиков команд")
 
-        # Регистрируем обработчики команд
+        # Регистрируем пользовательские команды
         self.application.add_handler(
-            CommandHandler("start", self.handlers.start_command),
+            CommandHandler("start", self.user_handlers.start_command),
         )
         self.application.add_handler(
-            CommandHandler("help", self.handlers.help_command),
+            CommandHandler("help", self.user_handlers.help_command),
         )
         self.application.add_handler(
-            CommandHandler("frog", self.handlers.frog_command),
-        )
-        self.application.add_handler(
-            CommandHandler("status", self.handlers.status_command),
+            CommandHandler("frog", self.user_handlers.frog_command),
         )
 
-        # Admin команды (регистрируем перед unknown_command!)
+        # Админские команды (регистрируем перед unknown_command!)
         self.application.add_handler(
-            CommandHandler("force_send", self.handlers.admin_force_send_command),
+            CommandHandler("status", self.admin_handlers.status_command),
         )
         self.application.add_handler(
-            CommandHandler("log", self.handlers.admin_log_command),
+            CommandHandler("force_send", self.admin_handlers.admin_force_send_command),
         )
         self.application.add_handler(
-            CommandHandler("add_chat", self.handlers.admin_add_chat_command),
+            CommandHandler("log", self.admin_handlers.admin_log_command),
         )
         self.application.add_handler(
-            CommandHandler("remove_chat", self.handlers.admin_remove_chat_command),
+            CommandHandler("add_chat", self.admin_handlers.admin_add_chat_command),
         )
         self.application.add_handler(
-            CommandHandler("stop", self.handlers.stop_command),
+            CommandHandler("remove_chat", self.admin_handlers.admin_remove_chat_command),
         )
-
         self.application.add_handler(
-            CommandHandler("list_chats", self.handlers.list_chats_command),
+            CommandHandler("stop", self.admin_handlers.stop_command),
         )
-
         self.application.add_handler(
-            CommandHandler("set_kandinsky_model", self.handlers.set_kandinsky_model_command),
+            CommandHandler("list_chats", self.admin_handlers.list_chats_command),
         )
-
         self.application.add_handler(
-            CommandHandler("set_gigachat_model", self.handlers.set_gigachat_model_command),
+            CommandHandler("mod", self.admin_handlers.mod_command),
         )
-
         self.application.add_handler(
-            CommandHandler("mod", self.handlers.mod_command),
+            CommandHandler("unmod", self.admin_handlers.unmod_command),
         )
-
         self.application.add_handler(
-            CommandHandler("unmod", self.handlers.unmod_command),
+            CommandHandler("list_mods", self.admin_handlers.list_mods_command),
         )
-
-        self.application.add_handler(
-            CommandHandler("list_mods", self.handlers.list_mods_command),
-        )
-
-        self.application.add_handler(
-            CommandHandler("list_models", self.handlers.list_models_command),
-        )
-
         # Админ: управление лимитами
         self.application.add_handler(
-            CommandHandler("set_frog_limit", self.handlers.set_frog_limit_command),
+            CommandHandler("set_frog_limit", self.admin_handlers.set_frog_limit_command),
         )
         self.application.add_handler(
-            CommandHandler("set_frog_used", self.handlers.set_frog_used_command),
+            CommandHandler("set_frog_used", self.admin_handlers.set_frog_used_command),
+        )
+
+        # Команды управления моделями
+        self.application.add_handler(
+            CommandHandler("set_kandinsky_model", self.model_handlers.set_kandinsky_model_command),
+        )
+        self.application.add_handler(
+            CommandHandler("set_gigachat_model", self.model_handlers.set_gigachat_model_command),
+        )
+        self.application.add_handler(
+            CommandHandler("list_models", self.model_handlers.list_models_command),
         )
 
         # Обработчик для неизвестных команд
         self.application.add_handler(
-            MessageHandler(filters.COMMAND, self.handlers.unknown_command),
+            MessageHandler(filters.COMMAND, self.user_handlers.unknown_command),
         )
 
         # Обработчик событий изменения статуса бота в чатах
