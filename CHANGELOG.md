@@ -15,6 +15,10 @@
   - Сохранена обработка успешной отправки (отметка в dispatch_registry, increment счетчиков)
   - Упрощена обработка ошибок: разделение на сетевые/Telegram-ошибки и неожиданные программные ошибки
   - Удалена неиспользуемая константа `RETRY_AFTER_DEFAULT_SECONDS` из `wednesday_bot.py`
+  - Классификация исключений в хендлерах: заменены все `except Exception:` на конкретные типы в методах `frog_command`, `stop_command`, `admin_log_command`, `admin_force_send_command`
+  - Infrastructure ошибки (retry + мягкая деградация): `except (TelegramError, NetworkError, TimedOut):` для сетевых/Telegram ошибок
+  - Programming/Business ошибки: `except (ValueError, TypeError, AttributeError):` для логических ошибок
+  - Обвязочный код (shutdown): оставлен `except Exception:` в `stop_command` для фоллбека остановки с добавлением `exc_info=True` в логирование
 
 - **Завершение DI — создание AppSettings для настроек приложения**:
   - Добавлен dataclass `AppSettings` в `services/app_settings.py` для инкапсуляции настроек приложения

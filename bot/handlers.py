@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from telegram import Bot, Message, Update
+from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from services.bot_services import BotServices
@@ -328,7 +329,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
+            except (TelegramError, NetworkError, TimedOut):
                 pass
             return
 
@@ -349,7 +350,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
+            except (TelegramError, NetworkError, TimedOut):
                 pass
             return
 
@@ -366,7 +367,7 @@ class CommandHandlers:
                         max_retries=3,
                         delay=2,
                     )
-                except Exception:
+                except (TelegramError, NetworkError, TimedOut):
                     pass
                 return
             count = int(raw)
@@ -401,7 +402,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
+            except (TelegramError, NetworkError, TimedOut):
                 pass
             return
 
@@ -412,7 +413,7 @@ class CommandHandlers:
                 max_retries=3,
                 delay=2,
             )
-        except Exception:
+        except (TelegramError, NetworkError, TimedOut):
             pass
 
         # Отправляем в порядке от старых к новым
@@ -426,7 +427,7 @@ class CommandHandlers:
                     chat_id=update.effective_chat.id,
                     path=lf,
                 )
-            except Exception as e:
+            except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.warning(
                     f"Ошибка при отправке лога {lf} (контейнерный путь: {LOGS_CONTAINER_PATH}/{lf.name}): {e}",
                 )
@@ -437,7 +438,7 @@ class CommandHandlers:
                 max_retries=3,
                 delay=2,
             )
-        except Exception:
+        except (TelegramError, NetworkError, TimedOut):
             pass
 
     async def stop_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -484,9 +485,9 @@ class CommandHandlers:
             if admin_chat_id and update.effective_chat and update.effective_chat.id is not None:
                 try:
                     is_admin_chat = admin_chat_id == update.effective_chat.id
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     is_admin_chat = False
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             is_admin_chat = False
 
         # Отправляем статус только если это НЕ админ-чат
@@ -499,7 +500,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
+            except (TelegramError, NetworkError, TimedOut):
                 status_msg = None
 
         # Сохраняем метаданные сообщения в экземпляр основного бота (только для не-админ чатов)
@@ -510,7 +511,7 @@ class CommandHandlers:
                     "chat_id": update.effective_chat.id,
                     "message_id": getattr(status_msg, "message_id", None),
                 }
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             pass
 
         # Получаем экземпляр основного бота через DI и останавливаем его
@@ -523,12 +524,12 @@ class CommandHandlers:
                 try:
                     if hasattr(context.application, "updater") and context.application.updater:
                         await context.application.updater.stop()
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.warning(f"Ошибка при остановке updater через фоллбек: {e}", exc_info=True)
                 try:
                     await context.application.stop()
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.warning(f"Ошибка при остановке application через фоллбек: {e}", exc_info=True)
         except Exception as e:
             self.logger.error(f"Ошибка при попытке остановить бота через /stop: {e}", exc_info=True)
 
@@ -773,7 +774,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception as e:
+            except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.error(f"Не удалось отправить сообщение о rate limit после {3} попыток: {e}")
             return
 
@@ -793,7 +794,7 @@ class CommandHandlers:
                         max_retries=MAX_RETRIES_DEFAULT,
                         delay=RETRY_DELAY_DEFAULT,
                     )
-                except Exception as e:
+                except (TelegramError, NetworkError, TimedOut) as e:
                     self.logger.error(
                         f"Не удалось отправить сообщение о rate limit после {MAX_RETRIES_DEFAULT} попыток: {e}",
                     )
@@ -814,7 +815,7 @@ class CommandHandlers:
                     max_retries=MAX_RETRIES_DEFAULT,
                     delay=RETRY_DELAY_DEFAULT,
                 )
-            except Exception as e:
+            except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.error(
                     f"Не удалось отправить сообщение о лимите после {MAX_RETRIES_DEFAULT} попыток: {e}",
                 )
@@ -1130,7 +1131,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception as e:
+            except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
@@ -1145,7 +1146,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception as e:
+            except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
             return
 
@@ -1158,7 +1159,7 @@ class CommandHandlers:
                     chat_info = await context.bot.get_chat(chat_id)
                     title = getattr(chat_info, "title", getattr(chat_info, "first_name", "Unknown"))
                     chat_list.append(f"• {title} (ID: {chat_id})")
-                except Exception as e:
+                except (TelegramError, NetworkError, TimedOut) as e:
                     self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
                     chat_list.append(f"• Чат {chat_id} (не удалось получить информацию)")
 
@@ -1178,7 +1179,7 @@ class CommandHandlers:
                     delay=2,
                 )
                 self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
-            except Exception as e:
+            except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.error(f"Не удалось отправить список чатов после {3} попыток: {e}")
             return
 
@@ -1213,7 +1214,7 @@ class CommandHandlers:
                             max_retries=3,
                             delay=2,
                         )
-                    except Exception as e:
+                    except (TelegramError, NetworkError, TimedOut) as e:
                         self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
                     return
             except ValueError:
@@ -1224,7 +1225,7 @@ class CommandHandlers:
                         max_retries=3,
                         delay=2,
                     )
-                except Exception as e:
+                except (TelegramError, NetworkError, TimedOut) as e:
                     self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
                 return
 
@@ -1236,7 +1237,7 @@ class CommandHandlers:
                     max_retries=3,
                     delay=2,
                 )
-            except Exception as e:
+            except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
             return
 
@@ -1248,7 +1249,7 @@ class CommandHandlers:
                 max_retries=3,
                 delay=2,
             )
-        except Exception as e:
+        except (TelegramError, NetworkError, TimedOut) as e:
             self.logger.error(f"Не удалось отправить статусное сообщение после {3} попыток: {e}")
             status_msg = None
 
