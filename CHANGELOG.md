@@ -32,6 +32,10 @@
   - Тесты модельных команд используют `ModelHandlers`
   - Обновлен тест `test_wednesday_bot_initializes_components` для проверки специализированных хендлеров
   - Удалены неиспользуемые импорты `CommandHandlers` из тестов
+  - Удален класс `CommandHandlers` из `bot/handlers.py`
+  - Файл `bot/handlers.py` оставлен с минимальным содержимым для совместимости с импортами в тестах
+  - Обновлен `test_smoke_low_coverage.py` для использования `UserHandlers` вместо `CommandHandlers`
+  - Исправлен патч `AdminsStore` в `test_smoke_low_coverage.py` для использования правильного модуля
 
 - **Унификация политики Retry — расширение utils/telegram_retry для поддержки retry_after**:
   - Добавлена обработка `TelegramError` с кодом 429 (rate limit) в функцию `retry_on_connect_error`

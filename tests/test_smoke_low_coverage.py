@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bot.handlers import CommandHandlers
+from bot.handlers_user import UserHandlers
 from services import prompt_cache as prompt_cache_module, rate_limiter as rate_limiter_module
 from services.bot_services import BotServices
 from services.clients import factory as clients_factory
@@ -137,7 +137,7 @@ async def test_command_handlers_start_help(
         async def list_all_admins(self) -> list[int]:
             return []
 
-    monkeypatch.setattr("bot.handlers.AdminsStore", _AdminNo)
+    monkeypatch.setattr("utils.admins_store.AdminsStore", _AdminNo)
     services = BotServices(
         image_generator=MagicMock(),
         scheduler=None,
@@ -150,7 +150,7 @@ async def test_command_handlers_start_help(
         rate_limiter=MagicMock(),
         settings=MagicMock(),
     )
-    handler = CommandHandlers(services=services, next_run_provider=None)
+    handler = UserHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)
 
     await handler.start_command(fake_update, fake_context)
