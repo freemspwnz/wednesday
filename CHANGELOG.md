@@ -1,8 +1,18 @@
 # CHANGELOG
 
-## [Unreleased]
+## [6.13.0] 2025-12-17 — Завершение DI, BaseHandlers вместо CommandHandlers и масштабируемый rate limiting
 
 ### Изменено
+
+- **Обновление документации архитектуры для SupportBot**:
+  - Обновлен раздел `SupportBot` в `ARCHITECTURE.md` с информацией о наследовании от `BaseHandlers`
+  - Добавлена информация об использовании `AppSettings` для доступа к настройкам через DI
+  - Добавлена информация о минимальном `BotServices` для `SupportBot`
+  - Добавлена информация об унифицированном retry helper и классификации исключений в `SupportBot`
+  - Обновлен раздел `Handler Architecture` с упоминанием `SupportBot` как наследника `BaseHandlers`
+  - Обновлен раздел `Dependency Injection` с информацией о минимальном `BotServices` для `SupportBot`
+  - Обновлен раздел `Retry Policy` с информацией об использовании retry helper в `SupportBot`
+  - Обновлен раздел `Классификация исключений` с информацией о применении в `SupportBot`
 
 - **Использование BaseHandlers для переиспользования общих методов в SupportBot**:
   - Создан минимальный `BotServices` в `SupportBot.__init__` с полями `settings` и `rate_limiter` для использования `BaseHandlers`
