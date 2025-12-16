@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Унификация retry-политики в SupportBot**:
+  - Добавлен импорт `retry_on_connect_error` из `utils.telegram_retry` в `SupportBot`
+  - Обернуты все вызовы отправки сообщений в `retry_on_connect_error` для обеспечения консистентности с `WednesdayBot`
+  - Обновлен метод `maintenance_message`: обернут `reply_text` в `retry_on_connect_error` с параметрами `max_retries=3, delay=2.0, handle_rate_limit=True`
+  - Обновлен метод `log_command`: обернуты все вызовы `reply_text` и `_send_log_file` в `retry_on_connect_error`
+  - Обновлен метод `_send_log_file`: обернут `send_document` в `retry_on_connect_error`
+  - Обновлен метод `start_main_command`: обернут `reply_text` в `retry_on_connect_error`
+  - Обновлен метод `help_command`: обернут `reply_text` в `retry_on_connect_error`
+  - Обновлен метод `start`: обернут `send_message` в `retry_on_connect_error` для уведомлений администраторам
+  - Обновлен метод `stop`: обернут `send_message` в `retry_on_connect_error` для уведомлений администраторам
+
 - **Приведение SupportBot в соответствие с DI и AppSettings**:
   - Удалена публикация в `bot_data` из метода `start` в `SupportBot`
   - Добавлен комментарий о том, что все зависимости доступны через экземпляр `SupportBot`, `bot_data` больше не используется для DI
