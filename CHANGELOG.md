@@ -25,6 +25,13 @@
   - Удалено создание `self.handlers = CommandHandlers(...)` из `WednesdayBot.__init__`
   - Удален импорт `CommandHandlers` из `wednesday_bot.py`
   - Обновлены комментарии в `wednesday_bot.py`, убраны упоминания `CommandHandlers`
+  - Обновлены тесты для использования специализированных хендлеров вместо `CommandHandlers`
+  - Заменены все создания `CommandHandlers` на соответствующие специализированные хендлеры в `test_handlers.py`
+  - Тесты пользовательских команд используют `UserHandlers`
+  - Тесты административных команд используют `AdminHandlers`
+  - Тесты модельных команд используют `ModelHandlers`
+  - Обновлен тест `test_wednesday_bot_initializes_components` для проверки специализированных хендлеров
+  - Удалены неиспользуемые импорты `CommandHandlers` из тестов
 
 - **Унификация политики Retry — расширение utils/telegram_retry для поддержки retry_after**:
   - Добавлена обработка `TelegramError` с кодом 429 (rate limit) в функцию `retry_on_connect_error`

@@ -172,7 +172,9 @@ def wednesday_bot(monkeypatch: Any) -> Any:
 
 def test_wednesday_bot_initializes_components(wednesday_bot: Any) -> None:
     assert wednesday_bot.application is not None
-    assert wednesday_bot.handlers is not None
+    assert wednesday_bot.user_handlers is not None
+    assert wednesday_bot.admin_handlers is not None
+    assert wednesday_bot.model_handlers is not None
     # scheduler может быть None если USE_OLD_SCHEDULER=false (используется Celery)
     # assert wednesday_bot.scheduler is not None
     assert wednesday_bot.is_running is False
