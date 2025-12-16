@@ -13,6 +13,10 @@
   - `UserHandlers` теперь наследуется от `BaseHandlers` вместо делегирования в `CommandHandlers`
   - Удалено делегирование и поле `self._core` из `UserHandlers`
   - Обновлен `__init__` в `UserHandlers`: принимает только `services` и `next_run_provider`, инициализирует `BaseHandlers`
+  - Перенесена полная реализация административных команд в `AdminHandlers`: `status_command`, `admin_log_command`, `stop_command`, `admin_force_send_command`, `admin_add_chat_command`, `admin_remove_chat_command`, `list_chats_command`, `set_frog_limit_command`, `set_frog_used_command`, `mod_command`, `unmod_command`, `list_mods_command`
+  - `AdminHandlers` теперь наследуется от `BaseHandlers` вместо делегирования в `CommandHandlers`
+  - Удалено делегирование и поле `self._core` из `AdminHandlers`
+  - Обновлен `__init__` в `AdminHandlers`: принимает только `services` и `next_run_provider`, инициализирует `BaseHandlers`
 
 - **Унификация политики Retry — расширение utils/telegram_retry для поддержки retry_after**:
   - Добавлена обработка `TelegramError` с кодом 429 (rate limit) в функцию `retry_on_connect_error`
