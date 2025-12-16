@@ -4,6 +4,9 @@
 
 ### Изменено
 
+- **Использование BaseHandlers для переиспользования общих методов в SupportBot**:
+  - Создан минимальный `BotServices` в `SupportBot.__init__` с полями `settings` и `rate_limiter` для использования `BaseHandlers`
+
 - **Унификация retry-политики в SupportBot**:
   - Добавлен импорт `retry_on_connect_error` из `utils.telegram_retry` в `SupportBot`
   - Обернуты все вызовы отправки сообщений в `retry_on_connect_error` для обеспечения консистентности с `WednesdayBot`
