@@ -85,13 +85,17 @@ Wednesday Frog Bot использует современный стек набл
 - **`celery_tasks_total`** (Counter)
   - Описание: Общее количество Celery задач
   - Labels: `task_name`, `status`
-  - Пример: `celery_tasks_total{task_name="wednesday.send_frog",status="success"}`
+  - Примеры:
+    - `celery_tasks_total{task_name="wednesday.send_frog",status="success"}` — автоматические отправки по расписанию
+    - `celery_tasks_total{task_name="wednesday.send_frog_manual",status="success"}` — ручные генерации по команде `/frog`
 
 - **`celery_task_duration_seconds`** (Histogram)
   - Описание: Длительность выполнения Celery задач в секундах
   - Labels: `task_name`
   - Buckets: 1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0
-  - Пример: `celery_task_duration_seconds_bucket{task_name="wednesday.send_frog",le="30.0"}`
+  - Примеры:
+    - `celery_task_duration_seconds_bucket{task_name="wednesday.send_frog",le="30.0"}` — автоматические отправки
+    - `celery_task_duration_seconds_bucket{task_name="wednesday.send_frog_manual",le="30.0"}` — ручные генерации
 
 - **`celery_task_retries_total`** (Counter)
   - Описание: Количество retry-попыток для Celery задач

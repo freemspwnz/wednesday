@@ -301,78 +301,90 @@ graph TB
     HC -->|Checks| RD
 ```
 
-### Диаграмма 2: Поток данных при генерации изображения (Sequence Diagram)
+### Диаграмма 2: Поток данных при генерации изображения по команде `/frog` (Sequence Diagram)
+
+**Примечание:** Эта диаграмма показывает упрощённый поток. Для детального асинхронного потока с Celery см. Диаграмму 2a.
 
 ```mermaid
 sequenceDiagram
     participant User as Пользователь
     participant Bot as WednesdayBot
     participant Handler as CommandHandlers
-    participant RL as RateLimiter
+    participant Queue as Redis Queue
+    participant Worker as Celery Worker
     participant IG as ImageGenerator
-    participant PC as PromptCache
-    participant GC as GigaChat Client
-    participant KC as Kandinsky Client
     participant PG as PostgreSQL
-    participant Metrics as Metrics
 
     User->>Bot: /frog
     Bot->>Handler: frog_command()
 
-    Handler->>RL: Проверка rate limit
-    RL-->>Handler: Разрешен
-
-    Handler->>Handler: Проверка лимита генераций
+    Handler->>Handler: Проверка rate limit
     Handler->>PG: UsageTracker.can_use_frog()
     PG-->>Handler: Разрешен
 
-    Handler->>IG: generate_frog_image()
+    Handler->>Bot: send_message("🐸 Генерирую жабу...")
+    Bot->>User: Статусное сообщение
 
-    alt Промпт в кэше
-        IG->>PC: Получить промпт
-        PC-->>IG: Промпт из кэша
-    else Промпт не в кэше
-        IG->>GC: Сгенерировать промпт
-        GC-->>IG: Новый промпт
-        IG->>PC: Сохранить промпт
-    end
+    Handler->>Queue: send_task("wednesday.send_frog_manual")
+    Note over Handler: Обработчик завершается<br/>за миллисекунды
 
-    IG->>KC: Генерация изображения
-    KC-->>IG: Изображение (bytes)
-
+    Queue->>Worker: Задача из очереди
+    Worker->>IG: generate_frog_image()
+    IG->>IG: Генерация (Kandinsky API)
     IG->>IG: Сохранение локально
-    IG-->>Handler: (image_data, caption)
+    IG-->>Worker: (image_data, caption)
 
-    Handler->>Bot: send_photo()
+    Worker->>Bot: send_photo()
     Bot->>User: Изображение с подписью
+    Worker->>Bot: delete_message() (статус)
 
-    Handler->>PG: UsageTracker.increment()
-    Handler->>Metrics: Обновление метрик
+    Worker->>PG: UsageTracker.increment()
+    Worker->>Worker: Обновление метрик
 ```
 
-### Диаграмма 2a: Синхронный поток команды `/frog` (без Celery)
+### Диаграмма 2a: Асинхронный поток команды `/frog` (с Celery)
 
 ```mermaid
 sequenceDiagram
     participant User as Пользователь
     participant Bot as WednesdayBot
     participant Handler as CommandHandlers
+    participant Queue as Redis Queue
+    participant Worker as Celery Worker
     participant IG as ImageGenerator
     participant KC as Kandinsky Client
-    participant User as Пользователь
+    participant PG as PostgreSQL
 
-    Note over User,User: ⚠️ СИНХРОННЫЙ ПОТОК (без Celery)
+    Note over User,PG: ✅ АСИНХРОННЫЙ ПОТОК (с Celery)
 
     User->>Bot: /frog
-    Bot->>Handler: frog_command() (синхронно)
-    Handler->>IG: generate_frog_image() (синхронно)
-    IG->>KC: Генерация изображения (блокирующий вызов)
-    KC-->>IG: Изображение (bytes)
-    IG-->>Handler: (image_data, caption)
-    Handler->>Bot: send_photo() (синхронно)
-    Bot->>User: Изображение с подписью
+    Bot->>Handler: frog_command()
 
-    Note over User,User: Все операции выполняются<br/>в одном процессе обработчика<br/>без использования Celery
+    Handler->>Handler: Проверка rate limit
+    Handler->>PG: UsageTracker.can_use_frog()
+    PG-->>Handler: Разрешен
+
+    Handler->>Bot: Отправка статусного сообщения
+    Bot->>User: "🐸 Генерирую жабу..."
+
+    Handler->>Queue: send_task("wednesday.send_frog_manual")
+    Handler-->>User: (обработчик завершается за миллисекунды)
+
+    Note over Queue,Worker: Асинхронная обработка в Celery worker
+
+    Queue->>Worker: Задача из очереди
+    Worker->>IG: generate_frog_image()
+    IG->>KC: Генерация изображения
+    KC-->>IG: Изображение (bytes)
+    IG->>IG: Сохранение локально
+    IG-->>Worker: (image_data, caption)
+
+    Worker->>Bot: send_photo()
+    Bot->>User: Изображение с подписью
+    Worker->>Bot: delete_message() (статус)
+
+    Worker->>PG: UsageTracker.increment()
+    Worker->>Worker: Обновление метрик
 ```
 
 ### Диаграмма 3: Поток данных автоматической отправки (Flowchart)
@@ -552,16 +564,21 @@ sequenceDiagram
 ### 1. Ручная генерация (`/frog`)
 
 1. Пользователь отправляет команду `/frog`
-2. `CommandHandlers.frog_command()` проверяет rate limit
-3. Проверяется лимит генераций через `UsageTracker`
-4. `ImageGenerator.generate_frog_image()` генерирует изображение:
-   - Получает или генерирует промпт (GigaChat или fallback)
-   - Генерирует изображение через Kandinsky API
-   - Сохраняет локально
-5. Изображение отправляется пользователю
-6. Обновляются счетчики использования и метрики
+2. `CommandHandlers.frog_command()` проверяет rate limit (глобальный и per-user)
+3. Проверяется лимит генераций через `UsageTracker.can_use_frog()`
+4. Отправляется статусное сообщение пользователю
+5. Задача `wednesday.send_frog_manual` ставится в очередь Celery через `celery_app.send_task()`
+6. Обработчик завершается (за миллисекунды, Event Loop не блокируется)
+7. Celery worker берёт задачу из очереди и выполняет:
+   - `ImageGenerator.generate_frog_image()` генерирует изображение:
+     - Получает или генерирует промпт (GigaChat или fallback)
+     - Генерирует изображение через Kandinsky API
+     - Сохраняет локально
+   - Изображение отправляется пользователю через `bot.application.bot.send_photo()`
+   - Удаляется статусное сообщение
+   - Обновляются счетчики использования (`UsageTracker.increment()`) и метрики
 
-**Примечание:** Команда `/frog` выполняется синхронно в обработчике бота и не использует Celery для фоновой обработки. Это обеспечивает быстрый ответ пользователю, но генерация происходит в том же процессе, что и обработка команды. Автоматические отправки по расписанию используют Celery.
+**Примечание:** Команда `/frog` теперь использует Celery для асинхронной обработки. Обработчик выполняет только валидацию (rate limits, месячный лимит) и постановку задачи в очередь, что обеспечивает быстрый ответ пользователю (завершается за миллисекунды) и исключает блокировку Event Loop. Генерация и отправка изображения выполняются асинхронно в Celery worker, что улучшает масштабируемость системы. Автоматические отправки по расписанию также используют Celery.
 
 ### 2. Автоматическая отправка (Celery Beat)
 
