@@ -7,8 +7,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from services.app_settings import AppSettings
+
+if TYPE_CHECKING:
+    from bot.wednesday_bot import WednesdayBot
 from services.image_generator import ImageGenerator
 from services.prompt_cache import PromptCache
 from services.rate_limiter import RateLimiter
@@ -38,3 +42,4 @@ class BotServices:
     user_state_store: UserStateStore
     rate_limiter: RateLimiter
     settings: AppSettings
+    bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
