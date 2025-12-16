@@ -11,6 +11,8 @@
   - Удалено дублирующее поле `self.logger` (используется из `BaseHandlers`)
   - Удалено дублирующее поле `self.admins` (используется `self.admins_store` из `BaseHandlers`)
   - Заменены все обращения к `self.admins` на `self.admins_store` в методах `_is_admin`, `start` и `stop`
+  - Заменены все прямые вызовы `retry_on_connect_error` на использование `self._retry_on_connect_error` из `BaseHandlers` для консистентности
+  - Удален импорт `retry_on_connect_error` из `utils.telegram_retry` (используется метод из `BaseHandlers`)
 
 - **Унификация retry-политики в SupportBot**:
   - Добавлен импорт `retry_on_connect_error` из `utils.telegram_retry` в `SupportBot`
