@@ -474,8 +474,7 @@ class SupportBot:
             for lf in sorted(selected, key=lambda p: p.name):
                 self.logger.info(f"SupportBot отправляет лог-файл: {lf.name} ({lf.stat().st_size} bytes)")
                 try:
-                    with lf.open("rb") as fh:
-                        await context.bot.send_document(chat_id=update.effective_chat.id, document=fh, filename=lf.name)
+                    await self._send_log_file(context, lf)
                     self.logger.info("SupportBot: лог отправлен успешно")
                 except Exception as e:
                     self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
@@ -486,6 +485,24 @@ class SupportBot:
                 await update.message.reply_text(f"❌ Ошибка при отправке логов: {str(e)[:200]}")
             except Exception:
                 pass
+
+    async def _send_log_file(self, context: ContextTypes.DEFAULT_TYPE, path: Path) -> None:  # noqa: PLR6301
+        """Асинхронно читает лог‑файл и отправляет его как документ.
+
+        Файловый I/O выполняется в отдельном потоке через run_in_executor,
+        чтобы не блокировать event loop SupportBot при работе с большими логами.
+        """
+        loop = asyncio.get_running_loop()
+
+        def _read_bytes(p: Path) -> bytes:
+            return p.read_bytes()
+
+        data = await loop.run_in_executor(None, _read_bytes, path)
+        await context.bot.send_document(
+            chat_id=context.chat_id,
+            document=data,
+            filename=path.name,
+        )
 
     async def start_main_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.

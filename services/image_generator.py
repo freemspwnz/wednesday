@@ -822,6 +822,29 @@ class ImageGenerator:
         """
         return random.choice(self.captions)
 
+    async def _save_image_async(
+        self,
+        image_data: bytes,
+        folder: str = FROG_IMAGES_DIR,
+        prefix: str = "frog",
+        max_files: int = MAX_FILES_DEFAULT,
+    ) -> str:
+        """Асинхронная обёртка над save_image_locally для использования в async‑коде.
+
+        Выполняет синхронные файловые операции в отдельном потоке через
+        loop.run_in_executor, чтобы не блокировать event loop.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self.save_image_locally(
+                image_data=image_data,
+                folder=folder,
+                prefix=prefix,
+                max_files=max_files,
+            ),
+        )
+
     def save_image_locally(
         self,
         image_data: bytes,
@@ -930,6 +953,18 @@ class ImageGenerator:
                 exc_info=True,
             )
             return ""
+
+    async def _get_random_saved_image_async(
+        self,
+        folder: str = FROG_IMAGES_DIR,
+    ) -> tuple[bytes, str] | None:
+        """Асинхронная обёртка над get_random_saved_image для использования в async‑коде.
+
+        Читает файл из файловой системы в отдельном потоке через run_in_executor,
+        чтобы избежать блокировки event loop при доступе к диску.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.get_random_saved_image(folder=folder))
 
     def get_random_saved_image(self, folder: str = FROG_IMAGES_DIR) -> tuple[bytes, str] | None:
         """Получает случайное изображение из сохраненных файлов.

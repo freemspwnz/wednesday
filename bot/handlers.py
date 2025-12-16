@@ -7,9 +7,10 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import datetime
+from pathlib import Path
 from typing import TypeVar
 
-from telegram import Message, Update
+from telegram import Bot, Message, Update
 from telegram.ext import ContextTypes
 
 from services.bot_services import BotServices
@@ -101,6 +102,29 @@ class CommandHandlers:
         self._global_frog_rate_limit_max: int = FROG_RATE_LIMIT_MAX_REQUESTS
 
         self.logger.info("CommandHandlers успешно инициализирован")
+
+    async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
+        """Асинхронно читает лог‑файл с диска и отправляет его как документ.
+
+        Чтение файла выполняется в отдельном потоке через run_in_executor,
+        чтобы избежать блокировки event loop при работе с файловой системой.
+        """
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+
+        def _read_bytes(p: Path) -> bytes:
+            return p.read_bytes()
+
+        data = await loop.run_in_executor(None, _read_bytes, path)
+        await self._retry_on_connect_error(
+            bot.send_document,
+            chat_id=chat_id,
+            document=data,
+            filename=path.name,
+            max_retries=3,
+            delay=2,
+        )
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
@@ -410,8 +434,11 @@ class CommandHandlers:
                 self.logger.info(
                     f"Отправляю лог-файл {lf} (контейнерный путь: {LOGS_CONTAINER_PATH}/{lf.name})",
                 )
-                with lf.open("rb") as fh:
-                    await context.bot.send_document(chat_id=update.effective_chat.id, document=fh, filename=lf.name)
+                await self._send_log_file(
+                    bot=context.bot,
+                    chat_id=update.effective_chat.id,
+                    path=lf,
+                )
             except Exception as e:
                 self.logger.warning(
                     f"Ошибка при отправке лога {lf} (контейнерный путь: {LOGS_CONTAINER_PATH}/{lf.name}): {e}",

@@ -358,9 +358,10 @@ class WednesdayBot:
             if result:
                 image_data, caption = result
 
-                # Сохраняем изображение локально заранее (на случай сбоев сети)
+                # Сохраняем изображение локально заранее (на случай сбоев сети).
+                # Файловый I/O выполняем в отдельном потоке, чтобы не блокировать event loop.
                 try:
-                    saved_path = self.image_generator.save_image_locally(
+                    saved_path = await self.image_generator._save_image_async(
                         image_data,
                         folder="data/frogs",
                         prefix="wednesday",
@@ -737,6 +738,10 @@ class WednesdayBot:
             - Логирует результат операции.
         """
         try:
+            # Чтение fallback‑изображения выполняется через файловое хранилище.
+            # Для сохранения обратной совместимости с существующими тестами и
+            # простоты логики здесь используется синхронный helper генератора,
+            # а самые тяжёлые операции сохранения выполняются асинхронно.
             fallback_image = self.image_generator.get_random_saved_image()
             if fallback_image:
                 image_data, caption = fallback_image
