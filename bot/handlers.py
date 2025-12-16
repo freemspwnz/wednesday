@@ -14,6 +14,7 @@ import httpx
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from services.celery_app import celery_app
 from services.image_generator import ImageGenerator
 from utils.admins_store import AdminsStore
 from utils.config import config
@@ -647,7 +648,7 @@ class CommandHandlers:
     async def frog_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /frog.
 
-        Генерирует и отправляет изображение жабы по запросу пользователя.
+        Ставит задачу генерации и отправки изображения жабы в очередь Celery.
         Команда защищена rate limiting (per-user и глобальный) и проверкой
         месячного лимита генераций.
 
@@ -660,17 +661,14 @@ class CommandHandlers:
         Side Effects:
             - Проверяет глобальный и per-user rate limits.
             - Проверяет месячный лимит генераций через usage.can_use_frog().
-            - Вызывает image_generator.generate_frog_image() для генерации изображения.
-            - Использует image_generator.get_random_saved_image() как fallback при ошибках.
-            - Вызывает usage.increment() для увеличения счетчика использования.
-            - Сохраняет изображение локально через image_generator.save_image_locally().
-            - Отправляет изображение пользователю и уведомления администраторам при ошибках.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Отправляет статусное сообщение пользователю.
+            - Ставит Celery-задачу wednesday.send_frog_manual в очередь.
         """
         if not update.message or not update.effective_user:
             return
 
         user_id = update.effective_user.id
+        chat_id = update.message.chat_id
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
         # Rate limit: глобальный
@@ -746,6 +744,7 @@ class CommandHandlers:
             return
 
         # Отправляем сообщение о начале генерации
+        status_message = None
         try:
             status_message = await self._retry_on_connect_error(
                 update.message.reply_text,
@@ -757,238 +756,33 @@ class CommandHandlers:
             self.logger.error(
                 f"Не удалось отправить сообщение о начале генерации после {MAX_RETRIES_DEFAULT} попыток: {e}",
             )
-            # Продолжаем генерацию даже если не удалось отправить статус
-            status_message = None
+            # Продолжаем даже если не удалось отправить статус
 
+        # Ставим задачу в очередь Celery
         try:
-            # Генерируем изображение жабы
-            result = await self.image_generator.generate_frog_image(user_id=user_id)
-
-            if result:
-                image_data, caption = result
-
-                # Отправляем изображение с подписью
-                await self._retry_on_connect_error(
-                    update.message.reply_photo,
-                    photo=image_data,
-                    caption=caption,
-                    max_retries=MAX_RETRIES_DEFAULT,
-                    delay=RETRY_DELAY_DEFAULT,
-                )
-                # Сохраним локально результат.
-                # В контейнере путь data/frogs соответствует /app/data/frogs,
-                # который примонтирован в Docker volume `frog_images`.
-                try:
-                    saved_path = self.image_generator.save_image_locally(image_data, prefix="frog")
-                    if saved_path:
-                        self.logger.info(
-                            f"Изображение сохранено локально и доступно в контейнере по пути {saved_path}",
-                        )
-                except Exception:
-                    # Ошибка локального сохранения не критична для пользователя.
-                    pass
-                # Успешная генерация — увеличиваем счетчик
-                if usage:
-                    await usage.increment(1)
-
-                # Удаляем статусное сообщение
-                if status_message:
-                    try:
-                        await status_message.delete()
-                    except Exception:
-                        pass
-
-                self.logger.info(f"Изображение жабы успешно отправлено пользователю {user_id}")
-
-            else:
-                # Если генерация не удалась
-                error_details = f"Не удалось сгенерировать изображение для пользователя {user_id}"
-                self.logger.error(error_details)
-
-                # Удаляем статусное сообщение
-                if status_message:
-                    try:
-                        await status_message.delete()
-                    except Exception:
-                        pass
-
-                # Отправляем дружелюбное сообщение пользователю
-                friendly_message = (
-                    "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
-                    "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
-                )
-                try:
-                    await self._retry_on_connect_error(
-                        update.message.reply_text,
-                        friendly_message,
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as e:
-                    self.logger.error(f"Не удалось отправить дружелюбное сообщение после {3} попыток: {e}")
-
-                # Отправляем случайное изображение из сохраненных
-                fallback_image = self.image_generator.get_random_saved_image()
-                if fallback_image:
-                    image_data, caption = fallback_image
-                    try:
-                        await self._retry_on_connect_error(
-                            update.message.reply_photo,
-                            photo=image_data,
-                            caption=caption,
-                            max_retries=3,
-                            delay=2,
-                        )
-                    except Exception as e:
-                        self.logger.error(f"Не удалось отправить fallback изображение после {3} попыток: {e}")
-                    self.logger.info(f"Случайное изображение отправлено пользователю {user_id} как fallback")
-                else:
-                    self.logger.warning("Нет сохраненных изображений для отправки как fallback")
-
-                # Отправляем детальное сообщение всем администраторам
-                all_admins = await self.admins_store.list_all_admins()
-                if all_admins:
-                    admin_message = (
-                        "🔴 Ошибка генерации изображения по команде /frog\n\n"
-                        f"Пользователь: {user_id}\n"
-                        f"Детали: {error_details}\n"
-                        "Возможные причины: достигнут лимит API, circuit breaker активен, ошибка генерации\n\n"
-                        "Пользователю отправлено дружелюбное сообщение и случайное изображение из архива."
-                    )
-                    for admin_id in all_admins:
-                        try:
-                            await self._retry_on_connect_error(
-                                context.bot.send_message,
-                                chat_id=admin_id,
-                                text=admin_message,
-                                max_retries=3,
-                                delay=2,
-                            )
-                        except Exception as admin_error:
-                            self.logger.error(
-                                f"Не удалось отправить сообщение об ошибке админу {admin_id} "
-                                f"после {3} попыток: {admin_error}",
-                            )
-
+            celery_app.send_task(
+                "wednesday.send_frog_manual",
+                args=[chat_id, user_id, status_message.message_id if status_message else None],
+            )
+            self.logger.info(f"Задача send_frog_manual поставлена в очередь для пользователя {user_id}")
         except Exception as e:
-            error_type = type(e).__name__
-            error_str = str(e)
-
-            # Определяем тип ошибки для более информативного сообщения
-            if "ConnectError" in error_type or "ConnectionError" in error_type or "Connection" in error_str:
-                error_details = (
-                    f"Ошибка подключения к API при обработке команды /frog для пользователя {user_id}.\n"
-                    f"Тип: {error_type}\n"
-                    f"Детали: {error_str[:200]}\n\n"
-                    "Возможные причины:\n"
-                    "- Проблемы с интернет-соединением\n"
-                    "- Kandinsky API временно недоступен\n"
-                    "- Проблемы с прокси (если используется)\n"
-                    "- Блокировка доступа на стороне провайдера"
-                )
-            else:
-                error_details = (
-                    f"Произошла ошибка при обработке команды /frog для пользователя {user_id}.\n"
-                    f"Тип: {error_type}\nДетали: {error_str[:200]}"
-                )
-
-            self.logger.error(f"Ошибка при обработке /frog: {error_type} - {error_str}", exc_info=True)
-
-            try:
-                # Пытаемся удалить статусное сообщение
-                if status_message is not None:
-                    await status_message.delete()
-            except Exception:
-                pass
-
-            # Отправляем дружелюбное сообщение пользователю
-            try:
-                friendly_message = (
-                    "🐸 К сожалению, произошла ошибка при генерации.\n"
-                    "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
-                )
-                await update.message.reply_text(friendly_message)
-
-                # Отправляем случайное изображение из сохраненных
-                fallback_image = self.image_generator.get_random_saved_image()
-                if fallback_image:
-                    image_data, caption = fallback_image
-                    await update.message.reply_photo(
-                        photo=image_data,
-                        caption=caption,
-                    )
-                    self.logger.info(f"Случайное изображение отправлено пользователю {user_id} как fallback")
-            except Exception as send_error:
-                self.logger.error(f"Не удалось отправить fallback сообщение/изображение: {send_error}")
-
-            # Отправляем детальное сообщение всем администраторам
-            all_admins = await self.admins_store.list_all_admins()
-            if all_admins:
+            self.logger.error(f"Не удалось поставить задачу в очередь Celery: {e}")
+            # Удаляем статусное сообщение
+            if status_message:
                 try:
-                    import traceback
-
-                    full_error = traceback.format_exc()
-                    # Обрезаем трейс до последних MAX_TRACE_LENGTH символов (важная информация обычно в конце)
-                    if len(full_error) > MAX_TRACE_LENGTH:
-                        full_error = "..." + full_error[-MAX_TRACE_LENGTH:]
-
-                    admin_message = (
-                        "🔴 Ошибка при обработке команды /frog\n\n"
-                        f"Пользователь: {user_id}\n"
-                        f"Детали: {error_details}\n\n"
-                        f"Трейс (последние {MAX_TRACE_LENGTH} символов):\n{full_error}\n\n"
-                        "Пользователю отправлено дружелюбное сообщение и случайное изображение из архива."
-                    )
-
-                    # Разбиваем длинные сообщения на части (лимит Telegram: 4096 символов)
-                    for admin_id in all_admins:
-                        try:
-                            if len(admin_message) > MAX_MESSAGE_LENGTH:
-                                # Отправляем короткую версию без полного трейса
-                                short_message = (
-                                    "🔴 Ошибка при обработке команды /frog\n\n"
-                                    f"Пользователь: {user_id}\n"
-                                    f"Детали: {error_details[:MAX_ERROR_DETAILS_LENGTH]}\n\n"
-                                    "⚠️ Полный трейс слишком длинный, смотрите логи.\n\n"
-                                    "Пользователю отправлено дружелюбное сообщение и случайное изображение из архива."
-                                )
-                                await context.bot.send_message(
-                                    chat_id=admin_id,
-                                    text=short_message,
-                                )
-                            else:
-                                await context.bot.send_message(
-                                    chat_id=admin_id,
-                                    text=admin_message,
-                                )
-                        except Exception as admin_error:
-                            error_str = str(admin_error)
-                            # Если ошибка "Message is too long", отправляем сокращенную версию
-                            if "too long" in error_str.lower():
-                                try:
-                                    short_message = (
-                                        "🔴 Ошибка при обработке команды /frog\n\n"
-                                        f"Пользователь: {user_id}\n"
-                                        f"Детали: {error_details[:MAX_ERROR_DETAILS_LENGTH]}\n\n"
-                                        "⚠️ Полный трейс слишком длинный для отправки, смотрите логи.\n\n"
-                                        "Пользователю отправлено дружелюбное сообщение и "
-                                        "случайное изображение из архива."
-                                    )
-                                    await context.bot.send_message(
-                                        chat_id=admin_id,
-                                        text=short_message,
-                                    )
-                                except Exception as retry_error:
-                                    self.logger.error(
-                                        f"Не удалось отправить даже сокращенное сообщение "
-                                        f"админу {admin_id}: {retry_error}",
-                                    )
-                            else:
-                                self.logger.error(
-                                    f"Не удалось отправить сообщение об ошибке админу {admin_id}: {admin_error}",
-                                )
-                except Exception as e:
-                    self.logger.error(f"Ошибка при отправке сообщений админам: {e}")
+                    await status_message.delete()
+                except Exception:
+                    pass
+            # Отправляем сообщение пользователю об ошибке
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    "⚠️ Не удалось поставить запрос в очередь. Попробуйте позже.",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception as send_error:
+                self.logger.error(f"Не удалось отправить сообщение об ошибке очереди: {send_error}")
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.
