@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Расщепление и удаление CommandHandlers — создание BaseHandlers для общих методов**:
+  - Создан базовый класс `BaseHandlers` в `bot/base_handlers.py` с общими утилитарными методами
+  - Перенесены общие методы из `CommandHandlers`: `_is_super_admin`, `_safe_reply_text`, `_retry_on_connect_error`, `_extract_target_user_id`, `_send_log_file`
+  - Добавлены поля `services: BotServices` и `admins_store: AdminsStore` в `BaseHandlers`
+  - Добавлена инициализация `self.logger = get_logger(__name__)` в `BaseHandlers`
+
 - **Унификация политики Retry — расширение utils/telegram_retry для поддержки retry_after**:
   - Добавлена обработка `TelegramError` с кодом 429 (rate limit) в функцию `retry_on_connect_error`
   - Добавлен параметр `handle_rate_limit: bool = True` для включения обработки rate limit
