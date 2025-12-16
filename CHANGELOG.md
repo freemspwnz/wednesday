@@ -32,6 +32,7 @@
   - Тесты модельных команд используют `ModelHandlers`
   - Обновлен тест `test_wednesday_bot_initializes_components` для проверки специализированных хендлеров
   - Удалены неиспользуемые импорты `CommandHandlers` из тестов
+  - Удален неиспользуемый класс `DummyHandlers` из `test_wednesday_bot.py` (больше не нужен после удаления monkeypatch для `CommandHandlers`)
   - Удален класс `CommandHandlers` из `bot/handlers.py`
   - Файл `bot/handlers.py` оставлен с минимальным содержимым для совместимости с импортами в тестах
   - Обновлен `test_smoke_low_coverage.py` для использования `UserHandlers` вместо `CommandHandlers`

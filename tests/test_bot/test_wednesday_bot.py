@@ -115,28 +115,6 @@ def wednesday_bot(monkeypatch: Any) -> Any:
         async def increment_dispatch_failed(self) -> None:
             self.failed += 1
 
-    class DummyHandlers:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            self.start_command = AsyncMock()
-            self.help_command = AsyncMock()
-            self.frog_command = AsyncMock()
-            self.status_command = AsyncMock()
-            self.admin_force_send_command = AsyncMock()
-            self.admin_log_command = AsyncMock()
-            self.admin_add_chat_command = AsyncMock()
-            self.admin_remove_chat_command = AsyncMock()
-            self.stop_command = AsyncMock()
-            self.list_chats_command = AsyncMock()
-            self.set_kandinsky_model_command = AsyncMock()
-            self.set_gigachat_model_command = AsyncMock()
-            self.mod_command = AsyncMock()
-            self.unmod_command = AsyncMock()
-            self.list_mods_command = AsyncMock()
-            self.list_models_command = AsyncMock()
-            self.set_frog_limit_command = AsyncMock()
-            self.set_frog_used_command = AsyncMock()
-            self.unknown_command = AsyncMock()
-
     class DummyCommandHandler:
         def __init__(self, command: Any, callback: Any) -> None:
             self.command = command
@@ -160,7 +138,6 @@ def wednesday_bot(monkeypatch: Any) -> Any:
     monkeypatch.setattr(wb_module, "ChatsStore", DummyChatsStore)
     monkeypatch.setattr(wb_module, "DispatchRegistry", DummyDispatchRegistry)
     monkeypatch.setattr(wb_module, "Metrics", DummyMetrics)
-    monkeypatch.setattr(wb_module, "CommandHandlers", DummyHandlers)
     monkeypatch.setattr(wb_module, "CommandHandler", DummyCommandHandler)
     monkeypatch.setattr(wb_module, "MessageHandler", DummyMessageHandler)
     monkeypatch.setattr(wb_module, "ChatMemberHandler", DummyChatMemberHandler)
