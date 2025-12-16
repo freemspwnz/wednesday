@@ -12,7 +12,6 @@ from telegram.error import NetworkError, TelegramError
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
-from bot.handlers import CommandHandlers
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
@@ -72,7 +71,7 @@ class WednesdayBot:
         - UsageTracker для отслеживания лимитов генераций
         - ChatsStore для управления списком чатов
         - PromptCache, UserStateStore, RateLimiter для работы с Redis
-        - CommandHandlers для обработки команд пользователей
+        - UserHandlers, AdminHandlers, ModelHandlers для обработки команд
 
         Инициализирует все необходимые сервисы и готовит бота к запуску.
         """
@@ -146,11 +145,9 @@ class WednesdayBot:
         self._stop_message_sent: bool = False
 
         # Создаем обработчики команд
-        self.logger.info("Создание CommandHandlers и специализированных наборов хендлеров")
+        self.logger.info("Создание специализированных наборов хендлеров")
         # Для get_next_run используем scheduler если он есть, иначе None (Celery управляет расписанием)
         get_next_run_fn = self.scheduler.get_next_run if self.scheduler else lambda: None
-        # Базовый набор с полной логикой команд (совместимость с существующими тестами и Celery)
-        self.handlers: CommandHandlers = CommandHandlers(self.services, get_next_run_fn)
         # Узкоспециализированные наборы для регистрации в PTB по зонам ответственности
         self.user_handlers: UserHandlers = UserHandlers(self.services, get_next_run_fn)
         # Админские и пользовательские команды должны разделять общее состояние (лимиты, хранилища),

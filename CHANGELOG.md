@@ -21,6 +21,10 @@
   - `ModelHandlers` теперь наследуется от `BaseHandlers` вместо делегирования в `CommandHandlers`
   - Удалено делегирование и поле `self._core` из `ModelHandlers`
   - Обновлен `__init__` в `ModelHandlers`: принимает только `services` и `next_run_provider`, инициализирует `BaseHandlers`
+  - Обновлен `WednesdayBot` для использования только специализированных хендлеров
+  - Удалено создание `self.handlers = CommandHandlers(...)` из `WednesdayBot.__init__`
+  - Удален импорт `CommandHandlers` из `wednesday_bot.py`
+  - Обновлены комментарии в `wednesday_bot.py`, убраны упоминания `CommandHandlers`
 
 - **Унификация политики Retry — расширение utils/telegram_retry для поддержки retry_after**:
   - Добавлена обработка `TelegramError` с кодом 429 (rate limit) в функцию `retry_on_connect_error`
