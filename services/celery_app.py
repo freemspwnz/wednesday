@@ -82,6 +82,7 @@ celery_app.conf.task_track_started = True  # Позволяет видеть "St
 # Настройка очередей для разделения задач
 celery_app.conf.task_routes = {
     "wednesday.send_frog": {"queue": "wednesday"},
+    "wednesday.send_frog_manual": {"queue": "wednesday"},
     "wednesday.generate_image": {"queue": "images"},
     "wednesday.daily_cleanup": {"queue": "maintenance"},
     "wednesday.daily_statistics": {"queue": "maintenance"},
