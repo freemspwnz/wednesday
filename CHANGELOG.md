@@ -4,6 +4,11 @@
 
 ### Изменено
 
+- **Завершение DI — создание AppSettings для настроек приложения**:
+  - Добавлен dataclass `AppSettings` в `services/app_settings.py` для инкапсуляции настроек приложения
+  - `AppSettings` содержит поля: `admin_chat_id`, `chat_id`, `scheduler_send_times`, `frog_rate_limit_minutes`, `frog_rate_limit_window_seconds`, `frog_rate_limit_max_requests`, `scheduler_tz`, `time_format_length`
+  - Добавлен метод `from_config` для инициализации из глобального `Config`
+
 - **Горизонтальное масштабирование rate limiting для команды /frog**:
   - Переведён rate limiting команды `/frog` с локальных словарей на Redis через `RateLimiter`
   - Per-user лимит использует ключ `frog:user:{user_id}` с окном `FROG_RATE_LIMIT_MINUTES * 60` секунд и лимитом 1
