@@ -10,6 +10,11 @@
   - При обнаружении 429 и `handle_rate_limit=True` функция читает `retry_after` из атрибута ошибки или заголовков ответа
   - Используется `retry_after` как задержка перед следующей попыткой вместо стандартного экспоненциального backoff
   - Сохранена существующая логика для других сетевых ошибок (httpx, NetworkError, TimedOut)
+  - Интеграция retry helper в `send_wednesday_frog`: заменён ручной retry-цикл на использование `retry_on_connect_error`
+  - Удалён ручной цикл `for attempt in range(...)` и логика backoff/jitter из `send_wednesday_frog`
+  - Сохранена обработка успешной отправки (отметка в dispatch_registry, increment счетчиков)
+  - Упрощена обработка ошибок: разделение на сетевые/Telegram-ошибки и неожиданные программные ошибки
+  - Удалена неиспользуемая константа `RETRY_AFTER_DEFAULT_SECONDS` из `wednesday_bot.py`
 
 - **Завершение DI — создание AppSettings для настроек приложения**:
   - Добавлен dataclass `AppSettings` в `services/app_settings.py` для инкапсуляции настроек приложения

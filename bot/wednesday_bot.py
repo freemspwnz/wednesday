@@ -28,6 +28,7 @@ from utils.config import config
 from utils.dispatch_registry import DispatchRegistry
 from utils.logger import get_logger, log_all_methods, log_event
 from utils.metrics import Metrics
+from utils.telegram_retry import retry_on_connect_error
 from utils.usage_tracker import UsageTracker
 
 # Константы для магических чисел
@@ -37,7 +38,6 @@ READ_TIMEOUT_SECONDS = 20.0
 CONNECT_TIMEOUT_SECONDS = 15.0
 MONTHLY_QUOTA_DEFAULT = 100
 FROG_THRESHOLD_DEFAULT = 70
-RETRY_AFTER_DEFAULT_SECONDS = 60  # дефолтное значение retry_after
 TIMEOUT_SHORT_SECONDS = 5.0
 TIMEOUT_MEDIUM_SECONDS = 30.0
 TIMEOUT_BOT_INFO_SECONDS = 30.0
@@ -384,103 +384,65 @@ class WednesdayBot:
                         )
                         continue
 
-                    send_attempts = 3
-                    initial_backoff = 2
-                    for attempt in range(1, send_attempts + 1):
+                    try:
+                        await retry_on_connect_error(
+                            self.application.bot.send_photo,
+                            chat_id=target_chat,
+                            photo=image_data,
+                            caption=caption,
+                            max_retries=3,
+                            delay=2.0,
+                            handle_rate_limit=True,
+                        )
+                        # Отмечаем в реестре успешную отправку
+                        await self.dispatch_registry.mark_dispatched(slot_date, slot_time, target_chat)
+                        # инкрементируем счетчик после успешной отправки
+                        await self.usage.increment(1)
                         try:
-                            await self.application.bot.send_photo(
-                                chat_id=target_chat,
-                                photo=image_data,
-                                caption=caption,
+                            await self.metrics.increment_dispatch_success()
+                        except Exception:
+                            # Метрики не критичны для основного потока
+                            pass
+                        self.logger.info(f"Жаба отправлена в чат {target_chat}")
+                    except (TelegramError, NetworkError) as send_error:
+                        # Сетевые/Telegram-ошибки после всех попыток
+                        error_str = str(send_error).lower()
+                        is_network = isinstance(send_error, NetworkError) or any(
+                            kw in error_str for kw in ("connection", "timeout", "network")
+                        )
+                        log_msg = (
+                            f"Сетевая/Telegram-ошибка отправки в чат {target_chat}: {send_error}"
+                            if is_network
+                            else f"Ошибка Telegram API при отправке в чат {target_chat}: {send_error}"
+                        )
+                        self.logger.error(log_msg)
+                        try:
+                            await self._send_error_message(
+                                f"Не удалось отправить изображение в чат {target_chat}",
                             )
-                            # Отмечаем в реестре успешную отправку
-                            await self.dispatch_registry.mark_dispatched(slot_date, slot_time, target_chat)
-                            # инкрементируем счетчик после успешной отправки
-                            await self.usage.increment(1)
-                            try:
-                                await self.metrics.increment_dispatch_success()
-                            except Exception:
-                                # Метрики не критичны для основного потока
-                                pass
-                            self.logger.info(f"Жаба отправлена в чат {target_chat}")
-                            break
-                        except TelegramError as send_error:
-                            error_str = str(send_error).lower()
-                            is_429 = "429" in error_str or "rate limit" in error_str or "too many requests" in error_str
-
-                            if is_429 and attempt < send_attempts:
-                                # Обработка 429: читаем Retry-After из заголовков если доступно
-                                retry_after = RETRY_AFTER_DEFAULT_SECONDS
-                                if hasattr(send_error, "retry_after") and send_error.retry_after:
-                                    retry_after = int(send_error.retry_after)
-                                elif hasattr(send_error, "response") and send_error.response:
-                                    retry_after_header = send_error.response.headers.get("retry-after")
-                                    if retry_after_header:
-                                        retry_after = int(retry_after_header)
-
-                                self.logger.warning(
-                                    f"429 Rate Limit в {target_chat} "
-                                    f"(попытка {attempt}/{send_attempts}), ждём {retry_after}с",
-                                )
-                                await asyncio.sleep(retry_after)
-                                continue
-
-                            # Сетевые/Telegram-ошибки, не относящиеся к 429, логируем отдельно
-                            is_network = isinstance(send_error, NetworkError) or any(
-                                kw in error_str for kw in ("connection", "timeout", "network")
+                        except Exception:
+                            pass
+                        try:
+                            await self.metrics.increment_dispatch_failed()
+                        except Exception:
+                            pass
+                    except Exception as send_error:
+                        # Неожиданные программные ошибки
+                        self.logger.error(
+                            f"Неожиданная программная ошибка при отправке изображения "
+                            f"в чат {target_chat}: {send_error}",
+                            exc_info=True,
+                        )
+                        try:
+                            await self._send_error_message(
+                                f"Не удалось отправить изображение в чат {target_chat} из-за внутренней ошибки",
                             )
-                            log_msg = (
-                                "Сетевая/Telgram-ошибка отправки в чат "
-                                f"{target_chat} (попытка {attempt}/{send_attempts}): {send_error}"
-                                if is_network
-                                else (
-                                    "Ошибка Telegram API при отправке в чат "
-                                    f"{target_chat} (попытка {attempt}/{send_attempts}): {send_error}"
-                                )
-                            )
-                            self.logger.warning(log_msg)
-
-                            if attempt == send_attempts:
-                                self.logger.error(
-                                    f"Не удалось отправить изображение в чат {target_chat} после всех попыток",
-                                )
-                                try:
-                                    await self._send_error_message(
-                                        f"Не удалось отправить изображение в чат {target_chat}",
-                                    )
-                                except Exception:
-                                    pass
-                                try:
-                                    await self.metrics.increment_dispatch_failed()
-                                except Exception:
-                                    pass
-                            else:
-                                # Экспоненциальный backoff с джиттером
-                                import random
-
-                                backoff = initial_backoff * (2 ** (attempt - 1))
-                                jitter = random.uniform(0, backoff * 0.3)
-                                wait_time = backoff + jitter
-                                self.logger.info(f"Ждём {wait_time:.1f}с перед повторной попыткой")
-                                await asyncio.sleep(wait_time)
-                        except Exception as send_error:
-                            # Непрограммные ошибки считаем программными/неожиданными и не ретраим поверх 3 попыток
-                            self.logger.error(
-                                "Неожиданная программная ошибка при отправке изображения "
-                                f"в чат {target_chat}: {send_error}",
-                                exc_info=True,
-                            )
-                            try:
-                                await self._send_error_message(
-                                    f"Не удалось отправить изображение в чат {target_chat} из-за внутренней ошибки",
-                                )
-                            except Exception:
-                                pass
-                            try:
-                                await self.metrics.increment_dispatch_failed()
-                            except Exception:
-                                pass
-                            break
+                        except Exception:
+                            pass
+                        try:
+                            await self.metrics.increment_dispatch_failed()
+                        except Exception:
+                            pass
 
             else:
                 # Если генерация не удалась, отправляем сообщения об ошибке и случайное изображение
