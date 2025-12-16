@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from bot import handlers as bot_handlers_module
 from bot.handlers import CommandHandlers
 
 
@@ -778,6 +779,9 @@ async def test_set_gigachat_model_command_success(fake_update: Any, fake_context
 @pytest.mark.integration
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
 async def test_mod_command_success(
     fake_update: Any,
@@ -786,8 +790,12 @@ async def test_mod_command_success(
     cleanup_tables: Any,
     monkeypatch: Any,
 ) -> None:
+    """Тест успешного выполнения команды /mod (обновленный для супер-админа)."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
     # Импортируем реальный AdminsStore напрямую из модуля, обходя патч
     import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
 
     # Перезагружаем модуль, чтобы получить реальный класс
     importlib.reload(admins_store_module)
@@ -798,11 +806,10 @@ async def test_mod_command_success(
 
     # Используем реальный AdminsStore для теста
     admins = AdminsStore()
-    # Делаем пользователя 42 администратором (через прямое обращение к БД)
-    await admins.add_admin(fake_update.effective_user.id)
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
     fake_context.args = ["99999"]
+    fake_update.message.reply_to_message = None
 
     await handler.mod_command(fake_update, fake_context)
 
@@ -813,23 +820,27 @@ async def test_mod_command_success(
 
 
 @pytest.mark.asyncio
-async def test_mod_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_mod_command_no_args(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, monkeypatch: Any
+) -> None:
+    """Тест команды /mod без аргументов (обновленный для супер-админа)."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    from bot.handlers import CommandHandlers
+
     handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
     async_retry_stub(handler)
 
-    class _AdminOk:
-        async def is_admin(self, _uid: int) -> bool:
-            return True
-
-    handler.admins_store = _AdminOk()  # type: ignore[assignment]
+    # Не нужно мокать admins_store, так как теперь проверяется _is_super_admin
     fake_context.args = []
+    fake_update.message.reply_to_message = None
 
     await handler.mod_command(fake_update, fake_context)
 
     fake_update.message.reply_text.assert_awaited()
     call = fake_update.message.reply_text.await_args
     text = call.kwargs.get("text", call.args[0])
-    assert "Использование: /mod" in text
+    assert "Использование" in text or "ответьте" in text.lower()
 
 
 @pytest.mark.integration
@@ -843,8 +854,12 @@ async def test_unmod_command_success(
     cleanup_tables: Any,
     monkeypatch: Any,
 ) -> None:
+    """Тест успешного выполнения команды /unmod (обновленный для супер-админа)."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
     # Импортируем реальный AdminsStore напрямую из модуля, обходя патч
     import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
 
     # Перезагружаем модуль, чтобы получить реальный класс
     importlib.reload(admins_store_module)
@@ -855,12 +870,11 @@ async def test_unmod_command_success(
 
     # Используем реальный AdminsStore для теста
     admins = AdminsStore()
-    # Делаем пользователя 42 администратором
-    await admins.add_admin(fake_update.effective_user.id)
     await admins.add_admin(99999)
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
     fake_context.args = ["99999"]
+    fake_update.message.reply_to_message = None
 
     await handler.unmod_command(fake_update, fake_context)
 
@@ -870,24 +884,48 @@ async def test_unmod_command_success(
     assert "✅" in text or "удалён" in text.lower() or "админ-права" in text.lower()
 
 
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_unmod_command_no_args_shows_list(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест команды /unmod без аргументов (теперь показывает список админов)."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
     handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
     async_retry_stub(handler)
 
-    class _AdminOk:
-        async def is_admin(self, _uid: int) -> bool:
-            return True
-
-    handler.admins_store = _AdminOk()  # type: ignore[assignment]
+    admins = AdminsStore()
+    handler.admins_store = admins
     fake_context.args = []
+    fake_update.message.reply_to_message = None
+
+    # Мокаем get_chat для получения информации о пользователях
+    def mock_get_chat(chat_id: int) -> Any:
+        chat = SimpleNamespace()
+        chat.full_name = f"User {chat_id}"
+        return chat
+
+    fake_context.bot.get_chat = AsyncMock(side_effect=mock_get_chat)
 
     await handler.unmod_command(fake_update, fake_context)
 
     fake_update.message.reply_text.assert_awaited()
     call = fake_update.message.reply_text.await_args
     text = call.kwargs.get("text", call.args[0])
-    assert "Использование: /unmod" in text
+    assert "Список администраторов" in text or "администраторов" in text.lower()
 
 
 @pytest.mark.integration
@@ -952,3 +990,420 @@ async def test_list_models_command(fake_update: Any, fake_context: Any, async_re
     call = fake_update.message.reply_text.await_args
     text = call.kwargs.get("text", call.args[0])
     assert "Kandinsky" in text or "GigaChat" in text or "модели" in text.lower()
+
+
+# Тесты для новых функций mod/unmod с поддержкой reply и ограничением доступа
+@pytest.mark.asyncio
+async def test_extract_target_user_id_from_reply(fake_update: Any, fake_context: Any) -> None:
+    """Тест извлечения target_user_id из reply на сообщение."""
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+
+    # Создаем reply_to_message
+    reply_user = SimpleNamespace(id=12345)
+    reply_message = SimpleNamespace(from_user=reply_user)
+    fake_update.message.reply_to_message = reply_message
+    fake_context.args = []
+
+    target_id = await handler._extract_target_user_id(fake_update, fake_context)
+    assert target_id == 12345
+
+
+@pytest.mark.asyncio
+async def test_extract_target_user_id_from_args(fake_update: Any, fake_context: Any) -> None:
+    """Тест извлечения target_user_id из аргументов команды."""
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+
+    fake_update.message.reply_to_message = None
+    fake_context.args = ["67890"]
+
+    target_id = await handler._extract_target_user_id(fake_update, fake_context)
+    assert target_id == 67890
+
+
+@pytest.mark.asyncio
+async def test_extract_target_user_id_priority_reply_over_args(fake_update: Any, fake_context: Any) -> None:
+    """Тест приоритета reply над аргументами."""
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+
+    # Есть и reply, и аргументы - должен вернуть reply
+    reply_user = SimpleNamespace(id=11111)
+    reply_message = SimpleNamespace(from_user=reply_user)
+    fake_update.message.reply_to_message = reply_message
+    fake_context.args = ["22222"]
+
+    target_id = await handler._extract_target_user_id(fake_update, fake_context)
+    assert target_id == 11111
+
+
+@pytest.mark.asyncio
+async def test_extract_target_user_id_invalid_args(fake_update: Any, fake_context: Any) -> None:
+    """Тест обработки невалидных аргументов."""
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+
+    fake_update.message.reply_to_message = None
+    fake_context.args = ["not_a_number"]
+
+    target_id = await handler._extract_target_user_id(fake_update, fake_context)
+    assert target_id is None
+
+
+@pytest.mark.asyncio
+async def test_extract_target_user_id_multiple_args(fake_update: Any, fake_context: Any) -> None:
+    """Тест обработки множественных аргументов (должен вернуть None)."""
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+
+    fake_update.message.reply_to_message = None
+    fake_context.args = ["111", "222"]
+
+    target_id = await handler._extract_target_user_id(fake_update, fake_context)
+    assert target_id is None
+
+
+@pytest.mark.asyncio
+async def test_extract_target_user_id_no_reply_no_args(fake_update: Any, fake_context: Any) -> None:
+    """Тест отсутствия reply и аргументов (должен вернуть None)."""
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+
+    fake_update.message.reply_to_message = None
+    fake_context.args = []
+
+    target_id = await handler._extract_target_user_id(fake_update, fake_context)
+    assert target_id is None
+
+
+@pytest.mark.asyncio
+async def test_is_super_admin_true(monkeypatch: Any) -> None:
+    """Тест проверки супер-админа (должен вернуть True)."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")
+    importlib.reload(bot_handlers_module)
+    from bot.handlers import CommandHandlers
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    assert handler._is_super_admin(42) is True
+
+
+@pytest.mark.asyncio
+async def test_is_super_admin_false(monkeypatch: Any) -> None:
+    """Тест проверки не-супер-админа (должен вернуть False)."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "999998")
+    importlib.reload(bot_handlers_module)
+    from bot.handlers import CommandHandlers
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    assert handler._is_super_admin(42) is False
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_mod_command_non_super_admin_denied(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест отказа команды /mod от не-супер-админа."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    await admins.add_admin(fake_update.effective_user.id)  # Делаем пользователя 42 админом, но не супер-админом
+    handler.admins_store = admins
+    fake_context.args = ["99999"]
+
+    await handler.mod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "главному администратору" in text.lower() or "доступно только" in text.lower()
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_mod_command_with_reply(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест команды /mod с reply на сообщение."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    handler.admins_store = admins
+    fake_context.args = []
+
+    # Создаем reply
+    reply_user = SimpleNamespace(id=12345)
+    reply_message = SimpleNamespace(from_user=reply_user)
+    fake_update.message.reply_to_message = reply_message
+
+    await handler.mod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "✅" in text or "админ‑права" in text.lower() or "админ-права" in text.lower()
+    assert "12345" in text
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_mod_command_with_args(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест команды /mod с аргументом user_id."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    handler.admins_store = admins
+    fake_context.args = ["54321"]
+    fake_update.message.reply_to_message = None
+
+    await handler.mod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "✅" in text or "админ‑права" in text.lower() or "админ-права" in text.lower()
+    assert "54321" in text
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_unmod_command_non_super_admin_denied(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест отказа команды /unmod от не-супер-админа."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    await admins.add_admin(fake_update.effective_user.id)
+    handler.admins_store = admins
+    fake_context.args = ["99999"]
+
+    await handler.unmod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "главному администратору" in text.lower() or "доступно только" in text.lower()
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_unmod_command_with_reply(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест команды /unmod с reply на сообщение."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    await admins.add_admin(12345)  # Добавляем админа для удаления
+    handler.admins_store = admins
+    fake_context.args = []
+    fake_context.bot.get_chat = AsyncMock(return_value=SimpleNamespace(full_name="Test User"))
+
+    # Создаем reply
+    reply_user = SimpleNamespace(id=12345)
+    reply_message = SimpleNamespace(from_user=reply_user)
+    fake_update.message.reply_to_message = reply_message
+
+    await handler.unmod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "✅" in text or "удалены" in text.lower() or "админ‑права" in text.lower()
+    assert "12345" in text
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_unmod_command_with_args(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест команды /unmod с аргументом user_id."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    await admins.add_admin(54321)
+    handler.admins_store = admins
+    fake_context.args = ["54321"]
+    fake_update.message.reply_to_message = None
+
+    await handler.unmod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "✅" in text or "удалены" in text.lower() or "админ‑права" in text.lower()
+    assert "54321" in text
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_unmod_command_cannot_remove_super_admin(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест попытки удалить главного администратора (должен быть отказ)."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    handler.admins_store = admins
+    fake_context.args = ["42"]  # Пытаемся удалить самого себя (главного админа)
+    fake_update.message.reply_to_message = None
+
+    await handler.unmod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "главного администратора" in text.lower() or "нельзя удалить" in text.lower()
+
+
+@pytest.mark.integration
+@pytest.mark.db
+@pytest.mark.usefixtures("_setup_test_postgres")
+@pytest.mark.asyncio
+async def test_unmod_command_shows_admin_list_when_no_args(
+    fake_update: Any,
+    fake_context: Any,
+    async_retry_stub: Any,
+    cleanup_tables: Any,
+    monkeypatch: Any,
+) -> None:
+    """Тест показа списка админов при вызове /unmod без аргументов."""
+    monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
+    importlib.reload(bot_handlers_module)
+    import utils.admins_store as admins_store_module
+    from bot.handlers import CommandHandlers
+
+    importlib.reload(admins_store_module)
+    AdminsStore = admins_store_module.AdminsStore
+
+    handler = CommandHandlers(image_generator=MagicMock(), next_run_provider=None)
+    async_retry_stub(handler)
+
+    admins = AdminsStore()
+    await admins.add_admin(11111)
+    await admins.add_admin(22222)
+    handler.admins_store = admins
+    fake_context.args = []
+    fake_update.message.reply_to_message = None
+
+    # Мокаем get_chat для получения информации о пользователях
+    def mock_get_chat(chat_id: int) -> Any:
+        chat = SimpleNamespace()
+        chat.full_name = f"User {chat_id}"
+        chat.username = f"user{chat_id}"
+        return chat
+
+    fake_context.bot.get_chat = AsyncMock(side_effect=mock_get_chat)
+
+    await handler.unmod_command(fake_update, fake_context)
+
+    fake_update.message.reply_text.assert_awaited()
+    call = fake_update.message.reply_text.await_args
+    text = call.kwargs.get("text", call.args[0])
+    assert "Список администраторов" in text or "администраторов" in text.lower()
+    assert "42" in text  # Главный админ должен быть в списке
+    assert "11111" in text or "22222" in text  # Хотя бы один из добавленных админов
