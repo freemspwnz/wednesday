@@ -4,6 +4,11 @@
 
 ### Изменено
 
+- **Унификация retry и обработки ошибок Telegram/сети**:
+  - Добавлен общий утилитный модуль `utils/telegram_retry.py` с helper-функцией `retry_on_connect_error` и декоратором `retry_on_telegram_error` для повторных попыток при сетевых/Telgram-ошибках.
+  - `CommandHandlers` переведён на использование общего helper'а через тонкую обёртку `_retry_on_connect_error`, сохраняя совместимость с существующими тестами и фикстурами, которые патчат этот метод.
+  - В `WednesdayBot.send_wednesday_frog` и вспомогательных методах `_send_error_message`, `_send_user_friendly_error`, `_send_admin_error`, `_send_fallback_image` разделены инфраструктурные ошибки Telegram/сети (`TelegramError`/`NetworkError`) и неожиданные программные ошибки, с более точным логированием и без изменения пользовательского поведения.
+
 - **Управление зависимостями бота (DI через BotServices)**:
   - Добавлен отдельный контейнер зависимостей `BotServices` (`services/bot_services.py`), инкапсулирующий основные сервисы бота: генератор изображений (`ImageGenerator`), планировщик (`TaskScheduler | None`), хранилища (`UsageTracker`, `ChatsStore`, `DispatchRegistry`, `Metrics`), Redis‑обёртки (`PromptCache`, `UserStateStore`) и `RateLimiter`.
   - `WednesdayBot` в конструкторе собирает все сервисы в единый объект `self.services: BotServices` и использует его как источник зависимостей для обработчиков команд; при этом ключевые объекты продолжают публиковаться в `application.bot_data` (`usage`, `chats`, `metrics`, `prompt_cache`, `user_state_store`, `rate_limiter`, `bot`, `services`) для сохранения обратной совместимости с существующим кодом.

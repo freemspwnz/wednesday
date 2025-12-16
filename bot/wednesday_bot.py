@@ -8,6 +8,7 @@ import os
 from typing import Any
 
 from telegram import Update
+from telegram.error import NetworkError, TelegramError
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
@@ -393,7 +394,7 @@ class WednesdayBot:
                                 pass
                             self.logger.info(f"Жаба отправлена в чат {target_chat}")
                             break
-                        except Exception as send_error:
+                        except TelegramError as send_error:
                             error_str = str(send_error).lower()
                             is_429 = "429" in error_str or "rate limit" in error_str or "too many requests" in error_str
 
@@ -414,9 +415,21 @@ class WednesdayBot:
                                 await asyncio.sleep(retry_after)
                                 continue
 
-                            self.logger.warning(
-                                f"Сбой отправки в {target_chat} (попытка {attempt}/{send_attempts}): {send_error}",
+                            # Сетевые/Telegram-ошибки, не относящиеся к 429, логируем отдельно
+                            is_network = isinstance(send_error, NetworkError) or any(
+                                kw in error_str for kw in ("connection", "timeout", "network")
                             )
+                            log_msg = (
+                                "Сетевая/Telgram-ошибка отправки в чат "
+                                f"{target_chat} (попытка {attempt}/{send_attempts}): {send_error}"
+                                if is_network
+                                else (
+                                    "Ошибка Telegram API при отправке в чат "
+                                    f"{target_chat} (попытка {attempt}/{send_attempts}): {send_error}"
+                                )
+                            )
+                            self.logger.warning(log_msg)
+
                             if attempt == send_attempts:
                                 self.logger.error(
                                     f"Не удалось отправить изображение в чат {target_chat} после всех попыток",
@@ -440,6 +453,24 @@ class WednesdayBot:
                                 wait_time = backoff + jitter
                                 self.logger.info(f"Ждём {wait_time:.1f}с перед повторной попыткой")
                                 await asyncio.sleep(wait_time)
+                        except Exception as send_error:
+                            # Непрограммные ошибки считаем программными/неожиданными и не ретраим поверх 3 попыток
+                            self.logger.error(
+                                "Неожиданная программная ошибка при отправке изображения "
+                                f"в чат {target_chat}: {send_error}",
+                                exc_info=True,
+                            )
+                            try:
+                                await self._send_error_message(
+                                    f"Не удалось отправить изображение в чат {target_chat} из-за внутренней ошибки",
+                                )
+                            except Exception:
+                                pass
+                            try:
+                                await self.metrics.increment_dispatch_failed()
+                            except Exception:
+                                pass
+                            break
 
             else:
                 # Если генерация не удалась, отправляем сообщения об ошибке и случайное изображение
@@ -555,8 +586,13 @@ class WednesdayBot:
                 chat_id=self.chat_id,
                 text=error_message,
             )
+        except TelegramError as send_error:
+            self.logger.warning(f"Не удалось отправить сообщение об ошибке (TelegramError): {send_error}")
         except Exception as send_error:
-            self.logger.error(f"Не удалось отправить сообщение об ошибке: {send_error}")
+            self.logger.error(
+                f"Неожиданная программная ошибка при отправке сообщения об ошибке: {send_error}",
+                exc_info=True,
+            )
 
     async def _send_user_friendly_error(self, chat_id: int, error_context: str = "генерации изображения") -> None:
         """Отправляет дружелюбное сообщение об ошибке в указанный чат.
@@ -582,8 +618,17 @@ class WednesdayBot:
                 chat_id=chat_id,
                 text=friendly_message,
             )
+        except TelegramError as send_error:
+            self.logger.warning(
+                "Не удалось отправить дружелюбное сообщение об ошибке (TelegramError): %s",
+                send_error,
+            )
         except Exception as send_error:
-            self.logger.error(f"Не удалось отправить дружелюбное сообщение об ошибке: {send_error}")
+            self.logger.error(
+                "Неожиданная программная ошибка при отправке дружелюбного сообщения об ошибке: %s",
+                send_error,
+                exc_info=True,
+            )
 
     async def _send_admin_error(self, error_details: str) -> None:
         """Отправляет детальное сообщение об ошибке всем администраторам.
@@ -631,7 +676,7 @@ class WednesdayBot:
                         text=admin_message,
                     )
                 self.logger.info(f"Отправлено сообщение об ошибке админу {admin_id}")
-            except Exception as send_error:
+            except TelegramError as send_error:
                 error_str = str(send_error)
                 # Если ошибка "Message is too long", отправляем сокращенную версию
                 if "too long" in error_str.lower():
@@ -642,12 +687,32 @@ class WednesdayBot:
                             text=short_message,
                         )
                         self.logger.info(f"Отправлено сокращенное сообщение об ошибке админу {admin_id}")
+                    except TelegramError as retry_error:
+                        self.logger.error(
+                            "Не удалось отправить даже сокращенное сообщение админу %s (TelegramError): %s",
+                            admin_id,
+                            retry_error,
+                        )
                     except Exception as retry_error:
                         self.logger.error(
-                            f"Не удалось отправить даже сокращенное сообщение админу {admin_id}: {retry_error}",
+                            "Неожиданная ошибка при отправке сокращённого сообщения админу %s: %s",
+                            admin_id,
+                            retry_error,
+                            exc_info=True,
                         )
                 else:
-                    self.logger.error(f"Не удалось отправить сообщение об ошибке админу {admin_id}: {send_error}")
+                    self.logger.error(
+                        "Не удалось отправить сообщение об ошибке админу %s (TelegramError): %s",
+                        admin_id,
+                        send_error,
+                    )
+            except Exception as send_error:
+                self.logger.error(
+                    "Неожиданная программная ошибка при отправке сообщения об ошибке админу %s: %s",
+                    admin_id,
+                    send_error,
+                    exc_info=True,
+                )
 
     async def _send_fallback_image(self, chat_id: int) -> bool:
         """Отправляет случайное изображение из сохраненных в случае ошибки генерации.
@@ -681,8 +746,20 @@ class WednesdayBot:
             else:
                 self.logger.warning("Нет сохраненных изображений для отправки как fallback")
                 return False
+        except TelegramError as send_error:
+            self.logger.warning(
+                "Не удалось отправить fallback-изображение в чат %s (TelegramError): %s",
+                chat_id,
+                send_error,
+            )
+            return False
         except Exception as e:
-            self.logger.error(f"Ошибка при отправке fallback изображения: {e}")
+            self.logger.error(
+                "Неожиданная программная ошибка при отправке fallback-изображения в чат %s: %s",
+                chat_id,
+                e,
+                exc_info=True,
+            )
             return False
 
     def setup_scheduler(self) -> None:

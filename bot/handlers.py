@@ -5,12 +5,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import TypeVar
 
-import httpx
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -19,6 +17,7 @@ from services.celery_app import celery_app
 from utils.admins_store import AdminsStore
 from utils.config import config
 from utils.logger import get_logger, log_all_methods
+from utils.telegram_retry import retry_on_connect_error as global_retry_on_connect_error
 
 # Константы
 FROG_RATE_LIMIT_MINUTES = 5  # минимальный интервал в минутах
@@ -508,7 +507,7 @@ class CommandHandlers:
         except Exception as e:
             self.logger.error(f"Ошибка при попытке остановить бота через /stop: {e}")
 
-    async def _retry_on_connect_error(
+    async def _retry_on_connect_error(  # noqa: PLR6301
         self,
         func: Callable[..., Awaitable[T]],
         *args: object,
@@ -517,44 +516,23 @@ class CommandHandlers:
         **kwargs: object,
     ) -> T:
         """
-        Выполняет функцию с повторными попытками при ошибках httpx.ConnectError.
+        Выполняет функцию с повторными попытками при сетевых/Telgram-ошибках.
 
-        Args:
-            func: Асинхронная функция для выполнения
-            *args: Позиционные аргументы для функции
-            max_retries: Максимальное количество попыток (по умолчанию 3)
-            delay: Задержка между попытками в секундах (по умолчанию 2)
-            **kwargs: Именованные аргументы для функции
+        Это тонкая обёртка вокруг общего helper'а `utils.telegram_retry.retry_on_connect_error`,
+        оставленная для совместимости с существующими тестами, которые патчат
+        `_retry_on_connect_error` через monkeypatch.
 
-        Returns:
-            Результат выполнения функции
-
-        Raises:
-            Последняя ошибка, если все попытки исчерпаны
+        Note:
+            Метод остаётся instance method (а не staticmethod) намеренно, чтобы
+            тесты могли патчить его через monkeypatch.setattr(handler, "_retry_on_connect_error", ...).
         """
-        last_error: Exception | None = None
-        for attempt in range(1, max_retries + 1):
-            try:
-                return await func(*args, **kwargs)
-            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
-                last_error = e
-                if attempt < max_retries:
-                    wait_time = delay * attempt  # Экспоненциальная задержка
-                    self.logger.warning(
-                        f"Ошибка подключения (попытка {attempt}/{max_retries}): {e}. Повтор через {wait_time}с...",
-                    )
-                    await asyncio.sleep(wait_time)
-                else:
-                    self.logger.error(f"Все {max_retries} попытки исчерпаны. Последняя ошибка: {e}")
-            except Exception:
-                # Для других ошибок не делаем повторных попыток
-                raise
-
-        # Если дошли сюда, все попытки исчерпаны
-        if last_error is not None:
-            raise last_error
-        # Если last_error None (не должно случиться, но для безопасности)
-        raise RuntimeError("Все попытки исчерпаны, но ошибка не была сохранена")
+        return await global_retry_on_connect_error(
+            func,
+            *args,
+            max_retries=max_retries,
+            delay=delay,
+            **kwargs,
+        )
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.
