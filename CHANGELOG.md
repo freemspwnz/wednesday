@@ -12,6 +12,10 @@
   - Инициализация `AppSettings` в `WednesdayBot.__init__` через `AppSettings.from_config(config)`
   - Замена чтения `config.scheduler_send_times` на `self.services.settings.scheduler_send_times` в `send_wednesday_frog`
   - Замена чтения `TIME_FORMAT_LENGTH` на `self.services.settings.time_format_length` в `send_wednesday_frog`
+  - Замена `config.admin_chat_id` на `self.services.settings.admin_chat_id` в методе `_is_super_admin`
+  - Замена прямого чтения `config.admin_chat_id` на `self.services.settings.admin_chat_id` в `stop_command`
+  - Замена прямого чтения `config.admin_chat_id` на `self.services.settings.admin_chat_id` в `admin_force_send_command` и `list_mods_command`
+  - Удален неиспользуемый импорт `config` из `bot/handlers.py`
 
 - **Горизонтальное масштабирование rate limiting для команды /frog**:
   - Переведён rate limiting команды `/frog` с локальных словарей на Redis через `RateLimiter`

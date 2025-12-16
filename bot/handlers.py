@@ -16,7 +16,6 @@ from telegram.ext import ContextTypes
 from services.bot_services import BotServices
 from services.celery_app import celery_app
 from utils.admins_store import AdminsStore
-from utils.config import config
 from utils.logger import get_logger, log_all_methods
 from utils.telegram_retry import (
     retry_on_connect_error as global_retry_on_connect_error,
@@ -162,7 +161,7 @@ class CommandHandlers:
     def _is_super_admin(self, user_id: int) -> bool:
         """Проверяет, является ли пользователь главным администратором.
 
-        Сравнивает user_id с config.admin_chat_id (из .env).
+        Сравнивает user_id с settings.admin_chat_id (из .env через DI).
 
         Args:
             user_id: Идентификатор пользователя для проверки.
@@ -170,16 +169,11 @@ class CommandHandlers:
         Returns:
             True если user_id совпадает с admin_chat_id, False иначе.
         """
-        admin_chat_id = config.admin_chat_id
+        admin_chat_id = self.services.settings.admin_chat_id
         if not admin_chat_id:
             return False
 
-        try:
-            main_admin_id = int(admin_chat_id)
-            return main_admin_id == user_id
-        except (ValueError, TypeError) as e:
-            self.logger.warning(f"_is_super_admin: ошибка при преобразовании admin_chat_id в int: {e}")
-            return False
+        return admin_chat_id == user_id
 
     @retry_on_telegram_error(max_retries=MAX_RETRIES_DEFAULT, delay=RETRY_DELAY_DEFAULT)
     async def _safe_reply_text(self, message: Message, text: str) -> None:  # noqa: PLR6301
@@ -486,12 +480,10 @@ class CommandHandlers:
         # В админ-чате НЕ отправляем короткое статусное сообщение (только полные сообщения об остановке)
         is_admin_chat = False
         try:
-            from utils.config import config as _cfg
-
-            admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
-            if admin_chat_id_env and update.effective_chat and update.effective_chat.id is not None:
+            admin_chat_id = self.services.settings.admin_chat_id
+            if admin_chat_id and update.effective_chat and update.effective_chat.id is not None:
                 try:
-                    is_admin_chat = int(str(admin_chat_id_env)) == int(str(update.effective_chat.id))
+                    is_admin_chat = admin_chat_id == update.effective_chat.id
                 except Exception:
                     is_admin_chat = False
         except Exception:
@@ -1335,21 +1327,18 @@ class CommandHandlers:
             return
 
         # Отправляем изображение главному админу
-        admin_chat_id = config.admin_chat_id
+        admin_chat_id = self.services.settings.admin_chat_id
         if admin_chat_id:
             try:
-                admin_id = int(admin_chat_id)
                 await self._retry_on_connect_error(
                     context.bot.send_photo,
-                    chat_id=admin_id,
+                    chat_id=admin_chat_id,
                     photo=image_data,
                     caption=f"🐸 Принудительная отправка (команда /force_send)\n\n{caption}",
                     max_retries=3,
                     delay=2,
                 )
-                self.logger.info(f"Изображение отправлено главному админу {admin_id}")
-            except (ValueError, TypeError) as e:
-                self.logger.warning(f"Неверный формат admin_chat_id: {e}")
+                self.logger.info(f"Изображение отправлено главному админу {admin_chat_id}")
             except Exception as e:
                 self.logger.warning(f"Не удалось отправить изображение главному админу: {e}")
 
@@ -2020,11 +2009,9 @@ class CommandHandlers:
             return
 
         admin_list = []
-        from utils.config import config
-
-        main_admin = config.admin_chat_id
+        main_admin = self.services.settings.admin_chat_id
         for admin_id in all_admins:
-            is_main = " (главный)" if (main_admin and int(main_admin) == admin_id) else ""
+            is_main = " (главный)" if (main_admin and main_admin == admin_id) else ""
             admin_list.append(f"• ID: {admin_id}{is_main}")
 
         message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
