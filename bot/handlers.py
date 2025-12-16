@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import TypeVar
 
-from telegram import Update
+from telegram import Message, Update
 from telegram.ext import ContextTypes
 
 from services.bot_services import BotServices
@@ -17,7 +17,10 @@ from services.celery_app import celery_app
 from utils.admins_store import AdminsStore
 from utils.config import config
 from utils.logger import get_logger, log_all_methods
-from utils.telegram_retry import retry_on_connect_error as global_retry_on_connect_error
+from utils.telegram_retry import (
+    retry_on_connect_error as global_retry_on_connect_error,
+    retry_on_telegram_error,
+)
 
 # Константы
 FROG_RATE_LIMIT_MINUTES = 5  # минимальный интервал в минутах
@@ -160,6 +163,16 @@ class CommandHandlers:
         except (ValueError, TypeError) as e:
             self.logger.warning(f"_is_super_admin: ошибка при преобразовании admin_chat_id в int: {e}")
             return False
+
+    @retry_on_telegram_error(max_retries=MAX_RETRIES_DEFAULT, delay=RETRY_DELAY_DEFAULT)
+    async def _safe_reply_text(self, message: Message, text: str) -> None:  # noqa: PLR6301
+        """Безопасная отправка текста с retry для Telegram/сетевых ошибок.
+
+        Используется как сокращённая запись для типичного паттерна
+        `_retry_on_connect_error(message.reply_text, ...)` в местах, где
+        не требуется гибкая настройка retry-параметров.
+        """
+        await message.reply_text(text)
 
     async def set_frog_limit_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_limit.
