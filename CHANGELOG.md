@@ -15,6 +15,19 @@
   - Обновлен метод `start`: обернут `send_message` в `retry_on_connect_error` для уведомлений администраторам
   - Обновлен метод `stop`: обернут `send_message` в `retry_on_connect_error` для уведомлений администраторам
 
+- **Классификация исключений в SupportBot**:
+  - Добавлен импорт `TelegramError` из `telegram.error` для классификации исключений
+  - Заменены все `except Exception:` на конкретные типы исключений для улучшения отладки и обработки ошибок
+  - Infrastructure ошибки (retry + мягкая деградация): `except (TelegramError, NetworkError, TimedOut):` для сетевых/Telegram ошибок в методах отправки сообщений
+  - Programming/Business ошибки: `except (ValueError, TypeError, AttributeError):` для логических ошибок (преобразование типов, доступ к атрибутам)
+  - Обвязочный код (shutdown, инициализация): оставлен `except Exception:` в критических местах с добавлением `exc_info=True` в логирование
+  - Обновлен метод `maintenance_message`: заменен `except Exception:` на `except (TelegramError, NetworkError, TimedOut):`
+  - Обновлен метод `log_command`: заменены исключения для ошибок отправки на `except (TelegramError, NetworkError, TimedOut):`, добавлен `exc_info=True` для общих ошибок
+  - Обновлен метод `start_main_command`: классифицированы исключения по типам, добавлен `exc_info=True` для критических ошибок
+  - Обновлен метод `help_command`: заменен `except Exception:` на `except (TelegramError, NetworkError, TimedOut):`
+  - Обновлен метод `start`: классифицированы исключения по типам, добавлен `exc_info=True` для warmup ошибок, повторной инициализации и общих ошибок
+  - Обновлен метод `stop`: классифицированы исключения по типам, добавлен `exc_info=True` для ошибок остановки updater, приложения и shutdown
+
 - **Приведение SupportBot в соответствие с DI и AppSettings**:
   - Удалена публикация в `bot_data` из метода `start` в `SupportBot`
   - Добавлен комментарий о том, что все зависимости доступны через экземпляр `SupportBot`, `bot_data` больше не используется для DI

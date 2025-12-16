@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from telegram import Update
-from telegram.error import NetworkError as _TNetworkError, TimedOut as _TTimedOut
+from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
@@ -140,7 +140,7 @@ class SupportBot:
                     _ = await self.application.bot.get_me()
                 except Exception as warmup_err:
                     # Не фейлим старт из-за warmup; просто залогируем
-                    self.logger.warning(f"SupportBot warmup get_me() не удался: {warmup_err}")
+                    self.logger.warning(f"SupportBot warmup get_me() не удался: {warmup_err}", exc_info=True)
                 break
             except (_TTimedOut, _TNetworkError) as e:
                 self.logger.warning(
@@ -180,6 +180,7 @@ class SupportBot:
                     except Exception as reinit_err:
                         self.logger.warning(
                             f"SupportBot: не удалось повторно инициализировать приложение: {reinit_err}",
+                            exc_info=True,
                         )
                     # Ретраим без немедленного падения
                     if attempt == start_attempts:
@@ -219,9 +220,9 @@ class SupportBot:
                     if self.settings.admin_chat_id and chat_id is not None:
                         try:
                             skip_admin_edit = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
-                        except Exception:
+                        except (ValueError, TypeError, AttributeError):
                             skip_admin_edit = False
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     skip_admin_edit = False
 
                 if chat_id and message_id and not skip_admin_edit:
@@ -234,7 +235,7 @@ class SupportBot:
                             text=final_text,
                         )
                         self.logger.info("Сообщение об остановке обновлено в чате-источнике")
-                    except Exception as edit_err:
+                    except (TelegramError, _TNetworkError, _TTimedOut) as edit_err:
                         # Игнорируем ошибку "Message is not modified" — это нормально, если текст уже установлен
                         error_str = str(edit_err).lower()
                         if "message is not modified" in error_str or "not modified" in error_str:
@@ -244,7 +245,7 @@ class SupportBot:
                 elif chat_id and skip_admin_edit:
                     self.logger.info("SupportBot: пропускаю редактирование статусного сообщения в админском чате")
         except Exception as e:
-            self.logger.warning(f"Не удалось обновить сообщение об остановке: {e}")
+            self.logger.warning(f"Не удалось обновить сообщение об остановке: {e}", exc_info=True)
 
         # Сообщим админам о запуске SupportBot
         try:
@@ -262,7 +263,7 @@ class SupportBot:
                         delay=2.0,
                         handle_rate_limit=True,
                     )
-                except Exception:
+                except (TelegramError, _TNetworkError, _TTimedOut):
                     pass
         except Exception:
             pass
@@ -302,9 +303,9 @@ class SupportBot:
                     if self.settings.admin_chat_id and chat_id is not None:
                         try:
                             is_admin_chat = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
-                        except Exception:
+                        except (ValueError, TypeError, AttributeError):
                             is_admin_chat = False
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     is_admin_chat = False
                 if chat_id and message_id and not is_admin_chat:
                     interim_text = "🚀 Запускаю основной бот...\n🛑 Support Bot остановлен"
@@ -314,7 +315,7 @@ class SupportBot:
                             message_id=message_id,
                             text=interim_text,
                         )
-                    except Exception:
+                    except (TelegramError, _TNetworkError, _TTimedOut):
                         pass
                 # Очистим ссылку, чтобы не переиспользовать
                 self.pending_startup_edit = None
@@ -325,7 +326,7 @@ class SupportBot:
             if hasattr(self.application, "updater") and self.application.updater:
                 await self.application.updater.stop()
         except Exception as e:
-            self.logger.warning(f"Ошибка при остановке updater'а SupportBot: {e}")
+            self.logger.warning(f"Ошибка при остановке updater'а SupportBot: {e}", exc_info=True)
         # Короткая пауза, чтобы соединения вернулись в пул
         try:
             await asyncio.sleep(0.2)
@@ -348,20 +349,20 @@ class SupportBot:
                             delay=2.0,
                             handle_rate_limit=True,
                         )
-                    except Exception:
+                    except (TelegramError, _TNetworkError, _TTimedOut):
                         pass
         except Exception:
             pass
         try:
             await self.application.stop()
         except Exception as e:
-            self.logger.warning(f"Ошибка при остановке приложения SupportBot: {e}")
+            self.logger.warning(f"Ошибка при остановке приложения SupportBot: {e}", exc_info=True)
 
         # Завершаем жизненный цикл приложения, освобождая все ресурсы PTB
         try:
             await self.application.shutdown()
         except Exception as e:
-            self.logger.warning(f"Ошибка при shutdown приложения SupportBot: {e}")
+            self.logger.warning(f"Ошибка при shutdown приложения SupportBot: {e}", exc_info=True)
 
     async def maintenance_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик неизвестных команд.
@@ -398,7 +399,7 @@ class SupportBot:
                 delay=2.0,
                 handle_rate_limit=True,
             )
-        except Exception as e:
+        except (TelegramError, _TNetworkError, _TTimedOut) as e:
             self.logger.warning(f"Не удалось отправить сообщение о техработах: {e}")
 
     async def _is_admin(self, user_id: int) -> bool:
@@ -523,7 +524,7 @@ class SupportBot:
                         handle_rate_limit=True,
                     )
                     self.logger.info("SupportBot: лог отправлен успешно")
-                except Exception as e:
+                except (TelegramError, _TNetworkError, _TTimedOut) as e:
                     self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
             await retry_on_connect_error(
                 update.message.reply_text,
@@ -533,7 +534,7 @@ class SupportBot:
                 handle_rate_limit=True,
             )
         except Exception as e:
-            self.logger.error(f"Ошибка в команде /log: {e}")
+            self.logger.error(f"Ошибка в команде /log: {e}", exc_info=True)
             try:
                 await retry_on_connect_error(
                     update.message.reply_text,
@@ -542,7 +543,7 @@ class SupportBot:
                     delay=2.0,
                     handle_rate_limit=True,
                 )
-            except Exception:
+            except (TelegramError, _TNetworkError, _TTimedOut):
                 pass
 
     async def _send_log_file(self, context: ContextTypes.DEFAULT_TYPE, path: Path) -> None:  # noqa: PLR6301
@@ -609,9 +610,9 @@ class SupportBot:
             if self.settings.admin_chat_id and chat_id is not None:
                 try:
                     is_admin_chat = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     is_admin_chat = False
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             is_admin_chat = False
 
         # Отправляем статусное сообщение только если это не админ-чат
@@ -633,9 +634,9 @@ class SupportBot:
                             "chat_id": update.effective_chat.id,
                             "message_id": status_msg.message_id,
                         }
-                    except Exception:
+                    except (ValueError, TypeError, AttributeError):
                         self.pending_startup_edit = None
-            except Exception:
+            except (TelegramError, _TNetworkError, _TTimedOut):
                 pass
 
         # Сигнализируем раннеру/супервизору о необходимости запуска основного бота
@@ -649,7 +650,7 @@ class SupportBot:
                 self.logger.info("SupportBot запрос запуска основного отправлен супервизору")
                 # Не редактируем статусное сообщение сразу; финальный текст поставит основной бот после запуска
             except Exception as e:
-                self.logger.error(f"Ошибка при запросе запуска основного бота: {e}")
+                self.logger.error(f"Ошибка при запросе запуска основного бота: {e}", exc_info=True)
         else:
             self.logger.warning("request_start_main не задан, невозможно запустить основной бот")
 
@@ -700,5 +701,5 @@ class SupportBot:
                 delay=2.0,
                 handle_rate_limit=True,
             )
-        except Exception as e:
+        except (TelegramError, _TNetworkError, _TTimedOut) as e:
             self.logger.warning(f"Ошибка при отправке help: {e}")
