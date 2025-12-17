@@ -17,7 +17,7 @@ from celery import Task
 from celery.signals import worker_shutdown
 
 from bot.wednesday_bot import WednesdayBot
-from services.celery_app import celery_app
+from services.celery import celery_app
 from services.image_generator import ImageGenerator
 from utils.config import config
 from utils.logger import get_logger, log_event

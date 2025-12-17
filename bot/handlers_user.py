@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
-from services.celery_app import celery_app
+from services.celery import celery_app
 from services.infrastructure.rate_limiting import RateLimiter
 
 # Константы

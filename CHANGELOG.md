@@ -11,6 +11,11 @@
   - Класс `CeleryServices` оставлен для обратной совместимости (deprecated)
   - Улучшена типизация всех методов
 
+- **Создан `services/celery/app.py`**:
+  - Вынесена конфигурация Celery из `services/celery_app.py` в `services/celery/app.py`
+  - Обновлены все импорты в проекте (bot/, services/, tests/)
+  - Обновлён `services/celery/__init__.py` для экспорта `celery_app`
+
 ### Изменено
 
 - **Создан `services/domain/image_generation.py`**:
