@@ -7,9 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from bot.handlers_user import UserHandlers
-from services import prompt_cache as prompt_cache_module, rate_limiter as rate_limiter_module
+from services import rate_limiter as rate_limiter_module
 from services.bot_services import BotServices
 from services.clients import factory as clients_factory
+from services.infrastructure.cache import prompt_cache as prompt_cache_module
 from utils.redis_client import _InMemoryRedis
 
 pytestmark = [pytest.mark.unit]

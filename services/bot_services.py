@@ -14,7 +14,7 @@ from services.app_settings import AppSettings
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 from services.image_generator import ImageGenerator
-from services.prompt_cache import PromptCache
+from services.infrastructure.cache.prompt_cache import PromptCache
 from services.rate_limiter import RateLimiter
 from services.scheduler import TaskScheduler
 from services.user_state_store import UserStateStore

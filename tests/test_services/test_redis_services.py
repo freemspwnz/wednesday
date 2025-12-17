@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from services.prompt_cache import PromptCache
+from services.infrastructure.cache.prompt_cache import PromptCache
 from services.rate_limiter import CircuitBreaker, RateLimiter
 from services.user_state_store import UserStateStore
 from utils.redis_client import _InMemoryRedis

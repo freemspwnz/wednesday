@@ -41,6 +41,11 @@
   - Использует `ImagesStore` и `PromptsStore` для работы с базой данных
   - Добавлена обработка ошибок через `CacheError`
 
+- **Перемещён `services/prompt_cache.py` → `services/infrastructure/cache/prompt_cache.py`**:
+  - Файл перемещён в директорию `infrastructure/cache/` согласно новой архитектуре
+  - Обновлены все импорты в проекте
+  - Обновлён `services/infrastructure/cache/__init__.py` для экспорта
+
 ### Добавлено
 
 - **Структура директорий для новой архитектуры services/**:
