@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from utils import paths
 
 
@@ -18,4 +20,4 @@ def test_logs_container_path() -> None:
     """
 
     assert paths.LOGS_CONTAINER_PATH == "/app/logs"
-    assert paths.LOGS_DIR == "logs"
+    assert paths.LOGS_DIR == Path("logs")

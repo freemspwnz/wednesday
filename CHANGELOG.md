@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Рефакторинг управления путями (paths.py)**:
+  - Упрощена структура модуля `utils/paths.py`: удалены дублирующие константы `*_CONTAINER_PATH` и функции `resolve_*()`
+  - Добавлена базовая константа `DATA_DIR = Path("data")` для единообразного определения путей к данным
+  - Обновлены константы на использование `pathlib.Path` объектов вместо строк
+  - Переименована константа `FROG_IMAGES_DIR` в `FROGS_DIR` для краткости
+  - Все пути теперь определены относительно корня проекта и автоматически разрешаются через `pathlib.Path`
+
 - **Унификация retry-механизма с использованием Tenacity**:
   - Добавлены импорты `httpx`, `telegram.error` и дополнительные компоненты Tenacity в `utils/retry.py`
   - Добавлен класс `WaitTelegramLinear` для линейного backoff и обработки 429 ошибок
@@ -15,6 +22,10 @@
   - Заменен декоратор `retry_on_telegram_error` на `retry_telegram` в `BaseHandlers._safe_reply_text`
   - Удален файл `utils/telegram_retry.py` после переноса функциональности в `utils/retry.py`
   - Обновлен комментарий в `base_handlers.py` с упоминанием нового пути к helper'у
+
+- **Реорганизация тестового кода**:
+  - Перемещен файл `utils/config_test.py` в `tests/utils/config_test.py` для правильной организации тестового кода
+  - Обновлен импорт в `tests/common/celery_app_test.py` на использование нового пути `tests.utils.config_test`
 
 ## [6.13.0] 2025-12-17 — Завершение DI, BaseHandlers вместо CommandHandlers и масштабируемый rate limiting
 

@@ -1,73 +1,45 @@
 """
 Утилитный модуль с централизованными путями для файловых операций.
 
-Хранит как относительные пути внутри проекта, так и ожидаемые абсолютные
-пути внутри Docker-контейнера. Это позволяет:
-
-- единообразно настраивать директории хранения изображений, логов и промптов;
-- использовать относительные пути при локальном запуске (без /app);
-- однозначно документировать, где именно находятся файлы в контейнере.
+Все пути определены относительно корня проекта (WORKDIR=/app в контейнере).
+При использовании относительных путей через pathlib.Path они автоматически
+разрешаются относительно текущей рабочей директории.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-# === Изображения жабы ===
+# Базовая директория для данных
+DATA_DIR = Path("data")
 
-# Относительный путь внутри проекта (от текущей рабочей директории).
-FROG_IMAGES_DIR: str = "data/frogs"
+# Изображения жабы
+FROGS_DIR = DATA_DIR / "frogs"
 
-# Абсолютный путь внутри Docker-контейнера (WORKDIR=/app).
-FROG_IMAGES_CONTAINER_PATH: str = "/app/data/frogs"
+# Логи приложения
+LOGS_DIR = Path("logs")
 
+# Хранилище промптов GigaChat
+PROMPTS_DIR = DATA_DIR / "prompts"
 
-# === Логи приложения ===
-
-# Относительный путь для логов (локальный запуск и внутри контейнера).
-LOGS_DIR: str = "logs"
-
-# Абсолютный путь к директории логов внутри Docker-контейнера.
+# Временные алиасы для обратной совместимости (будут удалены в следующих этапах)
+# Deprecated: используйте FROGS_DIR вместо FROG_IMAGES_DIR
+FROG_IMAGES_DIR: str = str(FROGS_DIR)
+FROG_IMAGES_CONTAINER_PATH: str = f"/app/{FROG_IMAGES_DIR}"
 LOGS_CONTAINER_PATH: str = "/app/logs"
-
-
-# === Хранилище промптов GigaChat ===
-
-PROMPTS_DIR: str = "data/prompts"
 PROMPTS_CONTAINER_PATH: str = "/app/data/prompts"
 
 
 def resolve_frog_images_dir() -> Path:
-    """Возвращает путь к директории с изображениями жабы.
-
-    Returns:
-        Путь к директории с изображениями. При локальном запуске это
-        <project_root>/data/frogs. В контейнере при WORKDIR=/app путь будет
-        /app/data/frogs.
-    """
-
-    return Path(FROG_IMAGES_DIR)
+    """Deprecated: используйте FROGS_DIR напрямую."""
+    return FROGS_DIR
 
 
 def resolve_logs_dir() -> Path:
-    """Возвращает путь к директории с логами.
-
-    Returns:
-        Путь к директории с логами. При локальном запуске это
-        <project_root>/logs. В контейнере при WORKDIR=/app путь будет
-        /app/logs.
-    """
-
-    return Path(LOGS_DIR)
+    """Deprecated: используйте LOGS_DIR напрямую."""
+    return LOGS_DIR
 
 
 def resolve_prompts_dir() -> Path:
-    """Возвращает путь к директории с сохранёнными промптами GigaChat.
-
-    Returns:
-        Путь к директории с промптами. При локальном запуске это
-        <project_root>/data/prompts. В контейнере при WORKDIR=/app путь будет
-        /app/data/prompts.
-    """
-
-    return Path(PROMPTS_DIR)
+    """Deprecated: используйте PROMPTS_DIR напрямую."""
+    return PROMPTS_DIR
