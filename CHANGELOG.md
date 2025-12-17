@@ -25,6 +25,7 @@
   - Упрощено логирование в `handlers_admin.py`: убраны упоминания контейнерных путей из сообщений о логах
   - Обновлен `tests/test_utils/test_paths.py`: переписаны тесты для проверки новых констант `DATA_DIR`, `FROGS_DIR`, `LOGS_DIR`, `PROMPTS_DIR` вместо старых `*_CONTAINER_PATH` констант
   - Обновлен `tests/test_utils/test_images_store.py`: заменен патчинг функции `resolve_frog_images_dir` на патчинг константы `FROGS_DIR` в обоих тестах
+  - Обновлен `tests/test_utils/test_logger_secrets.py`: заменен патчинг функции `resolve_logs_dir` на патчинг константы `LOGS_DIR` в тесте `test_json_logs_do_not_contain_gigachat_key`
 
 - **Унификация retry-механизма с использованием Tenacity**:
   - Добавлены импорты `httpx`, `telegram.error` и дополнительные компоненты Tenacity в `utils/retry.py`

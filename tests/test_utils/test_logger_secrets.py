@@ -135,12 +135,8 @@ def test_json_logs_do_not_contain_gigachat_key(
     # Подменяем директорию логов
     logs_dir = tmp_path / "logs"
 
-    def _fake_resolve_logs_dir() -> Path:
-        return logs_dir
-
-    # Важно: setup_logger импортирует resolve_logs_dir в модуль utils.logger,
-    # поэтому патчим именно его, а не utils.paths.resolve_logs_dir.
-    monkeypatch.setattr("utils.logger.resolve_logs_dir", _fake_resolve_logs_dir)
+    # Патчим константу в модуле, где она используется
+    monkeypatch.setattr("utils.logger.LOGS_DIR", logs_dir)
 
     # Переинициализируем логгер с новой конфигурацией
     setup_logger()
