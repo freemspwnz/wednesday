@@ -16,6 +16,8 @@
   - Обновлен `utils/images_store.py`: заменены импорты `FROG_IMAGES_CONTAINER_PATH` и `resolve_frog_images_dir` на `FROGS_DIR`
   - Упрощен метод `_container_path_for_hash` в `images_store.py`: теперь возвращает относительный путь через `str(FROGS_DIR / ...)`
   - Упрощено логирование в `images_store.py`: убраны упоминания контейнерных путей
+  - Обновлен `utils/logger.py`: заменены импорты `LOGS_CONTAINER_PATH` и `resolve_logs_dir` на `LOGS_DIR`
+  - Упрощено логирование в `logger.py`: заменено упоминание `LOGS_CONTAINER_PATH` на `LOGS_DIR` в сообщении о настройке логирования
 
 - **Унификация retry-механизма с использованием Tenacity**:
   - Добавлены импорты `httpx`, `telegram.error` и дополнительные компоненты Tenacity в `utils/retry.py`

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from loguru import Logger as LoggerType
 
 from utils.config import config
-from utils.paths import LOGS_CONTAINER_PATH, resolve_logs_dir
+from utils.paths import LOGS_DIR
 
 # Типы для уровней логирования декораторов
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -172,7 +172,7 @@ def setup_logger() -> None:
     log_to_file = os.getenv("LOG_TO_FILE", "0").lower() in {"1", "true", "yes"}
 
     if log_to_file:
-        log_dir = resolve_logs_dir()
+        log_dir = LOGS_DIR
         log_dir.mkdir(exist_ok=True)
 
         # Текстовый файл для человеко-читаемости
@@ -219,7 +219,7 @@ def setup_logger() -> None:
 
     # Логируем успешную инициализацию
     if log_to_file:
-        logger.info(f"Система логирования настроена, логи пишутся в stdout и {LOGS_CONTAINER_PATH}")
+        logger.info(f"Система логирования настроена, логи пишутся в stdout и {LOGS_DIR}")
     else:
         logger.info("Система логирования настроена, логи пишутся только в stdout (JSON)")
 
