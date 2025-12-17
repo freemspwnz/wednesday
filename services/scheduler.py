@@ -3,6 +3,8 @@
 Использует asyncio для асинхронного выполнения задач.
 """
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta

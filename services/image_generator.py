@@ -12,6 +12,8 @@
 через DI по Protocol‑интерфейсам `ITextToImageClient` и `ITextToTextClient`.
 """
 
+from __future__ import annotations
+
 import asyncio
 import random
 from datetime import datetime
@@ -178,7 +180,7 @@ class ImageGenerator:
     async def generate_frog_image(
         self,
         user_id: int | None = None,
-        metrics: "Metrics | None" = None,
+        metrics: Metrics | None = None,
     ) -> tuple[bytes, str] | None:
         """Генерирует изображение жабы с помощью Kandinsky API.
 

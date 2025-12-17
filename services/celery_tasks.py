@@ -5,6 +5,8 @@ Celery задачи для Wednesday Frog Bot.
 Все async ресурсы создаются ПОСЛЕ fork, внутри задач.
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
 from collections.abc import Awaitable, Callable

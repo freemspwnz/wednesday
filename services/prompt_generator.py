@@ -10,6 +10,8 @@
 Используется асинхронный GigaChatTextClient из services/clients/gigachat_text.py.
 """
 
+from __future__ import annotations
+
 import random
 from datetime import datetime
 from hashlib import sha256

@@ -50,6 +50,16 @@
   - Все протоколы используют `@runtime_checkable` для проверки через `isinstance`
   - Протоколы полностью типизированы с использованием `from __future__ import annotations`
 
+### Изменено
+
+- **Добавлен `from __future__ import annotations` во все файлы services/**:
+  - Добавлен импорт в `services/prompt_generator.py`
+  - Добавлен импорт в `services/image_generator.py`
+  - Добавлен импорт в `services/celery_app.py`
+  - Добавлен импорт в `services/celery_tasks.py`
+  - Добавлен импорт в `services/scheduler.py`
+  - Все файлы services/ теперь используют отложенную оценку аннотаций типов
+
 ---
 
 ## [6.14.1] 2025-12-17 — Удаление неисползуемого модуля и обновление тестов
