@@ -15,21 +15,19 @@
 from __future__ import annotations
 
 import json
-import logging
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any, cast
 
-import redis.asyncio as redis
-from redis.exceptions import RedisError
+from services.base.redis_backend_service import RedisBackendService
 
-from utils.redis_client import _InMemoryRedis, get_redis
+if TYPE_CHECKING:
+    import redis.asyncio as redis
 
-logger = logging.getLogger(__name__)
+    from utils.redis_client import _InMemoryRedis
 
-
-RedisBackend: TypeAlias = redis.Redis | _InMemoryRedis
+    RedisBackend = redis.Redis | _InMemoryRedis
 
 
-class PromptCache:
+class PromptCache(RedisBackendService):
     """
     Кэш промптов на базе Redis с автоматическим fallback в память.
     """
@@ -49,15 +47,8 @@ class PromptCache:
             prefix: Префикс для всех ключей этого кэша (по умолчанию "prompt:").
             default_ttl: Время жизни записей по умолчанию в секундах (по умолчанию 3600).
         """
-        backend = redis_client or get_redis()
-        self._redis: RedisBackend = backend
-        self._prefix = prefix
+        super().__init__(redis_client=redis_client, prefix=prefix)
         self._default_ttl = default_ttl
-        # Локальный fallback-кэш на случай ошибок Redis.
-        self._fallback: _InMemoryRedis = _InMemoryRedis()
-
-    def _key(self, key: str) -> str:
-        return f"{self._prefix}{key}"
 
     async def set(self, key: str, prompt: dict | str, ttl: int | None = None) -> None:
         """Сохраняет промпт с TTL.
@@ -78,13 +69,10 @@ class PromptCache:
         payload = json.dumps(prompt, ensure_ascii=False)
         ttl_value = ttl if ttl is not None else self._default_ttl
 
-        try:
-            await self._redis.set(full_key, payload, ex=ttl_value)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в PromptCache.set ({full_key}) — используем fallback in‑memory, ttl={ttl_value}: {exc!s}",
-            )
-            await self._fallback.set(full_key, payload, ex=ttl_value)
+        async def _set_operation(backend: RedisBackend) -> None:
+            await backend.set(full_key, payload, ex=ttl_value)
+
+        await self._execute_with_fallback(_set_operation)
 
     async def get(self, key: str) -> dict | str | None:
         """Возвращает сохранённый промпт или None.
@@ -103,22 +91,26 @@ class PromptCache:
         """
         full_key = self._key(key)
 
-        try:
-            raw = await self._redis.get(full_key)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в PromptCache.get ({full_key}) — пробуем fallback in‑memory: {exc!s}",
-            )
-            raw = await self._fallback.get(full_key)
+        async def _get_operation(backend: RedisBackend) -> bytes | str | None:
+            result = await backend.get(full_key)
+            return result
+
+        raw = await self._execute_with_fallback(_get_operation)
 
         if raw is None:
             return None
 
+        # Преобразуем bytes в str для json.loads
+        if isinstance(raw, bytes):
+            raw_str: str = raw.decode("utf-8")
+        else:
+            raw_str = str(raw)
+
         try:
-            loaded: Any = json.loads(raw)
+            loaded: Any = json.loads(raw_str)
         except json.JSONDecodeError:
             # В редких случаях можем получить "сырой" текст.
-            return raw
+            return raw_str
 
         # В этом сервисе мы ожидаем либо словарь (JSON‑объект), либо строку.
         if isinstance(loaded, dict):
@@ -139,13 +131,11 @@ class PromptCache:
             При ошибке Redis удаление выполняется только в fallback кэше.
         """
         full_key = self._key(key)
-        try:
-            await self._redis.delete(full_key)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в PromptCache.delete ({full_key}) — удаляем только из fallback: {exc!s}",
-            )
-        await self._fallback.delete(full_key)
+
+        async def _delete_operation(backend: RedisBackend) -> None:
+            await backend.delete(full_key)
+
+        await self._execute_with_fallback(_delete_operation)
 
     async def exists(self, key: str) -> bool:
         """Проверяет наличие ключа в кэше.
@@ -163,13 +153,11 @@ class PromptCache:
             При ошибке Redis проверка выполняется только в fallback кэше.
         """
         full_key = self._key(key)
-        try:
-            exists_val = await self._redis.exists(full_key)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в PromptCache.exists ({full_key}) — проверяем только fallback: {exc!s}",
-            )
-            exists_val = await self._fallback.exists(full_key)
+
+        async def _exists_operation(backend: RedisBackend) -> int:
+            return await backend.exists(full_key)
+
+        exists_val = await self._execute_with_fallback(_exists_operation)
         return bool(exists_val)
 
     async def keys(self, pattern: str = "*") -> list[str]:
@@ -193,13 +181,21 @@ class PromptCache:
             При ошибке Redis поиск выполняется только в fallback кэше.
         """
         prefixed_pattern = f"{self._prefix}{pattern}"
-        try:
-            raw_keys = await self._redis.keys(prefixed_pattern)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в PromptCache.keys ({prefixed_pattern}) — используем только fallback: {exc!s}",
-            )
-            raw_keys = await self._fallback.keys(prefixed_pattern)
 
-        # Снимаем префикс, чтобы вернуть "логические" ключи.
-        return [k[len(self._prefix) :] for k in raw_keys if k.startswith(self._prefix)]
+        async def _keys_operation(backend: RedisBackend) -> list[bytes | str]:
+            keys = await backend.keys(prefixed_pattern)
+            # Приводим к нужному типу для mypy
+            return cast(list[bytes | str], keys)
+
+        raw_keys = await self._execute_with_fallback(_keys_operation)
+
+        # Преобразуем bytes в str и снимаем префикс, чтобы вернуть "логические" ключи.
+        result: list[str] = []
+        for k in raw_keys:
+            if isinstance(k, bytes):
+                k_str = k.decode("utf-8")
+            else:
+                k_str = k
+            if k_str.startswith(self._prefix):
+                result.append(k_str[len(self._prefix) :])
+        return result
