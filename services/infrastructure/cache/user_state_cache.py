@@ -26,9 +26,9 @@ if TYPE_CHECKING:
     RedisBackend = redis.Redis | _InMemoryRedis
 
 
-class UserStateStore(RedisBackendService):
+class UserStateCache(RedisBackendService):
     """
-    Хранилище временного состояния пользователя.
+    Кэш временного состояния пользователя.
     """
 
     def __init__(

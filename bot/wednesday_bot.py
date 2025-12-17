@@ -19,9 +19,9 @@ from services.app_settings import AppSettings
 from services.bot_services import BotServices
 from services.image_generator import ImageGenerator
 from services.infrastructure.cache.prompt_cache import PromptCache
+from services.infrastructure.cache.user_state_cache import UserStateCache
 from services.rate_limiter import RateLimiter
 from services.scheduler import TaskScheduler
-from services.user_state_store import UserStateStore
 from utils.chats_store import ChatsStore
 from utils.config import config
 from utils.dispatch_registry import DispatchRegistry
@@ -70,7 +70,7 @@ class WednesdayBot:
         - TaskScheduler (опционально) для планирования задач
         - UsageTracker для отслеживания лимитов генераций
         - ChatsStore для управления списком чатов
-        - PromptCache, UserStateStore, RateLimiter для работы с Redis
+        - PromptCache, UserStateCache, RateLimiter для работы с Redis
         - UserHandlers, AdminHandlers, ModelHandlers для обработки команд
 
         Инициализирует все необходимые сервисы и готовит бота к запуску.
@@ -111,12 +111,12 @@ class WednesdayBot:
         self.metrics: Metrics = Metrics()
         # Redis‑сервисы (поднимаются один раз и переиспользуются через bot_data):
         # - PromptCache: быстрый кэш промптов/параметров генерации;
-        # - UserStateStore: временное состояние пользователей (диалоги, флаги и т.п.);
+        # - UserStateCache: временное состояние пользователей (диалоги, флаги и т.п.);
         # - RateLimiter: базовый лимитер для административных/ручных операций.
         # Эти сервисы построены поверх Redis, но автоматически деградируют в in‑memory режим,
         # если Redis недоступен, поэтому их безопасно инициализировать без жёсткой зависимости.
         self.prompt_cache: PromptCache = PromptCache()
-        self.user_state_store: UserStateStore = UserStateStore()
+        self.user_state_store: UserStateCache = UserStateCache()
         self.rate_limiter: RateLimiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
 
         # Создаем настройки приложения из config

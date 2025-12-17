@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 
 from services.infrastructure.cache.prompt_cache import PromptCache
+from services.infrastructure.cache.user_state_cache import UserStateCache
 from services.rate_limiter import CircuitBreaker, RateLimiter
-from services.user_state_store import UserStateStore
 from utils.redis_client import _InMemoryRedis
 
 pytestmark = [pytest.mark.unit]
@@ -36,7 +36,7 @@ async def test_prompt_cache_set_get_delete() -> None:
 @pytest.mark.asyncio
 async def test_user_state_store_roundtrip() -> None:
     backend = _InMemoryRedis()
-    store = UserStateStore(redis_client=backend, prefix="test:user:")
+    store = UserStateCache(redis_client=backend, prefix="test:user:")
 
     uid = 123
     state: dict[str, Any] = {"step": "intro", "flag": True}

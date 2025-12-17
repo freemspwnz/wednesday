@@ -46,6 +46,12 @@
   - Обновлены все импорты в проекте
   - Обновлён `services/infrastructure/cache/__init__.py` для экспорта
 
+- **Перемещён и переименован `services/user_state_store.py` → `services/infrastructure/cache/user_state_cache.py`**:
+  - Файл перемещён в директорию `infrastructure/cache/` согласно новой архитектуре
+  - Класс `UserStateStore` переименован в `UserStateCache`
+  - Обновлены все импорты в проекте
+  - Обновлён `services/infrastructure/cache/__init__.py` для экспорта
+
 ### Добавлено
 
 - **Структура директорий для новой архитектуры services/**:
