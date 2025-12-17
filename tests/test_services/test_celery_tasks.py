@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from services.celery_tasks import (
-    CeleryServices,
+from services.celery.tasks import (
     daily_cleanup_task,
     daily_statistics_task,
     generate_frog_image_task,
     is_retryable_error,
     send_wednesday_frog_task,
 )
+from services.celery_tasks import CeleryServices
 
 pytestmark = [pytest.mark.unit]
 

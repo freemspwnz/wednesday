@@ -16,6 +16,12 @@
   - Обновлены все импорты в проекте (bot/, services/, tests/)
   - Обновлён `services/celery/__init__.py` для экспорта `celery_app`
 
+- **Создан `services/celery/tasks.py`**:
+  - Перемещены все Celery задачи из `services/celery_tasks.py` в `services/celery/tasks.py`
+  - Перемещены вспомогательные функции `is_retryable_error()` и `log_celery_task()`
+  - Обновлён `services/celery_tasks.py` - теперь содержит только функции инициализации сервисов
+  - Обновлён `services/celery/__init__.py` для импорта задач
+
 ### Изменено
 
 - **Создан `services/domain/image_generation.py`**:
