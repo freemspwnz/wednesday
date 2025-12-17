@@ -37,6 +37,19 @@
   - Добавлено логирование fallback-переходов через self.logger
   - Класс полностью типизирован с использованием `from __future__ import annotations`
 
+- **Протоколы зависимостей в `services/protocols.py`**:
+  - Создан протокол `IMetrics` с методами для работы с метриками:
+    - `increment_generation_success()` — успешные генерации
+    - `increment_generation_failed()` — неудачные генерации
+    - `increment_cache_hit()` — попадания в кэш
+    - `increment_dispatch_success()` — успешные отправки
+    - `increment_dispatch_failed()` — неудачные отправки
+    - `record_circuit_breaker_trip()` — срабатывания circuit breaker
+  - Создан протокол `IStorage` для файлового хранилища с методами `save()` и `get_random()`
+  - Создан протокол `ICache` для кэширования с методами `get()`, `set()`, `delete()`
+  - Все протоколы используют `@runtime_checkable` для проверки через `isinstance`
+  - Протоколы полностью типизированы с использованием `from __future__ import annotations`
+
 ---
 
 ## [6.14.1] 2025-12-17 — Удаление неисползуемого модуля и обновление тестов
