@@ -23,6 +23,7 @@
   - Обновлен `bot/handlers_admin.py`: заменены импорты `LOGS_CONTAINER_PATH` и `LOGS_DIR` на только `LOGS_DIR`
   - Упрощено использование путей в `handlers_admin.py`: заменено `Path(LOGS_DIR)` на прямое использование `LOGS_DIR`
   - Упрощено логирование в `handlers_admin.py`: убраны упоминания контейнерных путей из сообщений о логах
+  - Обновлен `tests/test_utils/test_paths.py`: переписаны тесты для проверки новых констант `DATA_DIR`, `FROGS_DIR`, `LOGS_DIR`, `PROMPTS_DIR` вместо старых `*_CONTAINER_PATH` констант
 
 - **Унификация retry-механизма с использованием Tenacity**:
   - Добавлены импорты `httpx`, `telegram.error` и дополнительные компоненты Tenacity в `utils/retry.py`

@@ -1,23 +1,23 @@
 from pathlib import Path
 
-from utils import paths
+from utils.paths import DATA_DIR, FROGS_DIR, LOGS_DIR, PROMPTS_DIR
 
 
-def test_frog_images_container_path() -> None:
-    """
-    Проверяем, что контейнерный путь для изображений жабы
-    фиксирован и совпадает с ожидаемым /app/data/frogs.
-    """
-
-    assert paths.FROG_IMAGES_CONTAINER_PATH == "/app/data/frogs"
-    assert paths.FROG_IMAGES_DIR == "data/frogs"
+def test_data_dir() -> None:
+    """Проверяем, что базовая директория данных определена корректно."""
+    assert DATA_DIR == Path("data")
 
 
-def test_logs_container_path() -> None:
-    """
-    Проверяем, что контейнерный путь для логов
-    фиксирован и совпадает с ожидаемым /app/logs.
-    """
+def test_frogs_dir() -> None:
+    """Проверяем, что директория изображений определена корректно."""
+    assert FROGS_DIR == Path("data/frogs")
 
-    assert paths.LOGS_CONTAINER_PATH == "/app/logs"
-    assert paths.LOGS_DIR == Path("logs")
+
+def test_logs_dir() -> None:
+    """Проверяем, что директория логов определена корректно."""
+    assert LOGS_DIR == Path("logs")
+
+
+def test_prompts_dir() -> None:
+    """Проверяем, что директория промптов определена корректно."""
+    assert PROMPTS_DIR == Path("data/prompts")
