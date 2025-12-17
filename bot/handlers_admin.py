@@ -259,14 +259,13 @@ class AdminHandlers(BaseHandlers):
                 pass
             return
 
-        from utils.paths import LOGS_CONTAINER_PATH, LOGS_DIR
+        from utils.paths import LOGS_DIR
 
-        logs_dir = Path(LOGS_DIR)
+        logs_dir = LOGS_DIR
         if not logs_dir.exists():
             try:
                 self.logger.info(
-                    f"Запрошена команда /log, но директория логов отсутствует: {logs_dir} "
-                    f"(контейнерный путь: {LOGS_CONTAINER_PATH})",
+                    f"Запрошена команда /log, но директория логов отсутствует: {logs_dir}",
                 )
                 await self._retry_on_connect_error(
                     update.message.reply_text,
@@ -340,18 +339,14 @@ class AdminHandlers(BaseHandlers):
         # Отправляем в порядке от старых к новым
         for lf in sorted(candidates, key=lambda p: p.name):
             try:
-                self.logger.info(
-                    f"Отправляю лог-файл {lf} (контейнерный путь: {LOGS_CONTAINER_PATH}/{lf.name})",
-                )
+                self.logger.info(f"Отправляю лог-файл {lf}")
                 await self._send_log_file(
                     bot=context.bot,
                     chat_id=update.effective_chat.id,
                     path=lf,
                 )
             except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.warning(
-                    f"Ошибка при отправке лога {lf} (контейнерный путь: {LOGS_CONTAINER_PATH}/{lf.name}): {e}",
-                )
+                self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
         try:
             await self._retry_on_connect_error(
                 update.message.reply_text,
