@@ -14,21 +14,19 @@
 from __future__ import annotations
 
 import json
-import logging
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 
-import redis.asyncio as redis
-from redis.exceptions import RedisError
+from services.base.redis_backend_service import RedisBackendService
 
-from utils.redis_client import _InMemoryRedis, get_redis
+if TYPE_CHECKING:
+    import redis.asyncio as redis
 
-logger = logging.getLogger(__name__)
+    from utils.redis_client import _InMemoryRedis
 
-
-RedisBackend: TypeAlias = redis.Redis | _InMemoryRedis
+    RedisBackend = redis.Redis | _InMemoryRedis
 
 
-class UserStateStore:
+class UserStateStore(RedisBackendService):
     """
     Хранилище временного состояния пользователя.
     """
@@ -46,13 +44,18 @@ class UserStateStore:
                 Если None — будет использован глобальный клиент через `get_redis()`.
             prefix: Префикс ключей для хранения состояний (по умолчанию "user_state:").
         """
-        backend = redis_client or get_redis()
-        self._redis: RedisBackend = backend
-        self._prefix = prefix
-        self._fallback: _InMemoryRedis = _InMemoryRedis()
+        super().__init__(redis_client=redis_client, prefix=prefix)
 
-    def _key(self, user_id: int) -> str:
-        return f"{self._prefix}{user_id}"
+    def _user_key(self, user_id: int) -> str:
+        """Формирует ключ для состояния пользователя.
+
+        Args:
+            user_id: Идентификатор пользователя в Telegram.
+
+        Returns:
+            Полный ключ с префиксом.
+        """
+        return self._key(str(user_id))
 
     async def set_state(self, user_id: int, state: dict[str, Any], ttl: int | None = None) -> None:
         """Сохраняет состояние пользователя как JSON-blob.
@@ -70,21 +73,16 @@ class UserStateStore:
             TTL применяется через EXPIRE к ключу в Redis. При ошибке Redis сохранение
             выполняется в in-memory fallback.
         """
-        key = self._key(user_id)
+        key = self._user_key(user_id)
         payload = json.dumps(state, ensure_ascii=False)
-        try:
+
+        async def _set_operation(backend: RedisBackend) -> None:
             if ttl is not None:
-                await self._redis.set(key, payload, ex=ttl)
+                await backend.set(key, payload, ex=ttl)
             else:
-                await self._redis.set(key, payload)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в UserStateStore.set_state ({key}) — используем fallback in‑memory: {exc!s}",
-            )
-            if ttl is not None:
-                await self._fallback.set(key, payload, ex=ttl)
-            else:
-                await self._fallback.set(key, payload)
+                await backend.set(key, payload)
+
+        await self._execute_with_fallback(_set_operation)
 
     async def get_state(self, user_id: int) -> dict[str, Any] | None:
         """Возвращает состояние пользователя или None.
@@ -103,22 +101,26 @@ class UserStateStore:
             При ошибке Redis проверка выполняется в in-memory fallback. При ошибке
             декодирования JSON возвращается None и логируется предупреждение.
         """
-        key = self._key(user_id)
-        try:
-            raw = await self._redis.get(key)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в UserStateStore.get_state ({key}) — пробуем fallback in‑memory: {exc!s}",
-            )
-            raw = await self._fallback.get(key)
+        key = self._user_key(user_id)
+
+        async def _get_operation(backend: RedisBackend) -> bytes | str | None:
+            return await backend.get(key)
+
+        raw = await self._execute_with_fallback(_get_operation)
 
         if raw is None:
             return None
 
+        # Преобразуем bytes в str для json.loads
+        if isinstance(raw, bytes):
+            raw_str: str = raw.decode("utf-8")
+        else:
+            raw_str = str(raw)
+
         try:
-            value: dict[str, Any] = json.loads(raw)
+            value: dict[str, Any] = json.loads(raw_str)
         except json.JSONDecodeError:
-            logger.warning(
+            self.logger.warning(
                 f"Не удалось декодировать состояние пользователя {user_id} как JSON, состояние сброшено",
             )
             return None
@@ -135,11 +137,9 @@ class UserStateStore:
         Note:
             При ошибке Redis удаление выполняется только в fallback кэше.
         """
-        key = self._key(user_id)
-        try:
-            await self._redis.delete(key)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в UserStateStore.clear_state ({key}) — удаляем только из fallback: {exc!s}",
-            )
-        await self._fallback.delete(key)
+        key = self._user_key(user_id)
+
+        async def _delete_operation(backend: RedisBackend) -> None:
+            await backend.delete(key)
+
+        await self._execute_with_fallback(_delete_operation)
