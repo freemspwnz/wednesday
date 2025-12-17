@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Изменено
+
+- **Унификация retry-механизма с использованием Tenacity**:
+  - Добавлены импорты `httpx`, `telegram.error` и дополнительные компоненты Tenacity в `utils/retry.py`
+  - Добавлен класс `WaitTelegramLinear` для линейного backoff и обработки 429 ошибок
+  - Добавлена функция-предикат `_should_retry_telegram_error()` для определения необходимости retry
+  - Добавлена функция `retry_on_connect_error()` на базе Tenacity для замены реализации из `telegram_retry.py`
+  - Добавлен декоратор `retry_telegram()` как аналог `retry_on_telegram_error()` из `telegram_retry.py`
+  - Обновлены импорты в `bot/base_handlers.py`: заменен `utils.telegram_retry` на `utils.retry`
+  - Обновлены импорты в `bot/wednesday_bot.py`: заменен `utils.telegram_retry` на `utils.retry`
+  - Заменен декоратор `retry_on_telegram_error` на `retry_telegram` в `BaseHandlers._safe_reply_text`
+  - Удален файл `utils/telegram_retry.py` после переноса функциональности в `utils/retry.py`
+  - Обновлен комментарий в `base_handlers.py` с упоминанием нового пути к helper'у
+
 ## [6.13.0] 2025-12-17 — Завершение DI, BaseHandlers вместо CommandHandlers и масштабируемый rate limiting
 
 ### Изменено

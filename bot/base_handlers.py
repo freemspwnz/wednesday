@@ -17,9 +17,9 @@ from telegram.ext import ContextTypes
 from services.bot_services import BotServices
 from utils.admins_store import AdminsStore
 from utils.logger import get_logger
-from utils.telegram_retry import (
+from utils.retry import (
     retry_on_connect_error as global_retry_on_connect_error,
-    retry_on_telegram_error,
+    retry_telegram,
 )
 
 # Константы
@@ -122,7 +122,7 @@ class BaseHandlers:
 
         return admin_chat_id == user_id
 
-    @retry_on_telegram_error(max_retries=MAX_RETRIES_DEFAULT, delay=RETRY_DELAY_DEFAULT)
+    @retry_telegram(max_retries=MAX_RETRIES_DEFAULT, delay=RETRY_DELAY_DEFAULT)
     async def _safe_reply_text(self, message: Message, text: str) -> None:  # noqa: PLR6301
         """Безопасная отправка текста с retry для Telegram/сетевых ошибок.
 
@@ -143,7 +143,7 @@ class BaseHandlers:
         """
         Выполняет функцию с повторными попытками при сетевых/Telgram-ошибках.
 
-        Это тонкая обёртка вокруг общего helper'а `utils.telegram_retry.retry_on_connect_error`,
+        Это тонкая обёртка вокруг общего helper'а `utils.retry.retry_on_connect_error`,
         оставленная для совместимости с существующими тестами, которые патчат
         `_retry_on_connect_error` через monkeypatch.
 

@@ -11,11 +11,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiohttp
+import httpx
+from telegram.error import NetworkError, TelegramError, TimedOut
 from tenacity import (
     retry,
     retry_base,
@@ -26,6 +28,9 @@ from tenacity import (
 
 if TYPE_CHECKING:
     from tenacity import RetryCallState
+    from tenacity.wait import wait_base
+else:
+    from tenacity.wait import wait_base
 
 from utils.config import config
 from utils.logger import get_logger, log_event
@@ -38,6 +43,9 @@ _tenacity_logger = get_logger(__name__)
 
 # HTTP-статусы, для которых не нужно делать retry
 _NO_RETRY_STATUS_CODES = {400, 401, 403}
+
+# HTTP статус для rate limit
+HTTP_STATUS_RATE_LIMIT = 429
 
 
 def _should_retry_http_error(exception: BaseException) -> bool:
@@ -367,3 +375,296 @@ def retry_with_logging(
     """
     attempts = max_attempts or config.retry_max_attempts
     return retry_critical(service_name=service_name, method_name=method_name, max_attempts=attempts)
+
+
+# Константа для дефолтного значения retry_after при 429 ошибке
+RETRY_AFTER_DEFAULT_SECONDS = 60
+
+
+class WaitTelegramLinear(wait_base):
+    """
+    Кастомная стратегия ожидания для Telegram API с линейным backoff.
+
+    Для обычных ошибок использует линейный backoff: delay * attempt_number.
+    Для 429 ошибок (rate limit) использует retry_after из атрибута/заголовков.
+    """
+
+    def __init__(self, delay: float = 2.0) -> None:
+        """
+        Инициализирует стратегию ожидания.
+
+        Args:
+            delay: Базовая задержка между попытками (в секундах).
+        """
+        super().__init__()
+        self.delay = delay
+
+    def __call__(self, retry_state: RetryCallState) -> float:
+        """
+        Вычисляет время ожидания перед следующей попыткой.
+
+        Args:
+            retry_state: Состояние retry от tenacity с информацией о попытке и исключении.
+
+        Returns:
+            Время ожидания в секундах.
+        """
+        if not retry_state.outcome or not retry_state.outcome.failed:
+            return self.delay * retry_state.attempt_number
+
+        exception = retry_state.outcome.exception()
+        if not exception:
+            return self.delay * retry_state.attempt_number
+
+        # Проверяем, является ли это 429 ошибкой (rate limit)
+        is_429 = False
+        retry_after: int | None = None
+
+        if isinstance(exception, TelegramError):
+            # Проверяем code == 429
+            if hasattr(exception, "code") and exception.code == HTTP_STATUS_RATE_LIMIT:
+                is_429 = True
+            # Fallback: проверка строки ошибки
+            elif not is_429:
+                error_str = str(exception).lower()
+                is_429 = "429" in error_str or "rate limit" in error_str or "too many requests" in error_str
+
+            if is_429:
+                # Приоритет 1: exception.retry_after
+                if hasattr(exception, "retry_after") and exception.retry_after:
+                    try:
+                        retry_after = int(exception.retry_after)
+                    except (ValueError, TypeError):
+                        pass
+
+                # Приоритет 2: заголовки ответа
+                if retry_after is None and hasattr(exception, "response") and exception.response:
+                    retry_after_header = exception.response.headers.get("retry-after")
+                    if retry_after_header:
+                        try:
+                            retry_after = int(retry_after_header)
+                        except (ValueError, TypeError):
+                            pass
+
+                # Приоритет 3: дефолт
+                if retry_after is None:
+                    retry_after = RETRY_AFTER_DEFAULT_SECONDS
+
+                return float(retry_after)
+
+        # Для остальных ошибок используем линейный backoff
+        return self.delay * retry_state.attempt_number
+
+
+def _should_retry_telegram_error(retry_state: RetryCallState) -> bool:
+    """
+    Предикат для определения, нужно ли делать retry для Telegram-ошибки.
+
+    Retry для:
+    - NetworkError, TimedOut (всегда True)
+    - httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout (всегда True)
+    - TelegramError только если exception.code == 429
+
+    Args:
+        retry_state: Состояние retry от tenacity с информацией о попытке и исключении.
+
+    Returns:
+        True если нужно делать retry, False иначе.
+    """
+    if not retry_state.outcome or not retry_state.outcome.failed:
+        return False
+
+    exception = retry_state.outcome.exception()
+    if not exception:
+        return False
+
+    # NetworkError, TimedOut - всегда retry
+    if isinstance(exception, NetworkError | TimedOut):
+        return True
+
+    # httpx исключения - всегда retry
+    if isinstance(exception, httpx.ConnectError | httpx.ConnectTimeout | httpx.ReadTimeout):
+        return True
+
+    # TelegramError - только если code == 429
+    if isinstance(exception, TelegramError):
+        if hasattr(exception, "code") and exception.code == HTTP_STATUS_RATE_LIMIT:
+            return True
+        # Fallback: проверка строки ошибки
+        error_str = str(exception).lower()
+        if "429" in error_str or "rate limit" in error_str or "too many requests" in error_str:
+            return True
+        return False
+
+    return False
+
+
+async def retry_on_connect_error(
+    func: Callable[..., Awaitable[T]],
+    *args: object,
+    max_retries: int = 3,
+    delay: float = 2.0,
+    handle_rate_limit: bool = True,
+    **kwargs: object,
+) -> T:
+    """
+    Выполняет функцию с повторными попытками при сетевых/Telegram-ошибках.
+
+    Повторяются только ошибки, связанные с подключением/тайм-аутами HTTP-клиента
+    и Telegram API. Остальные исключения пробрасываются без ретраев.
+
+    Args:
+        func: Асинхронная функция для выполнения.
+        *args: Позиционные аргументы для функции.
+        max_retries: Максимальное количество попыток.
+        delay: Базовая задержка между попытками (в секундах).
+        handle_rate_limit: Если True, обрабатывает TelegramError с кодом 429 (rate limit),
+            используя retry_after из ошибки или заголовков ответа.
+        **kwargs: Именованные аргументы для функции.
+
+    Returns:
+        Результат выполнения функции.
+
+    Raises:
+        Последнее исключение, если все попытки исчерпаны.
+    """
+    import asyncio
+
+    wait_strategy = WaitTelegramLinear(delay=delay)
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            last_error = e
+
+            # Создаём mock retry_state для проверки предиката
+            # Это нужно для использования _should_retry_telegram_error
+            class MockOutcome:
+                def __init__(self, exc: Exception) -> None:
+                    self._exc = exc
+                    self.failed = True
+
+                def exception(self) -> Exception | None:
+                    return self._exc
+
+            class MockRetryState:
+                def __init__(self, attempt_num: int, exc: Exception) -> None:
+                    self.attempt_number = attempt_num
+                    self.outcome: MockOutcome = MockOutcome(exc)
+                    self.next_action = None
+
+            retry_state: Any = MockRetryState(attempt, e)
+
+            # Проверяем, нужно ли делать retry
+            if not _should_retry_telegram_error(retry_state):
+                # Не делаем retry - пробрасываем исключение
+                raise
+
+            # Если это последняя попытка, пробрасываем исключение
+            if attempt >= max_retries:
+                raise
+
+            # Вычисляем время ожидания
+            wait_time = wait_strategy(retry_state)
+
+            # Логируем попытку
+            error_type = type(e).__name__
+            error_message = str(e)[:200]
+
+            log_event(
+                event="telegram_retry",
+                status="warning",
+                extra={
+                    "attempt": attempt,
+                    "max_attempts": max_retries,
+                    "error": error_type,
+                    "error_message": error_message,
+                    "wait_time": wait_time,
+                },
+                level="warning",
+                message=f"Retry attempt {attempt}/{max_retries} for Telegram API request",
+            )
+
+            # Обновляем метрики
+            try:
+                from utils.prometheus_metrics import HTTP_RETRIES_TOTAL, HTTP_RETRY_WAIT_SECONDS
+
+                HTTP_RETRIES_TOTAL.labels(service="telegram", method="unknown", status="retry").inc()
+                HTTP_RETRY_WAIT_SECONDS.labels(service="telegram", method="unknown").observe(wait_time)
+            except Exception:
+                # Метрики не критичны, игнорируем ошибки
+                pass
+
+            # Ждём перед следующей попыткой
+            await asyncio.sleep(wait_time)
+
+    # Если дошли сюда, все попытки исчерпаны
+    if last_error:
+        # Логируем финальную ошибку
+        error_type = type(last_error).__name__
+        error_message = str(last_error)[:200]
+
+        log_event(
+            event="telegram_retry_failed",
+            status="error",
+            extra={
+                "max_attempts": max_retries,
+                "error": error_type,
+                "error_message": error_message,
+            },
+            level="error",
+            message=f"All {max_retries} retry attempts exhausted for Telegram API request",
+        )
+
+        # Обновляем метрики
+        try:
+            from utils.prometheus_metrics import HTTP_RETRIES_TOTAL
+
+            HTTP_RETRIES_TOTAL.labels(service="telegram", method="unknown", status="failed").inc()
+        except Exception:
+            # Метрики не критичны, игнорируем ошибки
+            pass
+
+        raise last_error
+
+    # Это не должно произойти, но на всякий случай
+    raise RuntimeError("Unexpected error in retry_on_connect_error")
+
+
+def retry_telegram(
+    max_retries: int = 3,
+    delay: float = 2.0,
+    handle_rate_limit: bool = True,
+) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
+    """
+    Декоратор для типичных retry-паттернов вокруг Telegram-хелперов.
+
+    Используется для обёртки методов, которые делают один или несколько вызовов
+    Telegram API (send_message, send_photo и т.п.).
+
+    Args:
+        max_retries: Максимальное количество попыток.
+        delay: Базовая задержка между попытками (в секундах).
+        handle_rate_limit: Если True, обрабатывает TelegramError с кодом 429 (rate limit).
+
+    Returns:
+        Декоратор retry.
+    """
+
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        @wraps(func)
+        async def wrapper(*args: object, **kwargs: object) -> T:
+            return await retry_on_connect_error(
+                func,
+                *args,
+                max_retries=max_retries,
+                delay=delay,
+                handle_rate_limit=handle_rate_limit,
+                **kwargs,
+            )
+
+        return wrapper
+
+    return decorator

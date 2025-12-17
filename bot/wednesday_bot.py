@@ -27,7 +27,7 @@ from utils.config import config
 from utils.dispatch_registry import DispatchRegistry
 from utils.logger import get_logger, log_all_methods, log_event
 from utils.metrics import Metrics
-from utils.telegram_retry import retry_on_connect_error
+from utils.retry import retry_on_connect_error
 from utils.usage_tracker import UsageTracker
 
 # Константы для магических чисел
