@@ -47,6 +47,13 @@
   - Реализован метод `generate_frog_image()` с полной координацией всех шагов
   - Добавлена обработка всех исключений и graceful degradation
 
+- **Обновлён `services/image_generator.py` для использования новых сервисов**:
+  - ImageGenerator теперь является тонкой обёрткой над ImageService
+  - Метод `generate_frog_image()` использует новый ImageService внутри
+  - Сохранён публичный интерфейс для обратной совместимости
+  - Добавлен deprecation warning в docstring (будет удалён в спринте 5)
+  - Создание всех сервисов вынесено в метод `_create_image_service()`
+
 ### Изменено
 
 - **Рефакторинг `services/prompt_cache.py`**:
