@@ -100,7 +100,16 @@ class WednesdayBot:
         self.image_generator: ImageGenerator = ImageGenerator()
         # TaskScheduler используется только если USE_OLD_SCHEDULER=true
         # Иначе используется Celery (запускается отдельно через celery worker/beat)
-        self.scheduler: TaskScheduler | None = TaskScheduler() if config.use_old_scheduler else None
+        self.scheduler: TaskScheduler | None = (
+            TaskScheduler(
+                send_times=config.scheduler_send_times,
+                wednesday_day=config.scheduler_wednesday_day,
+                check_interval=30,
+                timezone=config.scheduler_tz or "Europe/Moscow",
+            )
+            if config.use_old_scheduler
+            else None
+        )
         self.usage: UsageTracker = UsageTracker(
             storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
             monthly_quota=MONTHLY_QUOTA_DEFAULT,

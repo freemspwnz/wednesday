@@ -11,12 +11,20 @@ from datetime import datetime, timedelta
 from typing import TypedDict
 from zoneinfo import ZoneInfo
 
-from utils.config import SchedulerConfig
 from utils.logger import get_logger, log_all_methods
 
 # Константы для магических чисел
 DAYS_IN_WEEK = 7
 SECONDS_PER_MINUTE = 60
+
+
+class SchedulerConfigDict(TypedDict):
+    """Конфигурация планировщика задач."""
+
+    send_times: list[str]
+    wednesday_day: int
+    check_interval: int
+    timezone: str
 
 
 class DailyTaskConfig(TypedDict):
@@ -50,21 +58,33 @@ class TaskScheduler:
     - Логирование выполнения задач
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        send_times: list[str] | None = None,
+        wednesday_day: int | None = None,
+        check_interval: int | None = None,
+        timezone: str | None = None,
+    ) -> None:
         """Инициализирует планировщик задач.
 
-        Создаёт новый экземпляр планировщика с настройками из конфигурации:
-        времена отправки, день недели (среда), интервал проверки и таймзона.
+        Создаёт новый экземпляр планировщика с настройками из параметров конструктора.
+        Если параметры не указаны, используются значения по умолчанию.
+
+        Args:
+            send_times: Список времён отправки в формате "HH:MM". По умолчанию ["09:00", "12:00", "18:00"].
+            wednesday_day: День недели для отправки (0=понедельник, 2=среда). По умолчанию 2.
+            check_interval: Интервал проверки в секундах. По умолчанию 30.
+            timezone: Часовой пояс для расписания. По умолчанию "Europe/Moscow".
         """
         self.logger = get_logger(__name__)
         self.running: bool = False
         self.tasks: dict[str, TaskValue] = {}
 
-        # Настройки планировщика
-        self.send_times: list[str] = SchedulerConfig.SEND_TIMES
-        self.wednesday: int = SchedulerConfig.WEDNESDAY
-        self.check_interval: int = SchedulerConfig.CHECK_INTERVAL
-        self.tz: ZoneInfo = ZoneInfo(getattr(SchedulerConfig, "TZ", "Europe/Moscow"))
+        # Настройки планировщика с значениями по умолчанию
+        self.send_times: list[str] = send_times or ["09:00", "12:00", "18:00"]
+        self.wednesday: int = wednesday_day if wednesday_day is not None else 2
+        self.check_interval: int = check_interval if check_interval is not None else 30
+        self.tz: ZoneInfo = ZoneInfo(timezone or "Europe/Moscow")
 
         self.logger.info("Планировщик задач инициализирован")
 
