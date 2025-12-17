@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bot import handlers as bot_handlers_module
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
@@ -843,7 +842,6 @@ async def test_mod_command_success(
 ) -> None:
     """Тест успешного выполнения команды /mod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     # Импортируем реальный AdminsStore напрямую из модуля, обходя патч
     import utils.admins_store as admins_store_module
 
@@ -877,7 +875,6 @@ async def test_mod_command_no_args(
 ) -> None:
     """Тест команды /mod без аргументов (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
 
     services = MagicMock()
     services.image_generator = MagicMock()
@@ -909,7 +906,6 @@ async def test_unmod_command_success(
 ) -> None:
     """Тест успешного выполнения команды /unmod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     # Импортируем реальный AdminsStore напрямую из модуля, обходя патч
     import utils.admins_store as admins_store_module
 
@@ -951,7 +947,6 @@ async def test_unmod_command_no_args_shows_list(
 ) -> None:
     """Тест команды /unmod без аргументов (теперь показывает список админов)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1148,7 +1143,6 @@ async def test_extract_target_user_id_no_reply_no_args(fake_update: Any, fake_co
 async def test_is_super_admin_true(monkeypatch: Any) -> None:
     """Тест проверки супер-админа (должен вернуть True)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")
-    importlib.reload(bot_handlers_module)
 
     services = MagicMock()
     services.image_generator = MagicMock()
@@ -1160,7 +1154,6 @@ async def test_is_super_admin_true(monkeypatch: Any) -> None:
 async def test_is_super_admin_false(monkeypatch: Any) -> None:
     """Тест проверки не-супер-админа (должен вернуть False)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")
-    importlib.reload(bot_handlers_module)
 
     services = MagicMock()
     services.image_generator = MagicMock()
@@ -1181,7 +1174,6 @@ async def test_mod_command_non_super_admin_denied(
 ) -> None:
     """Тест отказа команды /mod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1218,7 +1210,6 @@ async def test_mod_command_with_reply(
 ) -> None:
     """Тест команды /mod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1260,7 +1251,6 @@ async def test_mod_command_with_args(
 ) -> None:
     """Тест команды /mod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1298,7 +1288,6 @@ async def test_unmod_command_non_super_admin_denied(
 ) -> None:
     """Тест отказа команды /unmod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1335,7 +1324,6 @@ async def test_unmod_command_with_reply(
 ) -> None:
     """Тест команды /unmod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1379,7 +1367,6 @@ async def test_unmod_command_with_args(
 ) -> None:
     """Тест команды /unmod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1418,7 +1405,6 @@ async def test_unmod_command_cannot_remove_super_admin(
 ) -> None:
     """Тест попытки удалить главного администратора (должен быть отказ)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
@@ -1455,7 +1441,6 @@ async def test_unmod_command_shows_admin_list_when_no_args(
 ) -> None:
     """Тест показа списка админов при вызове /unmod без аргументов."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    importlib.reload(bot_handlers_module)
     import utils.admins_store as admins_store_module
 
     importlib.reload(admins_store_module)
