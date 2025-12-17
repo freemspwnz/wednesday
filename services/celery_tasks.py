@@ -250,7 +250,8 @@ def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
 
 
 # Декоратор для логирования Celery задач
-def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
+# Используем Any для args/kwargs, так как Celery задачи имеют разные сигнатуры
+def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[R]]], Callable[..., Awaitable[R]]]:
     """Декоратор для автоматического логирования Celery задач.
 
     Декоратор добавляет автоматическое логирование начала, завершения и ошибок
@@ -268,8 +269,8 @@ def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[Any]]],
             ...
     """
 
-    def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
-        async def wrapper(self: Task, *args: object, **kwargs: object) -> Any:  # noqa: ANN401
+    def decorator(func: Callable[..., Awaitable[R]]) -> Callable[..., Awaitable[R]]:
+        async def wrapper(self: Task, *args: object, **kwargs: object) -> R:
             start_time = time.time()
             # Получаем request из self (Task)
             request = getattr(self, "request", None)
