@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [6.14.0] 2025-12-17 — Унификация путей, переход на Tenacity и упрощение инфраструктурных утилит
 
 ### Изменено
 
@@ -26,6 +26,8 @@
   - Обновлен `tests/test_utils/test_paths.py`: переписаны тесты для проверки новых констант `DATA_DIR`, `FROGS_DIR`, `LOGS_DIR`, `PROMPTS_DIR` вместо старых `*_CONTAINER_PATH` констант
   - Обновлен `tests/test_utils/test_images_store.py`: заменен патчинг функции `resolve_frog_images_dir` на патчинг константы `FROGS_DIR` в обоих тестах
   - Обновлен `tests/test_utils/test_logger_secrets.py`: заменен патчинг функции `resolve_logs_dir` на патчинг константы `LOGS_DIR` в тесте `test_json_logs_do_not_contain_gigachat_key`
+  - Удалены временные deprecated алиасы из `utils/paths.py`: `FROG_IMAGES_DIR`, `FROG_IMAGES_CONTAINER_PATH`, `LOGS_CONTAINER_PATH`, `PROMPTS_CONTAINER_PATH` и функции `resolve_*()`
+  - Переименован метод `_container_path_for_hash` в `_relative_path_for_hash` в `utils/images_store.py` для лучшей семантики
 
 - **Унификация retry-механизма с использованием Tenacity**:
   - Добавлены импорты `httpx`, `telegram.error` и дополнительные компоненты Tenacity в `utils/retry.py`
@@ -42,6 +44,8 @@
 - **Реорганизация тестового кода**:
   - Перемещен файл `utils/config_test.py` в `tests/utils/config_test.py` для правильной организации тестового кода
   - Обновлен импорт в `tests/common/celery_app_test.py` на использование нового пути `tests.utils.config_test`
+
+---
 
 ## [6.13.0] 2025-12-17 — Завершение DI, BaseHandlers вместо CommandHandlers и масштабируемый rate limiting
 

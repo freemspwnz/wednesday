@@ -118,7 +118,7 @@ class ImagesStore:
         return base_dir / f"{image_hash}{_PNG_SUFFIX}"
 
     @staticmethod
-    def _container_path_for_hash(image_hash: str) -> str:
+    def _relative_path_for_hash(image_hash: str) -> str:
         """Возвращает путь для сохранения в БД (относительный путь как строка).
 
         Args:
@@ -219,7 +219,7 @@ class ImagesStore:
 
         image_hash = self._compute_hash(image_bytes)
         fs_final_path = self._filesystem_path_for_hash(image_hash)
-        db_path = self._container_path_for_hash(image_hash)
+        db_path = self._relative_path_for_hash(image_hash)
 
         # 1. Атомарно сохраняем файл на диск (content-addressable storage).
         self._ensure_dir(fs_final_path)
