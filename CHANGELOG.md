@@ -4,6 +4,21 @@
 
 ### Изменено
 
+- **Создан `services/domain/image_generation.py`**:
+  - Создан класс `ImageGenerationService(BaseService)` для чистой генерации изображений
+  - Вынесена логика генерации из `ImageGenerator` без зависимостей от инфраструктуры
+  - Реализован метод `generate()` для генерации через `ITextToImageClient`
+  - Добавлена обработка ошибок через `ImageGenerationError`
+
+- **Создан `services/domain/prompt_generation.py`**:
+  - Создан класс `PromptGenerationService(BaseService)` для чистой генерации промптов
+  - Вынесена логика генерации промптов из `ImageGenerator` без зависимостей от инфраструктуры
+  - Реализован метод `generate()` для генерации через `ITextToTextClient`
+  - Добавлен статический fallback через `get_fallback_prompt()`
+  - Добавлена обработка ошибок через `PromptGenerationError`
+
+### Изменено
+
 - **Рефакторинг `services/prompt_cache.py`**:
   - Класс `PromptCache` теперь наследуется от `RedisBackendService`
   - Удалена дублированная логика fallback, используется `_execute_with_fallback` из базового класса
