@@ -23,9 +23,18 @@
   - Все исключения имеют docstrings и наследуются от `ServiceException`
 
 - **Базовый класс `BaseService` в `services/base/base_service.py`**:
-  - Создан абстрактный класс `BaseService(ABC)` для всех сервисов
+  - Создан базовый класс `BaseService` для всех сервисов
   - Добавлено свойство `self.logger` через `get_logger(self.__class__.__name__)`
   - Добавлен метод `log_event()` для унифицированного логирования событий
+  - Класс полностью типизирован с использованием `from __future__ import annotations`
+
+- **Базовый класс `RedisBackendService` в `services/base/redis_backend_service.py`**:
+  - Создан базовый класс `RedisBackendService(BaseService)` для Redis-сервисов
+  - Реализован `__init__(redis_client, prefix="")` с fallback на `get_redis()`
+  - Реализовано приватное поле `_fallback: _InMemoryRedis` для in-memory fallback
+  - Реализован метод `_key(key: str) -> str` для работы с префиксами ключей
+  - Реализован метод `_execute_with_fallback()` с типизацией через `TypeVar` и `Callable`
+  - Добавлено логирование fallback-переходов через self.logger
   - Класс полностью типизирован с использованием `from __future__ import annotations`
 
 ---
