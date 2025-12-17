@@ -4,7 +4,7 @@
 Таблица `images` хранит только метаданные:
 - image_hash  — sha256‑хеш содержимого файла (hex, 64 символа), уникальный;
 - prompt_hash — sha256‑хеш нормализованного промпта (FK на prompts.prompt_hash);
-- path        — путь к файлу внутри контейнера, вида `/app/data/frogs/<image_hash>.png`;
+- path        — относительный путь к файлу, вида `data/frogs/<image_hash>.png`;
 - created_at  — временная метка создания записи.
 
 Основные сценарии:
@@ -28,7 +28,7 @@ from typing import Final
 from asyncpg import UniqueViolationError
 
 from utils.logger import get_logger, log_all_methods
-from utils.paths import FROG_IMAGES_CONTAINER_PATH, resolve_frog_images_dir
+from utils.paths import FROGS_DIR
 from utils.postgres_client import get_postgres_pool
 
 logger = get_logger(__name__)
@@ -44,7 +44,7 @@ class ImageRecord:
         id: Уникальный идентификатор записи в базе данных.
         image_hash: SHA256-хеш содержимого файла изображения (hex, 64 символа).
         prompt_hash: SHA256-хеш нормализованного промпта (FK на prompts.prompt_hash).
-        path: Путь к файлу внутри контейнера (/app/data/frogs/<image_hash>.png).
+        path: Относительный путь к файлу (data/frogs/<image_hash>.png).
         created_at: Временная метка создания записи.
     """
 
@@ -114,21 +114,21 @@ class ImagesStore:
             внутри контейнера — тот же путь, так как WORKDIR=/app.
         """
 
-        base_dir = resolve_frog_images_dir()
+        base_dir = FROGS_DIR
         return base_dir / f"{image_hash}{_PNG_SUFFIX}"
 
     @staticmethod
     def _container_path_for_hash(image_hash: str) -> str:
-        """Возвращает путь, под которым файл будет виден внутри контейнера.
+        """Возвращает путь для сохранения в БД (относительный путь как строка).
 
         Args:
             image_hash: SHA256-хеш изображения в hex-представлении.
 
         Returns:
-            Абсолютный путь внутри контейнера в формате `/app/data/frogs/<image_hash>.png`.
+            Относительный путь в формате `data/frogs/<image_hash>.png`.
         """
 
-        return f"{FROG_IMAGES_CONTAINER_PATH}/{image_hash}{_PNG_SUFFIX}"
+        return str(FROGS_DIR / f"{image_hash}{_PNG_SUFFIX}")
 
     @staticmethod
     def _ensure_dir(path: Path) -> None:
@@ -179,7 +179,7 @@ class ImagesStore:
         """Загружает байты изображения по записи из БД.
 
         Для надёжности путь на файловой системе вычисляется по image_hash,
-        а не по полю path (path используется как "канонический" контейнерный путь).
+        а не по полю path (path используется как канонический относительный путь для БД).
 
         Args:
             record: Запись ImageRecord с метаданными изображения.
@@ -240,7 +240,7 @@ class ImagesStore:
                     # возможна только при гонке между процессами.
                     fs_tmp_path.replace(fs_final_path)
                     self._logger.info(
-                        f"Файл изображения сохранён: hash={image_hash} path={fs_final_path} (container_path={db_path})",
+                        f"Файл изображения сохранён: hash={image_hash} path={fs_final_path}",
                     )
                 finally:
                     # На всякий случай удаляем временный файл, если он остался.
