@@ -34,6 +34,13 @@
   - Реализованы асинхронные методы `save()` и `load_all()` с использованием `asyncio.to_thread()`
   - Добавлена обработка ошибок через `StorageError`
 
+- **Создан `services/infrastructure/cache/image_cache.py`**:
+  - Создан класс `ImageCacheService(BaseService)` для кэширования изображений по промптам
+  - Вынесена логика кэширования изображений из `ImageGenerator`
+  - Реализованы методы `get_by_prompt()`, `get_by_hash()` и `save()` для работы с кэшем
+  - Использует `ImagesStore` и `PromptsStore` для работы с базой данных
+  - Добавлена обработка ошибок через `CacheError`
+
 ### Добавлено
 
 - **Структура директорий для новой архитектуры services/**:
