@@ -16,20 +16,21 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TypeAlias
+from typing import TYPE_CHECKING
 
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
+from services.base.redis_backend_service import RedisBackendService
 from utils.redis_client import _InMemoryRedis, get_redis
+
+if TYPE_CHECKING:
+    RedisBackend = redis.Redis | _InMemoryRedis
 
 logger = logging.getLogger(__name__)
 
 
-RedisBackend: TypeAlias = redis.Redis | _InMemoryRedis
-
-
-class RateLimiter:
+class RateLimiter(RedisBackendService):
     """
     Простейший лимитер типа "фиксированное окно".
 
@@ -60,15 +61,9 @@ class RateLimiter:
             window: Размер временного окна в секундах (по умолчанию 60).
             limit: Максимальное количество запросов в окне (по умолчанию 100).
         """
-        backend = redis_client or get_redis()
-        self._redis: RedisBackend = backend
-        self._fallback: _InMemoryRedis = _InMemoryRedis()
-        self.prefix = prefix
+        super().__init__(redis_client=redis_client, prefix=prefix)
         self.window = window
         self.limit = limit
-
-    def _key(self, key: str) -> str:
-        return f"{self.prefix}{key}"
 
     async def is_allowed(self, key: str) -> bool:
         """Возвращает True, если запрос разрешён, и инкрементирует счётчик.
@@ -88,20 +83,15 @@ class RateLimiter:
             рамках текущего процесса.
         """
         full_key = self._key(key)
-        try:
-            count = await self._redis.incr(full_key)
+
+        async def _incr_operation(backend: RedisBackend) -> int:
+            count = await backend.incr(full_key)
             if count == 1:
-                await self._redis.expire(full_key, self.window)
-            return count <= self.limit
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в RateLimiter.is_allowed ({full_key}) — fallback in‑memory, policy=fail‑open: {exc!s}",
-            )
-            # Локальный лимитер; пригоден только как деградационный режим.
-            count = await self._fallback.incr(full_key)
-            if count == 1:
-                await self._fallback.expire(full_key, self.window)
-            return count <= self.limit
+                await backend.expire(full_key, self.window)
+            return count
+
+        count = await self._execute_with_fallback(_incr_operation)
+        return count <= self.limit
 
     async def reset(self, key: str) -> None:
         """Сбрасывает счётчик по ключу (в Redis и fallback).
@@ -116,13 +106,11 @@ class RateLimiter:
             При ошибке Redis сброс выполняется только в fallback кэше.
         """
         full_key = self._key(key)
-        try:
-            await self._redis.delete(full_key)
-        except RedisError as exc:
-            logger.warning(
-                f"Redis error в RateLimiter.reset ({full_key}) — очищаем только fallback: {exc!s}",
-            )
-        await self._fallback.delete(full_key)
+
+        async def _delete_operation(backend: RedisBackend) -> None:
+            await backend.delete(full_key)
+
+        await self._execute_with_fallback(_delete_operation)
 
 
 class CircuitBreaker:
