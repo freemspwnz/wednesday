@@ -29,6 +29,17 @@
   - Обновлены все импорты в проекте (bot/, services/, tests/)
   - Обновлён `services/infrastructure/rate_limiting/__init__.py` для экспорта
 
+- **Создан `services/application/prompt_service.py`**:
+  - Создан класс `PromptService(BaseService)` для координации генерации промптов
+  - Координирует работу PromptGenerationService, PromptCache и PromptStorageService
+  - Реализован метод `generate()` с полной координацией всех шагов
+  - Добавлено логирование всех этапов генерации
+
+- **Создан `services/infrastructure/metrics/metrics_recorder.py`**:
+  - Создан класс `MetricsRecorder(BaseService, IMetrics)` для записи метрик
+  - Реализует протокол IMetrics, оборачивая utils.metrics.Metrics
+  - Добавлено логирование всех записей метрик
+
 ### Изменено
 
 - **Рефакторинг `services/prompt_cache.py`**:
