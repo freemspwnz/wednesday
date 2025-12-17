@@ -28,10 +28,7 @@ async def test_get_or_create_image_saves_file_and_metadata(
     """
 
     # Перенаправляем папку с изображениями в tmp_path, чтобы не трогать реальные данные.
-    def _fake_resolve_frog_images_dir() -> Path:
-        return tmp_path
-
-    monkeypatch.setattr("utils.images_store.resolve_frog_images_dir", _fake_resolve_frog_images_dir)
+    monkeypatch.setattr("utils.images_store.FROGS_DIR", tmp_path)
 
     prompts_store = PromptsStore()
     images_store = ImagesStore()
@@ -65,10 +62,7 @@ async def test_get_or_create_image_handles_concurrent_insert(
     и должна вернуть ту же запись.
     """
 
-    def _fake_resolve_frog_images_dir() -> Path:
-        return tmp_path
-
-    monkeypatch.setattr("utils.images_store.resolve_frog_images_dir", _fake_resolve_frog_images_dir)
+    monkeypatch.setattr("utils.images_store.FROGS_DIR", tmp_path)
 
     prompts_store = PromptsStore()
     prompt_record = await prompts_store.get_or_create_prompt("Concurrent frog")
