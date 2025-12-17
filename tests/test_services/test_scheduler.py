@@ -23,8 +23,12 @@ def test_schedule_methods_register_tasks() -> None:
     scheduler.schedule_interval_task(sample, TEST_INTERVAL_MINUTES)
 
     assert "wednesday_frog" in scheduler.tasks
-    assert scheduler.tasks["daily_task"]["time_str"] == TEST_TIME_STR
-    assert scheduler.tasks["interval_task"]["interval_minutes"] == TEST_INTERVAL_MINUTES
+    daily_task = scheduler.tasks["daily_task"]
+    assert isinstance(daily_task, dict)
+    assert daily_task["time_str"] == TEST_TIME_STR  # type: ignore[typeddict-item]
+    interval_task = scheduler.tasks["interval_task"]
+    assert isinstance(interval_task, dict)
+    assert interval_task["interval_minutes"] == TEST_INTERVAL_MINUTES  # type: ignore[typeddict-item]
 
 
 @pytest.mark.asyncio
@@ -80,8 +84,12 @@ async def test_check_daily_task(monkeypatch: Any) -> None:
 
     await scheduler._check_daily_task()
 
-    scheduler.tasks["daily_task"]["func"].assert_awaited_once()
-    assert scheduler.tasks["daily_task"]["last_run_date"] is not None
+    daily_task = scheduler.tasks["daily_task"]
+    assert isinstance(daily_task, dict)
+    func = daily_task["func"]
+    assert hasattr(func, "assert_awaited_once")
+    func.assert_awaited_once()
+    assert daily_task.get("last_run_date") is not None
 
 
 @pytest.mark.asyncio
@@ -104,8 +112,12 @@ async def test_check_interval_task(monkeypatch: Any) -> None:
     monkeypatch.setattr("services.scheduler.datetime", FakeDateTime)
 
     await scheduler._check_interval_task()
-    scheduler.tasks["interval_task"]["func"].assert_awaited_once()
-    assert scheduler.tasks["interval_task"]["last_run"] == FakeDateTime.now()
+    interval_task = scheduler.tasks["interval_task"]
+    assert isinstance(interval_task, dict)
+    func = interval_task["func"]
+    assert hasattr(func, "assert_awaited_once")
+    func.assert_awaited_once()
+    assert interval_task.get("last_run") == FakeDateTime.now()
 
 
 def test_get_next_run_returns_closest_slot(monkeypatch: Any) -> None:
@@ -133,7 +145,11 @@ def test_get_next_run_returns_closest_slot(monkeypatch: Any) -> None:
 def test_stop_and_clear() -> None:
     scheduler = TaskScheduler()
     scheduler.running = True
-    scheduler.tasks["sample"] = object()
+    # Используем валидный тип для tasks
+
+    async def dummy() -> None: ...
+
+    scheduler.tasks["sample"] = dummy  # type: ignore[assignment]
 
     scheduler.stop()
     scheduler.clear_all_jobs()

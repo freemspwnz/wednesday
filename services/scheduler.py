@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TypedDict
 from zoneinfo import ZoneInfo
 
 from utils.config import SchedulerConfig
@@ -17,6 +17,25 @@ from utils.logger import get_logger, log_all_methods
 # Константы для магических чисел
 DAYS_IN_WEEK = 7
 SECONDS_PER_MINUTE = 60
+
+
+class DailyTaskConfig(TypedDict):
+    """Конфигурация ежедневной задачи."""
+
+    func: Callable[[], Awaitable[None]]
+    time_str: str
+    last_run_date: str | None
+
+
+class IntervalTaskConfig(TypedDict):
+    """Конфигурация интервальной задачи."""
+
+    func: Callable[[], Awaitable[None]]
+    interval_minutes: int
+    last_run: datetime | None
+
+
+TaskValue = Callable[[str | None], Awaitable[None]] | DailyTaskConfig | IntervalTaskConfig | set[str]
 
 
 @log_all_methods()
@@ -39,7 +58,7 @@ class TaskScheduler:
         """
         self.logger = get_logger(__name__)
         self.running: bool = False
-        self.tasks: dict[str, Any] = {}  # Может содержать Callable или Set[str] для '_executed'
+        self.tasks: dict[str, TaskValue] = {}
 
         # Настройки планировщика
         self.send_times: list[str] = SchedulerConfig.SEND_TIMES
@@ -167,9 +186,9 @@ class TaskScheduler:
                     self.logger.warning("Не задано время отправки (SCHEDULER_SEND_TIMES пусто)")
                     if "_executed" not in self.tasks:
                         self.tasks["_executed"] = set()
-                    executed_set = self.tasks["_executed"]
-                    if isinstance(executed_set, set):
-                        executed_set.add(onboarding_key)
+                    executed_value = self.tasks["_executed"]
+                    if isinstance(executed_value, set):
+                        executed_value.add(onboarding_key)
                 return
 
             # Проверяем каждый временной слот
@@ -192,7 +211,13 @@ class TaskScheduler:
                 if 0 <= delta_sec < self.check_interval:
                     if "wednesday_frog" in self.tasks:
                         # Передаём точное время слота в задачу, если она принимает аргумент slot_time
-                        task_func = self.tasks["wednesday_frog"]
+                        task_value = self.tasks["wednesday_frog"]
+                        if not callable(task_value):
+                            self.logger.error("wednesday_frog task is not a callable")
+                            continue
+
+                        # Type narrowing: мы проверили, что это callable
+                        task_func = task_value
 
                         # Создаём функцию-обёртку для передачи slot_time
                         # Используем функцию-фабрику для правильного замыкания
@@ -214,18 +239,20 @@ class TaskScheduler:
                             await self._run_async_task(task_func)
                         if "_executed" not in self.tasks:
                             self.tasks["_executed"] = set()
-                        executed_set = self.tasks["_executed"]
-                        if isinstance(executed_set, set):
-                            executed_set.add(key)
+                        executed_value = self.tasks["_executed"]
+                        if isinstance(executed_value, set):
+                            executed_value.add(key)
                         self.logger.info(f"Задача на среду выполнена: {key}")
 
     async def _check_daily_task(self) -> None:
         """
         Проверяет, нужно ли выполнить ежедневную задачу.
         """
-        daily = self.tasks.get("daily_task")
-        if not isinstance(daily, dict):
+        daily_value = self.tasks.get("daily_task")
+        if not isinstance(daily_value, dict):
             return
+        # Type narrowing для TypedDict
+        daily: DailyTaskConfig = daily_value  # type: ignore[assignment]
         now = datetime.now()
         last_run_date = daily.get("last_run_date")
         today_str = now.strftime("%Y-%m-%d")
@@ -246,9 +273,11 @@ class TaskScheduler:
         """
         Проверяет, нужно ли выполнить интервальную задачу.
         """
-        interval_meta = self.tasks.get("interval_task")
-        if not isinstance(interval_meta, dict):
+        interval_value = self.tasks.get("interval_task")
+        if not isinstance(interval_value, dict):
             return
+        # Type narrowing для TypedDict
+        interval_meta: IntervalTaskConfig = interval_value  # type: ignore[assignment]
         now = datetime.now()
         last_run = interval_meta.get("last_run")
         interval_minutes = interval_meta["interval_minutes"]
