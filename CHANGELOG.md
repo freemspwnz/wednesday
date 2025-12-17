@@ -40,6 +40,13 @@
   - Реализует протокол IMetrics, оборачивая utils.metrics.Metrics
   - Добавлено логирование всех записей метрик
 
+- **Создан `services/application/image_service.py`**:
+  - Создан класс `ImageService(BaseService)` для координации генерации изображений
+  - Координирует работу всех сервисов: ImageGenerationService, ImageCacheService,
+    ImageStorageService, PromptService, CircuitBreakerService, MetricsRecorder
+  - Реализован метод `generate_frog_image()` с полной координацией всех шагов
+  - Добавлена обработка всех исключений и graceful degradation
+
 ### Изменено
 
 - **Рефакторинг `services/prompt_cache.py`**:
