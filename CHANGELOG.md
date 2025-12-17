@@ -29,6 +29,12 @@
   - Добавлены значения по умолчанию для обратной совместимости
   - Обновлён `bot/wednesday_bot.py` для передачи конфигурации
 
+- **Создан `services/application/scheduler_service.py`**:
+  - Создан класс `SchedulerService(BaseService)` для оркестрации планирования
+  - Использует `TaskScheduler` как инфраструктурный компонент
+  - Реализованы методы для планирования задач и управления жизненным циклом
+  - Разделение на domain/infrastructure/application соблюдено
+
 ### Изменено
 
 - **Создан `services/domain/image_generation.py`**:
