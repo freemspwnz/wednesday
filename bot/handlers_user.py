@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
 from services.celery_app import celery_app
-from services.rate_limiter import RateLimiter
+from services.infrastructure.rate_limiting import RateLimiter
 
 # Константы
 FROG_RATE_LIMIT_MINUTES = 5  # минимальный интервал в минутах

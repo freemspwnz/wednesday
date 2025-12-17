@@ -21,7 +21,7 @@ from bot.wednesday_bot import (
     POOL_TIMEOUT_SECONDS,
     READ_TIMEOUT_SECONDS,
 )
-from services.rate_limiter import RateLimiter
+from services.infrastructure.rate_limiting import RateLimiter
 from utils.config import config
 from utils.logger import log_all_methods
 

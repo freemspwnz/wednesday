@@ -17,6 +17,18 @@
   - Добавлен статический fallback через `get_fallback_prompt()`
   - Добавлена обработка ошибок через `PromptGenerationError`
 
+- **Создан `services/infrastructure/rate_limiting/circuit_breaker.py`**:
+  - Создан класс `CircuitBreakerService(RedisBackendService)` для работы с circuit breaker
+  - Вынесена логика circuit breaker из `rate_limiter.py` в отдельный сервис
+  - Реализованы методы `is_open()`, `record_success()`, `record_failure()` с использованием Redis
+  - Добавлена обработка ошибок через `CircuitBreakerOpen`
+  - Использует `RedisBackendService` для автоматического fallback на in-memory
+
+- **Перемещён `services/rate_limiter.py` → `services/infrastructure/rate_limiting/rate_limiter.py`**:
+  - Файл перемещён в директорию `infrastructure/rate_limiting/` согласно новой архитектуре
+  - Обновлены все импорты в проекте (bot/, services/, tests/)
+  - Обновлён `services/infrastructure/rate_limiting/__init__.py` для экспорта
+
 ### Изменено
 
 - **Рефакторинг `services/prompt_cache.py`**:

@@ -5,11 +5,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from redis.exceptions import RedisError
 
 from bot.handlers_user import UserHandlers
-from services import rate_limiter as rate_limiter_module
 from services.bot_services import BotServices
 from services.clients import factory as clients_factory
+from services.infrastructure import rate_limiting as rate_limiter_module
 from services.infrastructure.cache import prompt_cache as prompt_cache_module
 from utils.redis_client import _InMemoryRedis
 
@@ -95,10 +96,10 @@ async def test_rate_limiter_and_circuit_breaker_fallback(monkeypatch: pytest.Mon
     # Проверяем fallback при ошибке Redis
     class _FailRedis:
         async def incr(self, *_: object, **__: object) -> int:  # pragma: no cover - исключения
-            raise rate_limiter_module.RedisError("boom")
+            raise RedisError("boom")
 
         async def expire(self, *_: object, **__: object) -> None:  # pragma: no cover - исключения
-            raise rate_limiter_module.RedisError("boom")
+            raise RedisError("boom")
 
         async def delete(self, *_: object, **__: object) -> None:  # pragma: no cover - исключения
             return None

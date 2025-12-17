@@ -20,7 +20,7 @@ from services.bot_services import BotServices
 from services.image_generator import ImageGenerator
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.rate_limiter import RateLimiter
+from services.infrastructure.rate_limiting import RateLimiter
 from services.scheduler import TaskScheduler
 from utils.chats_store import ChatsStore
 from utils.config import config

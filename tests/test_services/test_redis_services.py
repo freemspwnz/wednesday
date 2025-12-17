@@ -6,7 +6,7 @@ import pytest
 
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.rate_limiter import CircuitBreaker, RateLimiter
+from services.infrastructure.rate_limiting import CircuitBreaker, RateLimiter
 from utils.redis_client import _InMemoryRedis
 
 pytestmark = [pytest.mark.unit]

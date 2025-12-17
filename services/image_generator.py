@@ -24,8 +24,8 @@ from services.clients import ITextToImageClient, ITextToTextClient
 from services.clients.factory import create_image_client, create_text_client
 from services.clients.image_client_container import ImageClientContainer
 from services.clients.kandinsky import KandinskyClient
+from services.infrastructure.rate_limiting import CircuitBreaker
 from services.prompt_generator import PromptStorage
-from services.rate_limiter import CircuitBreaker
 from utils.config import ImageConfig, config
 from utils.images_store import ImagesStore
 from utils.logger import get_logger, log_all_methods, log_event
