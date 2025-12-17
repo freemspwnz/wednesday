@@ -28,6 +28,12 @@
   - Реализованы асинхронные методы `save()` и `get_random()` с использованием `asyncio.to_thread()`
   - Добавлена обработка ошибок через `StorageError`
 
+- **Создан `services/infrastructure/storage/prompt_storage.py`**:
+  - Создан класс `PromptStorageService(BaseService)` для работы с файловым хранилищем промптов
+  - Вынесена логика сохранения промптов из `PromptGenerator.save_prompt()`
+  - Реализованы асинхронные методы `save()` и `load_all()` с использованием `asyncio.to_thread()`
+  - Добавлена обработка ошибок через `StorageError`
+
 ### Добавлено
 
 - **Структура директорий для новой архитектуры services/**:
