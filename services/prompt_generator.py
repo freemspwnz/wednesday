@@ -16,7 +16,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from utils.logger import get_logger
-from utils.paths import PROMPTS_CONTAINER_PATH, resolve_prompts_dir
+from utils.paths import PROMPTS_DIR
 
 NEWLINE_CHARS = {"\n", "\r"}
 CONTROL_MIN_CODE = 32
@@ -38,21 +38,21 @@ class PromptStorage:
 
         Args:
             base_dir: Базовая директория для хранения промптов. Если None, используется
-                директория из конфигурации через resolve_prompts_dir().
+                директория из конфигурации через PROMPTS_DIR.
 
         Note:
-            Используется централизованный резолвер путей:
+            Используется централизованная константа путей:
             - при локальном запуске работает с <project_root>/data/prompts;
             - внутри контейнера пишет строго в /app/data/prompts, которое должно быть
               примонтировано как Docker volume (prompt_storage).
             Директория создаётся автоматически при инициализации.
         """
         self.logger = get_logger(__name__)
-        # Используем централизованный резолвер путей, чтобы:
+        # Используем централизованную константу путей, чтобы:
         # - при локальном запуске работать с <project_root>/data/prompts;
         # - внутри контейнера писать строго в /app/data/prompts, которое должно быть примонтировано
         #   как Docker volume (prompt_storage), а не запекаться в образ.
-        self.base_dir: Path = base_dir or resolve_prompts_dir()
+        self.base_dir: Path = base_dir or PROMPTS_DIR
         # Создаём директорию один раз при инициализации, чтобы не требовать ручного создания.
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -123,7 +123,7 @@ class PromptStorage:
         # пишем как будто внутри контейнера, чтобы путь совпадал
         # с ожидаемым mount‑путём volume `prompt_storage`.
         self.logger.info(
-            f"Writing prompt {prompt_hash} to {PROMPTS_CONTAINER_PATH}/{filename}",
+            f"Writing prompt {prompt_hash} to {PROMPTS_DIR / filename}",
         )
 
         # Явная запись через open/write вместо write_text() — чтобы не полагаться

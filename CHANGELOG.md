@@ -18,6 +18,8 @@
   - Упрощено логирование в `images_store.py`: убраны упоминания контейнерных путей
   - Обновлен `utils/logger.py`: заменены импорты `LOGS_CONTAINER_PATH` и `resolve_logs_dir` на `LOGS_DIR`
   - Упрощено логирование в `logger.py`: заменено упоминание `LOGS_CONTAINER_PATH` на `LOGS_DIR` в сообщении о настройке логирования
+  - Обновлен `services/prompt_generator.py`: заменены импорты `PROMPTS_CONTAINER_PATH` и `resolve_prompts_dir` на `PROMPTS_DIR`
+  - Упрощено логирование в `prompt_generator.py`: заменено упоминание `PROMPTS_CONTAINER_PATH` на `PROMPTS_DIR / filename` в сообщении о сохранении промпта
 
 - **Унификация retry-механизма с использованием Tenacity**:
   - Добавлены импорты `httpx`, `telegram.error` и дополнительные компоненты Tenacity в `utils/retry.py`
