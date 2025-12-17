@@ -564,32 +564,26 @@ def reset_singletons() -> Generator[None, None, None]:
     Сбрасывает состояние синглтонов перед тестом для обеспечения изоляции.
 
     Используйте эту фикстуру в тестах, которые мутируют состояние синглтонов
-    (CeleryServices, DispatchRegistry и др.).
+    (CeleryServices context, DispatchRegistry и др.).
 
     Пример использования:
         @pytest.mark.asyncio
         async def test_something(reset_singletons):
             # тест использует синглтоны
     """
-    from services.celery_tasks import CeleryServices
+    import services.celery_tasks as celery_tasks_module
 
     # Сохраняем исходное состояние
-    original_bot = CeleryServices._bot
-    original_generator = CeleryServices._generator
-    original_initialized = CeleryServices._initialized
+    original_context = celery_tasks_module._services_context
 
     # Сбрасываем состояние
-    CeleryServices._bot = None
-    CeleryServices._generator = None
-    CeleryServices._initialized = False
+    celery_tasks_module._services_context = None
 
     try:
         yield
     finally:
         # Восстанавливаем исходное состояние
-        CeleryServices._bot = original_bot
-        CeleryServices._generator = original_generator
-        CeleryServices._initialized = original_initialized
+        celery_tasks_module._services_context = original_context
 
 
 @pytest_asyncio.fixture

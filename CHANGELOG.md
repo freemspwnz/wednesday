@@ -4,6 +4,15 @@
 
 ### Изменено
 
+- **Рефакторинг `services/celery_tasks.py`**:
+  - Упрощён класс `CeleryServices` - удалены глобальные переменные `_bot`, `_generator`, `_initialized`, `_init_lock`
+  - Создана функция `get_services_context()` для получения сервисов через dependency injection
+  - Обновлены все задачи для использования контекста сервисов вместо глобального состояния
+  - Класс `CeleryServices` оставлен для обратной совместимости (deprecated)
+  - Улучшена типизация всех методов
+
+### Изменено
+
 - **Создан `services/domain/image_generation.py`**:
   - Создан класс `ImageGenerationService(BaseService)` для чистой генерации изображений
   - Вынесена логика генерации из `ImageGenerator` без зависимостей от инфраструктуры

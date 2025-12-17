@@ -312,28 +312,33 @@ async def test_daily_statistics_task_success(reset_singletons: Any) -> None:
 @pytest.mark.asyncio
 async def test_celery_services_shutdown() -> None:
     """Тест graceful shutdown CeleryServices."""
-    # Инициализируем сервисы
-    CeleryServices._bot = MagicMock()
-    CeleryServices._generator = MagicMock()
-    CeleryServices._initialized = True
+    # Инициализируем контекст сервисов
+    import services.celery_tasks as celery_tasks_module
+    from services.celery_tasks import shutdown_services
+
+    mock_bot = MagicMock()
+    mock_generator = MagicMock()
 
     # Мокаем aclose методы для bot и generator
     mock_bot_aclose = AsyncMock()
     mock_generator_aclose = AsyncMock()
-    CeleryServices._bot.aclose = mock_bot_aclose
-    CeleryServices._generator.aclose = mock_generator_aclose
+    mock_bot.aclose = mock_bot_aclose
+    mock_generator.aclose = mock_generator_aclose
+
+    celery_tasks_module._services_context = {
+        "bot": mock_bot,
+        "generator": mock_generator,
+    }
 
     with (
         patch("services.celery_tasks.close_postgres_pool", new_callable=AsyncMock) as mock_close_pg,
         patch("services.celery_tasks.close_redis", new_callable=AsyncMock) as mock_close_redis,
     ):
-        await CeleryServices.shutdown()
+        await shutdown_services()
 
         # Проверяем, что ресурсы были закрыты
         mock_close_pg.assert_awaited_once()
         mock_close_redis.assert_awaited_once()
 
         # Проверяем, что состояние сброшено
-        assert CeleryServices._bot is None
-        assert CeleryServices._generator is None
-        assert CeleryServices._initialized is False
+        assert celery_tasks_module._services_context is None

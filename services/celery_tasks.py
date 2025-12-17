@@ -76,112 +76,128 @@ def is_retryable_error(error: Exception) -> bool:
     return any(keyword in error_str for keyword in retryable_keywords)
 
 
-# Lazy factories для безопасной инициализации
-class CeleryServices:
-    """Lazy factory для сервисов Celery.
+# Context для хранения инициализированных сервисов в worker процессе
+_services_context: dict[str, object] | None = None
+_init_lock = asyncio.Lock()
 
-    Класс обеспечивает безопасную инициализацию сервисов в Celery worker процессах.
+
+async def _ensure_pools_initialized() -> None:
+    """Инициализирует пулы подключений Redis и Postgres.
+
     Инициализация происходит внутри задач, после fork worker процесса, что гарантирует:
     - Fork safety (соединения создаются после fork).
     - Отсутствие race conditions.
-    - Корректную работу с async клиентами.
 
-    Attributes:
-        _bot: Экземпляр WednesdayBot (инициализируется лениво).
-        _generator: Экземпляр ImageGenerator (инициализируется лениво).
-        _initialized: Флаг инициализации сервисов.
-        _init_lock: Блокировка для thread-safe инициализации.
+    Raises:
+        RuntimeError: Если не удалось инициализировать пулы подключений.
     """
+    # Проверяем, инициализирован ли контекст (только чтение, без global)
+    if _services_context is not None:
+        return
 
-    _bot: WednesdayBot | None = None
-    _generator: ImageGenerator | None = None
-    _initialized: bool = False
-    _init_lock = asyncio.Lock()
-
-    @classmethod
-    async def _ensure_initialized(cls) -> None:
-        """Инициализирует сервисы один раз (thread-safe).
-
-        Инициализирует Redis и Postgres пулы подключений, создаёт экземпляры
-        WednesdayBot и ImageGenerator. Гарантирует, что инициализация выполняется
-        только один раз даже при конкурентных вызовах.
-
-        Raises:
-            RuntimeError: Если не удалось инициализировать пулы подключений.
-        """
-        if cls._initialized:
+    async with _init_lock:
+        if _services_context is not None:
             return
 
-        async with cls._init_lock:
-            if cls._initialized:
-                return
+        # Инициализируем Redis и Postgres (async)
+        # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
+        if config.redis_url:
+            await init_redis_pool(url=config.redis_url)
+        else:
+            await init_redis_pool(
+                host=config.redis_host,
+                port=config.redis_port,
+                db=config.redis_db,
+                password=config.redis_password,
+            )
+        await init_postgres_pool(min_size=1, max_size=10)
+        await ensure_schema()
 
-            # Инициализируем Redis и Postgres (async)
-            # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
-            if config.redis_url:
-                await init_redis_pool(url=config.redis_url)
-            else:
-                await init_redis_pool(
-                    host=config.redis_host,
-                    port=config.redis_port,
-                    db=config.redis_db,
-                    password=config.redis_password,
-                )
-            await init_postgres_pool(min_size=1, max_size=10)
-            await ensure_schema()
+        logger.info("Celery pools initialized in worker process")
 
-            # Создаём экземпляры сервисов
-            cls._bot = WednesdayBot()
-            cls._generator = cls._bot.image_generator
 
-            cls._initialized = True
-            logger.info("Celery services initialized in worker process")
+async def get_services_context() -> dict[str, object]:
+    """Получает контекст сервисов для использования в Celery задачах.
 
-    @classmethod
-    async def shutdown(cls) -> None:
-        """
-        Graceful shutdown для async ресурсов.
+    Инициализирует пулы подключений и создаёт экземпляры сервисов при первом вызове.
+    Использует dependency injection вместо глобального состояния.
 
-        Закрывает все соединения при остановке worker:
-        - aiohttp sessions
-        - redis pool
-        - postgres pool
+    Returns:
+        Словарь с сервисами:
+        - bot: Экземпляр WednesdayBot
+        - generator: Экземпляр ImageGenerator
 
-        ⚠️ ВАЖНО: Вызывается автоматически через сигнал worker_shutdown
-        """
-        if not cls._initialized:
-            return
+    Raises:
+        RuntimeError: Если не удалось инициализировать сервисы.
+    """
+    global _services_context  # noqa: PLW0603
 
-        logger.info("Shutting down Celery services...")
+    await _ensure_pools_initialized()
 
-        try:
-            if cls._bot:
-                # Если у WednesdayBot есть метод aclose()
-                if hasattr(cls._bot, "aclose"):
-                    await cls._bot.aclose()
+    if _services_context is None:
+        async with _init_lock:
+            if _services_context is None:
+                # Создаём экземпляры сервисов
+                bot = WednesdayBot()
+                generator = bot.image_generator
 
-            if cls._generator:
-                # Если у ImageGenerator есть метод aclose()
-                if hasattr(cls._generator, "aclose"):
-                    await cls._generator.aclose()
+                _services_context = {
+                    "bot": bot,
+                    "generator": generator,
+                }
+                logger.info("Celery services context created in worker process")
 
-            # Закрываем пулы подключений
-            await close_postgres_pool()
-            await close_redis()
-        except Exception as e:
-            logger.error(f"Error during Celery services shutdown: {e}")
-        finally:
-            cls._bot = None
-            cls._generator = None
-            cls._initialized = False
-            logger.info("Celery services shutdown complete")
+    return _services_context
+
+
+async def shutdown_services() -> None:
+    """Graceful shutdown для async ресурсов.
+
+    Закрывает все соединения при остановке worker:
+    - aiohttp sessions
+    - redis pool
+    - postgres pool
+
+    ⚠️ ВАЖНО: Вызывается автоматически через сигнал worker_shutdown
+    """
+    global _services_context  # noqa: PLW0603
+
+    if _services_context is None:
+        return
+
+    logger.info("Shutting down Celery services...")
+
+    try:
+        bot = _services_context.get("bot")
+        if bot and hasattr(bot, "aclose"):
+            await bot.aclose()
+
+        generator = _services_context.get("generator")
+        if generator and hasattr(generator, "aclose"):
+            await generator.aclose()
+
+        # Закрываем пулы подключений
+        await close_postgres_pool()
+        await close_redis()
+    except Exception as e:
+        logger.error(f"Error during Celery services shutdown: {e}")
+    finally:
+        _services_context = None
+        logger.info("Celery services shutdown complete")
+
+
+# Обратная совместимость: класс CeleryServices для существующего кода
+class CeleryServices:
+    """Класс для обратной совместимости (deprecated).
+
+    Используйте функцию get_services_context() вместо этого класса.
+    """
 
     @classmethod
     async def get_bot(cls) -> WednesdayBot:
-        """Получает экземпляр WednesdayBot (lazy init).
+        """Получает экземпляр WednesdayBot.
 
-        Инициализирует сервисы при первом вызове, затем возвращает кэшированный
-        экземпляр.
+        Deprecated: используйте get_services_context()["bot"] вместо этого метода.
 
         Returns:
             Экземпляр WednesdayBot.
@@ -189,17 +205,17 @@ class CeleryServices:
         Raises:
             RuntimeError: Если не удалось инициализировать WednesdayBot.
         """
-        await cls._ensure_initialized()
-        if cls._bot is None:
+        context = await get_services_context()
+        bot = context.get("bot")
+        if not isinstance(bot, WednesdayBot):
             raise RuntimeError("Failed to initialize WednesdayBot")
-        return cls._bot
+        return bot
 
     @classmethod
     async def get_generator(cls) -> ImageGenerator:
-        """Получает экземпляр ImageGenerator (lazy init).
+        """Получает экземпляр ImageGenerator.
 
-        Инициализирует сервисы при первом вызове, затем возвращает кэшированный
-        экземпляр.
+        Deprecated: используйте get_services_context()["generator"] вместо этого метода.
 
         Returns:
             Экземпляр ImageGenerator.
@@ -207,10 +223,11 @@ class CeleryServices:
         Raises:
             RuntimeError: Если не удалось инициализировать ImageGenerator.
         """
-        await cls._ensure_initialized()
-        if cls._generator is None:
+        context = await get_services_context()
+        generator = context.get("generator")
+        if not isinstance(generator, ImageGenerator):
             raise RuntimeError("Failed to initialize ImageGenerator")
-        return cls._generator
+        return generator
 
 
 # Регистрируем shutdown handler
@@ -236,15 +253,15 @@ def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
             loop = asyncio.get_running_loop()
             # Если loop запущен, создаём задачу (для celery[asyncio])
             if not loop.is_closed():
-                task = asyncio.create_task(CeleryServices.shutdown())
+                task = asyncio.create_task(shutdown_services())
                 # Сохраняем ссылку на задачу, чтобы она не была удалена сборщиком мусора
                 _ = task
             else:
                 # Loop закрыт, создаём новый
-                asyncio.run(CeleryServices.shutdown())
+                asyncio.run(shutdown_services())
         except RuntimeError:
             # Нет запущенного loop, создаём новый
-            asyncio.run(CeleryServices.shutdown())
+            asyncio.run(shutdown_services())
     except Exception as e:
         logger.error(f"Ошибка при вызове shutdown в worker_shutdown handler: {e}")
 
@@ -380,8 +397,11 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Lazy инициализация внутри задачи (после fork, безопасно)
-        bot = await CeleryServices.get_bot()
+        # Получаем контекст сервисов (инициализация происходит внутри, после fork)
+        context = await get_services_context()
+        bot = context["bot"]
+        if not isinstance(bot, WednesdayBot):
+            raise RuntimeError("Failed to get WednesdayBot from context")
         await bot.send_wednesday_frog(slot_time=slot_time)
 
         return {"status": "success", "slot_time": slot_time}
@@ -435,8 +455,11 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Lazy инициализация внутри задачи (после fork, безопасно)
-        generator = await CeleryServices.get_generator()
+        # Получаем контекст сервисов (инициализация происходит внутри, после fork)
+        context = await get_services_context()
+        generator = context["generator"]
+        if not isinstance(generator, ImageGenerator):
+            raise RuntimeError("Failed to get ImageGenerator from context")
         result = await generator.generate_frog_image(user_id=user_id)
 
         if result:
@@ -510,9 +533,14 @@ async def send_frog_manual(
     MAX_ERROR_DETAILS_LENGTH = 500
 
     try:
-        # Lazy инициализация внутри задачи (после fork, безопасно)
-        bot_instance = await CeleryServices.get_bot()
-        generator = bot_instance.image_generator
+        # Получаем контекст сервисов (инициализация происходит внутри, после fork)
+        context = await get_services_context()
+        bot_instance = context["bot"]
+        if not isinstance(bot_instance, WednesdayBot):
+            raise RuntimeError("Failed to get WednesdayBot from context")
+        generator = context["generator"]
+        if not isinstance(generator, ImageGenerator):
+            raise RuntimeError("Failed to get ImageGenerator from context")
 
         # Генерируем изображение
         result = await generator.generate_frog_image(user_id=user_id)
@@ -651,17 +679,22 @@ async def send_frog_manual(
         # Удаляем статусное сообщение
         if status_message_id:
             try:
-                bot_instance = await CeleryServices.get_bot()
-                await bot_instance.application.bot.delete_message(
-                    chat_id=chat_id,
-                    message_id=status_message_id,
-                )
+                context = await get_services_context()
+                bot_instance = context["bot"]
+                if isinstance(bot_instance, WednesdayBot):
+                    await bot_instance.application.bot.delete_message(
+                        chat_id=chat_id,
+                        message_id=status_message_id,
+                    )
             except Exception:
                 pass
 
         # Отправляем дружелюбное сообщение пользователю
         try:
-            bot_instance = await CeleryServices.get_bot()
+            context = await get_services_context()
+            bot_instance = context["bot"]
+            if not isinstance(bot_instance, WednesdayBot):
+                raise RuntimeError("Failed to get WednesdayBot from context")
             friendly_message = (
                 "🐸 К сожалению, произошла ошибка при генерации.\n"
                 "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
@@ -690,7 +723,10 @@ async def send_frog_manual(
 
         # Уведомляем администраторов
         try:
-            bot_instance = await CeleryServices.get_bot()
+            context = await get_services_context()
+            bot_instance = context["bot"]
+            if not isinstance(bot_instance, WednesdayBot):
+                raise RuntimeError("Failed to get WednesdayBot from context")
             import traceback
 
             from utils.admins_store import AdminsStore
@@ -798,8 +834,8 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
         Exception: При ошибке выполнения очистки.
     """
     try:
-        # Lazy инициализация для доступа к сервисам (для инициализации пулов)
-        _ = await CeleryServices.get_bot()
+        # Инициализируем пулы подключений (для доступа к сервисам)
+        await _ensure_pools_initialized()
 
         # Очистка старых записей dispatch_registry
         from utils.dispatch_registry import DispatchRegistry
@@ -840,8 +876,8 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
         Exception: При ошибке сбора статистики.
     """
     try:
-        # Lazy инициализация для доступа к сервисам (для инициализации пулов)
-        _ = await CeleryServices.get_bot()
+        # Инициализируем пулы подключений (для доступа к сервисам)
+        await _ensure_pools_initialized()
 
         # Здесь можно добавить логику сбора статистики
         # Например, агрегация метрик из metrics_events
