@@ -56,6 +56,7 @@
   - Реализованы методы `is_open()`, `record_success()`, `record_failure()` с использованием Redis
   - Добавлена обработка ошибок через `CircuitBreakerOpen`
   - Использует `RedisBackendService` для автоматического fallback на in-memory
+  - Заменено использование старого CircuitBreaker на CircuitBreakerService в image_generator.py
 
 - **Перемещён `services/rate_limiter.py` → `services/infrastructure/rate_limiting/rate_limiter.py`**:
   - Файл перемещён в директорию `infrastructure/rate_limiting/` согласно новой архитектуре
@@ -77,6 +78,12 @@
   - Создан класс `ImageService(BaseService)` для координации генерации изображений
   - Координирует работу всех сервисов: ImageGenerationService, ImageCacheService,
     ImageStorageService, PromptService, CircuitBreakerService, MetricsRecorder
+
+### Добавлено
+
+- **Создан `services/container.py`**:
+  - Введён модуль сборки зависимостей для backend‑части бота
+  - Реализована функция `build_image_stack()` для централизованной сборки стека `ImageService`
   - Реализован метод `generate_frog_image()` с полной координацией всех шагов
   - Добавлена обработка всех исключений и graceful degradation
 
