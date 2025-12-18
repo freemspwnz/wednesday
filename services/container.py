@@ -8,18 +8,30 @@
 
 from __future__ import annotations
 
+import os
+
+from services.app_settings import AppSettings
 from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
+from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
 from services.domain.image_generation import ImageGenerationService
 from services.domain.prompt_generation import PromptGenerationService
+from services.image_generator import ImageGenerator
 from services.infrastructure.cache.image_cache import ImageCacheService
 from services.infrastructure.cache.prompt_cache import PromptCache
+from services.infrastructure.cache.user_state_cache import UserStateCache
 from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
+from services.infrastructure.rate_limiting import RateLimiter
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
+from services.scheduler import TaskScheduler
+from utils.chats_store import ChatsStore
 from utils.config import config
+from utils.dispatch_registry import DispatchRegistry
+from utils.metrics import Metrics
+from utils.usage_tracker import UsageTracker
 
 
 def build_image_stack() -> ImageService:
@@ -63,4 +75,57 @@ def build_image_stack() -> ImageService:
         circuit_breaker=circuit_breaker,
         metrics=metrics,
         max_retries=config.max_retries,
+    )
+
+
+def build_bot_services() -> BotServices:
+    """Собирает контейнер BotServices для основного бота.
+
+    На этом этапе:
+    - image_service создаётся через build_image_stack();
+    - image_generator сохраняется для обратной совместимости с существующим кодом;
+    - остальные сервисы повторяют существующую инициализацию из WednesdayBot.
+    """
+    app_settings = AppSettings.from_config(config)
+    image_service = build_image_stack()
+
+    scheduler = (
+        TaskScheduler(
+            send_times=config.scheduler_send_times,
+            wednesday_day=config.scheduler_wednesday_day,
+            check_interval=30,
+            timezone=config.scheduler_tz or "Europe/Moscow",
+        )
+        if config.use_old_scheduler
+        else None
+    )
+
+    usage = UsageTracker(
+        storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
+        monthly_quota=100,
+        frog_threshold=70,
+    )
+
+    chats = ChatsStore()
+    dispatch_registry = DispatchRegistry()
+    metrics = Metrics()
+    prompt_cache = PromptCache()
+    user_state_store = UserStateCache()
+    rate_limiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
+
+    # Сохраняем ImageGenerator для плавной миграции на ImageService.
+    image_generator = ImageGenerator()
+
+    return BotServices(
+        image_generator=image_generator,
+        image_service=image_service,
+        scheduler=scheduler,
+        usage=usage,
+        chats=chats,
+        dispatch_registry=dispatch_registry,
+        metrics=metrics,
+        prompt_cache=prompt_cache,
+        user_state_store=user_state_store,
+        rate_limiter=rate_limiter,
+        settings=app_settings,
     )

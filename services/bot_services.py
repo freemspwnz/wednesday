@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from services.app_settings import AppSettings
+from services.application.image_service import ImageService
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
@@ -33,7 +34,6 @@ class BotServices:
     """
 
     image_generator: ImageGenerator
-    scheduler: TaskScheduler | None
     usage: UsageTracker
     chats: ChatsStore
     dispatch_registry: DispatchRegistry
@@ -42,4 +42,6 @@ class BotServices:
     user_state_store: UserStateCache
     rate_limiter: RateLimiter
     settings: AppSettings
+    image_service: ImageService | None = None
+    scheduler: TaskScheduler | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop

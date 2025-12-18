@@ -84,6 +84,10 @@
 - **Создан `services/container.py`**:
   - Введён модуль сборки зависимостей для backend‑части бота
   - Реализована функция `build_image_stack()` для централизованной сборки стека `ImageService`
+
+- **Расширен DI‑контейнер `BotServices` и контейнер сервисов**:
+  - В `BotServices` добавлено поле `image_service` для работы с `ImageService` через DI
+  - В `services/container.py` реализована функция `build_bot_services()` для сборки контейнера `BotServices`
   - Реализован метод `generate_frog_image()` с полной координацией всех шагов
   - Добавлена обработка всех исключений и graceful degradation
 
