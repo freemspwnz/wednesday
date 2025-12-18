@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypeVar, runtime_checkable
 
 
 @runtime_checkable
@@ -138,11 +138,14 @@ class IPromptStorage(Protocol):
         ...
 
 
+T = TypeVar("T")
+
+
 @runtime_checkable
-class ICache(Protocol):
+class ICache(Protocol[T]):
     """Протокол для кэширования данных."""
 
-    async def get(self, key: str) -> object | None:
+    async def get(self, key: str) -> T | None:
         """Получает значение из кэша по ключу.
 
         Args:
@@ -153,7 +156,7 @@ class ICache(Protocol):
         """
         ...
 
-    async def set(self, key: str, value: object, ttl: int | None = None) -> None:
+    async def set(self, key: str, value: T, ttl: int | None = None) -> None:
         """Сохраняет значение в кэш.
 
         Args:

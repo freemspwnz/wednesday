@@ -35,7 +35,7 @@ class ImageService(BaseService):
         self,
         image_generation_service: ImageGenerationService,
         prompt_service: PromptService,
-        image_cache: ICache | None = None,
+        image_cache: ICache[tuple[bytes, str]] | None = None,
         image_storage: IImageStorage | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         metrics: IMetrics | None = None,

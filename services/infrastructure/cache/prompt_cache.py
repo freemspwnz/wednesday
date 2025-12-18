@@ -18,6 +18,7 @@ import json
 from typing import TYPE_CHECKING, Any, cast
 
 from services.base.redis_backend_service import RedisBackendService
+from services.protocols import ICache
 
 if TYPE_CHECKING:
     import redis.asyncio as redis
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     RedisBackend = redis.Redis | _InMemoryRedis
 
 
-class PromptCache(RedisBackendService):
+class PromptCache(RedisBackendService, ICache[dict | str]):
     """
     Кэш промптов на базе Redis с автоматическим fallback в память.
     """

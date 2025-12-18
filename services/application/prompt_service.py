@@ -25,7 +25,7 @@ class PromptService(BaseService):
     def __init__(
         self,
         prompt_generation_service: PromptGenerationService,
-        prompt_cache: PromptCache | ICache | None = None,
+        prompt_cache: PromptCache | ICache[dict | str] | None = None,
         prompt_storage: PromptStorageService | IPromptStorage | None = None,
     ) -> None:
         """Инициализирует сервис координации промптов.

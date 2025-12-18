@@ -13,7 +13,7 @@ from utils.prompts_store import PromptsStore
 IMAGE_CACHE_VALUE_TUPLE_LENGTH = 2
 
 
-class ImageCacheService(BaseService, ICache):
+class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
     """Сервис для кэширования изображений по промптам.
 
     Использует ImagesStore и PromptsStore для работы с кэшем изображений
@@ -168,7 +168,7 @@ class ImageCacheService(BaseService, ICache):
             self.logger.error(f"Ошибка при сохранении изображения в кэш: {e}", exc_info=True)
             raise CacheError(f"Ошибка при сохранении изображения в кэш: {e}") from e
 
-    async def get(self, key: str) -> object | None:
+    async def get(self, key: str) -> tuple[bytes, str] | None:
         """Реализация протокола ICache.get для кэша изображений.
 
         Для совместимости с существующей логикой key трактуется как текст промпта.
@@ -176,7 +176,7 @@ class ImageCacheService(BaseService, ICache):
         """
         return await self.get_by_prompt(key)
 
-    async def set(self, key: str, value: object, ttl: int | None = None) -> None:
+    async def set(self, key: str, value: tuple[bytes, str], ttl: int | None = None) -> None:
         """Реализация протокола ICache.set для кэша изображений.
 
         Ожидает value в формате (image_data: bytes, caption: str | object).

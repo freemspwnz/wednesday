@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Усилена типизация кэшей и протокола ICache**:
+  - Протокол `ICache` в `services/protocols.py` стал generic-интерфейсом `ICache[T]` с точным типом значения
+  - `ImageCacheService` в `services/infrastructure/cache/image_cache.py` реализует `ICache[tuple[bytes, str]]` с уточнёнными сигнатурами `get` и `set`
+  - `PromptCache` в `services/infrastructure/cache/prompt_cache.py` реализует `ICache[dict | str]` поверх Redis/in-memory backend
+  - `ImageService` и `PromptService` в application-слое используют `ICache` с конкретными параметрами типов для кэшей изображений и промптов
+
 - **Введён протокол IScheduler и абстрагирован планировщик через него**:
   - Добавлен протокол `IScheduler` в `services/protocols.py` с методами управления задачами и получения состояния без утечки внутренних полей конкретной реализации
   - `SchedulerService` в `services/application/scheduler_service.py` теперь зависит от `IScheduler`, а не от конкретного `TaskScheduler`
