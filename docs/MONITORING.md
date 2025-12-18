@@ -721,6 +721,45 @@ docker compose restart promtail
 
 ---
 
+## Управление жизненным циклом ресурсов {#resource-lifecycle}
+
+### Shutdown ML-клиентов
+
+При остановке сервиса (standalone-бота или Celery worker) необходимо гарантированно закрыть все HTTP-сессии ML-клиентов (Kandinsky, GigaChat) для корректного освобождения ресурсов.
+
+**Контракт shutdown:**
+
+1. **В Celery worker** — shutdown выполняется автоматически через сигнал `worker_shutdown`:
+   - При остановке worker вызывается `shutdown_services()` из `services/celery_tasks.py`
+   - Метод закрывает `ImageClientContainer` и `TextClientContainer` через `aclose()`
+   - HTTP-сессии (aiohttp) внутри клиентов корректно завершаются
+   - Затем закрываются пулы подключений Redis и Postgres
+
+2. **В standalone-боте** — shutdown выполняется через метод `stop()`:
+   - Метод `WednesdayBot.stop()` вызывает `aclose()` для закрытия контейнеров ML-клиентов
+   - Контейнеры (`ImageClientContainer`, `TextClientContainer`) закрывают внутренние HTTP-клиенты
+   - Все HTTP-сессии корректно завершаются перед остановкой приложения
+
+**Важно:**
+- При добавлении новых точек shutdown (например, в тестах или других entry points) необходимо вызывать `aclose()` у контейнеров ML-клиентов
+- Контейнеры доступны через `get_image_client_container()` и `get_text_client_container()` из `services.clients`
+- Если контейнеры не закрыты, HTTP-сессии могут остаться открытыми, что приведёт к предупреждениям о незакрытых ресурсах
+
+**Пример использования в коде:**
+
+```python
+from services.clients import get_image_client_container, get_text_client_container
+
+# При shutdown
+image_container = get_image_client_container()
+await image_container.aclose()
+
+text_container = get_text_client_container()
+await text_container.aclose()
+```
+
+---
+
 ## Дополнительные ресурсы
 
 - [Архитектура проекта](ARCHITECTURE.md)

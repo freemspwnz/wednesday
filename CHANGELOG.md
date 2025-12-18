@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Формализован shutdown ML-клиентов в общем месте**:
+  - В `services/celery_tasks.py` функция `shutdown_services()` теперь закрывает `ImageClientContainer` и `TextClientContainer` через `aclose()` для гарантированного закрытия HTTP-сессий
+  - В `bot/wednesday_bot.py` добавлен метод `aclose()` для закрытия контейнеров ML-клиентов при остановке standalone-бота
+  - Метод `WednesdayBot.stop()` вызывает `aclose()` для освобождения ресурсов HTTP-клиентов перед остановкой приложения
+  - Документирован контракт shutdown в `docs/MONITORING.md`: при остановке сервиса необходимо вызывать `aclose()` у контейнеров ML-клиентов для корректного закрытия всех HTTP-сессий
+
 - **Выделен DispatchService для cron‑логики send_wednesday_frog**:
   - Создан application‑сервис `DispatchService` в `services/application/dispatch_service.py` для координации рассылки жабы по расписанию
   - В `services/container.py` сервис собирается через DI и прокидывается в `BotServices.dispatch_service`
@@ -68,8 +74,6 @@
   - Добавлен `frog_request_service` в `BotServices` и контейнер
   - Обновлён `UserHandlers.frog_command` для использования нового сервиса вместо прямого вызова `celery_app.send_task`
   - Убраны прямые импорты `celery_app` из `UserHandlers`
-
-### Изменено
 
 - **Рефакторинг `services/celery_tasks.py`**:
   - Упрощён класс `CeleryServices` - удалены глобальные переменные `_bot`, `_generator`, `_initialized`, `_init_lock`

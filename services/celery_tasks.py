@@ -12,6 +12,7 @@ import asyncio
 from celery.signals import worker_shutdown
 
 from bot.wednesday_bot import WednesdayBot
+from services.clients import get_image_client_container, get_text_client_container
 from utils.config import config
 from utils.logger import get_logger
 from utils.postgres_client import close_postgres_pool, init_postgres_pool
@@ -96,7 +97,8 @@ async def shutdown_services() -> None:
     """Graceful shutdown для async ресурсов.
 
     Закрывает все соединения при остановке worker:
-    - aiohttp sessions
+    - ML-клиенты (ImageClientContainer, TextClientContainer) через aclose()
+    - aiohttp sessions через закрытие клиентов
     - redis pool
     - postgres pool
 
@@ -110,9 +112,20 @@ async def shutdown_services() -> None:
     logger.info("Shutting down Celery services...")
 
     try:
-        bot = _services_context.get("bot")
-        if bot and hasattr(bot, "aclose"):
-            await bot.aclose()
+        # Закрываем ML-клиенты (контейнеры управляют HTTP-сессиями внутри)
+        try:
+            image_container = get_image_client_container()
+            await image_container.aclose()
+            logger.info("ImageClientContainer closed")
+        except Exception as e:
+            logger.warning(f"Error closing ImageClientContainer: {e}")
+
+        try:
+            text_container = get_text_client_container()
+            await text_container.aclose()
+            logger.info("TextClientContainer closed")
+        except Exception as e:
+            logger.warning(f"Error closing TextClientContainer: {e}")
 
         # Закрываем пулы подключений
         await close_postgres_pool()
@@ -167,7 +180,10 @@ def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
     """Обработчик сигнала остановки worker для graceful shutdown.
 
     Вызывается автоматически при остановке Celery worker. Выполняет graceful
-    shutdown всех async ресурсов (aiohttp sessions, Redis и Postgres пулы).
+    shutdown всех async ресурсов:
+    - ML-клиенты (ImageClientContainer, TextClientContainer) через aclose()
+    - HTTP-сессии (aiohttp) через закрытие клиентов
+    - Redis и Postgres пулы подключений
 
     Args:
         sender: Отправитель сигнала (обычно Celery app).
