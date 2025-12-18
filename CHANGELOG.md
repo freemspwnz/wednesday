@@ -4,6 +4,11 @@
 
 ### Изменено
 
+- **Уточнены импорты и структура административных хэндлеров**:
+  - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
+  - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal
+  - В административных обработчиках сохранена зависимость только от `BotServices` и утилитного слоя без прямых импортов инфраструктуры
+
 - **Формализован shutdown ML-клиентов в общем месте**:
   - В `services/celery_tasks.py` функция `shutdown_services()` теперь закрывает `ImageClientContainer` и `TextClientContainer` через `aclose()` для гарантированного закрытия HTTP-сессий
   - В `bot/wednesday_bot.py` добавлен метод `aclose()` для закрытия контейнеров ML-клиентов при остановке standalone-бота

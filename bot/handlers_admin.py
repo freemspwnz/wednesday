@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from bot.base_handlers import BaseHandlers
 from services.application.admin_dashboard_service import AdminDashboardService
 from services.bot_services import BotServices
+from utils.paths import LOGS_DIR
 
 # Константы
 MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
@@ -153,8 +154,6 @@ class AdminHandlers(BaseHandlers):
             except (TelegramError, NetworkError, TimedOut):
                 pass
             return
-
-        from utils.paths import LOGS_DIR
 
         logs_dir = LOGS_DIR
         if not logs_dir.exists():
