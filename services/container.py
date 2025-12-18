@@ -23,7 +23,6 @@ from services.infrastructure.cache.image_cache import ImageCacheService
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
 from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
-from services.infrastructure.rate_limiting import RateLimiter
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
@@ -112,21 +111,20 @@ def build_bot_services() -> BotServices:
     metrics = Metrics()
     prompt_cache = PromptCache()
     user_state_store = UserStateCache()
-    rate_limiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
     frog_rate_limiter = FrogRateLimiterService(settings=app_settings)
     frog_request_service = FrogRequestService()
 
     return BotServices(
-        image_service=image_service,
-        scheduler=scheduler,
         usage=usage,
         chats=chats,
         dispatch_registry=dispatch_registry,
         metrics=metrics,
         prompt_cache=prompt_cache,
         user_state_store=user_state_store,
-        rate_limiter=rate_limiter,
         settings=app_settings,
+        image_service=image_service,
         frog_rate_limiter=frog_rate_limiter,
         frog_request_service=frog_request_service,
+        scheduler=scheduler,
+        bot_controller=None,
     )

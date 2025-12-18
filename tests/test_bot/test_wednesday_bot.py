@@ -54,16 +54,12 @@ def wednesday_bot(monkeypatch: Any) -> Any:
 
     monkeypatch.setattr(wb_module, "HTTPXRequest", http_request)
 
-    class DummyImageGenerator:
+    class DummyImageService:
         def __init__(self) -> None:
             self.saved: list[Any] = []
 
-        async def generate_frog_image(self, metrics: Any = None) -> tuple[bytes, str]:
+        async def generate_frog_image(self, user_id: int | None = None) -> tuple[bytes, str]:
             return b"img", "caption"
-
-        def save_image_locally(self, image_data: bytes, folder: str = "data/frogs", prefix: str = "wednesday") -> str:
-            self.saved.append((image_data, folder, prefix))
-            return "saved_path"
 
     class DummyScheduler:
         def __init__(self) -> None:
@@ -132,12 +128,22 @@ def wednesday_bot(monkeypatch: Any) -> Any:
             self.callback = callback
             self.member_filter = member_filter
 
-    monkeypatch.setattr(wb_module, "ImageGenerator", DummyImageGenerator)
-    monkeypatch.setattr(wb_module, "TaskScheduler", DummyScheduler)
-    monkeypatch.setattr(wb_module, "UsageTracker", DummyUsageTracker)
-    monkeypatch.setattr(wb_module, "ChatsStore", DummyChatsStore)
-    monkeypatch.setattr(wb_module, "DispatchRegistry", DummyDispatchRegistry)
-    monkeypatch.setattr(wb_module, "Metrics", DummyMetrics)
+    monkeypatch.setattr(
+        wb_module,
+        "build_bot_services",
+        lambda: SimpleNamespace(
+            image_service=DummyImageService(),
+            scheduler=DummyScheduler(),
+            usage=DummyUsageTracker(),
+            chats=DummyChatsStore(),
+            dispatch_registry=DummyDispatchRegistry(),
+            metrics=DummyMetrics(),
+            settings=SimpleNamespace(scheduler_send_times=["10:00"], time_format_length=5),
+            frog_rate_limiter=SimpleNamespace(),
+            frog_request_service=SimpleNamespace(),
+            bot_controller=None,
+        ),
+    )
     monkeypatch.setattr(wb_module, "CommandHandler", DummyCommandHandler)
     monkeypatch.setattr(wb_module, "MessageHandler", DummyMessageHandler)
     monkeypatch.setattr(wb_module, "ChatMemberHandler", DummyChatMemberHandler)
@@ -173,7 +179,7 @@ async def test_send_wednesday_frog_dispatches_to_targets(monkeypatch: Any, wedne
     def fake_generate(metrics: Any = None) -> tuple[bytes, str]:
         return b"img", "caption"
 
-    wednesday_bot.image_generator.generate_frog_image = AsyncMock(side_effect=fake_generate)
+    wednesday_bot.services.image_service.generate_frog_image = AsyncMock(side_effect=fake_generate)
 
     await wednesday_bot.send_wednesday_frog(slot_time="10:00")
 
@@ -217,7 +223,10 @@ async def test_send_user_friendly_error(wednesday_bot: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_send_fallback_image_success(wednesday_bot: Any) -> None:
-    wednesday_bot.image_generator.get_random_saved_image = MagicMock(return_value=(b"img", "caption"))
+    storage = MagicMock()
+    storage.get_random_from_archive.return_value = (b"img", "caption")
+    image_service = wednesday_bot.services.image_service
+    image_service._storage = storage
     result = await wednesday_bot._send_fallback_image(12345)
 
     assert result is True
@@ -228,7 +237,10 @@ async def test_send_fallback_image_success(wednesday_bot: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_send_fallback_image_no_image(wednesday_bot: Any) -> None:
-    wednesday_bot.image_generator.get_random_saved_image = MagicMock(return_value=None)
+    storage = MagicMock()
+    storage.get_random_from_archive.return_value = None
+    image_service = wednesday_bot.services.image_service
+    image_service._storage = storage
     result = await wednesday_bot._send_fallback_image(12345)
 
     assert result is False

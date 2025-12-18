@@ -107,7 +107,6 @@ class SupportBot(BaseHandlers):
             metrics=None,  # type: ignore[arg-type]
             prompt_cache=None,  # type: ignore[arg-type]
             user_state_store=None,  # type: ignore[arg-type]
-            rate_limiter=self.rate_limiter,
             settings=self.settings,
             image_service=None,  # type: ignore[arg-type]
             frog_rate_limiter=frog_rate_limiter,

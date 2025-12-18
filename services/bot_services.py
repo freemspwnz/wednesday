@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.infrastructure.rate_limiting import RateLimiter
 from services.scheduler import TaskScheduler
 from utils.chats_store import ChatsStore
 from utils.dispatch_registry import DispatchRegistry
@@ -40,7 +39,6 @@ class BotServices:
     metrics: Metrics
     prompt_cache: PromptCache
     user_state_store: UserStateCache
-    rate_limiter: RateLimiter
     settings: AppSettings
     image_service: ImageService
     frog_rate_limiter: FrogRateLimiterService

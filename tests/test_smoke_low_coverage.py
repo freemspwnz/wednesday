@@ -152,7 +152,6 @@ async def test_command_handlers_start_help(
         metrics=MagicMock(),
         prompt_cache=MagicMock(),
         user_state_store=MagicMock(),
-        rate_limiter=MagicMock(),
         settings=MagicMock(),
         image_service=MagicMock(),
         frog_rate_limiter=frog_rate_limiter,

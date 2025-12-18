@@ -113,6 +113,11 @@
   - `max_retries` и набор подписей для изображений теперь передаются через DI из `services/container.py`
   - Контейнер читает значения из `utils.config.ImageConfig` и `config` и передаёт их в конструктор `ImageService`
 
+- **Обновлены тесты и документация под финальную архитектуру `ImageService` и `BotServices`**:
+  - Тест `tests/test_bot/test_wednesday_bot.py` переписан на использование DI‑контейнера `build_bot_services()` и `ImageService` вместо устаревшего `ImageGenerator`
+  - В `docs/ARCHITECTURE.md` разделы про генерацию изображений и DI обновлены: `ImageService` описан как основной application‑сервис, зафиксирован финальный контракт `BotServices`
+  - Уточнён `PROJECT_SUMMARY.md` и справочная документация по DI, чтобы отражать новую структуру контейнера и потоки зависимостей
+
 ### Добавлено
 
 - **Создан `services/container.py`**:
@@ -122,6 +127,11 @@
 - **Расширен DI‑контейнер `BotServices` и контейнер сервисов**:
   - В `BotServices` добавлено поле `image_service` для работы с `ImageService` через DI
   - В `services/container.py` реализована функция `build_bot_services()` для сборки контейнера `BotServices`
+
+- **Упрощён и зафиксирован контракт `BotServices`**:
+  - Удалено неиспользуемое поле `rate_limiter` из `services/bot_services.py` и контейнера
+  - Оставлены только те зависимости, к которым реально обращаются хэндлеры и `WednesdayBot`
+  - Тип поля `scheduler` выражен как `TaskScheduler | None` для явного обозначения опциональности
 
 - **Переведён `WednesdayBot` на DI‑контейнер**:
   - Вся сборка сервисов перенесена в `build_bot_services()`, `WednesdayBot` получает только готовый `BotServices`
