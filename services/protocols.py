@@ -38,7 +38,7 @@ class IMetrics(Protocol):
 class IStorage(Protocol):
     """Протокол для файлового хранилища."""
 
-    async def save(self, data: bytes, folder: str, prefix: str) -> str:
+    async def save(self, data: bytes, folder: str | None = None, prefix: str = "frog") -> str:
         """Сохраняет данные в файловое хранилище.
 
         Args:
@@ -51,7 +51,7 @@ class IStorage(Protocol):
         """
         ...
 
-    async def get_random(self, folder: str) -> tuple[bytes, str] | None:
+    async def get_random(self, folder: str | None = None) -> tuple[bytes, str] | None:
         """Получает случайный файл из папки.
 
         Args:

@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **ImageService и кэш/хранилище изображений переведены на протоколы ICache/IStorage/IMetrics**:
+  - Параметры `image_cache`, `image_storage`, `metrics` в `services/application/image_service.py` типизированы через `ICache`, `IStorage`, `IMetrics`
+  - `ImageCacheService` реализует протокол `ICache` (методы `get`, `set`, `delete`) поверх существующих операций `get_by_prompt` и `save`
+  - Логика работы с кэшем в `ImageService` использует протокольный интерфейс `ICache` и кодирует значение как `(image_data, caption)`
+  - `ImageStorageService` и `MetricsRecorder` продолжают удовлетворять протоколам `IStorage` и `IMetrics` без изменений публичного API
+
 - **Централизованы настройки rate limit для команды /frog**:
   - Удалены константы `FROG_RATE_LIMIT_MINUTES`, `FROG_RATE_LIMIT_WINDOW_SECONDS`, `FROG_RATE_LIMIT_MAX_REQUESTS` из `bot/handlers_user.py`
   - Настройки лимитов теперь читаются из `AppSettings` через DI (`self.services.settings`)

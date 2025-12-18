@@ -14,11 +14,11 @@ from services.application.prompt_service import PromptService
 from services.base.base_service import BaseService
 from services.base.exceptions import CircuitBreakerOpen, ImageGenerationError
 from services.domain.image_generation import ImageGenerationService
-from services.infrastructure.cache.image_cache import ImageCacheService
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
-from services.infrastructure.storage.image_storage import ImageStorageService
-from services.protocols import IMetrics
+from services.protocols import ICache, IMetrics, IStorage
 from utils.config import ImageConfig, config
+
+CACHE_VALUE_TUPLE_LENGTH = 2
 
 
 class ImageService(BaseService):
@@ -37,8 +37,8 @@ class ImageService(BaseService):
         self,
         image_generation_service: ImageGenerationService,
         prompt_service: PromptService,
-        image_cache: ImageCacheService | None = None,
-        image_storage: ImageStorageService | None = None,
+        image_cache: ICache | None = None,
+        image_storage: IStorage | None = None,
         circuit_breaker: CircuitBreakerService | None = None,
         metrics: IMetrics | None = None,
         max_retries: int | None = None,
@@ -160,25 +160,38 @@ class ImageService(BaseService):
         # 3. Проверяем кэш
         if self._cache is not None:
             try:
-                cached_result = await self._cache.get_by_prompt(prompt)
-                if cached_result:
-                    image_data, _ = cached_result
-                    elapsed = time.time() - start_time
-                    self.log_event(
-                        event="image_cache_hit",
-                        user_id=user_id_str,
-                        status="cached",
-                        latency_ms=round(elapsed * 1000),
-                        level="info",
-                        message="Изображение получено из кэша",
-                    )
-                    if self._metrics:
-                        try:
-                            await self._metrics.increment_cache_hit()
-                            await self._metrics.increment_generation_success()
-                        except Exception as e:
-                            self.logger.warning(f"Ошибка при записи метрик кэша: {e}")
-                    return image_data, caption
+                cached_obj = await self._cache.get(prompt)
+                if cached_obj:
+                    # Ожидаем, что реализация ICache для изображений
+                    # вернёт кортеж (image_data, caption) или совместимую структуру.
+                    if isinstance(cached_obj, tuple) and len(cached_obj) == CACHE_VALUE_TUPLE_LENGTH:
+                        image_data, cached_caption = cached_obj
+                        result_caption = str(cached_caption) or caption
+                    else:
+                        self.logger.warning(
+                            "Неподдерживаемый формат значения в кэше для prompt=%s: %r",
+                            prompt,
+                            cached_obj,
+                        )
+                        image_data = None
+
+                    if image_data is not None:
+                        elapsed = time.time() - start_time
+                        self.log_event(
+                            event="image_cache_hit",
+                            user_id=user_id_str,
+                            status="cached",
+                            latency_ms=round(elapsed * 1000),
+                            level="info",
+                            message="Изображение получено из кэша",
+                        )
+                        if self._metrics:
+                            try:
+                                await self._metrics.increment_cache_hit()
+                                await self._metrics.increment_generation_success()
+                            except Exception as e:
+                                self.logger.warning(f"Ошибка при записи метрик кэша: {e}")
+                        return image_data, result_caption
             except Exception as e:
                 self.logger.warning(f"Ошибка при проверке кэша: {e}")
 
@@ -276,7 +289,7 @@ class ImageService(BaseService):
         image_data = image_data_result
         if self._cache is not None:
             try:
-                await self._cache.save(prompt, image_data, caption)
+                await self._cache.set(prompt, (image_data, caption))
                 self.log_event(
                     event="image_cached",
                     user_id=user_id_str,

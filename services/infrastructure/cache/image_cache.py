@@ -6,11 +6,14 @@ from hashlib import sha256
 
 from services.base.base_service import BaseService
 from services.base.exceptions import CacheError
+from services.protocols import ICache
 from utils.images_store import ImagesStore
 from utils.prompts_store import PromptsStore
 
+IMAGE_CACHE_VALUE_TUPLE_LENGTH = 2
 
-class ImageCacheService(BaseService):
+
+class ImageCacheService(BaseService, ICache):
     """Сервис для кэширования изображений по промптам.
 
     Использует ImagesStore и PromptsStore для работы с кэшем изображений
@@ -164,3 +167,42 @@ class ImageCacheService(BaseService):
         except Exception as e:
             self.logger.error(f"Ошибка при сохранении изображения в кэш: {e}", exc_info=True)
             raise CacheError(f"Ошибка при сохранении изображения в кэш: {e}") from e
+
+    async def get(self, key: str) -> object | None:
+        """Реализация протокола ICache.get для кэша изображений.
+
+        Для совместимости с существующей логикой key трактуется как текст промпта.
+        Возвращает кортеж (байты изображения, caption), как и get_by_prompt().
+        """
+        return await self.get_by_prompt(key)
+
+    async def set(self, key: str, value: object, ttl: int | None = None) -> None:
+        """Реализация протокола ICache.set для кэша изображений.
+
+        Ожидает value в формате (image_data: bytes, caption: str | object).
+        """
+        try:
+            if not isinstance(value, tuple) or len(value) != IMAGE_CACHE_VALUE_TUPLE_LENGTH:
+                raise CacheError("Expected value as tuple[bytes, str] for ImageCacheService.set()")
+
+            image_data_obj, caption_obj = value
+            if not isinstance(image_data_obj, bytes | bytearray):
+                raise CacheError("First element of value must be bytes-like for ImageCacheService.set()")
+
+            image_bytes = bytes(image_data_obj)
+            caption_str = str(caption_obj)
+
+            await self.save(prompt=key, image_data=image_bytes, caption=caption_str)
+        except CacheError:
+            raise
+        except Exception as e:  # pragma: no cover - защитный слой от неожиданных типов
+            self.logger.error(f"Ошибка при установке значения в кэш через set(): {e}", exc_info=True)
+            raise CacheError(f"Ошибка при установке значения в кэш: {e}") from e
+
+    async def delete(self, key: str) -> None:
+        """Реализация протокола ICache.delete.
+
+        В текущей версии кэша удаление по ключу не требуется бизнес-логикой,
+        поэтому метод является no-op с логированием для диагностики.
+        """
+        self.logger.debug("ICache.delete() вызван для ImageCacheService, key=%s (no-op)", key)
