@@ -29,7 +29,7 @@ from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
 from services.scheduler import TaskScheduler
 from utils.chats_store import ChatsStore
-from utils.config import config
+from utils.config import ImageConfig, config
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
 from utils.usage_tracker import UsageTracker
@@ -76,6 +76,7 @@ def build_image_stack() -> ImageService:
         circuit_breaker=circuit_breaker,
         metrics=metrics,
         max_retries=config.max_retries,
+        captions=ImageConfig.CAPTIONS,
     )
 
 

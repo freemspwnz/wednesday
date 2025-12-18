@@ -16,7 +16,6 @@ from services.base.exceptions import CircuitBreakerOpen, ImageGenerationError
 from services.domain.image_generation import ImageGenerationService
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.protocols import ICache, IMetrics, IStorage
-from utils.config import ImageConfig, config
 
 CACHE_VALUE_TUPLE_LENGTH = 2
 
@@ -41,7 +40,8 @@ class ImageService(BaseService):
         image_storage: IStorage | None = None,
         circuit_breaker: CircuitBreakerService | None = None,
         metrics: IMetrics | None = None,
-        max_retries: int | None = None,
+        max_retries: int = 1,
+        captions: list[str] | tuple[str, ...] | None = None,
     ) -> None:
         """Инициализирует сервис координации изображений.
 
@@ -52,7 +52,8 @@ class ImageService(BaseService):
             image_storage: Сервис хранения изображений (опционально).
             circuit_breaker: Сервис circuit breaker (опционально).
             metrics: Сервис записи метрик (опционально).
-            max_retries: Максимальное количество попыток генерации (по умолчанию из config).
+            max_retries: Максимальное количество попыток генерации.
+            captions: Набор возможных подписей для сгенерированных изображений.
         """
         super().__init__()
         self._generation_service = image_generation_service
@@ -61,8 +62,8 @@ class ImageService(BaseService):
         self._storage = image_storage
         self._circuit_breaker = circuit_breaker
         self._metrics = metrics
-        self._max_retries = max_retries or config.max_retries
-        self._captions = ImageConfig.CAPTIONS
+        self._max_retries = max_retries
+        self._captions = list(captions or [])
 
     def _get_random_caption(self) -> str:
         """Возвращает случайную подпись для изображения.

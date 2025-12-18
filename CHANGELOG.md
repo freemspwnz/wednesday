@@ -108,6 +108,11 @@
   - Координирует работу всех сервисов: ImageGenerationService, ImageCacheService,
     ImageStorageService, PromptService, CircuitBreakerService, MetricsRecorder
 
+- **Централизовано использование `Config` в `ImageService`**:
+  - Убрано прямое чтение глобального `config` из `services/application/image_service.py`
+  - `max_retries` и набор подписей для изображений теперь передаются через DI из `services/container.py`
+  - Контейнер читает значения из `utils.config.ImageConfig` и `config` и передаёт их в конструктор `ImageService`
+
 ### Добавлено
 
 - **Создан `services/container.py`**:
