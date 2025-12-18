@@ -6,7 +6,6 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Protocol, runtime_checkable
-from zoneinfo import ZoneInfo
 
 
 @runtime_checkable
@@ -58,10 +57,6 @@ class ICircuitBreaker(Protocol):
 @runtime_checkable
 class IScheduler(Protocol):
     """Протокол для абстракции планировщика задач."""
-
-    send_times: list[str]
-    wednesday: int
-    tz: ZoneInfo
 
     def schedule_wednesday_task(self, task_func: Callable[[str | None], Awaitable[None]]) -> None:
         """Планирует задачу на выполнение каждую среду."""

@@ -247,12 +247,9 @@ class WednesdayBot:
         slot_date = now.strftime("%Y-%m-%d")
         # Если слот не передан планировщиком — сопоставим ближайший (<= now)
         if slot_time is None:
+            # Используем конфигурацию из настроек приложения, а не внутреннее состояние планировщика
             try:
-                if self.services.scheduler:
-                    configured_times: list[str] = list(self.services.scheduler.send_times or [])
-                else:
-                    # Используем конфигурацию из settings для Celery
-                    configured_times = self.services.settings.scheduler_send_times
+                configured_times: list[str] = list(self.services.settings.scheduler_send_times or [])
             except Exception:
                 configured_times = []
             resolved_slot: str | None = None
@@ -794,16 +791,28 @@ class WednesdayBot:
         """
         self.logger.info("Запускаю Wednesday Bot (боевой режим с планировщиком)")
 
-        # Валидация конфигурации слотов (только для старого планировщика)
+        # Валидация конфигурации слотов основана на настройках, а не на внутреннем состоянии планировщика.
+        settings = self.services.settings
+        configured_times = settings.scheduler_send_times
+        # День недели и таймзона берутся из глобальной конфигурации, но не протекают через протокол планировщика
+        from utils.config import config as _config
+
+        wednesday_day = _config.scheduler_wednesday_day
+        timezone = _config.scheduler_tz or "Europe/Moscow"
+
         if self.services.scheduler:
             self.logger.info(
-                f"Валидация планировщика: день недели={self.services.scheduler.wednesday}, "
-                f"времена={self.services.scheduler.send_times}, TZ={self.services.scheduler.tz.key}",
+                "Валидация планировщика (TaskScheduler): "
+                f"день недели={wednesday_day}, времена={configured_times}, TZ={timezone}",
             )
-            if len(self.services.scheduler.send_times) == 0:
-                self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
         else:
-            self.logger.info("Используется Celery для планирования задач (TaskScheduler отключен)")
+            self.logger.info(
+                "Используется Celery для планирования задач: "
+                f"день недели={wednesday_day}, времена={configured_times}, TZ={timezone}",
+            )
+
+        if not configured_times:
+            self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
 
         try:
             # Настраиваем обработчики
