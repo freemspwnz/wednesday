@@ -35,6 +35,23 @@ class IMetrics(Protocol):
 
 
 @runtime_checkable
+class ICircuitBreaker(Protocol):
+    """Протокол для circuit breaker."""
+
+    async def is_open(self) -> bool:
+        """Возвращает True, если circuit breaker открыт и запросы должны блокироваться."""
+        ...
+
+    async def record_success(self) -> None:
+        """Регистрирует успешный запрос и, при необходимости, сбрасывает счётчик ошибок."""
+        ...
+
+    async def record_failure(self) -> None:
+        """Регистрирует неудачу и обновляет состояние circuit breaker."""
+        ...
+
+
+@runtime_checkable
 class IStorage(Protocol):
     """Протокол для файлового хранилища."""
 

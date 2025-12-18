@@ -26,6 +26,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
+from services.protocols import ICircuitBreaker
 from services.scheduler import TaskScheduler
 from utils.chats_store import ChatsStore
 from utils.config import ImageConfig, config
@@ -53,7 +54,7 @@ def build_image_stack() -> ImageService:
     image_storage = ImageStorageService()
     prompt_cache = PromptCache()
     prompt_storage = PromptStorageService()
-    circuit_breaker = CircuitBreakerService(
+    circuit_breaker: ICircuitBreaker = CircuitBreakerService(
         key="cb:kandinsky_api",
         threshold=5,
         window=300,

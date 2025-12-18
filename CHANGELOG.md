@@ -4,6 +4,11 @@
 
 ### Изменено
 
+- **Введён протокол ICircuitBreaker и переведён ImageService на использование протокола**:
+  - Добавлен протокол `ICircuitBreaker` в `services/protocols.py` с методами `is_open()`, `record_success()`, `record_failure()`
+  - Параметр `circuit_breaker` в `services/application/image_service.py` типизирован через `ICircuitBreaker | None`
+  - В `services/container.py` инфраструктурный `CircuitBreakerService` передаётся в `ImageService` как значение типа `ICircuitBreaker`
+
 - **ImageService и кэш/хранилище изображений переведены на протоколы ICache/IStorage/IMetrics**:
   - Параметры `image_cache`, `image_storage`, `metrics` в `services/application/image_service.py` типизированы через `ICache`, `IStorage`, `IMetrics`
   - `ImageCacheService` реализует протокол `ICache` (методы `get`, `set`, `delete`) поверх существующих операций `get_by_prompt` и `save`
