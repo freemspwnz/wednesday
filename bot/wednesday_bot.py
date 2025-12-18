@@ -8,7 +8,7 @@ import os
 from typing import Any
 
 from telegram import Update
-from telegram.error import NetworkError, TelegramError
+from telegram.error import TelegramError
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
@@ -19,7 +19,6 @@ from services.bot_services import BotServices
 from services.container import build_bot_services
 from utils.config import config
 from utils.logger import get_logger, log_all_methods, log_event
-from utils.retry import retry_on_connect_error
 
 # Константы для магических чисел
 CONNECTION_POOL_SIZE = 20
@@ -273,229 +272,21 @@ class WednesdayBot:
 
         self.logger.info("Выполняю запланированную отправку жабы")
 
-        try:
-            # Сначала соберём список целевых чатов
-            targets: set[int] = set(await self.services.chats.list_chat_ids() or [])
-            if self.chat_id:
-                try:
-                    chat_id_int: int = int(str(self.chat_id))
-                    targets.add(chat_id_int)
-                except (ValueError, TypeError):
-                    pass
+        dispatch_service = self.services.dispatch_service
+        if dispatch_service is None:
+            self.logger.error("DispatchService недоступен, пропускаю рассылку")
+            return
 
-            # Если нет ни одного чата — просто выходим
-            if not targets:
-                self.logger.warning("Нет целевых чатов для отправки сообщения")
-                await self._send_error_message("Нет настроенных чатов для отправки")
-                return
-
-            # Проверяем, отправляли ли уже в этот слот во ВСЕ целевые чаты
-            already_dispatched_for_all = True
-            for target_chat in targets:
-                if not await self.services.dispatch_registry.is_dispatched(
-                    slot_date,
-                    slot_time,
-                    target_chat,
-                ):
-                    already_dispatched_for_all = False
-                    break
-
-            if already_dispatched_for_all:
-                self.logger.info(
-                    f"Уже отправлено ранее для всех чатов в слот {slot_date}_{slot_time}. Пропускаю генерацию.",
-                )
-                return
-
-            # Генерируем изображение жабы только если есть хотя бы один чат без отправки
-            if self.services.image_service is None:
-                self.logger.error("ImageService недоступен, пропускаю генерацию")
-                return
-            result = await self.services.image_service.generate_frog_image()
-
-            if result:
-                image_data, caption = result
-
-                for target_chat in targets:
-                    # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-                    if await self.services.dispatch_registry.is_dispatched(
-                        slot_date,
-                        slot_time,
-                        target_chat,
-                    ):
-                        self.logger.info(
-                            f"Пропускаем отправку в {target_chat} - уже отправлено в слот {slot_date}_{slot_time}",
-                        )
-                        continue
-
-                    try:
-                        await retry_on_connect_error(
-                            self.application.bot.send_photo,
-                            chat_id=target_chat,
-                            photo=image_data,
-                            caption=caption,
-                            max_retries=3,
-                            delay=2.0,
-                            handle_rate_limit=True,
-                        )
-                        # Отмечаем в реестре успешную отправку
-                        await self.services.dispatch_registry.mark_dispatched(
-                            slot_date,
-                            slot_time,
-                            target_chat,
-                        )
-                        # инкрементируем счетчик после успешной отправки
-                        await self.services.usage.increment(1)
-                        try:
-                            await self.services.metrics.increment_dispatch_success()
-                        except Exception:
-                            # Метрики не критичны для основного потока
-                            pass
-                        self.logger.info(f"Жаба отправлена в чат {target_chat}")
-                    except (TelegramError, NetworkError) as send_error:
-                        # Сетевые/Telegram-ошибки после всех попыток
-                        error_str = str(send_error).lower()
-                        is_network = isinstance(send_error, NetworkError) or any(
-                            kw in error_str for kw in ("connection", "timeout", "network")
-                        )
-                        log_msg = (
-                            f"Сетевая/Telegram-ошибка отправки в чат {target_chat}: {send_error}"
-                            if is_network
-                            else f"Ошибка Telegram API при отправке в чат {target_chat}: {send_error}"
-                        )
-                        self.logger.error(log_msg)
-                        try:
-                            await self._send_error_message(
-                                f"Не удалось отправить изображение в чат {target_chat}",
-                            )
-                        except Exception:
-                            pass
-                        try:
-                            await self.services.metrics.increment_dispatch_failed()
-                        except Exception:
-                            pass
-                    except Exception as send_error:
-                        # Неожиданные программные ошибки
-                        self.logger.error(
-                            f"Неожиданная программная ошибка при отправке изображения "
-                            f"в чат {target_chat}: {send_error}",
-                            exc_info=True,
-                        )
-                        try:
-                            await self._send_error_message(
-                                f"Не удалось отправить изображение в чат {target_chat} из-за внутренней ошибки",
-                            )
-                        except Exception:
-                            pass
-                        try:
-                            await self.services.metrics.increment_dispatch_failed()
-                        except Exception:
-                            pass
-
-            else:
-                # Если генерация не удалась, отправляем сообщения об ошибке и случайное изображение
-                error_details = (
-                    "Не удалось сгенерировать изображение жабы для среды. "
-                    "API вернул None (возможные причины: лимит API, circuit breaker, "
-                    "ошибка генерации)"
-                )
-                self.logger.error(error_details)
-
-                # Отправляем детальное сообщение администратору
-                await self._send_admin_error(error_details)
-
-                # Отправляем дружелюбные сообщения и случайные изображения во все целевые чаты
-                targets = set(await self.services.chats.list_chat_ids() or [])
-                if self.chat_id:
-                    try:
-                        chat_id_val: int = int(str(self.chat_id))
-                        targets.add(chat_id_val)
-                    except (ValueError, TypeError):
-                        pass
-
-                for target_chat in targets:
-                    try:
-                        # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-                        if await self.services.dispatch_registry.is_dispatched(
-                            slot_date,
-                            slot_time,
-                            target_chat,
-                        ):
-                            self.logger.info(
-                                f"Пропускаем fallback отправку в {target_chat} - "
-                                f"уже отправлено в слот {slot_date}_{slot_time}",
-                            )
-                            continue
-
-                        # Отправляем дружелюбное сообщение
-                        await self._send_user_friendly_error(target_chat)
-
-                        # Отправляем случайное изображение
-                        if await self._send_fallback_image(target_chat):
-                            # Отмечаем в реестре успешную отправку
-                            await self.services.dispatch_registry.mark_dispatched(
-                                slot_date,
-                                slot_time,
-                                target_chat,
-                            )
-                            try:
-                                await self.services.metrics.increment_dispatch_success()
-                            except Exception:
-                                pass
-
-                    except Exception as send_error:
-                        self.logger.error(f"Ошибка при отправке fallback в чат {target_chat}: {send_error}")
-
-        except Exception as e:
-            error_details = f"Произошла ошибка при отправке жабы: {e!s}"
-            self.logger.error(error_details, exc_info=True)
-
-            # Отправляем детальное сообщение администратору
-            import traceback
-
-            full_error = traceback.format_exc()
-            # Обрезаем трейс до последних 2000 символов (важная информация обычно в конце)
-            max_trace_length = 2000
-            if len(full_error) > max_trace_length:
-                full_error = "..." + full_error[-max_trace_length:]
-            await self._send_admin_error(
-                f"{error_details}\n\nТрейс (последние {max_trace_length} символов):\n{full_error}",
-            )
-
-            # Отправляем дружелюбные сообщения и случайные изображения во все целевые чаты
-            targets = set(await self.services.chats.list_chat_ids() or [])
-            if self.chat_id:
-                try:
-                    chat_id_error_val: int = int(str(self.chat_id))
-                    targets.add(chat_id_error_val)
-                except (ValueError, TypeError):
-                    pass
-
-            for target_chat in targets:
-                try:
-                    # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-                    if await self.services.dispatch_registry.is_dispatched(
-                        slot_date,
-                        slot_time,
-                        target_chat,
-                    ):
-                        self.logger.info(
-                            f"Пропускаем fallback отправку в {target_chat} - "
-                            f"уже отправлено в слот {slot_date}_{slot_time}",
-                        )
-                        continue
-
-                    # Отправляем дружелюбное сообщение
-                    await self._send_user_friendly_error(target_chat)
-
-                    # Отправляем случайное изображение
-                    if await self._send_fallback_image(target_chat):
-                        try:
-                            await self.services.metrics.increment_dispatch_success()
-                        except Exception:
-                            pass
-
-                except Exception as send_error:
-                    self.logger.error(f"Ошибка при отправке fallback в чат {target_chat}: {send_error}")
+        await dispatch_service.send_wednesday_frog(
+            slot_date=slot_date,
+            slot_time=slot_time,
+            main_chat_id=self.chat_id,
+            send_error_message=self._send_error_message,
+            send_admin_error=self._send_admin_error,
+            send_user_friendly_error=self._send_user_friendly_error,
+            send_fallback_image=self._send_fallback_image,
+            send_photo=self.application.bot.send_photo,
+        )
 
     async def _send_error_message(self, error_text: str) -> None:
         """Отправляет сообщение об ошибке в основной чат.

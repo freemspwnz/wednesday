@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Выделен DispatchService для cron‑логики send_wednesday_frog**:
+  - Создан application‑сервис `DispatchService` в `services/application/dispatch_service.py` для координации рассылки жабы по расписанию
+  - В `services/container.py` сервис собирается через DI и прокидывается в `BotServices.dispatch_service`
+  - Метод `WednesdayBot.send_wednesday_frog` стал тонким glue‑кодом: вычисляет `slot_time`/`slot_date` и делегирует основную логику в `DispatchService`
+  - Логика работы с `dispatch_registry`, `usage`, `metrics`, `chats` и `ImageService` инкапсулирована в application‑слое
+
 - **Вынесена сложная логика админских команд в AdminDashboardService**:
   - Создан application‑сервис `AdminDashboardService` в `services/application/admin_dashboard_service.py` для агрегации метрик, лимитов, чатов и статусов API
   - Команда `/status` в `bot/handlers_admin.py` использует `AdminDashboardService.build_status_message()` вместо ручного сбора и форматирования данных в хэндлере

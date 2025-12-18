@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 
 from services.app_settings import AppSettings
+from services.application.dispatch_service import DispatchService
 from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.frog_requests import FrogRequestService
 from services.application.image_service import ImageService
@@ -114,6 +115,13 @@ def build_bot_services() -> BotServices:
     user_state_store = UserStateCache()
     frog_rate_limiter = FrogRateLimiterService(settings=app_settings)
     frog_request_service = FrogRequestService()
+    dispatch_service = DispatchService(
+        usage=usage,
+        chats=chats,
+        dispatch_registry=dispatch_registry,
+        metrics=metrics,
+        image_service=image_service,
+    )
 
     return BotServices(
         usage=usage,
@@ -128,4 +136,5 @@ def build_bot_services() -> BotServices:
         frog_request_service=frog_request_service,
         scheduler=scheduler,
         bot_controller=None,
+        dispatch_service=dispatch_service,
     )
