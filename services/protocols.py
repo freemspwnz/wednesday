@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 from zoneinfo import ZoneInfo
 
@@ -96,11 +97,11 @@ class IScheduler(Protocol):
 
 
 @runtime_checkable
-class IStorage(Protocol):
-    """Протокол для файлового хранилища."""
+class IImageStorage(Protocol):
+    """Протокол для файлового хранилища изображений."""
 
     async def save(self, data: bytes, folder: str | None = None, prefix: str = "frog") -> str:
-        """Сохраняет данные в файловое хранилище.
+        """Сохраняет байтовые данные изображения в файловое хранилище.
 
         Args:
             data: Данные для сохранения (байты).
@@ -113,7 +114,7 @@ class IStorage(Protocol):
         ...
 
     async def get_random(self, folder: str | None = None) -> tuple[bytes, str] | None:
-        """Получает случайный файл из папки.
+        """Получает случайный файл изображения из папки.
 
         Args:
             folder: Папка для поиска файла.
@@ -121,6 +122,24 @@ class IStorage(Protocol):
         Returns:
             Кортеж (данные файла, путь к файлу) или None, если файлы не найдены.
         """
+        ...
+
+
+@runtime_checkable
+class IPromptStorage(Protocol):
+    """Протокол для файлового хранилища промптов."""
+
+    async def save(
+        self,
+        prompt: str,
+        folder: Path | str | None = None,
+        source: str = "gigachat",
+    ) -> str:
+        """Сохраняет промпт в файловое хранилище и возвращает путь к файлу."""
+        ...
+
+    async def load_all(self, folder: Path | str | None = None) -> list[str]:
+        """Загружает все сохранённые промпты из указанной папки."""
         ...
 
 

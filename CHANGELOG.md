@@ -9,6 +9,11 @@
   - `SchedulerService` в `services/application/scheduler_service.py` теперь зависит от `IScheduler`, а не от конкретного `TaskScheduler`
   - Поле `scheduler` в `BotServices` и контейнере `build_bot_services()` типизировано через `IScheduler | None`, что позволяет подменять реализацию планировщика
 
+- **Разделены протоколы файловых хранилищ для изображений и промптов**:
+  - Протокол `IStorage` переименован в `IImageStorage` в `services/protocols.py` и используется только для байтового хранилища изображений
+  - Добавлен протокол `IPromptStorage` в `services/protocols.py` с методами `save()` и `load_all()` для работы с файловым хранилищем промптов
+  - `PromptService` в `services/application/prompt_service.py` теперь зависит от `ICache` и `IPromptStorage`, сохраняя текущие реализации (`PromptCache`, `PromptStorageService`) через DI
+
 - **Введён протокол ICircuitBreaker и переведён ImageService на использование протокола**:
   - Добавлен протокол `ICircuitBreaker` в `services/protocols.py` с методами `is_open()`, `record_success()`, `record_failure()`
   - Параметр `circuit_breaker` в `services/application/image_service.py` типизирован через `ICircuitBreaker | None`

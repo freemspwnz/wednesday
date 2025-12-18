@@ -14,7 +14,7 @@ from services.application.prompt_service import PromptService
 from services.base.base_service import BaseService
 from services.base.exceptions import CircuitBreakerOpen, ImageGenerationError
 from services.domain.image_generation import ImageGenerationService
-from services.protocols import ICache, ICircuitBreaker, IMetrics, IStorage
+from services.protocols import ICache, ICircuitBreaker, IImageStorage, IMetrics
 
 CACHE_VALUE_TUPLE_LENGTH = 2
 
@@ -36,7 +36,7 @@ class ImageService(BaseService):
         image_generation_service: ImageGenerationService,
         prompt_service: PromptService,
         image_cache: ICache | None = None,
-        image_storage: IStorage | None = None,
+        image_storage: IImageStorage | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         metrics: IMetrics | None = None,
         max_retries: int = 1,

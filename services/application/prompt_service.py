@@ -10,6 +10,7 @@ from services.base.base_service import BaseService
 from services.domain.prompt_generation import PromptGenerationService
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.storage.prompt_storage import PromptStorageService
+from services.protocols import ICache, IPromptStorage
 
 
 class PromptService(BaseService):
@@ -24,8 +25,8 @@ class PromptService(BaseService):
     def __init__(
         self,
         prompt_generation_service: PromptGenerationService,
-        prompt_cache: PromptCache | None = None,
-        prompt_storage: PromptStorageService | None = None,
+        prompt_cache: PromptCache | ICache | None = None,
+        prompt_storage: PromptStorageService | IPromptStorage | None = None,
     ) -> None:
         """Инициализирует сервис координации промптов.
 
