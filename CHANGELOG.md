@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Централизованы настройки rate limit для команды /frog**:
+  - Удалены константы `FROG_RATE_LIMIT_MINUTES`, `FROG_RATE_LIMIT_WINDOW_SECONDS`, `FROG_RATE_LIMIT_MAX_REQUESTS` из `bot/handlers_user.py`
+  - Настройки лимитов теперь читаются из `AppSettings` через DI (`self.services.settings`)
+  - Унифицирована работа с настройками rate limit через единую точку конфигурации
+
+### Изменено
+
 - **Рефакторинг `services/celery_tasks.py`**:
   - Упрощён класс `CeleryServices` - удалены глобальные переменные `_bot`, `_generator`, `_initialized`, `_init_lock`
   - Создана функция `get_services_context()` для получения сервисов через dependency injection

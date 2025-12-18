@@ -13,9 +13,6 @@ from services.celery import celery_app
 from services.infrastructure.rate_limiting import RateLimiter
 
 # Константы
-FROG_RATE_LIMIT_MINUTES = 5  # минимальный интервал в минутах
-FROG_RATE_LIMIT_WINDOW_SECONDS = 60  # окно в секундах
-FROG_RATE_LIMIT_MAX_REQUESTS = 10  # максимум запросов в окне
 SECONDS_PER_MINUTE = 60  # секунд в минуте
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
 RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по умолчанию
@@ -218,18 +215,24 @@ class UserHandlers(BaseHandlers):
         chat_id = update.message.chat_id
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
+        # Получаем настройки лимитов из DI
+        settings = self.services.settings
+        minutes = settings.frog_rate_limit_minutes
+        window_seconds = settings.frog_rate_limit_window_seconds
+        max_requests = settings.frog_rate_limit_max_requests
+
         # Создаем лимитеры для /frog с нужными параметрами
-        # Глобальный лимитер: окно FROG_RATE_LIMIT_WINDOW_SECONDS, лимит FROG_RATE_LIMIT_MAX_REQUESTS
+        # Глобальный лимитер: окно window_seconds, лимит max_requests
         global_limiter = RateLimiter(
             prefix="frog:global:",
-            window=FROG_RATE_LIMIT_WINDOW_SECONDS,
-            limit=FROG_RATE_LIMIT_MAX_REQUESTS,
+            window=window_seconds,
+            limit=max_requests,
         )
 
-        # Per-user лимитер: окно FROG_RATE_LIMIT_MINUTES * 60 секунд, лимит 1
+        # Per-user лимитер: окно minutes * 60 секунд, лимит 1
         user_limiter = RateLimiter(
             prefix="frog:user:",
-            window=FROG_RATE_LIMIT_MINUTES * SECONDS_PER_MINUTE,
+            window=minutes * SECONDS_PER_MINUTE,
             limit=1,
         )
 
@@ -237,8 +240,7 @@ class UserHandlers(BaseHandlers):
         global_key = "global"
         if not await global_limiter.is_allowed(global_key):
             self.logger.warning(
-                f"Глобальный rate limit /frog превышен: {FROG_RATE_LIMIT_MAX_REQUESTS} "
-                f"запросов за {FROG_RATE_LIMIT_WINDOW_SECONDS}с",
+                f"Глобальный rate limit /frog превышен: {max_requests} запросов за {window_seconds}с",
             )
             try:
                 await self._retry_on_connect_error(
@@ -258,7 +260,7 @@ class UserHandlers(BaseHandlers):
         if not is_admin:
             user_key = str(user_id)
             if not await user_limiter.is_allowed(user_key):
-                remaining_seconds = FROG_RATE_LIMIT_MINUTES * SECONDS_PER_MINUTE
+                remaining_seconds = minutes * SECONDS_PER_MINUTE
                 self.logger.info(f"Rate limit для пользователя {user_id}: {remaining_seconds}с осталось")
                 try:
                     await self._retry_on_connect_error(
