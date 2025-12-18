@@ -17,6 +17,14 @@
   - Добавлен `frog_rate_limiter` в `BotServices` и контейнер
   - Обновлён `UserHandlers.frog_command` для использования нового сервиса вместо прямого создания `RateLimiter`
 
+- **Создан `FrogRequestService` для постановки задач в очередь Celery**:
+  - Создан перечисление `CeleryTaskNames` в `services/celery/task_names.py` для централизации имён задач
+  - Создан application-сервис `services/application/frog_requests.py` для инкапсуляции логики постановки задач в Celery
+  - Сервис скрывает детали работы с `celery_app` от handlers
+  - Добавлен `frog_request_service` в `BotServices` и контейнер
+  - Обновлён `UserHandlers.frog_command` для использования нового сервиса вместо прямого вызова `celery_app.send_task`
+  - Убраны прямые импорты `celery_app` из `UserHandlers`
+
 ### Изменено
 
 - **Рефакторинг `services/celery_tasks.py`**:

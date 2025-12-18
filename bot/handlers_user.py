@@ -9,7 +9,6 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
-from services.celery import celery_app
 
 # Константы
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
@@ -201,10 +200,10 @@ class UserHandlers(BaseHandlers):
                 Информация о лимитах и использовании берётся из self.services.usage.
 
         Side Effects:
-            - Проверяет глобальный и per-user rate limits через Redis.
+            - Проверяет глобальный и per-user rate limits через FrogRateLimiterService.
             - Проверяет месячный лимит генераций через usage.can_use_frog().
             - Отправляет статусное сообщение пользователю.
-            - Ставит Celery-задачу wednesday.send_frog_manual в очередь.
+            - Ставит Celery-задачу через FrogRequestService.
         """
         if not update.message or not update.effective_user:
             return
@@ -271,13 +270,13 @@ class UserHandlers(BaseHandlers):
             )
             # Продолжаем даже если не удалось отправить статус
 
-        # Ставим задачу в очередь Celery
+        # Ставим задачу в очередь Celery через application service
         try:
-            celery_app.send_task(
-                "wednesday.send_frog_manual",
-                args=[chat_id, user_id, status_message.message_id if status_message else None],
+            await self.services.frog_request_service.request_manual_frog(
+                chat_id=chat_id,
+                user_id=user_id,
+                status_message_id=status_message.message_id if status_message else None,
             )
-            self.logger.info(f"Задача send_frog_manual поставлена в очередь для пользователя {user_id}")
         except Exception as e:
             self.logger.error(f"Не удалось поставить задачу в очередь Celery: {e}")
             # Удаляем статусное сообщение
