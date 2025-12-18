@@ -88,6 +88,11 @@
 - **Расширен DI‑контейнер `BotServices` и контейнер сервисов**:
   - В `BotServices` добавлено поле `image_service` для работы с `ImageService` через DI
   - В `services/container.py` реализована функция `build_bot_services()` для сборки контейнера `BotServices`
+
+- **Переведён `WednesdayBot` на DI‑контейнер**:
+  - Вся сборка сервисов перенесена в `build_bot_services()`, `WednesdayBot` получает только готовый `BotServices`
+  - Использование сервисов внутри `WednesdayBot` унифицировано через `self.services.*` без прокси‑полей
+  - Fallback‑отправка изображений переведена на использование файлового хранилища `ImageStorageService`
   - Реализован метод `generate_frog_image()` с полной координацией всех шагов
   - Добавлена обработка всех исключений и graceful degradation
 

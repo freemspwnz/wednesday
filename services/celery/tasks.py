@@ -15,9 +15,9 @@ import aiohttp
 from celery import Task
 
 from bot.wednesday_bot import WednesdayBot
+from services.application.image_service import ImageService
 from services.celery import celery_app
 from services.celery_tasks import _ensure_pools_initialized, get_services_context
-from services.image_generator import ImageGenerator
 from utils.logger import get_logger, log_event
 from utils.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,
@@ -242,7 +242,7 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
 async def generate_frog_image_task(self: Task, user_id: int | None = None) -> dict[str, Any]:
     """Celery задача для генерации изображения жабы.
 
-    Выполняет генерацию изображения жабы через ImageGenerator. Использует dependency
+    Выполняет генерацию изображения жабы через ImageService. Использует dependency
     injection через get_services_context().
 
     Args:
@@ -261,10 +261,15 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
     try:
         # Получаем контекст сервисов (инициализация происходит внутри, после fork)
         context = await get_services_context()
-        generator = context["generator"]
-        if not isinstance(generator, ImageGenerator):
-            raise RuntimeError("Failed to get ImageGenerator from context")
-        result = await generator.generate_frog_image(user_id=user_id)
+        bot_instance = context["bot"]
+        if not isinstance(bot_instance, WednesdayBot):
+            raise RuntimeError("Failed to get WednesdayBot from context")
+
+        image_service: ImageService | None = bot_instance.services.image_service
+        if image_service is None:
+            raise RuntimeError("ImageService is not available in BotServices")
+
+        result = await image_service.generate_frog_image(user_id=user_id)
 
         if result:
             image_data, _caption = result
@@ -342,12 +347,13 @@ async def send_frog_manual(
         bot_instance = context["bot"]
         if not isinstance(bot_instance, WednesdayBot):
             raise RuntimeError("Failed to get WednesdayBot from context")
-        generator = context["generator"]
-        if not isinstance(generator, ImageGenerator):
-            raise RuntimeError("Failed to get ImageGenerator from context")
+
+        image_service: ImageService | None = bot_instance.services.image_service
+        if image_service is None:
+            raise RuntimeError("ImageService is not available in BotServices")
 
         # Генерируем изображение
-        result = await generator.generate_frog_image(user_id=user_id)
+        result = await image_service.generate_frog_image(user_id=user_id)
 
         if result:
             image_data, caption = result
@@ -359,18 +365,13 @@ async def send_frog_manual(
                 caption=caption,
             )
 
-            # Сохраняем локально
+            # Сохраняем локально и обновляем usage через BotServices
             try:
-                saved_path = generator.save_image_locally(image_data, prefix="frog")
-                if saved_path:
-                    logger.info(f"Изображение сохранено локально: {saved_path}")
+                if bot_instance.services.usage:
+                    await bot_instance.services.usage.increment(1)
             except Exception:
-                # Ошибка локального сохранения не критична
+                # Ошибка обновления счётчика не критична для отправки
                 pass
-
-            # Инкрементируем usage
-            if bot_instance.usage:
-                await bot_instance.usage.increment(1)
 
             # Удаляем статусное сообщение
             if status_message_id:
@@ -414,8 +415,10 @@ async def send_frog_manual(
             except Exception as e:
                 logger.error(f"Не удалось отправить дружелюбное сообщение: {e}")
 
-            # Отправляем случайное изображение из сохраненных
-            fallback_image = generator.get_random_saved_image()
+            # Отправляем случайное изображение из сохраненных через инфраструктурное хранилище
+            image_service = bot_instance.services.image_service
+            storage = getattr(image_service, "_storage", None) if image_service is not None else None
+            fallback_image = await storage.get_random_from_archive() if storage is not None else None
             if fallback_image:
                 fallback_image_data, fallback_caption = fallback_image
                 try:
@@ -508,9 +511,10 @@ async def send_frog_manual(
                 text=friendly_message,
             )
 
-            # Отправляем случайное изображение из сохраненных
-            generator = bot_instance.image_generator
-            fallback_image = generator.get_random_saved_image()
+            # Отправляем случайное изображение из сохраненных через инфраструктурное хранилище
+            image_service = bot_instance.services.image_service
+            storage = getattr(image_service, "_storage", None) if image_service is not None else None
+            fallback_image = await storage.get_random_from_archive() if storage is not None else None
             if fallback_image:
                 fallback_image_data, fallback_caption = fallback_image
                 await bot_instance.application.bot.send_photo(

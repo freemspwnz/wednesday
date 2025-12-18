@@ -12,7 +12,6 @@ import asyncio
 from celery.signals import worker_shutdown
 
 from bot.wednesday_bot import WednesdayBot
-from services.image_generator import ImageGenerator
 from utils.config import config
 from utils.logger import get_logger
 from utils.postgres_client import close_postgres_pool, init_postgres_pool
@@ -71,7 +70,6 @@ async def get_services_context() -> dict[str, object]:
     Returns:
         Словарь с сервисами:
         - bot: Экземпляр WednesdayBot
-        - generator: Экземпляр ImageGenerator
 
     Raises:
         RuntimeError: Если не удалось инициализировать сервисы.
@@ -85,11 +83,9 @@ async def get_services_context() -> dict[str, object]:
             if _services_context is None:
                 # Создаём экземпляры сервисов
                 bot = WednesdayBot()
-                generator = bot.image_generator
 
                 _services_context = {
                     "bot": bot,
-                    "generator": generator,
                 }
                 logger.info("Celery services context created in worker process")
 
@@ -117,10 +113,6 @@ async def shutdown_services() -> None:
         bot = _services_context.get("bot")
         if bot and hasattr(bot, "aclose"):
             await bot.aclose()
-
-        generator = _services_context.get("generator")
-        if generator and hasattr(generator, "aclose"):
-            await generator.aclose()
 
         # Закрываем пулы подключений
         await close_postgres_pool()
@@ -158,22 +150,15 @@ class CeleryServices:
         return bot
 
     @classmethod
-    async def get_generator(cls) -> ImageGenerator:
-        """Получает экземпляр ImageGenerator.
+    async def get_generator(cls) -> None:
+        """DEPRECATED: генератор изображений больше не предоставляется напрямую.
 
         Deprecated: используйте get_services_context()["generator"] вместо этого метода.
 
         Returns:
-            Экземпляр ImageGenerator.
-
-        Raises:
-            RuntimeError: Если не удалось инициализировать ImageGenerator.
+            None.
         """
-        context = await get_services_context()
-        generator = context.get("generator")
-        if not isinstance(generator, ImageGenerator):
-            raise RuntimeError("Failed to initialize ImageGenerator")
-        return generator
+        await get_services_context()
 
 
 # Регистрируем shutdown handler

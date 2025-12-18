@@ -196,3 +196,11 @@ class ImageStorageService(BaseService):
         except Exception as e:
             self.logger.error(f"Неожиданная ошибка при получении случайного изображения: {e}")
             return None
+
+    async def get_random_from_archive(self) -> tuple[bytes, str] | None:
+        """Возвращает случайное сохранённое изображение из базовой директории.
+
+        Используется как fallback, когда генерация нового изображения недоступна.
+        Возвращает кортеж (image_data, file_name).
+        """
+        return await self.get_random(folder=self.base_dir)

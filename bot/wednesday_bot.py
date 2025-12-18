@@ -15,20 +15,11 @@ from telegram.request import HTTPXRequest
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
-from services.app_settings import AppSettings
 from services.bot_services import BotServices
-from services.image_generator import ImageGenerator
-from services.infrastructure.cache.prompt_cache import PromptCache
-from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.infrastructure.rate_limiting import RateLimiter
-from services.scheduler import TaskScheduler
-from utils.chats_store import ChatsStore
+from services.container import build_bot_services
 from utils.config import config
-from utils.dispatch_registry import DispatchRegistry
 from utils.logger import get_logger, log_all_methods, log_event
-from utils.metrics import Metrics
 from utils.retry import retry_on_connect_error
-from utils.usage_tracker import UsageTracker
 
 # Константы для магических чисел
 CONNECTION_POOL_SIZE = 20
@@ -92,58 +83,9 @@ class WednesdayBot:
         self.logger.info("Создание Application с токеном")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
 
-        # Создаем сервисы
-        self.logger.info(
-            "Инициализация сервисов: ImageGenerator, TaskScheduler (опционально), "
-            "UsageTracker, ChatsStore, DispatchRegistry, Metrics",
-        )
-        self.image_generator: ImageGenerator = ImageGenerator()
-        # TaskScheduler используется только если USE_OLD_SCHEDULER=true
-        # Иначе используется Celery (запускается отдельно через celery worker/beat)
-        self.scheduler: TaskScheduler | None = (
-            TaskScheduler(
-                send_times=config.scheduler_send_times,
-                wednesday_day=config.scheduler_wednesday_day,
-                check_interval=30,
-                timezone=config.scheduler_tz or "Europe/Moscow",
-            )
-            if config.use_old_scheduler
-            else None
-        )
-        self.usage: UsageTracker = UsageTracker(
-            storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
-            monthly_quota=MONTHLY_QUOTA_DEFAULT,
-            frog_threshold=FROG_THRESHOLD_DEFAULT,
-        )
-        self.chats: ChatsStore = ChatsStore()
-        self.dispatch_registry: DispatchRegistry = DispatchRegistry()
-        self.metrics: Metrics = Metrics()
-        # Redis‑сервисы (поднимаются один раз и переиспользуются через bot_data):
-        # - PromptCache: быстрый кэш промптов/параметров генерации;
-        # - UserStateCache: временное состояние пользователей (диалоги, флаги и т.п.);
-        # - RateLimiter: базовый лимитер для административных/ручных операций.
-        # Эти сервисы построены поверх Redis, но автоматически деградируют в in‑memory режим,
-        # если Redis недоступен, поэтому их безопасно инициализировать без жёсткой зависимости.
-        self.prompt_cache: PromptCache = PromptCache()
-        self.user_state_store: UserStateCache = UserStateCache()
-        self.rate_limiter: RateLimiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
-
-        # Создаем настройки приложения из config
-        app_settings = AppSettings.from_config(config)
-
-        # Собираем все сервисы в явный контейнер зависимостей
-        self.services: BotServices = BotServices(
-            image_generator=self.image_generator,
-            scheduler=self.scheduler,
-            usage=self.usage,
-            chats=self.chats,
-            dispatch_registry=self.dispatch_registry,
-            metrics=self.metrics,
-            prompt_cache=self.prompt_cache,
-            user_state_store=self.user_state_store,
-            rate_limiter=self.rate_limiter,
-            settings=app_settings,
-        )
+        # Создаем сервисы через DI‑контейнер
+        self.logger.info("Инициализация сервисов через DI‑контейнер BotServices")
+        self.services: BotServices = build_bot_services()
         # Устанавливаем ссылку на экземпляр бота для команд управления
         self.services.bot_controller = self
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
@@ -156,7 +98,7 @@ class WednesdayBot:
         # Создаем обработчики команд
         self.logger.info("Создание специализированных наборов хендлеров")
         # Для get_next_run используем scheduler если он есть, иначе None (Celery управляет расписанием)
-        get_next_run_fn = self.scheduler.get_next_run if self.scheduler else lambda: None
+        get_next_run_fn = self.services.scheduler.get_next_run if self.services.scheduler else lambda: None
         # Узкоспециализированные наборы для регистрации в PTB по зонам ответственности
         self.user_handlers: UserHandlers = UserHandlers(self.services, get_next_run_fn)
         # Админские и пользовательские команды должны разделять общее состояние (лимиты, хранилища),
@@ -306,8 +248,8 @@ class WednesdayBot:
         # Если слот не передан планировщиком — сопоставим ближайший (<= now)
         if slot_time is None:
             try:
-                if self.scheduler:
-                    configured_times: list[str] = list(self.scheduler.send_times or [])
+                if self.services.scheduler:
+                    configured_times: list[str] = list(self.services.scheduler.send_times or [])
                 else:
                     # Используем конфигурацию из settings для Celery
                     configured_times = self.services.settings.scheduler_send_times
@@ -336,7 +278,7 @@ class WednesdayBot:
 
         try:
             # Сначала соберём список целевых чатов
-            targets: set[int] = set(await self.chats.list_chat_ids() or [])
+            targets: set[int] = set(await self.services.chats.list_chat_ids() or [])
             if self.chat_id:
                 try:
                     chat_id_int: int = int(str(self.chat_id))
@@ -353,7 +295,11 @@ class WednesdayBot:
             # Проверяем, отправляли ли уже в этот слот во ВСЕ целевые чаты
             already_dispatched_for_all = True
             for target_chat in targets:
-                if not await self.dispatch_registry.is_dispatched(slot_date, slot_time, target_chat):
+                if not await self.services.dispatch_registry.is_dispatched(
+                    slot_date,
+                    slot_time,
+                    target_chat,
+                ):
                     already_dispatched_for_all = False
                     break
 
@@ -364,27 +310,21 @@ class WednesdayBot:
                 return
 
             # Генерируем изображение жабы только если есть хотя бы один чат без отправки
-            result = await self.image_generator.generate_frog_image(metrics=self.metrics)
+            if self.services.image_service is None:
+                self.logger.error("ImageService недоступен, пропускаю генерацию")
+                return
+            result = await self.services.image_service.generate_frog_image()
 
             if result:
                 image_data, caption = result
 
-                # Сохраняем изображение локально заранее (на случай сбоев сети).
-                # Файловый I/O выполняем в отдельном потоке, чтобы не блокировать event loop.
-                try:
-                    saved_path = await self.image_generator._save_image_async(
-                        image_data,
-                        folder="data/frogs",
-                        prefix="wednesday",
-                    )
-                    if saved_path:
-                        self.logger.info(f"Изображение сохранено локально: {saved_path}")
-                except Exception as e:
-                    self.logger.warning(f"Не удалось сохранить изображение локально: {e}")
-
                 for target_chat in targets:
                     # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-                    if await self.dispatch_registry.is_dispatched(slot_date, slot_time, target_chat):
+                    if await self.services.dispatch_registry.is_dispatched(
+                        slot_date,
+                        slot_time,
+                        target_chat,
+                    ):
                         self.logger.info(
                             f"Пропускаем отправку в {target_chat} - уже отправлено в слот {slot_date}_{slot_time}",
                         )
@@ -401,11 +341,15 @@ class WednesdayBot:
                             handle_rate_limit=True,
                         )
                         # Отмечаем в реестре успешную отправку
-                        await self.dispatch_registry.mark_dispatched(slot_date, slot_time, target_chat)
+                        await self.services.dispatch_registry.mark_dispatched(
+                            slot_date,
+                            slot_time,
+                            target_chat,
+                        )
                         # инкрементируем счетчик после успешной отправки
-                        await self.usage.increment(1)
+                        await self.services.usage.increment(1)
                         try:
-                            await self.metrics.increment_dispatch_success()
+                            await self.services.metrics.increment_dispatch_success()
                         except Exception:
                             # Метрики не критичны для основного потока
                             pass
@@ -429,7 +373,7 @@ class WednesdayBot:
                         except Exception:
                             pass
                         try:
-                            await self.metrics.increment_dispatch_failed()
+                            await self.services.metrics.increment_dispatch_failed()
                         except Exception:
                             pass
                     except Exception as send_error:
@@ -446,7 +390,7 @@ class WednesdayBot:
                         except Exception:
                             pass
                         try:
-                            await self.metrics.increment_dispatch_failed()
+                            await self.services.metrics.increment_dispatch_failed()
                         except Exception:
                             pass
 
@@ -463,7 +407,7 @@ class WednesdayBot:
                 await self._send_admin_error(error_details)
 
                 # Отправляем дружелюбные сообщения и случайные изображения во все целевые чаты
-                targets = set(await self.chats.list_chat_ids() or [])
+                targets = set(await self.services.chats.list_chat_ids() or [])
                 if self.chat_id:
                     try:
                         chat_id_val: int = int(str(self.chat_id))
@@ -474,7 +418,11 @@ class WednesdayBot:
                 for target_chat in targets:
                     try:
                         # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-                        if await self.dispatch_registry.is_dispatched(slot_date, slot_time, target_chat):
+                        if await self.services.dispatch_registry.is_dispatched(
+                            slot_date,
+                            slot_time,
+                            target_chat,
+                        ):
                             self.logger.info(
                                 f"Пропускаем fallback отправку в {target_chat} - "
                                 f"уже отправлено в слот {slot_date}_{slot_time}",
@@ -487,9 +435,13 @@ class WednesdayBot:
                         # Отправляем случайное изображение
                         if await self._send_fallback_image(target_chat):
                             # Отмечаем в реестре успешную отправку
-                            await self.dispatch_registry.mark_dispatched(slot_date, slot_time, target_chat)
+                            await self.services.dispatch_registry.mark_dispatched(
+                                slot_date,
+                                slot_time,
+                                target_chat,
+                            )
                             try:
-                                await self.metrics.increment_dispatch_success()
+                                await self.services.metrics.increment_dispatch_success()
                             except Exception:
                                 pass
 
@@ -513,7 +465,7 @@ class WednesdayBot:
             )
 
             # Отправляем дружелюбные сообщения и случайные изображения во все целевые чаты
-            targets = set(await self.chats.list_chat_ids() or [])
+            targets = set(await self.services.chats.list_chat_ids() or [])
             if self.chat_id:
                 try:
                     chat_id_error_val: int = int(str(self.chat_id))
@@ -524,7 +476,11 @@ class WednesdayBot:
             for target_chat in targets:
                 try:
                     # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-                    if await self.dispatch_registry.is_dispatched(slot_date, slot_time, target_chat):
+                    if await self.services.dispatch_registry.is_dispatched(
+                        slot_date,
+                        slot_time,
+                        target_chat,
+                    ):
                         self.logger.info(
                             f"Пропускаем fallback отправку в {target_chat} - "
                             f"уже отправлено в слот {slot_date}_{slot_time}",
@@ -537,7 +493,7 @@ class WednesdayBot:
                     # Отправляем случайное изображение
                     if await self._send_fallback_image(target_chat):
                         try:
-                            await self.metrics.increment_dispatch_success()
+                            await self.services.metrics.increment_dispatch_success()
                         except Exception:
                             pass
 
@@ -711,11 +667,20 @@ class WednesdayBot:
             - Логирует результат операции.
         """
         try:
-            # Чтение fallback‑изображения выполняется через файловое хранилище.
-            # Для сохранения обратной совместимости с существующими тестами и
-            # простоты логики здесь используется синхронный helper генератора,
-            # а самые тяжёлые операции сохранения выполняются асинхронно.
-            fallback_image = self.image_generator.get_random_saved_image()
+            # Чтение fallback‑изображения выполняется через инфраструктурное файловое хранилище.
+            # На этом этапе используем тот же механизм, что и для сохранения архивных изображений.
+            image_service = self.services.image_service
+            if image_service is None:
+                self.logger.warning("Хранилище изображений недоступно для fallback-изображения")
+                return False
+
+            # Временное решение: используем файловое хранилище для получения случайного файла.
+            storage = getattr(image_service, "_storage", None)
+            if storage is None:
+                self.logger.warning("ImageStorageService недоступен для fallback-изображения")
+                return False
+
+            fallback_image = await storage.get_random_from_archive()
             if fallback_image:
                 image_data, caption = fallback_image
                 await self.application.bot.send_photo(
@@ -757,17 +722,17 @@ class WednesdayBot:
               если установлена переменная окружения SCHEDULER_TEST_MINUTES.
 
         Note:
-            Если TaskScheduler отключен (self.scheduler is None), метод ничего не делает,
+            Если TaskScheduler отключен (self.services.scheduler is None), метод ничего не делает,
             так как планирование выполняется через Celery.
         """
-        if not self.scheduler:
+        if not self.services.scheduler:
             self.logger.info("TaskScheduler отключен, используется Celery для планирования задач")
             return
 
         self.logger.info("Настраиваю планировщик задач (старый TaskScheduler)")
 
         # Планируем отправку жабы каждую среду
-        self.scheduler.schedule_wednesday_task(self.send_wednesday_frog)
+        self.services.scheduler.schedule_wednesday_task(self.send_wednesday_frog)
 
         # Необязательный тестовый интервал для проверки планировщика
         test_minutes = os.getenv("SCHEDULER_TEST_MINUTES")
@@ -776,7 +741,7 @@ class WednesdayBot:
                 minutes = int(test_minutes)
                 if minutes > 0:
                     self.logger.info(f"Включен тестовый интервал планировщика: каждые {minutes} минут")
-                    self.scheduler.schedule_interval_task(self.send_wednesday_frog, minutes)
+                    self.services.scheduler.schedule_interval_task(self.send_wednesday_frog, minutes)
             except ValueError:
                 self.logger.warning("Переменная SCHEDULER_TEST_MINUTES должна быть целым числом")
 
@@ -830,12 +795,12 @@ class WednesdayBot:
         self.logger.info("Запускаю Wednesday Bot (боевой режим с планировщиком)")
 
         # Валидация конфигурации слотов (только для старого планировщика)
-        if self.scheduler:
+        if self.services.scheduler:
             self.logger.info(
-                f"Валидация планировщика: день недели={self.scheduler.wednesday}, "
-                f"времена={self.scheduler.send_times}, TZ={self.scheduler.tz.key}",
+                f"Валидация планировщика: день недели={self.services.scheduler.wednesday}, "
+                f"времена={self.services.scheduler.send_times}, TZ={self.services.scheduler.tz.key}",
             )
-            if len(self.scheduler.send_times) == 0:
+            if len(self.services.scheduler.send_times) == 0:
                 self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
         else:
             self.logger.info("Используется Celery для планирования задач (TaskScheduler отключен)")
@@ -878,7 +843,7 @@ class WednesdayBot:
 
             # Отправляем сообщение о запуске после старта
             try:
-                scheduler_status = "включен (Celery)" if not self.scheduler else "включен (TaskScheduler)"
+                scheduler_status = "включен (Celery)" if not self.services.scheduler else "включен (TaskScheduler)"
                 startup_message = (
                     "🚀 Wednesday Frog Bot запущен!\n\n"
                     "✅ Бот активен и готов к работе\n"
@@ -971,8 +936,8 @@ class WednesdayBot:
                 self.logger.warning(f"Не удалось обновить статусное сообщение SupportBot: {e}")
 
             # Запускаем планировщик в фоновой задаче (только если используется старый планировщик)
-            if self.scheduler:
-                self.scheduler_task = asyncio.create_task(self.scheduler.start())
+            if self.services.scheduler:
+                self.scheduler_task = asyncio.create_task(self.services.scheduler.start())
             else:
                 self.scheduler_task = None
                 self.logger.info("Celery используется для планирования, TaskScheduler не запущен")
@@ -1077,7 +1042,7 @@ class WednesdayBot:
 
             # Бот добавлен/активирован в чате
             if new in {"member", "administrator"} and old in {"left", "kicked", "restricted", None}:
-                await self.chats.add_chat(chat_id, title)
+                await self.services.chats.add_chat(chat_id, title)
                 welcome = (
                     "🐸 Привет! Я Wednesday Frog Bot.\n\n"
                     "Я присылаю картинки с жабой по средам (09:00, 12:00, 18:00 по Мск), "
@@ -1094,7 +1059,7 @@ class WednesdayBot:
 
             # Бот удалён из чата
             if new in {"left", "kicked"} and old in {"member", "administrator", "restricted"}:
-                await self.chats.remove_chat(chat_id)
+                await self.services.chats.remove_chat(chat_id)
 
         except Exception as e:
             self.logger.error(f"Ошибка в on_my_chat_member: {e}")
@@ -1163,8 +1128,8 @@ class WednesdayBot:
 
             # Останавливаем планировщик (только если используется старый планировщик)
             try:
-                if self.scheduler and hasattr(self, "scheduler_task") and self.scheduler_task:
-                    self.scheduler.stop()
+                if self.services.scheduler and hasattr(self, "scheduler_task") and self.scheduler_task:
+                    self.services.scheduler.stop()
                     self.scheduler_task.cancel()
                     try:
                         await self.scheduler_task
