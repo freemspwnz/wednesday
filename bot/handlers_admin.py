@@ -9,8 +9,8 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
+from services.application.admin_dashboard_service import AdminDashboardService
 from services.bot_services import BotServices
-from services.clients.factory import create_image_client, create_text_client
 
 # Константы
 MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
@@ -33,8 +33,11 @@ class AdminHandlers(BaseHandlers):
         next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
         super().__init__(services)
-        self.image_client = create_image_client()
-        self.text_client = create_text_client()
+        self._dashboard_service = AdminDashboardService(
+            usage=self.services.usage,
+            chats=self.services.chats,
+            metrics=self.services.metrics,
+        )
         self.next_run_provider: Callable[[], datetime | None] | None = next_run_provider
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -80,120 +83,10 @@ class AdminHandlers(BaseHandlers):
             return
 
         try:
-            # Получаем информацию о статусе бота
             bot_info = await context.bot.get_me()
-
-            # Информация о следующей отправке
-            next_run_line = ""
-            scheduler_status = "❌ Не настроен"
-            if self.next_run_provider:
-                try:
-                    next_dt = self.next_run_provider()
-                    if next_dt:
-                        next_run_line = f"📅 Следующая отправка: {next_dt.strftime('%Y-%m-%d %H:%M')}\n"
-                        scheduler_status = f"✅ Следующая отправка: {next_dt.strftime('%Y-%m-%d %H:%M')}"
-                except Exception:
-                    pass
-
-            # Проверяем API без генерации (dry-run)
-            api_status: str = "⏳ Проверка..."
-            _api_models: list[str] = []
-            current_kandinsky: tuple[str | None, str | None] = (None, None)
-            api_ok: bool = False
-            try:
-                api_ok, api_status, _api_models, current_kandinsky = await self.image_client.check_api_status()
-                if not api_ok:
-                    self.logger.warning(f"Проверка API Kandinsky не прошла: {api_status}")
-            except Exception as e:
-                api_ok = False
-                api_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
-                self.logger.error(f"Ошибка при проверке API: {e}", exc_info=True)
-
-            # Проверяем GigaChat API без траты токенов
-            gigachat_status: str = "N/A"
-            current_gigachat: str | None = None
-            if self.text_client:
-                try:
-                    gigachat_ok: bool
-                    gigachat_ok, gigachat_status = await self.text_client.check_api_status()
-                    if not gigachat_ok:
-                        self.logger.warning(f"Проверка API GigaChat не прошла: {gigachat_status}")
-                    # Получаем доступные модели GigaChat
-                    _gigachat_models = await self.text_client.get_available_models()
-                    from utils.models_store import ModelsStore
-
-                    models_store = ModelsStore()
-                    current_gigachat = await models_store.get_gigachat_model() or "GigaChat"
-                except Exception as e:
-                    gigachat_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
-                    self.logger.error(f"Ошибка при проверке GigaChat API: {e}", exc_info=True)
-            else:
-                gigachat_status = "⚠️  Не настроен (GIGACHAT_AUTHORIZATION_KEY не указан)"
-
-            # Информация об использовании и лимитах
-            usage = self.services.usage
-            usage_info = "N/A"
-            if usage:
-                total, threshold, quota = await usage.get_limits_info()
-                used_percent = int(total / quota * PERCENT_MULTIPLIER) if quota else 0
-                usage_info = f"{total}/{quota} ({used_percent}%), порог: {threshold}"
-
-            # Информация об активных чатах
-            chats = self.services.chats
-            chats_info: str | int = "N/A"
-            if chats:
-                chats_info = len(await chats.list_chat_ids())
-
-            # Метрики производительности (из /health)
-            metrics = self.services.metrics
-            metrics_text = "Не настроены"
-            if metrics:
-                m_sum = await metrics.get_summary()
-                total_requests = m_sum["generations_total"]
-                successful = m_sum["generations_success"]
-                success_rate = (successful / total_requests * PERCENT_MULTIPLIER) if total_requests > 0 else 0
-                metrics_text = (
-                    f"• Всего запросов на генерацию: {total_requests}\n"
-                    f"• Успешных генераций: {successful}\n"
-                    f"• Процент успеха: {success_rate:.1f}%\n"
-                    f"• Среднее время генерации: {m_sum['average_generation_time']}\n"
-                    f"• Срабатываний circuit breaker: {m_sum['circuit_breaker_trips']}"
-                )
-
-            # Форматируем информацию о текущих моделях (только активные, не все доступные)
-            kandinsky_current_text = ""
-            if current_kandinsky[0]:
-                kandinsky_current_text = f"  ⭐ Текущая модель: {current_kandinsky[1] or current_kandinsky[0]}"
-            else:
-                kandinsky_current_text = "  ⚠️ Модель не выбрана"
-
-            # Форматируем информацию о текущей модели GigaChat
-            gigachat_current_text = ""
-            if current_gigachat:
-                gigachat_current_text = f"  ⭐ Текущая модель: {current_gigachat}"
-            else:
-                gigachat_current_text = "  ⚠️ Модель не выбрана"
-
-            status_message = (
-                f"🤖 Статус бота: {bot_info.first_name}\n\n"
-                "✅ Бот активен и работает\n"
-                f"{next_run_line}"
-                "🎨 Генератор изображений: Kandinsky API\n"
-                "📝 Логирование: включено\n\n"
-                "🔌 Проверка систем:\n"
-                f"• API Kandinsky: {api_status}\n"
-                f"{kandinsky_current_text}\n"
-                f"• API GigaChat: {gigachat_status}\n"
-                f"{gigachat_current_text}\n"
-                f"• Планировщик: {scheduler_status}\n\n"
-                "📊 Статистика:\n"
-                f"• Генерации: {usage_info}\n"
-                f"• Активных чатов: {chats_info}\n\n"
-                "📈 Метрики производительности:\n"
-                f"{metrics_text}\n\n"
-                "💡 Используйте /list_models для просмотра всех доступных моделей\n\n"
-                "🔄 Последняя проверка: прямо сейчас\n"
-                "💚 Все системы работают нормально!"
+            status_message = await self._dashboard_service.build_status_message(
+                bot_name=bot_info.first_name,
+                next_run_provider=self.next_run_provider,
             )
 
             try:

@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Вынесена сложная логика админских команд в AdminDashboardService**:
+  - Создан application‑сервис `AdminDashboardService` в `services/application/admin_dashboard_service.py` для агрегации метрик, лимитов, чатов и статусов API
+  - Команда `/status` в `bot/handlers_admin.py` использует `AdminDashboardService.build_status_message()` вместо ручного сбора и форматирования данных в хэндлере
+  - Команда `/list_models` в `bot/handlers_models.py` использует `AdminDashboardService.build_models_list_message()` для вывода списка моделей Kandinsky и GigaChat
+  - Повторяющаяся логика работы с `ModelsStore`, ML‑клиентами и форматированием перенесена из хэндлеров в application‑слой
+
 - **Усилена типизация кэшей и протокола ICache**:
   - Протокол `ICache` в `services/protocols.py` стал generic-интерфейсом `ICache[T]` с точным типом значения
   - `ImageCacheService` в `services/infrastructure/cache/image_cache.py` реализует `ICache[tuple[bytes, str]]` с уточнёнными сигнатурами `get` и `set`
