@@ -94,8 +94,10 @@ class SupportBot(BaseHandlers):
         self.settings: AppSettings = AppSettings.from_config(config)
         # Создаем минимальный BotServices только с settings для использования BaseHandlers
         # SupportBot не использует остальные сервисы, поэтому передаем заглушки для обязательных полей
+        from services.application.frog_limit_service import FrogRateLimiterService
         from services.bot_services import BotServices
 
+        frog_rate_limiter = FrogRateLimiterService(settings=self.settings)
         services: BotServices = BotServices(
             usage=None,  # type: ignore[arg-type]
             chats=None,  # type: ignore[arg-type]
@@ -106,6 +108,7 @@ class SupportBot(BaseHandlers):
             rate_limiter=self.rate_limiter,
             settings=self.settings,
             image_service=None,  # type: ignore[arg-type]
+            frog_rate_limiter=frog_rate_limiter,
             scheduler=None,
             bot_controller=None,
         )

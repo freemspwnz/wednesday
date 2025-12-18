@@ -10,10 +10,8 @@ from telegram.ext import ContextTypes
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
 from services.celery import celery_app
-from services.infrastructure.rate_limiting import RateLimiter
 
 # Константы
-SECONDS_PER_MINUTE = 60  # секунд в минуте
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
 RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по умолчанию
 
@@ -215,65 +213,27 @@ class UserHandlers(BaseHandlers):
         chat_id = update.message.chat_id
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
-        # Получаем настройки лимитов из DI
-        settings = self.services.settings
-        minutes = settings.frog_rate_limit_minutes
-        window_seconds = settings.frog_rate_limit_window_seconds
-        max_requests = settings.frog_rate_limit_max_requests
+        # Проверка на админа
+        is_admin = await self.admins_store.is_admin(user_id)
 
-        # Создаем лимитеры для /frog с нужными параметрами
-        # Глобальный лимитер: окно window_seconds, лимит max_requests
-        global_limiter = RateLimiter(
-            prefix="frog:global:",
-            window=window_seconds,
-            limit=max_requests,
+        # Проверка rate limit через application service
+        is_allowed, rate_limit_message = await self.services.frog_rate_limiter.check_and_consume(
+            user_id=user_id,
+            is_admin=is_admin,
         )
-
-        # Per-user лимитер: окно minutes * 60 секунд, лимит 1
-        user_limiter = RateLimiter(
-            prefix="frog:user:",
-            window=minutes * SECONDS_PER_MINUTE,
-            limit=1,
-        )
-
-        # Rate limit: глобальный
-        global_key = "global"
-        if not await global_limiter.is_allowed(global_key):
-            self.logger.warning(
-                f"Глобальный rate limit /frog превышен: {max_requests} запросов за {window_seconds}с",
-            )
+        if not is_allowed:
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    "🚦 Слишком много запросов! Попробуйте через минуту.",
-                    max_retries=3,
-                    delay=2,
+                    rate_limit_message or "⏰ Повторная генерация временно недоступна",
+                    max_retries=MAX_RETRIES_DEFAULT,
+                    delay=RETRY_DELAY_DEFAULT,
                 )
             except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.error(f"Не удалось отправить сообщение о rate limit после {3} попыток: {e}")
+                self.logger.error(
+                    f"Не удалось отправить сообщение о rate limit после {MAX_RETRIES_DEFAULT} попыток: {e}",
+                )
             return
-
-        # Проверка на админа - пропускаем per-user rate limit для админа
-        is_admin = await self.admins_store.is_admin(user_id)
-
-        # Rate limit: per-user (пропускаем для админа)
-        if not is_admin:
-            user_key = str(user_id)
-            if not await user_limiter.is_allowed(user_key):
-                remaining_seconds = minutes * SECONDS_PER_MINUTE
-                self.logger.info(f"Rate limit для пользователя {user_id}: {remaining_seconds}с осталось")
-                try:
-                    await self._retry_on_connect_error(
-                        update.message.reply_text,
-                        f"⏰ Повторная генерация доступна через {remaining_seconds}с",
-                        max_retries=MAX_RETRIES_DEFAULT,
-                        delay=RETRY_DELAY_DEFAULT,
-                    )
-                except (TelegramError, NetworkError, TimedOut) as e:
-                    self.logger.error(
-                        f"Не удалось отправить сообщение о rate limit после {MAX_RETRIES_DEFAULT} попыток: {e}",
-                    )
-                return
 
         # Проверяем лимит генераций
         usage = self.services.usage

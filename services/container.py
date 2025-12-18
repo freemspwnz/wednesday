@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 
 from services.app_settings import AppSettings
+from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
 from services.bot_services import BotServices
@@ -110,6 +111,7 @@ def build_bot_services() -> BotServices:
     prompt_cache = PromptCache()
     user_state_store = UserStateCache()
     rate_limiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
+    frog_rate_limiter = FrogRateLimiterService(settings=app_settings)
 
     return BotServices(
         image_service=image_service,
@@ -122,4 +124,5 @@ def build_bot_services() -> BotServices:
         user_state_store=user_state_store,
         rate_limiter=rate_limiter,
         settings=app_settings,
+        frog_rate_limiter=frog_rate_limiter,
     )

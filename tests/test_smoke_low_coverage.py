@@ -140,6 +140,9 @@ async def test_command_handlers_start_help(
             return []
 
     monkeypatch.setattr("utils.admins_store.AdminsStore", _AdminNo)
+    from services.application.frog_limit_service import FrogRateLimiterService
+
+    frog_rate_limiter = FrogRateLimiterService(settings=MagicMock())
     services = BotServices(
         usage=MagicMock(),
         chats=MagicMock(),
@@ -150,6 +153,7 @@ async def test_command_handlers_start_help(
         rate_limiter=MagicMock(),
         settings=MagicMock(),
         image_service=MagicMock(),
+        frog_rate_limiter=frog_rate_limiter,
         scheduler=None,
     )
     handler = UserHandlers(services=services, next_run_provider=None)

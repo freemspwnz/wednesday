@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from services.app_settings import AppSettings
+from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.image_service import ImageService
 
 if TYPE_CHECKING:
@@ -41,5 +42,6 @@ class BotServices:
     rate_limiter: RateLimiter
     settings: AppSettings
     image_service: ImageService
+    frog_rate_limiter: FrogRateLimiterService
     scheduler: TaskScheduler | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop

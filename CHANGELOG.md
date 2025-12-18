@@ -9,6 +9,14 @@
   - Настройки лимитов теперь читаются из `AppSettings` через DI (`self.services.settings`)
   - Унифицирована работа с настройками rate limit через единую точку конфигурации
 
+- **Создан `FrogRateLimiterService` для проверки rate limit команды /frog**:
+  - Создан application-сервис `services/application/frog_limit_service.py` для инкапсуляции логики rate limiting
+  - Сервис проверяет глобальный и per-user лимиты через инфраструктурный `RateLimiter`
+  - Администраторы пропускают per-user лимит, но подчиняются глобальному лимиту
+  - Метод `check_and_consume()` возвращает понятный результат (bool, сообщение) для хэндлера
+  - Добавлен `frog_rate_limiter` в `BotServices` и контейнер
+  - Обновлён `UserHandlers.frog_command` для использования нового сервиса вместо прямого создания `RateLimiter`
+
 ### Изменено
 
 - **Рефакторинг `services/celery_tasks.py`**:
