@@ -26,7 +26,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
-from services.protocols import ICircuitBreaker
+from services.protocols import ICircuitBreaker, IScheduler
 from services.scheduler import TaskScheduler
 from utils.chats_store import ChatsStore
 from utils.config import ImageConfig, config
@@ -90,7 +90,7 @@ def build_bot_services() -> BotServices:
     app_settings = AppSettings.from_config(config)
     image_service = build_image_stack()
 
-    scheduler = (
+    scheduler: IScheduler | None = (
         TaskScheduler(
             send_times=config.scheduler_send_times,
             wednesday_day=config.scheduler_wednesday_day,

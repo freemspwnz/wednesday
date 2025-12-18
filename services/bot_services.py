@@ -13,16 +13,16 @@ from services.app_settings import AppSettings
 from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.frog_requests import FrogRequestService
 from services.application.image_service import ImageService
-
-if TYPE_CHECKING:
-    from bot.wednesday_bot import WednesdayBot
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.scheduler import TaskScheduler
+from services.protocols import IScheduler
 from utils.chats_store import ChatsStore
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
 from utils.usage_tracker import UsageTracker
+
+if TYPE_CHECKING:
+    from bot.wednesday_bot import WednesdayBot
 
 
 @dataclass
@@ -43,5 +43,5 @@ class BotServices:
     image_service: ImageService
     frog_rate_limiter: FrogRateLimiterService
     frog_request_service: FrogRequestService
-    scheduler: TaskScheduler | None = None
+    scheduler: IScheduler | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop

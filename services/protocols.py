@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Protocol, runtime_checkable
+from zoneinfo import ZoneInfo
 
 
 @runtime_checkable
@@ -48,6 +51,47 @@ class ICircuitBreaker(Protocol):
 
     async def record_failure(self) -> None:
         """Регистрирует неудачу и обновляет состояние circuit breaker."""
+        ...
+
+
+@runtime_checkable
+class IScheduler(Protocol):
+    """Протокол для абстракции планировщика задач."""
+
+    send_times: list[str]
+    wednesday: int
+    tz: ZoneInfo
+
+    def schedule_wednesday_task(self, task_func: Callable[[str | None], Awaitable[None]]) -> None:
+        """Планирует задачу на выполнение каждую среду."""
+        ...
+
+    def schedule_daily_task(self, task_func: Callable[[], Awaitable[None]], time_str: str) -> None:
+        """Планирует задачу на выполнение каждый день в указанное время."""
+        ...
+
+    def schedule_interval_task(self, task_func: Callable[[], Awaitable[None]], interval_minutes: int) -> None:
+        """Планирует задачу на выполнение с заданным интервалом."""
+        ...
+
+    async def start(self) -> None:
+        """Запускает цикл планировщика задач."""
+        ...
+
+    def stop(self) -> None:
+        """Останавливает планировщик задач."""
+        ...
+
+    def get_next_run(self) -> datetime | None:
+        """Возвращает время следующего запланированного выполнения."""
+        ...
+
+    def clear_all_jobs(self) -> None:
+        """Очищает все запланированные задачи."""
+        ...
+
+    def get_jobs_count(self) -> int:
+        """Возвращает количество запланированных задач."""
         ...
 
 

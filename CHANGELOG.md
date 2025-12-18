@@ -4,6 +4,11 @@
 
 ### Изменено
 
+- **Введён протокол IScheduler и абстрагирован планировщик через него**:
+  - Добавлен протокол `IScheduler` в `services/protocols.py` с методами управления задачами и получения состояния
+  - `SchedulerService` в `services/application/scheduler_service.py` теперь зависит от `IScheduler`, а не от конкретного `TaskScheduler`
+  - Поле `scheduler` в `BotServices` и контейнере `build_bot_services()` типизировано через `IScheduler | None`, что позволяет подменять реализацию планировщика
+
 - **Введён протокол ICircuitBreaker и переведён ImageService на использование протокола**:
   - Добавлен протокол `ICircuitBreaker` в `services/protocols.py` с методами `is_open()`, `record_success()`, `record_failure()`
   - Параметр `circuit_breaker` в `services/application/image_service.py` типизирован через `ICircuitBreaker | None`

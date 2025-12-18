@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 
 from services.base.base_service import BaseService
-from services.scheduler import TaskScheduler
+from services.protocols import IScheduler
 
 
 class SchedulerService(BaseService):
@@ -21,7 +21,7 @@ class SchedulerService(BaseService):
 
     def __init__(
         self,
-        scheduler: TaskScheduler,
+        scheduler: IScheduler,
     ) -> None:
         """Инициализирует сервис оркестрации планирования.
 
