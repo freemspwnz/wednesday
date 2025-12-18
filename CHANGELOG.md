@@ -53,11 +53,11 @@
   - Параметр `circuit_breaker` в `services/application/image_service.py` типизирован через `ICircuitBreaker | None`
   - В `services/container.py` инфраструктурный `CircuitBreakerService` передаётся в `ImageService` как значение типа `ICircuitBreaker`
 
-- **ImageService и кэш/хранилище изображений переведены на протоколы ICache/IStorage/IMetrics**:
-  - Параметры `image_cache`, `image_storage`, `metrics` в `services/application/image_service.py` типизированы через `ICache`, `IStorage`, `IMetrics`
+- **ImageService и кэш/хранилище изображений переведены на протоколы ICache/IImageStorage/IMetrics**:
+  - Параметры `image_cache`, `image_storage`, `metrics` в `services/application/image_service.py` типизированы через `ICache`, `IImageStorage`, `IMetrics`
   - `ImageCacheService` реализует протокол `ICache` (методы `get`, `set`, `delete`) поверх существующих операций `get_by_prompt` и `save`
   - Логика работы с кэшем в `ImageService` использует протокольный интерфейс `ICache` и кодирует значение как `(image_data, caption)`
-  - `ImageStorageService` и `MetricsRecorder` продолжают удовлетворять протоколам `IStorage` и `IMetrics` без изменений публичного API
+  - `ImageStorageService` и `MetricsRecorder` продолжают удовлетворять протоколам `IImageStorage` и `IMetrics` без изменений публичного API
 
 - **Централизованы настройки rate limit для команды /frog**:
   - Удалены константы `FROG_RATE_LIMIT_MINUTES`, `FROG_RATE_LIMIT_WINDOW_SECONDS`, `FROG_RATE_LIMIT_MAX_REQUESTS` из `bot/handlers_user.py`
@@ -107,9 +107,15 @@
 
 - **Создан `services/application/scheduler_service.py`**:
   - Создан класс `SchedulerService(BaseService)` для оркестрации планирования
-  - Использует `TaskScheduler` как инфраструктурный компонент
+  - Использует протокол `IScheduler` как абстракцию над инфраструктурным планировщиком (по умолчанию `TaskScheduler`)
   - Реализованы методы для планирования задач и управления жизненным циклом
   - Разделение на domain/infrastructure/application соблюдено
+
+- **Обновлена документация сервисов под новые протоколы**:
+  - В `services/application/prompt_service.py` docstring-и отражают использование протоколов `ICache[dict | str]` и `IPromptStorage` вместо жёсткой привязки к реализациям
+  - В `services/application/scheduler_service.py` уточнено, что сервис работает через протокол `IScheduler`, а конкретный планировщик скрыт за интерфейсом
+  - В `services/container.py` обновлён модульный docstring под роль composition root и актуальный граф зависимостей
+  - В `docs/ARCHITECTURE.md` добавлен раздел о протокольном слое (`ICircuitBreaker`, `IScheduler`, `ICache[T]`, `IImageStorage`, `IPromptStorage`) и обновлено описание `ImageService` под новые интерфейсы
 
 ### Изменено
 

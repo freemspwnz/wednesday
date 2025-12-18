@@ -1,7 +1,7 @@
 """Application service для координации генерации промптов.
 
 Координирует работу доменных и инфраструктурных сервисов для генерации,
-кэширования и сохранения промптов.
+кэширования и сохранения промптов через протоколы `ICache` и `IPromptStorage`.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ class PromptService(BaseService):
     """Application service для координации генерации промптов.
 
     Координирует работу:
-    - PromptGenerationService (генерация)
-    - PromptCache (кэширование)
-    - PromptStorageService (сохранение)
+    - PromptGenerationService (генерация);
+    - кэша промптов, удовлетворяющего протоколу ``ICache[dict | str]``;
+    - файлового хранилища промптов, удовлетворяющего протоколу ``IPromptStorage``.
     """
 
     def __init__(
@@ -32,8 +32,8 @@ class PromptService(BaseService):
 
         Args:
             prompt_generation_service: Сервис генерации промптов (обязателен).
-            prompt_cache: Сервис кэширования промптов (опционально).
-            prompt_storage: Сервис сохранения промптов (опционально).
+            prompt_cache: Кэш промптов, реализующий ``ICache[dict | str]`` (опционально).
+            prompt_storage: Файловое хранилище промптов, реализующее ``IPromptStorage`` (опционально).
         """
         super().__init__()
         self._generation_service = prompt_generation_service

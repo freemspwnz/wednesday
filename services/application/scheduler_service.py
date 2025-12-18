@@ -1,6 +1,7 @@
 """Application service для оркестрации планирования задач.
 
-Координирует работу TaskScheduler для автоматического выполнения задач по расписанию.
+Координирует работу абстракции планировщика задач через протокол ``IScheduler``,
+не завязываясь на конкретную реализацию (по умолчанию используется TaskScheduler).
 """
 
 from __future__ import annotations
@@ -15,8 +16,9 @@ from services.protocols import IScheduler
 class SchedulerService(BaseService):
     """Application service для оркестрации планирования задач.
 
-    Координирует работу TaskScheduler для автоматического выполнения задач.
-    Использует TaskScheduler как инфраструктурный компонент.
+    Координирует работу абстрактного планировщика, удовлетворяющего протоколу
+    :class:`services.protocols.IScheduler`, а конкретная реализация (например,
+    ``TaskScheduler``) скрывается за интерфейсом протокола.
     """
 
     def __init__(
@@ -26,7 +28,7 @@ class SchedulerService(BaseService):
         """Инициализирует сервис оркестрации планирования.
 
         Args:
-            scheduler: Экземпляр TaskScheduler для использования.
+            scheduler: Экземпляр планировщика, удовлетворяющий протоколу ``IScheduler``.
         """
         super().__init__()
         self._scheduler = scheduler
