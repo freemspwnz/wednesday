@@ -72,6 +72,25 @@ class ImageService(BaseService):
         """
         return random.choice(self._captions)
 
+    async def get_random_saved_image(self) -> tuple[bytes, str] | None:
+        """Возвращает случайное сохранённое изображение из файлового хранилища.
+
+        Используется как fallback, когда генерация нового изображения недоступна.
+        Если хранилище недоступно или произошла ошибка при чтении — возвращает None.
+        """
+        if self._storage is None:
+            self.logger.warning("ImageStorageService недоступен для получения сохранённого изображения")
+            return None
+
+        try:
+            return await self._storage.get_random()
+        except Exception as e:  # pragma: no cover - защитный слой от неожиданных ошибок файловой системы
+            self.logger.warning(
+                "Ошибка при получении случайного сохранённого изображения из файлового хранилища: %s",
+                e,
+            )
+            return None
+
     async def generate_frog_image(
         self,
         user_id: int | None = None,

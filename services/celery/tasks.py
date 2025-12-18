@@ -415,10 +415,9 @@ async def send_frog_manual(
             except Exception as e:
                 logger.error(f"Не удалось отправить дружелюбное сообщение: {e}")
 
-            # Отправляем случайное изображение из сохраненных через инфраструктурное хранилище
+            # Отправляем случайное изображение из сохраненных через application-сервис изображений
             image_service = bot_instance.services.image_service
-            storage = getattr(image_service, "_storage", None) if image_service is not None else None
-            fallback_image = await storage.get_random_from_archive() if storage is not None else None
+            fallback_image = await image_service.get_random_saved_image() if image_service is not None else None
             if fallback_image:
                 fallback_image_data, fallback_caption = fallback_image
                 try:
@@ -511,10 +510,9 @@ async def send_frog_manual(
                 text=friendly_message,
             )
 
-            # Отправляем случайное изображение из сохраненных через инфраструктурное хранилище
+            # Отправляем случайное изображение из сохраненных через application-сервис изображений
             image_service = bot_instance.services.image_service
-            storage = getattr(image_service, "_storage", None) if image_service is not None else None
-            fallback_image = await storage.get_random_from_archive() if storage is not None else None
+            fallback_image = await image_service.get_random_saved_image() if image_service is not None else None
             if fallback_image:
                 fallback_image_data, fallback_caption = fallback_image
                 await bot_instance.application.bot.send_photo(

@@ -636,8 +636,10 @@ class AdminHandlers(BaseHandlers):
 
         # Если нужно использовать fallback
         if use_fallback:
-            storage = getattr(image_service, "_storage", None) if image_service is not None else None
-            fallback_image = await storage.get_random_from_archive() if storage is not None else None
+            if image_service is not None:
+                fallback_image = await image_service.get_random_saved_image()
+            else:
+                fallback_image = None
             if fallback_image:
                 image_data, caption = fallback_image
                 self.logger.info("Используется случайное изображение из архива")

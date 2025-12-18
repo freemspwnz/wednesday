@@ -10,6 +10,10 @@
   - `PromptCache` в `services/infrastructure/cache/prompt_cache.py` реализует `ICache[dict | str]` поверх Redis/in-memory backend
   - `ImageService` и `PromptService` в application-слое используют `ICache` с конкретными параметрами типов для кэшей изображений и промптов
 
+- **Минимизирован доступ к приватному файловому хранилищу изображений**:
+  - В `services/application/image_service.py` добавлен публичный метод `get_random_saved_image()` для получения случайного сохранённого изображения через application-слой
+  - Методы fallback в `bot/wednesday_bot.py`, `bot/handlers_admin.py` и `services/celery/tasks.py` используют `ImageService` вместо прямого доступа к приватному полю `_storage`
+
 - **Введён протокол IScheduler и абстрагирован планировщик через него**:
   - Добавлен протокол `IScheduler` в `services/protocols.py` с методами управления задачами и получения состояния без утечки внутренних полей конкретной реализации
   - `SchedulerService` в `services/application/scheduler_service.py` теперь зависит от `IScheduler`, а не от конкретного `TaskScheduler`

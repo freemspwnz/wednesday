@@ -664,20 +664,14 @@ class WednesdayBot:
             - Логирует результат операции.
         """
         try:
-            # Чтение fallback‑изображения выполняется через инфраструктурное файловое хранилище.
-            # На этом этапе используем тот же механизм, что и для сохранения архивных изображений.
+            # Чтение fallback‑изображения выполняется через публичный метод ImageService,
+            # который инкапсулирует детали инфраструктурного хранилища.
             image_service = self.services.image_service
             if image_service is None:
-                self.logger.warning("Хранилище изображений недоступно для fallback-изображения")
+                self.logger.warning("Сервис изображений недоступен для fallback-изображения")
                 return False
 
-            # Временное решение: используем файловое хранилище для получения случайного файла.
-            storage = getattr(image_service, "_storage", None)
-            if storage is None:
-                self.logger.warning("ImageStorageService недоступен для fallback-изображения")
-                return False
-
-            fallback_image = await storage.get_random_from_archive()
+            fallback_image = await image_service.get_random_saved_image()
             if fallback_image:
                 image_data, caption = fallback_image
                 await self.application.bot.send_photo(
