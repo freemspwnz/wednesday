@@ -141,8 +141,6 @@ async def test_command_handlers_start_help(
 
     monkeypatch.setattr("utils.admins_store.AdminsStore", _AdminNo)
     services = BotServices(
-        image_generator=MagicMock(),
-        scheduler=None,
         usage=MagicMock(),
         chats=MagicMock(),
         dispatch_registry=MagicMock(),
@@ -151,6 +149,8 @@ async def test_command_handlers_start_help(
         user_state_store=MagicMock(),
         rate_limiter=MagicMock(),
         settings=MagicMock(),
+        image_service=MagicMock(),
+        scheduler=None,
     )
     handler = UserHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)

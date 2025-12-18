@@ -93,6 +93,11 @@
   - Вся сборка сервисов перенесена в `build_bot_services()`, `WednesdayBot` получает только готовый `BotServices`
   - Использование сервисов внутри `WednesdayBot` унифицировано через `self.services.*` без прокси‑полей
   - Fallback‑отправка изображений переведена на использование файлового хранилища `ImageStorageService`
+
+- **Удалён legacy‑генератор `ImageGenerator`**:
+  - Логика генерации и fallback‑обработки окончательно переведена на `ImageService` и `ImageStorageService`
+  - Admin/Model‑хэндлеры используют клиентские контейнеры (`create_image_client`, `create_text_client`) вместо `ImageGenerator`
+  - Celery‑таски и smoke/typing‑тесты обновлены для работы без `services/image_generator.py`
   - Реализован метод `generate_frog_image()` с полной координацией всех шагов
   - Добавлена обработка всех исключений и graceful degradation
 

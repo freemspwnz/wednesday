@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
+from services.clients.factory import create_image_client, create_text_client
 
 # Константы
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
@@ -26,7 +27,8 @@ class ModelHandlers(BaseHandlers):
         next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
         super().__init__(services)
-        self.image_generator = services.image_generator
+        self.image_client = create_image_client()
+        self.text_client = create_text_client()
         self.next_run_provider: Callable[[], datetime | None] | None = next_run_provider
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -38,9 +40,9 @@ class ModelHandlers(BaseHandlers):
 
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
-                и пользователе, который отправил команду.
+            и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args. Генератор изображений берётся из self.image_generator.
+                через context.args. Клиент изображения берётся из image_client.
 
         Side Effects:
             - Вызывает image_generator.image_client.set_model() для установки модели.
@@ -90,7 +92,7 @@ class ModelHandlers(BaseHandlers):
             self.logger.error(f"Не удалось отправить сообщение о начале установки после {3} попыток: {e}")
 
         try:
-            success, message = await self.image_generator.image_client.set_model(model_arg)
+            success, message = await self.image_client.set_model(model_arg)
             if success:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
@@ -118,7 +120,7 @@ class ModelHandlers(BaseHandlers):
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args. Клиент GigaChat берётся из self.image_generator.text_client.
+                через context.args. Клиент GigaChat берётся из text_client.
 
         Side Effects:
             - Вызывает image_generator.text_client.set_model() для установки модели.
@@ -155,7 +157,7 @@ class ModelHandlers(BaseHandlers):
 
         model_name = context.args[0]
 
-        if not self.image_generator.text_client:
+        if not self.text_client:
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
@@ -168,7 +170,7 @@ class ModelHandlers(BaseHandlers):
             return
 
         try:
-            _, message = await self.image_generator.text_client.set_model(model_name)
+            _, message = await self.text_client.set_model(model_name)
             await self._retry_on_connect_error(
                 update.message.reply_text,
                 message,
@@ -220,7 +222,7 @@ class ModelHandlers(BaseHandlers):
 
             # Получаем модели Kandinsky
             try:
-                _api_ok, _api_status, api_models, current_kandinsky = await self.image_generator.check_api_status()
+                _api_ok, _api_status, api_models, current_kandinsky = await self.image_client.check_api_status()
                 if api_models:
                     message_parts.append("🎨 Kandinsky (Kandinsky API):")
                     for model in api_models:
@@ -250,8 +252,8 @@ class ModelHandlers(BaseHandlers):
 
             # Получаем модели GigaChat
             try:
-                if self.image_generator.text_client:
-                    gigachat_models = await self.image_generator.text_client.get_available_models()
+                if self.text_client:
+                    gigachat_models = await self.text_client.get_available_models()
                     from utils.models_store import ModelsStore
 
                     models_store = ModelsStore()

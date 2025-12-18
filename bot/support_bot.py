@@ -93,12 +93,10 @@ class SupportBot(BaseHandlers):
 
         self.settings: AppSettings = AppSettings.from_config(config)
         # Создаем минимальный BotServices только с settings для использования BaseHandlers
-        # SupportBot не использует другие сервисы, поэтому передаем None для остальных полей
+        # SupportBot не использует остальные сервисы, поэтому передаем заглушки для обязательных полей
         from services.bot_services import BotServices
 
         services: BotServices = BotServices(
-            image_generator=None,  # type: ignore[arg-type]
-            scheduler=None,
             usage=None,  # type: ignore[arg-type]
             chats=None,  # type: ignore[arg-type]
             dispatch_registry=None,  # type: ignore[arg-type]
@@ -107,6 +105,8 @@ class SupportBot(BaseHandlers):
             user_state_store=None,  # type: ignore[arg-type]
             rate_limiter=self.rate_limiter,
             settings=self.settings,
+            image_service=None,  # type: ignore[arg-type]
+            scheduler=None,
             bot_controller=None,
         )
         # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)

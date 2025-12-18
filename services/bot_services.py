@@ -14,7 +14,6 @@ from services.application.image_service import ImageService
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
-from services.image_generator import ImageGenerator
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
 from services.infrastructure.rate_limiting import RateLimiter
@@ -33,7 +32,6 @@ class BotServices:
     через атрибуты `WednesdayBot` и `context.application.bot_data`.
     """
 
-    image_generator: ImageGenerator
     usage: UsageTracker
     chats: ChatsStore
     dispatch_registry: DispatchRegistry
@@ -42,6 +40,6 @@ class BotServices:
     user_state_store: UserStateCache
     rate_limiter: RateLimiter
     settings: AppSettings
-    image_service: ImageService | None = None
+    image_service: ImageService
     scheduler: TaskScheduler | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop

@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
+from services.clients.factory import create_image_client, create_text_client
 
 # Константы
 MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
@@ -32,7 +33,8 @@ class AdminHandlers(BaseHandlers):
         next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
         super().__init__(services)
-        self.image_generator = services.image_generator
+        self.image_client = create_image_client()
+        self.text_client = create_text_client()
         self.next_run_provider: Callable[[], datetime | None] | None = next_run_provider
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -99,7 +101,7 @@ class AdminHandlers(BaseHandlers):
             current_kandinsky: tuple[str | None, str | None] = (None, None)
             api_ok: bool = False
             try:
-                api_ok, api_status, _api_models, current_kandinsky = await self.image_generator.check_api_status()
+                api_ok, api_status, _api_models, current_kandinsky = await self.image_client.check_api_status()
                 if not api_ok:
                     self.logger.warning(f"Проверка API Kandinsky не прошла: {api_status}")
             except Exception as e:
@@ -110,14 +112,14 @@ class AdminHandlers(BaseHandlers):
             # Проверяем GigaChat API без траты токенов
             gigachat_status: str = "N/A"
             current_gigachat: str | None = None
-            if self.image_generator.text_client:
+            if self.text_client:
                 try:
                     gigachat_ok: bool
-                    gigachat_ok, gigachat_status = await self.image_generator.text_client.check_api_status()
+                    gigachat_ok, gigachat_status = await self.text_client.check_api_status()
                     if not gigachat_ok:
                         self.logger.warning(f"Проверка API GigaChat не прошла: {gigachat_status}")
                     # Получаем доступные модели GigaChat
-                    _gigachat_models = await self.image_generator.text_client.get_available_models()
+                    _gigachat_models = await self.text_client.get_available_models()
                     from utils.models_store import ModelsStore
 
                     models_store = ModelsStore()
@@ -613,21 +615,12 @@ class AdminHandlers(BaseHandlers):
         caption: str = ""
         use_fallback = False
 
-        if can_generate:
+        image_service = self.services.image_service
+        if can_generate and image_service is not None:
             try:
-                result = await self.image_generator.generate_frog_image(user_id=user_id)
+                result = await image_service.generate_frog_image(user_id=user_id)
                 if result:
                     image_data, caption = result
-                    # Сохраняем изображение локально
-                    try:
-                        saved_path = self.image_generator.save_image_locally(image_data, prefix="frog")
-                        if saved_path:
-                            self.logger.info(
-                                f"Изображение сохранено локально и доступно в контейнере по пути {saved_path}",
-                            )
-                    except Exception:
-                        # Ошибка локального сохранения не должна ломать рассылку.
-                        pass
                     # Увеличиваем счетчик использования
                     if usage:
                         await usage.increment(1)
@@ -643,7 +636,8 @@ class AdminHandlers(BaseHandlers):
 
         # Если нужно использовать fallback
         if use_fallback:
-            fallback_image = self.image_generator.get_random_saved_image()
+            storage = getattr(image_service, "_storage", None) if image_service is not None else None
+            fallback_image = await storage.get_random_from_archive() if storage is not None else None
             if fallback_image:
                 image_data, caption = fallback_image
                 self.logger.info("Используется случайное изображение из архива")

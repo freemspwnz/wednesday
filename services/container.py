@@ -17,7 +17,6 @@ from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
 from services.domain.image_generation import ImageGenerationService
 from services.domain.prompt_generation import PromptGenerationService
-from services.image_generator import ImageGenerator
 from services.infrastructure.cache.image_cache import ImageCacheService
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
@@ -83,7 +82,6 @@ def build_bot_services() -> BotServices:
 
     На этом этапе:
     - image_service создаётся через build_image_stack();
-    - image_generator сохраняется для обратной совместимости с существующим кодом;
     - остальные сервисы повторяют существующую инициализацию из WednesdayBot.
     """
     app_settings = AppSettings.from_config(config)
@@ -113,11 +111,7 @@ def build_bot_services() -> BotServices:
     user_state_store = UserStateCache()
     rate_limiter = RateLimiter(prefix="rate:wednesday:", window=60, limit=100)
 
-    # Сохраняем ImageGenerator для плавной миграции на ImageService.
-    image_generator = ImageGenerator()
-
     return BotServices(
-        image_generator=image_generator,
         image_service=image_service,
         scheduler=scheduler,
         usage=usage,

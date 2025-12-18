@@ -31,7 +31,6 @@ async def test_celery_services_lazy_init(reset_singletons: Any) -> None:
         patch("services.celery_tasks.WednesdayBot") as mock_bot_class,
     ):
         mock_bot_instance = MagicMock()
-        mock_bot_instance.image_generator = MagicMock()
         mock_bot_class.return_value = mock_bot_instance
 
         # Первый вызов должен инициализировать
