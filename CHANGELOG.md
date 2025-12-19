@@ -11,6 +11,14 @@
   - `IChatsRepo` содержит метод `list_chat_ids()`
   - Соответствуют принципу Dependency Inversion (DIP)
 
+### Изменено
+
+- **Рефакторинг AdminDashboardService для использования протоколов (Проблема 5, Шаг 2)**:
+  - Заменены типы параметров конструктора с конкретных классов на протоколы `IUsageTracker` и `IChatsRepo`
+  - Удалены прямые импорты `UsageTracker` и `ChatsRepo` из модуля
+  - Application слой больше не зависит от конкретных реализаций из `utils/`
+  - Соответствует принципу Dependency Inversion (DIP)
+
 - **Создание протоколов IImageRepo и IPromptRepo (Проблема 4, Шаг 1)**:
   - Добавлены протоколы `IImageRepo` и `IPromptRepo` в `services/protocols.py`
   - Протоколы определяют интерфейсы для репозиториев изображений и промптов в БД

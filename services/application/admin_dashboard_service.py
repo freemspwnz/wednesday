@@ -22,10 +22,9 @@ from services.application.admin_dashboard_builders import (
 )
 from services.base.base_service import BaseService
 from services.clients.interfaces import ITextToImageClient, ITextToTextClient
-from utils.chats_repo import ChatsRepo
+from services.protocols import IChatsRepo, IUsageTracker
 from utils.metrics import Metrics
 from utils.models_repo import ModelsRepo
-from utils.usage_tracker import UsageTracker
 
 if TYPE_CHECKING:
     pass
@@ -45,8 +44,8 @@ class AdminDashboardService(BaseService):
     def __init__(  # noqa: PLR0913
         self,
         *,
-        usage: UsageTracker | None,
-        chats: ChatsRepo | None,
+        usage: IUsageTracker | None,
+        chats: IChatsRepo | None,
         metrics: Metrics | None,
         image_client: ITextToImageClient,
         text_client: ITextToTextClient | None,
