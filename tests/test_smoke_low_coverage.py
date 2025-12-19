@@ -215,6 +215,9 @@ def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> Non
     assert client._api_key is not None
     assert client._secret_key is not None
     assert client._base_url == "https://api-key.fusionbrain.ai"
+    # Проверяем, что сессия создана для переиспользования
+    assert hasattr(client, "_session")
+    assert client._session is not None
 
 
 @pytest.mark.asyncio
@@ -231,6 +234,43 @@ async def test_kandinsky_client_auth_headers(monkeypatch: pytest.MonkeyPatch) ->
     assert "X-Secret" in headers
     assert headers["X-Key"].startswith("Key ")
     assert headers["X-Secret"].startswith("Secret ")
+
+
+@pytest.mark.asyncio
+async def test_kandinsky_client_aclose(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Проверка закрытия сессии через метод aclose()."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from services.clients.kandinsky import KandinskyClient
+    from services.clients.kandinsky_config import KandinskyConfig
+
+    # Мокируем переменные окружения для прокси
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
+    monkeypatch.delenv("HTTP_PROXY", raising=False)
+
+    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    client = KandinskyClient(config=config)
+
+    # Проверяем, что сессия создана
+    assert client._session is not None
+
+    # Сохраняем оригинальную сессию и создаем мок
+    original_session = client._session
+    mock_session = MagicMock()
+    mock_session.close = AsyncMock()
+    client._session = mock_session
+
+    # Вызываем aclose()
+    await client.aclose()
+
+    # Проверяем, что close был вызван
+    mock_session.close.assert_called_once()
+
+    # Проверяем, что сессия обнулена
+    assert client._session is None
+
+    # Закрываем оригинальную сессию для очистки
+    await original_session.close()
 
 
 @pytest.mark.asyncio
