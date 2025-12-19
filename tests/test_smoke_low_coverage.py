@@ -220,6 +220,7 @@ async def test_kandinsky_client_auth_headers(monkeypatch: pytest.MonkeyPatch) ->
 async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента GigaChatTextClient."""
 
+    from services.clients.gigachat_config import GigaChatConfig
     from services.clients.gigachat_text import GigaChatTextClient
 
     # Мокируем aiohttp.ClientSession и TCPConnector, чтобы избежать реальных HTTP-запросов
@@ -237,7 +238,15 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
     monkeypatch.setattr("aiohttp.TCPConnector", _mock_connector_init)
 
-    client = GigaChatTextClient()
+    config = GigaChatConfig(
+        auth_url="https://example.test/auth",
+        api_url="https://example.test/api",
+        authorization_key="dummy",
+        scope="GIGACHAT_API_PERS",
+        model="GigaChat",
+        verify_ssl=False,
+    )
+    client = GigaChatTextClient(config=config)
 
     try:
         assert client._auth_url is not None

@@ -21,6 +21,7 @@ import os
 from typing import Final
 
 from services.clients import ITextToImageClient, ITextToTextClient
+from services.clients.gigachat_config import GigaChatConfig
 from services.clients.gigachat_text import GigaChatTextClient
 from services.clients.image_client_container import get_image_client_container
 from services.clients.kandinsky import KandinskyClient
@@ -113,14 +114,8 @@ def create_text_client() -> ITextToTextClient | None:
     # Контейнер реализует интерфейс `ITextToTextClient`, так что вызывающий код
     # продолжает работать через те же методы (`generate`, `set_model` и т.д.),
     # но теперь с возможностью безопасной замены клиента в рантайме.
-    gigachat_client = GigaChatTextClient(
-        auth_url=config.gigachat_auth_url,
-        api_url=config.gigachat_api_url,
-        authorization_key=config.gigachat_authorization_key,
-        scope=config.gigachat_scope,
-        model=config.gigachat_model,
-        verify_ssl=config.gigachat_verify_ssl,
-    )
+    gigachat_config = GigaChatConfig.from_config(config)
+    gigachat_client = GigaChatTextClient(config=gigachat_config)
 
     container = get_text_client_container()
     # Инициализируем контейнер только один раз; последующие вызовы фабрики

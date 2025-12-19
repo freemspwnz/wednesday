@@ -34,7 +34,7 @@ import aiohttp
 from loguru import logger
 
 from services.clients import ITextToTextClient
-from utils.config import config
+from services.clients.gigachat_config import GigaChatConfig
 from utils.models_store import ModelsStore
 from utils.retry import retry_critical, retry_standard
 
@@ -107,31 +107,21 @@ class GigaChatTextClient(ITextToTextClient):
     реализуются на уровне сервисов, использующих этот клиент.
     """
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(
         self,
-        auth_url: str | None = None,
-        api_url: str | None = None,
-        authorization_key: str | None = None,
-        scope: str | None = None,
-        model: str | None = None,
-        verify_ssl: bool | str = True,
+        config: GigaChatConfig,
     ) -> None:
         """Инициализация клиента GigaChat.
 
         Args:
-            auth_url: URL для получения токена доступа.
-            api_url: URL для запросов к API.
-            authorization_key: Ключ авторизации в формате base64.
-            scope: Область доступа для токена.
-            model: Название модели по умолчанию.
-            verify_ssl: Проверка SSL сертификата (bool или путь к сертификату).
+            config: Конфигурация GigaChat клиента (обязательна).
         """
-        self._auth_url: str = auth_url or config.gigachat_auth_url
-        self._api_url: str = api_url or config.gigachat_api_url
-        self._authorization_key: str = authorization_key or config.gigachat_authorization_key
-        self._scope: str = scope or config.gigachat_scope
-        self._verify_ssl: bool | str = verify_ssl if verify_ssl is not True else config.gigachat_verify_ssl
-        self._model: str = model or config.gigachat_model
+        self._auth_url: str = config.auth_url
+        self._api_url: str = config.api_url
+        self._authorization_key: str = config.authorization_key
+        self._scope: str = config.scope
+        self._verify_ssl: bool | str = config.verify_ssl
+        self._model: str = config.model
 
         # Кэш токена
         self._access_token: str | None = None

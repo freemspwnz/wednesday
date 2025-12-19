@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from loguru import logger
 
+from services.clients.gigachat_config import GigaChatConfig
 from services.clients.gigachat_text import GigaChatTextClient
 
 
@@ -64,7 +65,7 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
     Проверяем, что при параллельных запросах токена фактически выполняется
     только один HTTP‑запрос и не возникает гонок.
     """
-    client = GigaChatTextClient(
+    config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
         authorization_key="dummy",
@@ -72,6 +73,7 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
         model="GigaChat",
         verify_ssl=False,
     )
+    client = GigaChatTextClient(config=config)
 
     try:
         # Подменяем внутренний session на заглушку, чтобы не ходить в сеть.
@@ -104,7 +106,7 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
     """
     full_key = "A" * 40
 
-    client = GigaChatTextClient(
+    config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
         authorization_key=full_key,
@@ -112,6 +114,7 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
         model="GigaChat",
         verify_ssl=False,
     )
+    client = GigaChatTextClient(config=config)
 
     try:
         # Подменяем session, чтобы не было реальных HTTP‑запросов.

@@ -605,9 +605,18 @@ async def gigachat_client() -> AsyncIterator[Any]:
             finally:
                 await client.aclose()
     """
+    from services.clients.gigachat_config import GigaChatConfig
     from services.clients.gigachat_text import GigaChatTextClient
 
-    client = GigaChatTextClient()
+    config = GigaChatConfig(
+        auth_url="https://example.test/auth",
+        api_url="https://example.test/api",
+        authorization_key="dummy",
+        scope="GIGACHAT_API_PERS",
+        model="GigaChat",
+        verify_ssl=False,
+    )
+    client = GigaChatTextClient(config=config)
     try:
         yield client
     finally:
