@@ -1,7 +1,7 @@
 """Application service для координации генерации промптов.
 
-Координирует работу доменных и инфраструктурных сервисов для генерации,
-кэширования и сохранения промптов через протоколы `ICache` и `IPromptStorage`.
+Координирует работу доменных и инфраструктурных сервисов для генерации
+и кэширования промптов через протокол `ICache`.
 """
 
 from __future__ import annotations
@@ -9,8 +9,7 @@ from __future__ import annotations
 from services.base.base_service import BaseService
 from services.domain.prompt_generation import PromptGenerationService
 from services.infrastructure.cache.prompt_cache import PromptCache
-from services.infrastructure.storage.prompt_storage import PromptStorageService
-from services.protocols import ICache, IPromptStorage
+from services.protocols import ICache
 
 
 class PromptService(BaseService):
@@ -18,27 +17,23 @@ class PromptService(BaseService):
 
     Координирует работу:
     - PromptGenerationService (генерация);
-    - кэша промптов, удовлетворяющего протоколу ``ICache[dict | str]``;
-    - файлового хранилища промптов, удовлетворяющего протоколу ``IPromptStorage``.
+    - кэша промптов, удовлетворяющего протоколу ``ICache[dict | str]``.
     """
 
     def __init__(
         self,
         prompt_generation_service: PromptGenerationService,
         prompt_cache: PromptCache | ICache[dict | str] | None = None,
-        prompt_storage: PromptStorageService | IPromptStorage | None = None,
     ) -> None:
         """Инициализирует сервис координации промптов.
 
         Args:
             prompt_generation_service: Сервис генерации промптов (обязателен).
             prompt_cache: Кэш промптов, реализующий ``ICache[dict | str]`` (опционально).
-            prompt_storage: Файловое хранилище промптов, реализующее ``IPromptStorage`` (опционально).
         """
         super().__init__()
         self._generation_service = prompt_generation_service
         self._cache = prompt_cache
-        self._storage = prompt_storage
 
     async def generate(self) -> str | None:
         """Генерирует промпт с полной координацией всех сервисов.
@@ -47,8 +42,7 @@ class PromptService(BaseService):
         1. Проверяет кэш (если доступен)
         2. Генерирует промпт через PromptGenerationService
         3. Сохраняет в кэш (если доступен)
-        4. Сохраняет в файловое хранилище (если доступно)
-        5. Возвращает промпт или None
+        4. Возвращает промпт или None
 
         Returns:
             Сгенерированный промпт или None, если генерация не удалась.
@@ -104,18 +98,5 @@ class PromptService(BaseService):
                 )
             except Exception as e:
                 self.logger.warning(f"Ошибка при сохранении промпта в кэш: {e}")
-
-        # Сохраняем в файловое хранилище (если доступно)
-        if prompt and self._storage is not None:
-            try:
-                await self._storage.save(prompt)
-                self.log_event(
-                    event="prompt_saved",
-                    status="saved",
-                    level="debug",
-                    message="Промпт сохранён в файловое хранилище",
-                )
-            except Exception as e:
-                self.logger.warning(f"Ошибка при сохранении промпта в файловое хранилище: {e}")
 
         return prompt

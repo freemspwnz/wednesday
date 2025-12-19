@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Удалено файловое хранилище промптов**:
+  - Удалён избыточный слой файлового хранилища промптов (`PromptStorageService`, `IPromptStorage`)
+  - Все промпты теперь хранятся только в базе данных PostgreSQL через `PromptsStore`
+  - Удалён параметр `prompt_storage` из конструктора `PromptService`
+  - Удалён параметр `prompt_storage` из конструктора `GigaChatTextClient`
+  - Удалён параметр `prompt_storage` из функции `create_text_client()`
+  - Обновлён `services/container.py` для удаления создания и передачи `PromptStorageService`
+  - Удалён протокол `IPromptStorage` из `services/protocols.py`
+  - Удалён файл `services/infrastructure/storage/prompt_storage.py`
+  - Удалены тесты, использующие `PromptStorageService`
+  - Упрощена архитектура за счёт удаления дублирования функциональности
+
 - **Декомпозиция DispatchService.send_wednesday_frog**:
   - Разбит толстый метод `send_wednesday_frog` на приватные методы для улучшения читаемости и тестируемости
   - Выделены методы: `_init_result`, `_prepare_targets`, `_already_dispatched_for_all`, `_generate_image`, `_send_single_photo`, `_send_to_targets`, `_send_fallback_to_targets`, `_handle_generation_failure`, `_handle_unexpected_error`

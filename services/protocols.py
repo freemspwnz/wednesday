@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Protocol, TypeVar, runtime_checkable
 
 
@@ -91,24 +90,6 @@ class IImageStorage(Protocol):
         Returns:
             Кортеж (данные файла, путь к файлу) или None, если файлы не найдены.
         """
-        ...
-
-
-@runtime_checkable
-class IPromptStorage(Protocol):
-    """Протокол для файлового хранилища промптов."""
-
-    async def save(
-        self,
-        prompt: str,
-        folder: Path | str | None = None,
-        source: str = "gigachat",
-    ) -> str:
-        """Сохраняет промпт в файловое хранилище и возвращает путь к файлу."""
-        ...
-
-    async def load_all(self, folder: Path | str | None = None) -> list[str]:
-        """Загружает все сохранённые промпты из указанной папки."""
         ...
 
 

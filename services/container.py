@@ -29,8 +29,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
-from services.infrastructure.storage.prompt_storage import PromptStorageService
-from services.protocols import ICircuitBreaker, IPromptStorage, IRateLimiter
+from services.protocols import ICircuitBreaker, IRateLimiter
 from utils.chats_store import ChatsStore
 from utils.config import ImageConfig, config
 from utils.dispatch_registry import DispatchRegistry
@@ -39,26 +38,20 @@ from utils.models_store import ModelsStore
 from utils.usage_tracker import UsageTracker
 
 
-def _create_clients(prompt_storage: IPromptStorage | None = None) -> tuple:
+def _create_clients() -> tuple:
     """Создаёт клиенты для внешних ML‑сервисов.
 
-    Args:
-        prompt_storage: Опциональное хранилище промптов. Если None, создаётся новый экземпляр.
-
     Returns:
-        Кортеж (image_client, text_client, prompt_storage) для использования в сервисах.
+        Кортеж (image_client, text_client) для использования в сервисах.
     """
-    if prompt_storage is None:
-        prompt_storage = PromptStorageService()
     image_client = create_image_client()
-    text_client = create_text_client(prompt_storage=prompt_storage)
-    return (image_client, text_client, prompt_storage)
+    text_client = create_text_client()
+    return (image_client, text_client)
 
 
 def build_image_stack(
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
-    prompt_storage: IPromptStorage | None = None,
 ) -> ImageService:
     """Собирает полный стек зависимостей для ImageService.
 
@@ -70,19 +63,15 @@ def build_image_stack(
             Если None, создаётся новый через create_image_client().
         text_client: Опциональный клиент для генерации текста.
             Если None, создаётся новый через create_text_client().
-        prompt_storage: Опциональное хранилище промптов.
-            Если None, создаётся новый PromptStorageService.
 
     Returns:
         Настроенный экземпляр ImageService.
     """
     # Инфраструктура и клиенты
-    if prompt_storage is None:
-        prompt_storage = PromptStorageService()
     if image_client is None:
         image_client = create_image_client()
     if text_client is None:
-        text_client = create_text_client(prompt_storage=prompt_storage)
+        text_client = create_text_client()
 
     # Доменные сервисы
     image_generation = ImageGenerationService(image_client)
@@ -103,7 +92,6 @@ def build_image_stack(
     prompt_service = PromptService(
         prompt_generation_service=prompt_generation,
         prompt_cache=prompt_cache,
-        prompt_storage=prompt_storage,
     )
 
     return ImageService(
@@ -158,13 +146,12 @@ def build_bot_services() -> BotServices:
     app_settings = AppSettings.from_config(config)
 
     # Создаём клиенты один раз для переиспользования во всех сервисах
-    image_client, text_client, prompt_storage = _create_clients()
+    image_client, text_client = _create_clients()
 
     # Создаём image_service с переиспользованием клиентов
     image_service = build_image_stack(
         image_client=image_client,
         text_client=text_client,
-        prompt_storage=prompt_storage,
     )
 
     usage = UsageTracker(
