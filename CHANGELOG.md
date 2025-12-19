@@ -74,6 +74,14 @@
   - Tasks теперь регистрируются автоматически при импорте `tasks.py` в worker процессе
   - Устранён циклический импорт между `__init__.py` и `tasks.py`
 
+- **Устранение прямого импорта WednesdayBot в tasks.py (Этап 5)**:
+  - Удалён импорт `WednesdayBot` на уровне модуля в `tasks.py` для устранения циклической зависимости
+  - Добавлен условный импорт `WednesdayBot` через `TYPE_CHECKING` для типизации
+  - Создана helper-функция `_get_wednesday_bot()` с ленивым импортом для проверки типа во время выполнения
+  - Заменены все использования `isinstance(bot, WednesdayBot)` на вызов helper-функции
+  - Устранена зависимость `tasks.py` → `WednesdayBot` на уровне импортов
+  - Все задачи используют `get_services_context()` для получения бота через dependency injection
+
 - **Рефакторинг PromptGenerationService: удаление зависимости от utils.config**:
   - Создан dataclass `PromptFallbackConfig` для инкапсуляции конфигурации fallback промптов
   - Добавлен метод `from_image_config()` для создания конфигурации из глобального `ImageConfig`

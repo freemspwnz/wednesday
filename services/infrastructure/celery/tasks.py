@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiohttp
 from celery import Task
 
-from bot.wednesday_bot import WednesdayBot
+if TYPE_CHECKING:
+    from bot.wednesday_bot import WednesdayBot
+
 from services.application.image_service import ImageService
 from services.infrastructure.celery.app import celery_app
 from services.infrastructure.celery.context import _ensure_pools_initialized, get_services_context
@@ -29,6 +31,28 @@ from utils.prometheus_metrics import (
 R = TypeVar("R")
 
 logger = get_logger(__name__)
+
+
+def _get_wednesday_bot(context: dict[str, object]) -> WednesdayBot:
+    """Получает WednesdayBot из контекста с проверкой типа.
+
+    Использует ленивый импорт для избежания циклических зависимостей.
+
+    Args:
+        context: Контекст сервисов из get_services_context().
+
+    Returns:
+        Экземпляр WednesdayBot.
+
+    Raises:
+        RuntimeError: Если bot не найден в контексте или имеет неправильный тип.
+    """
+    from bot.wednesday_bot import WednesdayBot  # Ленивый импорт
+
+    bot = context.get("bot")
+    if not isinstance(bot, WednesdayBot):
+        raise RuntimeError("Failed to get WednesdayBot from context")
+    return bot
 
 
 def is_retryable_error(error: Exception) -> bool:
@@ -203,9 +227,7 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
     try:
         # Получаем контекст сервисов (инициализация происходит внутри, после fork)
         context = await get_services_context()
-        bot = context["bot"]
-        if not isinstance(bot, WednesdayBot):
-            raise RuntimeError("Failed to get WednesdayBot from context")
+        bot = _get_wednesday_bot(context)
         await bot.send_wednesday_frog(slot_time=slot_time)
 
         return {"status": "success", "slot_time": slot_time}
@@ -261,9 +283,7 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
     try:
         # Получаем контекст сервисов (инициализация происходит внутри, после fork)
         context = await get_services_context()
-        bot_instance = context["bot"]
-        if not isinstance(bot_instance, WednesdayBot):
-            raise RuntimeError("Failed to get WednesdayBot from context")
+        bot_instance = _get_wednesday_bot(context)
 
         image_service: ImageService | None = bot_instance.services.image_service
         if image_service is None:
@@ -344,9 +364,7 @@ async def send_frog_manual(
     try:
         # Получаем контекст сервисов (инициализация происходит внутри, после fork)
         context = await get_services_context()
-        bot_instance = context["bot"]
-        if not isinstance(bot_instance, WednesdayBot):
-            raise RuntimeError("Failed to get WednesdayBot from context")
+        bot_instance = _get_wednesday_bot(context)
 
         image_service: ImageService | None = bot_instance.services.image_service
         if image_service is None:
@@ -486,21 +504,18 @@ async def send_frog_manual(
         if status_message_id:
             try:
                 context = await get_services_context()
-                bot_instance = context["bot"]
-                if isinstance(bot_instance, WednesdayBot):
-                    await bot_instance.application.bot.delete_message(
-                        chat_id=chat_id,
-                        message_id=status_message_id,
-                    )
+                bot_instance = _get_wednesday_bot(context)
+                await bot_instance.application.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=status_message_id,
+                )
             except Exception:
                 pass
 
         # Отправляем дружелюбное сообщение пользователю
         try:
             context = await get_services_context()
-            bot_instance = context["bot"]
-            if not isinstance(bot_instance, WednesdayBot):
-                raise RuntimeError("Failed to get WednesdayBot from context")
+            bot_instance = _get_wednesday_bot(context)
             friendly_message = (
                 "🐸 К сожалению, произошла ошибка при генерации.\n"
                 "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
@@ -530,9 +545,7 @@ async def send_frog_manual(
         # Уведомляем администраторов
         try:
             context = await get_services_context()
-            bot_instance = context["bot"]
-            if not isinstance(bot_instance, WednesdayBot):
-                raise RuntimeError("Failed to get WednesdayBot from context")
+            bot_instance = _get_wednesday_bot(context)
             import traceback
 
             from utils.admins_store import AdminsStore
