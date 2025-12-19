@@ -15,7 +15,6 @@ from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
 from services.bot_services import BotServices
-from services.clients import get_image_client_container, get_text_client_container
 from utils.config import config
 from utils.logger import get_logger, log_all_methods, log_event
 
@@ -958,8 +957,12 @@ class WednesdayBot:
             except Exception as e:
                 self.logger.warning(f"Ошибка при shutdown приложения: {e}")
 
-            # Закрываем ML-клиенты (контейнеры управляют HTTP-сессиями внутри)
-            await self.aclose()
+            # Закрываем все ресурсы через BotServices
+            try:
+                await self.services.cleanup()
+                self.logger.info("Все ресурсы BotServices закрыты")
+            except Exception as e:
+                self.logger.warning(f"Ошибка при cleanup ресурсов: {e}")
 
             self.logger.info("Бот успешно остановлен")
 
@@ -1080,32 +1083,3 @@ class WednesdayBot:
 
             self.logger.error(f"Ошибка при получении информации о боте: {error_type} - {error_str}")
             return {"error": error_type, "error_message": error_msg, "is_running": self.is_running}
-
-    async def aclose(self) -> None:
-        """Закрывает async ресурсы бота (ML-клиенты).
-
-        Закрывает контейнеры ML-клиентов (ImageClientContainer, TextClientContainer),
-        что гарантирует корректное закрытие всех HTTP-сессий (aiohttp).
-
-        Этот метод должен вызываться при остановке standalone-бота для гарантированного
-        освобождения всех ресурсов. В Celery worker контейнеры закрываются автоматически
-        через shutdown_services() при остановке worker.
-
-        Side Effects:
-            - Закрывает ImageClientContainer через aclose()
-            - Закрывает TextClientContainer через aclose()
-            - Все HTTP-сессии внутри клиентов корректно завершаются
-        """
-        try:
-            image_container = get_image_client_container()
-            await image_container.aclose()
-            self.logger.info("ImageClientContainer closed in WednesdayBot")
-        except Exception as e:
-            self.logger.warning(f"Error closing ImageClientContainer in WednesdayBot: {e}")
-
-        try:
-            text_container = get_text_client_container()
-            await text_container.aclose()
-            self.logger.info("TextClientContainer closed in WednesdayBot")
-        except Exception as e:
-            self.logger.warning(f"Error closing TextClientContainer in WednesdayBot: {e}")
