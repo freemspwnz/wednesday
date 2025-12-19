@@ -46,3 +46,39 @@ class BotServices:
     admin_dashboard_service: AdminDashboardService | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
+
+    async def cleanup(self) -> None:  # noqa: PLR6301
+        """Закрывает все ресурсы (HTTP сессии, соединения).
+
+        Должен вызываться при остановке приложения для корректного
+        освобождения всех ресурсов.
+
+        Side Effects:
+            - Закрывает ImageClientContainer через aclose()
+            - Закрывает TextClientContainer через aclose()
+            - В будущем: закрытие Redis соединений, PostgreSQL pool и т.д.
+        """
+        from services.clients import get_image_client_container, get_text_client_container
+        from utils.logger import get_logger
+
+        logger = get_logger(__name__)
+
+        # Закрываем клиенты через контейнеры
+        try:
+            image_container = get_image_client_container()
+            await image_container.aclose()
+            logger.info("ImageClientContainer закрыт через BotServices.cleanup()")
+        except Exception as e:
+            logger.warning(f"Ошибка при закрытии ImageClientContainer: {e}")
+
+        try:
+            text_container = get_text_client_container()
+            await text_container.aclose()
+            logger.info("TextClientContainer закрыт через BotServices.cleanup()")
+        except Exception as e:
+            logger.warning(f"Ошибка при закрытии TextClientContainer: {e}")
+
+        # В будущем можно добавить cleanup для других ресурсов:
+        # - Redis connections (если требуется явное закрытие)
+        # - PostgreSQL pool (если используется через BotServices)
+        # - И другие долгоживущие ресурсы
