@@ -117,7 +117,10 @@ class SupportBot(BaseHandlers):
             global_limiter=global_limiter,
             user_limiter=user_limiter,
         )
-        frog_request_service = FrogRequestService()
+        from services.infrastructure.celery.celery_task_queue import CeleryTaskQueue
+
+        task_queue = CeleryTaskQueue()
+        frog_request_service = FrogRequestService(task_queue=task_queue)
         services: BotServices = BotServices(
             usage=None,  # type: ignore[arg-type]
             chats=None,  # type: ignore[arg-type]

@@ -144,6 +144,7 @@ async def test_command_handlers_start_help(
     monkeypatch.setattr("utils.admins_store.AdminsStore", _AdminNo)
     from services.application.frog_limit_service import FrogRateLimiterService
     from services.application.frog_requests import FrogRequestService
+    from services.infrastructure.celery.celery_task_queue import CeleryTaskQueue
     from services.infrastructure.rate_limiting import RateLimiter
 
     global_limiter = RateLimiter(prefix="frog:global:", window=60, limit=100)
@@ -153,7 +154,8 @@ async def test_command_handlers_start_help(
         global_limiter=global_limiter,
         user_limiter=user_limiter,
     )
-    frog_request_service = FrogRequestService()
+    task_queue = CeleryTaskQueue()
+    frog_request_service = FrogRequestService(task_queue=task_queue)
     services = BotServices(
         usage=MagicMock(),
         chats=MagicMock(),

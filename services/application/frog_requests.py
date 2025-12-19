@@ -1,22 +1,30 @@
-"""Application service для постановки задач генерации жабы в очередь Celery.
+"""Application service для постановки задач генерации жабы в очередь.
 
-Инкапсулирует логику взаимодействия с Celery, скрывая детали постановки задач
+Инкапсулирует логику взаимодействия с очередью задач, скрывая детали постановки задач
 от handlers.
 """
 
 from __future__ import annotations
 
 from services.base.base_service import BaseService
-from services.infrastructure.celery import celery_app
-from services.infrastructure.celery.task_names import CeleryTaskNames
+from services.protocols import ITaskQueue
 
 
 class FrogRequestService(BaseService):
-    """Application service для постановки задач генерации жабы в очередь Celery.
+    """Application service для постановки задач генерации жабы в очередь.
 
     Предоставляет высокоуровневый интерфейс для постановки задач генерации,
-    скрывая детали работы с Celery от handlers.
+    скрывая детали работы с очередью задач от handlers.
     """
+
+    def __init__(self, task_queue: ITaskQueue) -> None:
+        """Инициализирует FrogRequestService.
+
+        Args:
+            task_queue: Реализация ITaskQueue для отправки задач.
+        """
+        super().__init__()
+        self.task_queue = task_queue
 
     async def request_manual_frog(
         self,
@@ -24,7 +32,7 @@ class FrogRequestService(BaseService):
         user_id: int,
         status_message_id: int | None,
     ) -> None:
-        """Ставит задачу генерации и отправки жабы в очередь Celery.
+        """Ставит задачу генерации и отправки жабы в очередь.
 
         Args:
             chat_id: ID чата для отправки изображения.
@@ -32,14 +40,10 @@ class FrogRequestService(BaseService):
             status_message_id: ID статусного сообщения для удаления после отправки (опционально).
 
         Raises:
-            Exception: При ошибке постановки задачи в очередь Celery.
+            Exception: При ошибке постановки задачи в очередь.
         """
-        try:
-            celery_app.send_task(
-                CeleryTaskNames.WEDNESDAY_SEND_FROG_MANUAL,
-                args=[chat_id, user_id, status_message_id],
-            )
-            self.logger.info(f"Задача send_frog_manual поставлена в очередь для пользователя {user_id}")
-        except Exception as e:
-            self.logger.error(f"Не удалось поставить задачу в очередь Celery: {e}")
-            raise
+        await self.task_queue.send_frog_manual_task(
+            chat_id=chat_id,
+            user_id=user_id,
+            status_message_id=status_message_id,
+        )

@@ -58,6 +58,14 @@
   - Бот теперь создаётся с явной передачей сервисов через dependency injection
   - Тесты используют новый API с явными зависимостями
 
+- **Рефакторинг FrogRequestService (Этап 3)**:
+  - Удалена прямая зависимость от `celery_app` и `CeleryTaskNames` в `FrogRequestService`
+  - Добавлен конструктор, принимающий `task_queue: ITaskQueue` через dependency injection
+  - Метод `request_manual_frog()` теперь использует `self.task_queue.send_frog_manual_task()`
+  - Обновлён `container.py` для создания `CeleryTaskQueue` и передачи его в `FrogRequestService`
+  - Обновлены `support_bot.py` и тесты для использования нового API
+  - Устранена зависимость Application Layer → Infrastructure Layer
+
 - **Рефакторинг PromptGenerationService: удаление зависимости от utils.config**:
   - Создан dataclass `PromptFallbackConfig` для инкапсуляции конфигурации fallback промптов
   - Добавлен метод `from_image_config()` для создания конфигурации из глобального `ImageConfig`

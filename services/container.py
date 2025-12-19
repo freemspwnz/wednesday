@@ -18,7 +18,6 @@ from services.app_settings import AppSettings
 from services.application.admin_dashboard_service import AdminDashboardService
 from services.application.dispatch_service import DispatchService
 from services.application.frog_limit_service import FrogRateLimiterService
-from services.application.frog_requests import FrogRequestService
 from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
 from services.bot_services import BotServices
@@ -193,7 +192,13 @@ def build_bot_services() -> BotServices:
         global_limiter=global_limiter,
         user_limiter=user_limiter,
     )
-    frog_request_service = FrogRequestService()
+    # Ленивые импорты для избежания циклических зависимостей
+    from services.application.frog_requests import FrogRequestService
+    from services.infrastructure.celery.celery_task_queue import CeleryTaskQueue
+
+    # Создаём task queue и передаём в FrogRequestService
+    task_queue = CeleryTaskQueue()
+    frog_request_service = FrogRequestService(task_queue=task_queue)
     dispatch_service = DispatchService(
         usage=usage,
         chats=chats,
