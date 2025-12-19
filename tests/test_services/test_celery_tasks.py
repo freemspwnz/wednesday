@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
+from services.celery.context import CeleryServices
 from services.celery.tasks import (
     daily_cleanup_task,
     daily_statistics_task,
@@ -15,7 +16,6 @@ from services.celery.tasks import (
     is_retryable_error,
     send_wednesday_frog_task,
 )
-from services.celery_tasks import CeleryServices
 
 pytestmark = [pytest.mark.unit]
 
@@ -25,10 +25,10 @@ async def test_celery_services_lazy_init(reset_singletons: Any) -> None:
     """Тест lazy инициализации CeleryServices."""
 
     with (
-        patch("services.celery_tasks.init_redis_pool") as mock_redis,
-        patch("services.celery_tasks.init_postgres_pool") as mock_pg,
-        patch("services.celery_tasks.ensure_schema") as mock_schema,
-        patch("services.celery_tasks.WednesdayBot") as mock_bot_class,
+        patch("services.celery.context.init_redis_pool") as mock_redis,
+        patch("services.celery.context.init_postgres_pool") as mock_pg,
+        patch("services.celery.context.ensure_schema") as mock_schema,
+        patch("services.celery.context.WednesdayBot") as mock_bot_class,
     ):
         mock_bot_instance = MagicMock()
         mock_bot_class.return_value = mock_bot_instance
@@ -81,8 +81,8 @@ async def test_send_wednesday_frog_task_success(reset_singletons: Any) -> None:
     mock_self.request.id = "test-task-id"
 
     with (
-        patch("services.celery_tasks.CeleryServices.get_bot") as mock_get_bot,
-        patch("services.celery_tasks.log_event") as mock_log_event,
+        patch("services.celery.context.CeleryServices.get_bot") as mock_get_bot,
+        patch("services.celery.context.log_event") as mock_log_event,
     ):
         mock_bot = AsyncMock()
         mock_bot.send_wednesday_frog = AsyncMock()
@@ -116,8 +116,8 @@ async def test_send_wednesday_frog_task_retry_on_network_error() -> None:
     mock_self.retry = MagicMock(side_effect=Exception("Retry called"))
 
     with (
-        patch("services.celery_tasks.CeleryServices.get_bot") as mock_get_bot,
-        patch("services.celery_tasks.CELERY_TASK_RETRIES_TOTAL") as mock_retry_metric,
+        patch("services.celery.context.CeleryServices.get_bot") as mock_get_bot,
+        patch("services.celery.context.CELERY_TASK_RETRIES_TOTAL") as mock_retry_metric,
     ):
         mock_bot = AsyncMock()
         mock_bot.send_wednesday_frog = AsyncMock(side_effect=aiohttp.ClientError())
@@ -149,7 +149,7 @@ async def test_send_wednesday_frog_task_no_retry_on_business_error() -> None:
     mock_self.request.id = "test-task-id"
     mock_self.retry = MagicMock()
 
-    with patch("services.celery_tasks.CeleryServices.get_bot") as mock_get_bot:
+    with patch("services.celery.context.CeleryServices.get_bot") as mock_get_bot:
         mock_bot = AsyncMock()
         mock_bot.send_wednesday_frog = AsyncMock(side_effect=ValueError("Business logic error"))
         mock_get_bot.return_value = mock_bot
@@ -176,7 +176,7 @@ async def test_generate_frog_image_task_success() -> None:
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
 
-    with patch("services.celery_tasks.CeleryServices.get_generator") as mock_get_gen:
+    with patch("services.celery.context.CeleryServices.get_generator") as mock_get_gen:
         mock_gen = AsyncMock()
         mock_gen.generate_frog_image = AsyncMock(return_value=(b"image_data", "caption"))
         mock_get_gen.return_value = mock_gen
@@ -203,7 +203,7 @@ async def test_generate_frog_image_task_failed() -> None:
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
 
-    with patch("services.celery_tasks.CeleryServices.get_generator") as mock_get_gen:
+    with patch("services.celery.context.CeleryServices.get_generator") as mock_get_gen:
         mock_gen = AsyncMock()
         mock_gen.generate_frog_image = AsyncMock(return_value=None)
         mock_get_gen.return_value = mock_gen
@@ -231,8 +231,8 @@ async def test_generate_frog_image_task_retry_on_network_error() -> None:
     mock_self.retry = MagicMock(side_effect=Exception("Retry called"))
 
     with (
-        patch("services.celery_tasks.CeleryServices.get_generator") as mock_get_gen,
-        patch("services.celery_tasks.CELERY_TASK_RETRIES_TOTAL") as mock_retry_metric,
+        patch("services.celery.context.CeleryServices.get_generator") as mock_get_gen,
+        patch("services.celery.context.CELERY_TASK_RETRIES_TOTAL") as mock_retry_metric,
     ):
         mock_gen = AsyncMock()
         mock_gen.generate_frog_image = AsyncMock(side_effect=aiohttp.ClientError())
@@ -262,7 +262,7 @@ async def test_daily_cleanup_task_success(reset_singletons: Any) -> None:
     mock_self.request.id = "test-task-id"
 
     with (
-        patch("services.celery_tasks.CeleryServices.get_bot") as mock_get_bot,
+        patch("services.celery.context.CeleryServices.get_bot") as mock_get_bot,
         patch("utils.dispatch_registry.DispatchRegistry") as mock_registry_class,
     ):
         mock_bot = AsyncMock()
@@ -292,7 +292,7 @@ async def test_daily_statistics_task_success(reset_singletons: Any) -> None:
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
 
-    with patch("services.celery_tasks.CeleryServices.get_bot") as mock_get_bot:
+    with patch("services.celery.context.CeleryServices.get_bot") as mock_get_bot:
         mock_bot = AsyncMock()
         mock_get_bot.return_value = mock_bot
 
@@ -312,8 +312,8 @@ async def test_daily_statistics_task_success(reset_singletons: Any) -> None:
 async def test_celery_services_shutdown() -> None:
     """Тест graceful shutdown CeleryServices."""
     # Инициализируем контекст сервисов
-    import services.celery_tasks as celery_tasks_module
-    from services.celery_tasks import shutdown_services
+    import services.celery.context as celery_context_module
+    from services.celery.context import shutdown_services
 
     mock_bot = MagicMock()
     mock_generator = MagicMock()
@@ -324,14 +324,14 @@ async def test_celery_services_shutdown() -> None:
     mock_bot.aclose = mock_bot_aclose
     mock_generator.aclose = mock_generator_aclose
 
-    celery_tasks_module._services_context = {
+    celery_context_module._services_context = {
         "bot": mock_bot,
         "generator": mock_generator,
     }
 
     with (
-        patch("services.celery_tasks.close_postgres_pool", new_callable=AsyncMock) as mock_close_pg,
-        patch("services.celery_tasks.close_redis", new_callable=AsyncMock) as mock_close_redis,
+        patch("services.celery.context.close_postgres_pool", new_callable=AsyncMock) as mock_close_pg,
+        patch("services.celery.context.close_redis", new_callable=AsyncMock) as mock_close_redis,
     ):
         await shutdown_services()
 
@@ -340,4 +340,4 @@ async def test_celery_services_shutdown() -> None:
         mock_close_redis.assert_awaited_once()
 
         # Проверяем, что состояние сброшено
-        assert celery_tasks_module._services_context is None
+        assert celery_context_module._services_context is None

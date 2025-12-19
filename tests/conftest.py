@@ -571,19 +571,19 @@ def reset_singletons() -> Generator[None, None, None]:
         async def test_something(reset_singletons):
             # тест использует синглтоны
     """
-    import services.celery_tasks as celery_tasks_module
+    import services.celery.context as celery_context_module
 
     # Сохраняем исходное состояние
-    original_context = celery_tasks_module._services_context
+    original_context = celery_context_module._services_context
 
     # Сбрасываем состояние
-    celery_tasks_module._services_context = None
+    celery_context_module._services_context = None
 
     try:
         yield
     finally:
         # Восстанавливаем исходное состояние
-        celery_tasks_module._services_context = original_context
+        celery_context_module._services_context = original_context
 
 
 @pytest_asyncio.fixture

@@ -17,7 +17,7 @@ from celery import Task
 from bot.wednesday_bot import WednesdayBot
 from services.application.image_service import ImageService
 from services.celery import celery_app
-from services.celery_tasks import _ensure_pools_initialized, get_services_context
+from services.celery.context import _ensure_pools_initialized, get_services_context
 from utils.logger import get_logger, log_event
 from utils.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,

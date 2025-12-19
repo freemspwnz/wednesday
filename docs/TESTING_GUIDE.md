@@ -246,7 +246,7 @@ async def test_celery_task_with_mock(mocker):
     mock_bot = mocker.AsyncMock()
     mock_bot.send_wednesday_frog = mocker.AsyncMock(return_value={"status": "success"})
 
-    with mocker.patch("services.celery_tasks.CeleryServices.get_bot", return_value=mock_bot):
+    with mocker.patch("services.celery.context.CeleryServices.get_bot", return_value=mock_bot):
         # Обходим декораторы Celery для прямого вызова функции
         task_func = send_wednesday_frog_task
         if hasattr(task_func, '__wrapped__'):

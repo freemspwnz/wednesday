@@ -24,6 +24,12 @@
   - Обновлены команды в `docker-compose.yml` и `docs/DEPLOYMENT.md` для использования `services.celery` вместо `services.celery_app`
   - Обновлена структура проекта в `README.md` для отражения новой организации Celery модулей
 
+- **Реорганизована структура Celery модулей**:
+  - Переименован `services/celery_tasks.py` → `services/celery/context.py` для улучшения ясности структуры
+  - Модуль `context.py` содержит инфраструктуру и управление жизненным циклом сервисов (инициализация, shutdown)
+  - Модуль `tasks.py` содержит бизнес-логику Celery задач
+  - Обновлены все импорты в тестах и документации для использования нового пути `services.celery.context`
+
 - **Уточнены импорты и структура административных хэндлеров**:
   - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
   - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal
