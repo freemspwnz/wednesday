@@ -226,7 +226,7 @@ services:
     # - Подходит для I/O-bound задач (HTTP запросы, БД)
     # ВАЖНО: get_redis_url() в celery/app.py читает REDIS_HOST из переменных окружения,
     # которые установлены в секции environment выше (REDIS_HOST=redis)
-    command: celery -A services.celery worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
+    command: celery -A services.infrastructure.celery worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
     volumes:
       - frog_images:/app/data/frogs
       - prompt_storage:/app/data/prompts
@@ -236,7 +236,7 @@ services:
     healthcheck:
       # Проверяем здоровье worker через стандартный Celery inspect ping
       # Используем celery inspect ping для проверки доступности worker
-      test: ["CMD-SHELL", "celery -A services.celery inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "celery -A services.infrastructure.celery inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -286,7 +286,7 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       SERVICE_NAME: celery-beat
       ENV: ${ENV:-dev}
-    command: celery -A services.celery beat --loglevel=debug
+    command: celery -A services.infrastructure.celery beat --loglevel=debug
     volumes:
       # Beat сохраняет состояние расписания в файл (опционально)
       - beat_data:/app/data/beat

@@ -275,7 +275,7 @@ async def _check_celery() -> dict[str, Any]:
     try:
         import asyncio
 
-        from services.celery import celery_app
+        from services.infrastructure.celery import celery_app
 
         # Проверяем доступность workers через ping
         # celery_app.control.inspect() синхронный, запускаем в executor

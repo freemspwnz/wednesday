@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from services.celery import celery_app
-from services.celery.task_names import CeleryTaskNames
+from services.infrastructure.celery import celery_app
+from services.infrastructure.celery.task_names import CeleryTaskNames
 from utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class CeleryTaskQueue:
 
         Args:
             celery_app_instance: Экземпляр Celery app. По умолчанию использует
-                глобальный celery_app из services.celery.
+                глобальный celery_app из services.infrastructure.celery.
         """
         self.celery_app = celery_app_instance
         self.logger = get_logger(__name__)

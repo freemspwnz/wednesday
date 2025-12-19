@@ -180,7 +180,7 @@ async def test_frog_command_success(
     fake_update.message.chat_id = fake_update.effective_chat.id
 
     # Мокаем отправку задачи в Celery
-    from services.celery import celery_app
+    from services.infrastructure.celery import celery_app
 
     send_task_mock = MagicMock()
     monkeypatch.setattr(celery_app, "send_task", send_task_mock)
@@ -238,7 +238,7 @@ async def test_frog_command_usage_limit(
     # Добавляем chat_id для совместимости
     fake_update.message.chat_id = fake_update.effective_chat.id
 
-    from services.celery import celery_app
+    from services.infrastructure.celery import celery_app
 
     send_task_mock = MagicMock()
     monkeypatch.setattr(celery_app, "send_task", send_task_mock)

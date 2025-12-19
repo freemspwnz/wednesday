@@ -7,8 +7,8 @@
 from __future__ import annotations
 
 from services.base.base_service import BaseService
-from services.celery import celery_app
-from services.celery.task_names import CeleryTaskNames
+from services.infrastructure.celery import celery_app
+from services.infrastructure.celery.task_names import CeleryTaskNames
 
 
 class FrogRequestService(BaseService):
