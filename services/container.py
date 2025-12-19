@@ -39,8 +39,10 @@ from services.protocols import ICircuitBreaker, IRateLimiter
 from utils.chats_repo import ChatsRepo
 from utils.config import ImageConfig, config
 from utils.dispatch_registry import DispatchRegistry
+from utils.images_repo import ImagesRepo
 from utils.metrics import Metrics
 from utils.models_repo import ModelsRepo
+from utils.prompts_repo import PromptsRepo
 from utils.usage_tracker import UsageTracker
 
 
@@ -95,7 +97,12 @@ def build_image_stack(
     )
 
     # Инфраструктура
-    image_cache = ImageCacheService()
+    images_repo = ImagesRepo()
+    prompts_repo = PromptsRepo()
+    image_cache = ImageCacheService(
+        images_repo=images_repo,
+        prompts_repo=prompts_repo,
+    )
     image_storage = ImageStorageService()
     prompt_cache = PromptCache()
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(

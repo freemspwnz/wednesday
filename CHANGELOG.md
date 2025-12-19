@@ -19,6 +19,12 @@
   - Infrastructure слой больше не зависит от конкретных реализаций из `utils/`
   - Соответствует принципу Dependency Inversion (DIP)
 
+- **Обновление container.py для передачи репозиториев в ImageCacheService (Проблема 4, Шаг 3)**:
+  - Добавлены импорты `ImagesRepo` и `PromptsRepo` в `container.py`
+  - Создание экземпляров репозиториев вынесено в `build_image_stack()`
+  - `ImageCacheService` теперь получает конкретные реализации через конструктор
+  - `container.py` является единственным местом создания конкретных реализаций
+
 - **Переименование классов репозиториев БД Store → Repo (Проблема 4, Подготовка)**:
   - Переименованы классы репозиториев БД для единообразия: `ImagesStore` → `ImagesRepo`, `PromptsStore` → `PromptsRepo`, `ChatsStore` → `ChatsRepo`, `AdminsStore` → `AdminsRepo`, `ModelsStore` → `ModelsRepo`
   - Переименованы файлы: `*_store.py` → `*_repo.py` в `utils/`
