@@ -34,7 +34,7 @@ import aiohttp
 from loguru import logger
 
 from services.clients import ITextToTextClient
-from services.prompt_generator import PromptStorage
+from services.protocols import IPromptStorage
 from utils.config import config
 from utils.models_store import ModelsStore
 from utils.retry import retry_critical, retry_standard
@@ -116,6 +116,8 @@ class GigaChatTextClient(ITextToTextClient):
         scope: str | None = None,
         model: str | None = None,
         verify_ssl: bool | str = True,
+        *,
+        prompt_storage: IPromptStorage | None = None,
     ) -> None:
         """Инициализация клиента GigaChat.
 
@@ -168,7 +170,7 @@ class GigaChatTextClient(ITextToTextClient):
                 logger.warning(f"⚠️ Файл сертификата не найден: {self._verify_ssl}. Проверка SSL может не работать.")
 
         # Хранилище промптов для сохранения успешных генераций
-        self._prompt_storage = PromptStorage()
+        self._prompt_storage: IPromptStorage | None = prompt_storage
 
         logger.info("GigaChatTextClient инициализирован")
 
@@ -239,10 +241,11 @@ class GigaChatTextClient(ITextToTextClient):
                     bound.info(f"Промпт успешно сгенерирован ({len(generated_prompt)} символов)")
 
                     # Сохраняем успешный промпт в файловое хранилище
-                    try:
-                        self._prompt_storage.save_prompt(generated_prompt, source="gigachat")
-                    except Exception as e:
-                        bound.warning(f"Не удалось сохранить промпт в хранилище: {e}")
+                    if self._prompt_storage is not None:
+                        try:
+                            await self._prompt_storage.save(generated_prompt, source="gigachat")
+                        except Exception as e:
+                            bound.warning(f"Не удалось сохранить промпт в файловое хранилище: {e}")
 
                     return generated_prompt
                 else:

@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Унифицировано файловое хранилище промптов**:
+  - Удалён синхронный класс `PromptStorage` из `services/prompt_generator.py`, оставлена только асинхронная реализация `PromptStorageService`
+  - `GigaChatTextClient` теперь принимает `IPromptStorage` через dependency injection вместо создания хранилища внутри себя
+  - Фабрика `create_text_client()` в `services/clients/factory.py` принимает опциональный параметр `prompt_storage` для передачи в клиент
+  - В `services/container.py` создаётся единый экземпляр `PromptStorageService` и передаётся в `create_text_client()` и `PromptService`
+  - Обновлены тесты для использования асинхронного `PromptStorageService` вместо синхронного `PromptStorage`
+
 - **Уточнены импорты и структура административных хэндлеров**:
   - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
   - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal

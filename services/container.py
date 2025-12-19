@@ -27,7 +27,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
-from services.protocols import ICircuitBreaker, IScheduler
+from services.protocols import ICircuitBreaker, IPromptStorage, IScheduler
 from services.scheduler import TaskScheduler
 from utils.chats_store import ChatsStore
 from utils.config import ImageConfig, config
@@ -42,9 +42,12 @@ def build_image_stack() -> ImageService:
     Все клиенты, доменные и инфраструктурные сервисы создаются в одном месте,
     чтобы упростить дальнейшее сопровождение и тестирование.
     """
+    # Инфраструктура
+    prompt_storage: IPromptStorage = PromptStorageService()
+
     # Клиенты
     image_client = create_image_client()
-    text_client = create_text_client()
+    text_client = create_text_client(prompt_storage=prompt_storage)
 
     # Доменные сервисы
     image_generation = ImageGenerationService(image_client)
@@ -54,7 +57,6 @@ def build_image_stack() -> ImageService:
     image_cache = ImageCacheService()
     image_storage = ImageStorageService()
     prompt_cache = PromptCache()
-    prompt_storage = PromptStorageService()
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(
         key="cb:kandinsky_api",
         threshold=5,

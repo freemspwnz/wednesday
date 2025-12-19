@@ -25,6 +25,8 @@ from services.clients.gigachat_text import GigaChatTextClient
 from services.clients.image_client_container import get_image_client_container
 from services.clients.kandinsky import KandinskyClient
 from services.clients.text_client_container import get_text_client_container
+from services.infrastructure.storage.prompt_storage import PromptStorageService
+from services.protocols import IPromptStorage
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -77,12 +79,16 @@ def create_image_client() -> ITextToImageClient:
     return container
 
 
-def create_text_client() -> ITextToTextClient | None:
+def create_text_client(prompt_storage: IPromptStorage | None = None) -> ITextToTextClient | None:
     """Создаёт/возвращает контейнер текстовой модели.
 
     Фабрика создаёт и возвращает контейнер текстового клиента в соответствии с
     переменной окружения `TEXT_MODEL_BACKEND`. Контейнер реализует интерфейс
     `ITextToTextClient` и проксирует вызовы к текущему активному клиенту.
+
+    Args:
+        prompt_storage: Опциональное хранилище промптов для передачи в клиент.
+            Если None, создаётся новый экземпляр PromptStorageService.
 
     Returns:
         Экземпляр TextClientContainer, реализующий интерфейс ITextToTextClient, или None
@@ -111,6 +117,9 @@ def create_text_client() -> ITextToTextClient | None:
             backend,
         )
 
+    # Создаём хранилище промптов, если не передано
+    storage = prompt_storage or PromptStorageService()
+
     # Создаём реальный HTTP‑клиент один раз и регистрируем его в singleton‑контейнере.
     # Контейнер реализует интерфейс `ITextToTextClient`, так что вызывающий код
     # продолжает работать через те же методы (`generate`, `set_model` и т.д.),
@@ -122,6 +131,7 @@ def create_text_client() -> ITextToTextClient | None:
         scope=config.gigachat_scope,
         model=config.gigachat_model,
         verify_ssl=config.gigachat_verify_ssl,
+        prompt_storage=storage,
     )
 
     container = get_text_client_container()
