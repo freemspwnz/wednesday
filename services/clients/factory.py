@@ -25,6 +25,7 @@ from services.clients.gigachat_text import GigaChatTextClient
 from services.clients.image_client_container import get_image_client_container
 from services.clients.kandinsky import KandinskyClient
 from services.clients.text_client_container import get_text_client_container
+from services.protocols import IModelsRepo
 from utils.config import GigaChatConfig, KandinskyConfig
 from utils.logger import get_logger
 
@@ -34,7 +35,10 @@ DEFAULT_IMAGE_BACKEND: Final[str] = "kandinsky"
 DEFAULT_TEXT_BACKEND: Final[str] = "gigachat"
 
 
-def create_image_client(kandinsky_config: KandinskyConfig) -> ITextToImageClient:
+def create_image_client(
+    kandinsky_config: KandinskyConfig,
+    models_repo: IModelsRepo | None = None,
+) -> ITextToImageClient:
     """Создаёт/возвращает контейнер клиента генерации изображений.
 
     Фабрика создаёт и возвращает контейнер клиента генерации изображений в соответствии
@@ -43,6 +47,7 @@ def create_image_client(kandinsky_config: KandinskyConfig) -> ITextToImageClient
 
     Args:
         kandinsky_config: Конфигурация Kandinsky клиента.
+        models_repo: Репозиторий моделей для передачи в клиент через DI.
 
     Returns:
         Экземпляр ImageClientContainer, реализующий интерфейс ITextToImageClient.
@@ -71,7 +76,7 @@ def create_image_client(kandinsky_config: KandinskyConfig) -> ITextToImageClient
     # Контейнер реализует интерфейс `ITextToImageClient`, так что вызывающий код
     # продолжает работать через те же методы (`generate`),
     # но теперь с возможностью безопасной замены клиента в рантайме.
-    kandinsky_client = KandinskyClient(config=kandinsky_config)
+    kandinsky_client = KandinskyClient(config=kandinsky_config, models_repo=models_repo)
 
     container = get_image_client_container()
     # Инициализируем контейнер только один раз; последующие вызовы фабрики
@@ -80,7 +85,10 @@ def create_image_client(kandinsky_config: KandinskyConfig) -> ITextToImageClient
     return container
 
 
-def create_text_client(gigachat_config: GigaChatConfig) -> ITextToTextClient | None:
+def create_text_client(
+    gigachat_config: GigaChatConfig,
+    models_repo: IModelsRepo | None = None,
+) -> ITextToTextClient | None:
     """Создаёт/возвращает контейнер текстовой модели.
 
     Фабрика создаёт и возвращает контейнер текстового клиента в соответствии с
@@ -89,6 +97,7 @@ def create_text_client(gigachat_config: GigaChatConfig) -> ITextToTextClient | N
 
     Args:
         gigachat_config: Конфигурация GigaChat клиента (обязательна).
+        models_repo: Репозиторий моделей для передачи в клиент через DI.
 
     Returns:
         Экземпляр TextClientContainer, реализующий интерфейс ITextToTextClient, или None
@@ -118,7 +127,7 @@ def create_text_client(gigachat_config: GigaChatConfig) -> ITextToTextClient | N
     # Контейнер реализует интерфейс `ITextToTextClient`, так что вызывающий код
     # продолжает работать через те же методы (`generate`, `set_model` и т.д.),
     # но теперь с возможностью безопасной замены клиента в рантайме.
-    gigachat_client = GigaChatTextClient(config=gigachat_config)
+    gigachat_client = GigaChatTextClient(config=gigachat_config, models_repo=models_repo)
 
     container = get_text_client_container()
     # Инициализируем контейнер только один раз; последующие вызовы фабрики

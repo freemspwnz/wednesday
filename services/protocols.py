@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from utils.images_repo import ImageRecord
@@ -348,5 +348,79 @@ class IChatsRepo(Protocol):
 
         Args:
             chat_id: Идентификатор чата для удаления.
+        """
+        ...
+
+
+@runtime_checkable
+class IModelsRepo(Protocol):
+    """Протокол для репозитория моделей Kandinsky и GigaChat."""
+
+    async def set_kandinsky_model(self, pipeline_id: str, pipeline_name: str) -> None:
+        """Устанавливает текущую модель Kandinsky.
+
+        Args:
+            pipeline_id: Идентификатор pipeline модели Kandinsky.
+            pipeline_name: Название pipeline модели Kandinsky.
+        """
+        ...
+
+    async def get_kandinsky_model(self) -> tuple[str | None, str | None]:
+        """Возвращает текущую модель Kandinsky.
+
+        Returns:
+            Кортеж (pipeline_id, pipeline_name) текущей модели Kandinsky.
+            Если модель не установлена, возвращает (None, None).
+        """
+        ...
+
+    async def set_gigachat_model(self, model_name: str) -> None:
+        """Устанавливает текущую модель GigaChat.
+
+        Args:
+            model_name: Название модели GigaChat для установки.
+        """
+        ...
+
+    async def get_gigachat_model(self) -> str | None:
+        """Возвращает текущую модель GigaChat.
+
+        Returns:
+            Название текущей модели GigaChat или None, если модель не установлена.
+        """
+        ...
+
+    async def set_kandinsky_available_models(self, models: list[dict[str, Any]] | list[str]) -> None:
+        """Сохраняет список доступных моделей Kandinsky.
+
+        Args:
+            models: Список моделей. Может быть списком словарей с полями
+                'id' и 'name' или списком строк.
+        """
+        ...
+
+    async def get_kandinsky_available_models(self) -> list[str]:
+        """Возвращает список доступных моделей Kandinsky.
+
+        Returns:
+            Список строк моделей в формате "Name (ID: xxx)".
+            Если модели не установлены, возвращает пустой список.
+        """
+        ...
+
+    async def set_gigachat_available_models(self, models: list[str]) -> None:
+        """Сохраняет список доступных моделей GigaChat.
+
+        Args:
+            models: Список названий моделей GigaChat.
+        """
+        ...
+
+    async def get_gigachat_available_models(self) -> list[str]:
+        """Возвращает список доступных моделей GigaChat.
+
+        Returns:
+            Список названий моделей GigaChat.
+            Если модели не установлены, возвращает пустой список.
         """
         ...

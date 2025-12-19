@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Внедрение протокола IModelsRepo для ModelsRepo**:
+  - Создан протокол `IModelsRepo` в `services/protocols.py` для абстракции репозитория моделей
+  - `GigaChatTextClient` и `KandinskyClient` теперь принимают `IModelsRepo` через dependency injection вместо создания `ModelsRepo` напрямую
+  - `AdminDashboardService` теперь использует протокол `IModelsRepo` вместо конкретного класса `ModelsRepo`
+  - Фабрики `create_image_client()` и `create_text_client()` принимают `models_repo` для передачи в клиенты
+  - В `container.py` создается единый экземпляр `ModelsRepo` и передается во все сервисы через DI
+  - Улучшена тестируемость и соблюдение принципов Dependency Injection
+
 - **Централизация конфигураций клиентов в config.py**:
   - Классы `GigaChatConfig`, `KandinskyConfig` и `AppSettings` перенесены из отдельных модулей в `utils/config.py`
   - Все конфигурации теперь находятся в одном месте, аналогично `ImageConfig` и `SchedulerConfig`

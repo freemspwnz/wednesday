@@ -34,6 +34,7 @@ import aiohttp
 from loguru import logger
 
 from services.clients import ITextToTextClient
+from services.protocols import IModelsRepo
 from utils.config import GigaChatConfig
 from utils.models_repo import ModelsRepo
 from utils.retry import retry_critical, retry_standard
@@ -110,11 +111,14 @@ class GigaChatTextClient(ITextToTextClient):
     def __init__(
         self,
         config: GigaChatConfig,
+        models_repo: IModelsRepo | None = None,
     ) -> None:
         """Инициализация клиента GigaChat.
 
         Args:
             config: Конфигурация GigaChat клиента (обязательна).
+            models_repo: Репозиторий моделей для сохранения/получения настроек моделей.
+                Если не передан, создается новый экземпляр ModelsRepo при необходимости.
         """
         self._auth_url: str = config.auth_url
         self._api_url: str = config.api_url
@@ -122,6 +126,7 @@ class GigaChatTextClient(ITextToTextClient):
         self._scope: str = config.scope
         self._verify_ssl: bool | str = config.verify_ssl
         self._model: str = config.model
+        self._models_repo: IModelsRepo | None = models_repo
 
         # Кэш токена
         self._access_token: str | None = None
@@ -397,7 +402,7 @@ class GigaChatTextClient(ITextToTextClient):
             available_models = await self.get_available_models(save_models=False)
             if model_name in available_models:
                 # Сохраняем модель в async-хранилище
-                models_store = ModelsRepo()
+                models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
                 await models_store.set_gigachat_model(model_name)
                 self._model = model_name
 
@@ -536,7 +541,7 @@ class GigaChatTextClient(ITextToTextClient):
             Название текущей модели.
         """
         try:
-            models_store = ModelsRepo()
+            models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
             stored_model = await models_store.get_gigachat_model()
             if stored_model:
                 return stored_model

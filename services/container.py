@@ -32,7 +32,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
-from services.protocols import IChatsRepo, ICircuitBreaker, IRateLimiter, IUsageTracker
+from services.protocols import IChatsRepo, ICircuitBreaker, IModelsRepo, IRateLimiter, IUsageTracker
 from utils.chats_repo import ChatsRepo
 from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, KandinskyConfig
 from utils.dispatch_registry import DispatchRegistry
@@ -43,11 +43,12 @@ from utils.prompts_repo import PromptsRepo
 from utils.usage_tracker import UsageTracker
 
 
-def _create_clients(config: Config) -> tuple:
+def _create_clients(config: Config, models_repo: IModelsRepo | None = None) -> tuple:
     """Создаёт клиенты для внешних ML‑сервисов.
 
     Args:
         config: Экземпляр Config для создания конфигураций клиентов.
+        models_repo: Репозиторий моделей для передачи в клиенты через DI.
 
     Returns:
         Кортеж (image_client, text_client) для использования в сервисах.
@@ -57,8 +58,8 @@ def _create_clients(config: Config) -> tuple:
     kandinsky_config = KandinskyConfig.from_config(config)
 
     # Передаем в фабрики
-    image_client = create_image_client(kandinsky_config=kandinsky_config)
-    text_client = create_text_client(gigachat_config=gigachat_config)
+    image_client = create_image_client(kandinsky_config=kandinsky_config, models_repo=models_repo)
+    text_client = create_text_client(gigachat_config=gigachat_config, models_repo=models_repo)
     return (image_client, text_client)
 
 
@@ -66,6 +67,7 @@ def build_image_stack(
     config: Config,
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
+    models_repo: IModelsRepo | None = None,
 ) -> ImageService:
     """Собирает полный стек зависимостей для ImageService.
 
@@ -85,7 +87,7 @@ def build_image_stack(
     # Инфраструктура и клиенты
     if image_client is None or text_client is None:
         # Используем _create_clients() вместо дублирования логики
-        created_image_client, created_text_client = _create_clients(config)
+        created_image_client, created_text_client = _create_clients(config, models_repo=models_repo)
         if image_client is None:
             image_client = created_image_client
         if text_client is None:
@@ -133,12 +135,13 @@ def build_image_stack(
     )
 
 
-def build_admin_dashboard_service(
+def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     usage: IUsageTracker,
     chats: IChatsRepo,
     metrics: Metrics,
     image_client: ITextToImageClient,
     text_client: ITextToTextClient | None,
+    models_repo: IModelsRepo | None = None,
 ) -> AdminDashboardService:
     """Собирает AdminDashboardService с зависимостями.
 
@@ -148,11 +151,12 @@ def build_admin_dashboard_service(
         metrics: Метрики производительности.
         image_client: Клиент для генерации изображений.
         text_client: Клиент для генерации текста.
+        models_repo: Репозиторий моделей для передачи в сервис через DI.
 
     Returns:
         Экземпляр AdminDashboardService с внедрёнными зависимостями.
     """
-    models_store = ModelsRepo()
+    models_store = models_repo if models_repo is not None else ModelsRepo()
     return AdminDashboardService(
         usage=usage,
         chats=chats,
@@ -178,14 +182,18 @@ def build_bot_services(config: Config) -> BotServices:
     """
     app_settings = AppSettings.from_config(config)
 
+    # Создаём ModelsRepo один раз для переиспользования во всех сервисах
+    models_repo = ModelsRepo()
+
     # Создаём клиенты один раз для переиспользования во всех сервисах
-    image_client, text_client = _create_clients(config)
+    image_client, text_client = _create_clients(config, models_repo=models_repo)
 
     # Создаём image_service с переиспользованием клиентов
     image_service = build_image_stack(
         config=config,
         image_client=image_client,
         text_client=text_client,
+        models_repo=models_repo,
     )
 
     usage = UsageTracker(
@@ -239,6 +247,7 @@ def build_bot_services(config: Config) -> BotServices:
         metrics=metrics,
         image_client=image_client,
         text_client=text_client,
+        models_repo=models_repo,
     )
 
     return BotServices(
