@@ -118,20 +118,29 @@ async def shutdown_services() -> None:
     logger.info("Shutting down Celery services...")
 
     try:
-        # Закрываем ML-клиенты (контейнеры управляют HTTP-сессиями внутри)
-        try:
-            image_container = get_image_client_container()
-            await image_container.aclose()
-            logger.info("ImageClientContainer closed")
-        except Exception as e:
-            logger.warning(f"Error closing ImageClientContainer: {e}")
+        # Закрываем ресурсы через BotServices, если bot доступен
+        bot = _services_context.get("bot")
+        if bot is not None and hasattr(bot, "services") and hasattr(bot.services, "cleanup"):
+            try:
+                await bot.services.cleanup()
+                logger.info("BotServices resources closed via cleanup()")
+            except Exception as e:
+                logger.warning(f"Error closing BotServices resources: {e}")
+        else:
+            # Fallback: закрываем контейнеры напрямую, если bot недоступен
+            try:
+                image_container = get_image_client_container()
+                await image_container.aclose()
+                logger.info("ImageClientContainer closed (fallback)")
+            except Exception as e:
+                logger.warning(f"Error closing ImageClientContainer: {e}")
 
-        try:
-            text_container = get_text_client_container()
-            await text_container.aclose()
-            logger.info("TextClientContainer closed")
-        except Exception as e:
-            logger.warning(f"Error closing TextClientContainer: {e}")
+            try:
+                text_container = get_text_client_container()
+                await text_container.aclose()
+                logger.info("TextClientContainer closed (fallback)")
+            except Exception as e:
+                logger.warning(f"Error closing TextClientContainer: {e}")
 
         # Закрываем пулы подключений
         await close_postgres_pool()

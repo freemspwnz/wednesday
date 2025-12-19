@@ -4,17 +4,18 @@
 
 ### Добавлено
 
-- **Централизованное управление жизненным циклом ресурсов в BotServices (Проблема 11, Шаг 1-2)**:
+- **Централизованное управление жизненным циклом ресурсов в BotServices**:
   - Добавлен метод `cleanup()` в класс `BotServices` для централизованного закрытия всех ресурсов
   - Метод закрывает `ImageClientContainer` и `TextClientContainer` через `aclose()`
   - Обеспечивает единую точку управления жизненным циклом ресурсов
   - Улучшает архитектуру и расширяемость для будущих ресурсов (Redis, PostgreSQL и т.д.)
   - `WednesdayBot.stop()` теперь использует `services.cleanup()` вместо прямых вызовов контейнеров
   - Удален метод `aclose()` из `WednesdayBot` - cleanup теперь управляется через `BotServices`
+  - `shutdown_services()` в Celery контексте использует `bot.services.cleanup()` с fallback на прямые вызовы
 
 ### Изменено
 
-- **Переиспользование aiohttp.ClientSession в KandinskyClient (Проблема 10, Шаг 1-4)**:
+- **Переиспользование aiohttp.ClientSession в KandinskyClient**:
   - Сессия создается в `__init__` один раз для переиспользования во всех методах
   - Timeout и connector сохраняются как поля класса
   - Методы `generate()`, `check_api_status()`, `set_model()` используют переиспользуемую сессию
@@ -28,7 +29,7 @@
 
 ### Добавлено
 
-- **Создание протоколов IUsageTracker и IChatsRepo (Проблема 5, Шаг 1)**:
+- **Создание протоколов IUsageTracker и IChatsRepo**:
   - Добавлены протоколы `IUsageTracker` и `IChatsRepo` в `services/protocols.py`
   - Протоколы определяют интерфейсы для трекера использования и репозитория чатов
   - `IUsageTracker` содержит методы: `increment()`, `get_limits_info()`, `can_use_frog()`, `set_frog_threshold()`, `set_month_total()`, свойство `monthly_quota`
@@ -37,25 +38,25 @@
 
 ### Изменено
 
-- **Рефакторинг AdminDashboardService для использования протоколов (Проблема 5, Шаг 2)**:
+- **Рефакторинг AdminDashboardService для использования протоколов**:
   - Заменены типы параметров конструктора с конкретных классов на протоколы `IUsageTracker` и `IChatsRepo`
   - Удалены прямые импорты `UsageTracker` и `ChatsRepo` из модуля
   - Application слой больше не зависит от конкретных реализаций из `utils/`
   - Соответствует принципу Dependency Inversion (DIP)
 
-- **Рефакторинг DispatchService для использования протоколов (Проблема 5, Шаг 3)**:
+- **Рефакторинг DispatchService для использования протоколов**:
   - Заменены типы параметров конструктора с конкретных классов на протоколы `IUsageTracker` и `IChatsRepo`
   - Удалены прямые импорты `UsageTracker` и `ChatsRepo` из модуля
   - Application слой больше не зависит от конкретных реализаций из `utils/`
   - Соответствует принципу Dependency Inversion (DIP)
 
-- **Рефакторинг BotServices для использования протоколов (Проблема 5, Шаг 4)**:
+- **Рефакторинг BotServices для использования протоколов**:
   - Заменены типы полей dataclass с конкретных классов на протоколы `IUsageTracker` и `IChatsRepo`
   - Удалены прямые импорты `UsageTracker` и `ChatsRepo` из модуля
   - Контейнер зависимостей использует протоколы для типизации
   - Соответствует принципу Dependency Inversion (DIP)
 
-- **Создание протоколов IImageRepo и IPromptRepo (Проблема 4, Шаг 1)**:
+- **Создание протоколов IImageRepo и IPromptRepo**:
   - Добавлены протоколы `IImageRepo` и `IPromptRepo` в `services/protocols.py`
   - Протоколы определяют интерфейсы для репозиториев изображений и промптов в БД
   - Используют TYPE_CHECKING для импорта типов ImageRecord и PromptRecord
@@ -63,20 +64,20 @@
 
 ### Изменено
 
-- **Рефакторинг ImageCacheService для использования протоколов (Проблема 4, Шаг 2)**:
+- **Рефакторинг ImageCacheService для использования протоколов**:
   - Заменены типы параметров конструктора с конкретных классов на протоколы `IImageRepo` и `IPromptRepo`
   - Удалены прямые импорты `ImagesRepo` и `PromptsRepo` из модуля
   - Импорты конкретных классов перенесены внутрь `__init__` для fallback-создания
   - Infrastructure слой больше не зависит от конкретных реализаций из `utils/`
   - Соответствует принципу Dependency Inversion (DIP)
 
-- **Обновление container.py для передачи репозиториев в ImageCacheService (Проблема 4, Шаг 3)**:
+- **Обновление container.py для передачи репозиториев в ImageCacheService**:
   - Добавлены импорты `ImagesRepo` и `PromptsRepo` в `container.py`
   - Создание экземпляров репозиториев вынесено в `build_image_stack()`
   - `ImageCacheService` теперь получает конкретные реализации через конструктор
   - `container.py` является единственным местом создания конкретных реализаций
 
-- **Переименование классов репозиториев БД Store → Repo (Проблема 4, Подготовка)**:
+- **Переименование классов репозиториев БД Store → Repo**:
   - Переименованы классы репозиториев БД для единообразия: `ImagesStore` → `ImagesRepo`, `PromptsStore` → `PromptsRepo`, `ChatsStore` → `ChatsRepo`, `AdminsStore` → `AdminsRepo`, `ModelsStore` → `ModelsRepo`
   - Переименованы файлы: `*_store.py` → `*_repo.py` в `utils/`
   - Обновлены все импорты и использования классов в коде
@@ -86,13 +87,13 @@
 
 ### Добавлено
 
-- **Создание dataclass для конфигурации GigaChat (Проблема 3, Шаг 1)**:
+- **Создание dataclass для конфигурации GigaChat**:
   - Создан файл `services/clients/gigachat_config.py` с dataclass `GigaChatConfig`
   - Инкапсулирует все параметры конфигурации GigaChat клиента (auth_url, api_url, authorization_key, scope, model, verify_ssl)
   - Добавлен метод `from_config()` для создания из глобального Config
   - Использует `frozen=True` для иммутабельности конфигурации
 
-- **Создание dataclass для конфигурации Kandinsky (Проблема 3, Шаг 2)**:
+- **Создание dataclass для конфигурации Kandinsky**:
   - Создан файл `services/clients/kandinsky_config.py` с dataclass `KandinskyConfig`
   - Инкапсулирует все параметры конфигурации Kandinsky клиента (api_key, secret_key)
   - Добавлен метод `from_config()` для создания из глобального Config
@@ -100,45 +101,45 @@
 
 ### Изменено
 
-- **Рефакторинг конструктора GigaChatTextClient (Проблема 3, Шаг 3)**:
+- **Рефакторинг конструктора GigaChatTextClient**:
   - Заменены все параметры конфигурации на один параметр `config: GigaChatConfig`
   - Удален fallback на глобальный `config` из конструктора
   - Удален импорт `from utils.config import config`
   - Конструктор теперь принимает только обязательный объект конфигурации
   - Устранена зависимость от глобального состояния
 
-- **Рефакторинг конструктора KandinskyClient (Проблема 3, Шаг 4)**:
+- **Рефакторинг конструктора KandinskyClient**:
   - Заменено чтение из глобального `config` на параметр `config: KandinskyConfig`
   - Удален импорт `from utils.config import config`
   - Конструктор теперь принимает только обязательный объект конфигурации
   - Исправлено использование config на уровне модуля для timeout константы
   - Устранена зависимость от глобального состояния
 
-- **Обновление factory.py для использования config объектов (Проблема 3, Шаг 5)**:
+- **Обновление factory.py для использования config объектов**:
   - Функция `create_image_client` теперь принимает `kandinsky_config: KandinskyConfig`
   - Функция `create_text_client` теперь принимает `gigachat_config: GigaChatConfig`
   - Удален импорт глобального `config` из factory.py
   - Фабрики больше не зависят от глобального состояния
 
-- **Обновление container.py для создания config объектов (Проблема 3, Шаг 6)**:
+- **Обновление container.py для создания config объектов**:
   - `container.py` теперь единственное место, где импортируется глобальный `config`
   - Создание config объектов из глобального config через методы `from_config()`
   - Передача config объектов в factory функции
   - Соответствует принципу Composition Root
 
-- **Обновление тестов для использования config объектов (Проблема 3, Шаг 7)**:
+- **Обновление тестов для использования config объектов**:
   - Все тесты обновлены для использования GigaChatConfig и KandinskyConfig
   - Тесты больше не зависят от глобального config
   - Улучшена тестируемость клиентов
 
 ### Добавлено
 
-- **Создание интерфейса ITaskQueue (Этап 1)**:
+- **Создание интерфейса ITaskQueue**:
   - Добавлен Protocol `ITaskQueue` в `services/protocols.py` для абстракции очереди задач
   - Определён метод `send_frog_manual_task()` с параметрами `chat_id`, `user_id`, `status_message_id`
   - Протокол абстрагирует детали реализации очереди задач от application-сервисов
 
-- **Создание реализации CeleryTaskQueue (Этап 2)**:
+- **Создание реализации CeleryTaskQueue**:
   - Создан класс `CeleryTaskQueue` в `services/infrastructure/celery/celery_task_queue.py`
   - Класс реализует `ITaskQueue` Protocol через Celery
   - Принимает `celery_app` в конструкторе с дефолтным значением
@@ -155,32 +156,32 @@
 
 ### Изменено
 
-- **Устранение зависимости от конкретных реализаций в PromptService (Проблема 2)**:
+- **Устранение зависимости от конкретных реализаций в PromptService**:
   - Удалён импорт конкретного класса `PromptCache` из `services/application/prompt_service.py`
   - Упрощены типы в конструкторе `PromptService`: убран union с конкретным классом, оставлен только протокол `ICache[dict | str]`
   - Application слой теперь зависит только от абстракций (Protocol), а не от конкретных реализаций Infrastructure слоя
   - Улучшено соответствие принципу Dependency Inversion (DIP)
   - Упрощена замена реализаций кэша без изменения Application слоя
 
-- **Рефакторинг WednesdayBot на Dependency Injection (Этап 0.1)**:
+- **Рефакторинг WednesdayBot на Dependency Injection**:
   - Удалён импорт `build_bot_services` из `bot/wednesday_bot.py`
   - Изменена сигнатура конструктора `WednesdayBot.__init__()` для принятия `services: BotServices` через dependency injection
   - Удалён вызов `build_bot_services()` внутри конструктора
   - Обратная ссылка `services.bot_controller` устанавливается после присваивания сервисов
   - Устранена зависимость `WednesdayBot` → `container.py` на уровне импортов
 
-- **Добавлена функция build_bot() в container.py (Этап 0.2)**:
+- **Добавлена функция build_bot() в container.py**:
   - Добавлена функция `build_bot()` как единственная точка создания `WednesdayBot` в приложении
   - Функция использует ленивый импорт `WednesdayBot` для избежания циклических зависимостей
   - Функция принимает опциональный параметр `services` для возможности переиспользования существующих сервисов
   - Функция является Composition Root для `WednesdayBot`, обеспечивая правильный DI
 
-- **Обновление main.py для использования build_bot() (Этап 0.3)**:
+- **Обновление main.py для использования build_bot()**:
   - Заменён импорт `WednesdayBot` на импорт `build_bot` из `services.container`
   - Заменено создание бота `WednesdayBot()` на вызов `build_bot()`
   - Все точки создания бота теперь используют единую функцию из composition root
 
-- **Обновление services/celery/context.py для использования build_bot() (Этап 0.4)**:
+- **Обновление services/celery/context.py для использования build_bot()**:
   - Удалён импорт `WednesdayBot` с уровня модуля
   - Добавлен ленивый импорт `build_bot` внутри функции `get_services_context()`
   - Заменено создание бота `WednesdayBot()` на вызов `build_bot()`
@@ -188,13 +189,13 @@
   - Добавлен TYPE_CHECKING импорт для `WednesdayBot` в аннотациях типов
   - Использован ленивый импорт в методе `get_bot()` для проверки типа
 
-- **Обновление тестов для использования нового API (Этап 0.5)**:
+- **Обновление тестов для использования нового API**:
   - Обновлена фикстура `wednesday_bot` для создания mock-сервисов и передачи их в конструктор
   - Удалён monkeypatch для `build_bot_services`, так как он больше не используется
   - Бот теперь создаётся с явной передачей сервисов через dependency injection
   - Тесты используют новый API с явными зависимостями
 
-- **Рефакторинг FrogRequestService (Этап 3)**:
+- **Рефакторинг FrogRequestService**:
   - Удалена прямая зависимость от `celery_app` и `CeleryTaskNames` в `FrogRequestService`
   - Добавлен конструктор, принимающий `task_queue: ITaskQueue` через dependency injection
   - Метод `request_manual_frog()` теперь использует `self.task_queue.send_frog_manual_task()`
@@ -202,7 +203,7 @@
   - Обновлены `support_bot.py` и тесты для использования нового API
   - Устранена зависимость Application Layer → Infrastructure Layer
 
-- **Устранение циклического импорта в Celery модуле (Этап 4)**:
+- **Устранение циклического импорта в Celery модуле**:
   - Удалён импорт `tasks` из `services/infrastructure/celery/__init__.py` для разрыва циклической зависимости
   - Добавлен комментарий о причинах отсутствия импорта `tasks` в `__init__.py`
   - Обновлён импорт `celery_app` в `tasks.py` на прямой импорт из `app.py` для надёжности
@@ -210,7 +211,7 @@
   - Tasks теперь регистрируются автоматически при импорте `tasks.py` в worker процессе
   - Устранён циклический импорт между `__init__.py` и `tasks.py`
 
-- **Устранение прямого импорта WednesdayBot в tasks.py (Этап 5)**:
+- **Устранение прямого импорта WednesdayBot в tasks.py**:
   - Удалён импорт `WednesdayBot` на уровне модуля в `tasks.py` для устранения циклической зависимости
   - Добавлен условный импорт `WednesdayBot` через `TYPE_CHECKING` для типизации
   - Создана helper-функция `_get_wednesday_bot()` с ленивым импортом для проверки типа во время выполнения
@@ -218,7 +219,7 @@
   - Устранена зависимость `tasks.py` → `WednesdayBot` на уровне импортов
   - Все задачи используют `get_services_context()` для получения бота через dependency injection
 
-- **Обновление container.py для внедрения зависимостей (Этап 6)**:
+- **Обновление container.py для внедрения зависимостей**:
   - Перенесён импорт `FrogRequestService` внутрь функции `build_bot_services()` для избежания циклических зависимостей
   - Добавлен ленивый импорт `CeleryTaskQueue` внутри функции `build_bot_services()`
   - Создаётся экземпляр `CeleryTaskQueue` перед созданием `FrogRequestService`
