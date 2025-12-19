@@ -56,10 +56,13 @@ class BotServices:
         Side Effects:
             - Закрывает ImageClientContainer через aclose()
             - Закрывает TextClientContainer через aclose()
-            - В будущем: закрытие Redis соединений, PostgreSQL pool и т.д.
+            - Закрывает Redis соединения через close_redis()
+            - Закрывает PostgreSQL pool через close_postgres_pool()
         """
         from services.clients import get_image_client_container, get_text_client_container
         from utils.logger import get_logger
+        from utils.postgres_client import close_postgres_pool
+        from utils.redis_client import close_redis
 
         logger = get_logger(__name__)
 
@@ -78,7 +81,16 @@ class BotServices:
         except Exception as e:
             logger.warning(f"Ошибка при закрытии TextClientContainer: {e}")
 
-        # В будущем можно добавить cleanup для других ресурсов:
-        # - Redis connections (если требуется явное закрытие)
-        # - PostgreSQL pool (если используется через BotServices)
-        # - И другие долгоживущие ресурсы
+        # Закрываем Redis соединения
+        try:
+            await close_redis()
+            logger.info("Redis соединения закрыты через BotServices.cleanup()")
+        except Exception as e:
+            logger.warning(f"Ошибка при закрытии Redis: {e}")
+
+        # Закрываем PostgreSQL pool
+        try:
+            await close_postgres_pool()
+            logger.info("PostgreSQL pool закрыт через BotServices.cleanup()")
+        except Exception as e:
+            logger.warning(f"Ошибка при закрытии PostgreSQL pool: {e}")

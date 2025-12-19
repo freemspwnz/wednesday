@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Централизованное закрытие ресурсов в BotServices.cleanup()**:
+  - Добавлено закрытие Redis соединений через `close_redis()` в `BotServices.cleanup()`
+  - Добавлено закрытие PostgreSQL pool через `close_postgres_pool()` в `BotServices.cleanup()`
+  - Обновлен `_cleanup()` в `main.py` для вызова `services.cleanup()` при остановке ботов
+  - Добавлен гарантированный вызов cleanup через `atexit` handler в `BotRunner` для случаев аварийного завершения
+  - Устранены потенциальные утечки соединений при завершении приложения
+  - Улучшена надежность освобождения ресурсов
+
 - **Асинхронизация метода load_image_bytes в ImagesRepo**:
   - Метод `load_image_bytes()` в `utils/images_repo.py` теперь асинхронный
   - Используется `asyncio.to_thread()` для неблокирующего чтения файлов

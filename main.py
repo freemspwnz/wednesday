@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import atexit
 import signal
 import sys
 import types
@@ -37,6 +38,7 @@ class BotRunner:
     - Graceful shutdown при получении сигналов
     - Обработку ошибок запуска
     - Логирование состояния приложения
+    - Гарантированное закрытие ресурсов через context manager
     """
 
     def __init__(self) -> None:
@@ -50,7 +52,35 @@ class BotRunner:
         self.request_start_main_event: asyncio.Event = asyncio.Event()
         self.pending_startup_edit: dict[str, Any] | None = None
         self.pending_shutdown_edit: dict[str, Any] | None = None
+        # Регистрируем cleanup через atexit для гарантированного вызова при завершении
+        atexit.register(self._sync_cleanup)
         self.logger.info("BotRunner успешно инициализирован")
+
+    def _sync_cleanup(self) -> None:
+        """
+        Синхронная обёртка для cleanup, вызываемая через atexit.
+
+        Пытается вызвать асинхронный cleanup, если event loop доступен.
+        """
+        try:
+            # Пытаемся получить текущий event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Если loop работает, создаём задачу для cleanup
+                _ = asyncio.create_task(self._cleanup())  # noqa: RUF006 - задача запускается в фоне
+            else:
+                # Если loop не работает, запускаем cleanup синхронно
+                loop.run_until_complete(self._cleanup())
+        except RuntimeError:
+            # Нет event loop - пытаемся создать новый для cleanup
+            try:
+                asyncio.run(self._cleanup())
+            except Exception as e:
+                # Если не удалось, просто логируем
+                print(f"Не удалось выполнить cleanup при завершении: {e}")
+        except Exception as e:
+            # Любая другая ошибка - логируем и продолжаем
+            print(f"Ошибка при cleanup через atexit: {e}")
 
     def setup_signal_handlers(self) -> None:
         """
@@ -403,6 +433,13 @@ class BotRunner:
                 self.logger.info("Основной бот успешно остановлен")
             except Exception as e:
                 self.logger.error(f"Ошибка при остановке бота: {e}", exc_info=True)
+        elif self.bot and hasattr(self.bot, "services"):
+            # Если бот не был остановлен через stop(), но services доступны, вызываем cleanup напрямую
+            try:
+                await self.bot.services.cleanup()
+                self.logger.info("Ресурсы BotServices закрыты через _cleanup()")
+            except Exception as e:
+                self.logger.warning(f"Ошибка при cleanup ресурсов BotServices: {e}")
         self.bot = None
         self.logger.info("Ссылка на основной бот очищена")
 
