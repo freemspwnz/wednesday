@@ -134,40 +134,31 @@ class KandinskyClient(ITextToImageClient):
             bound.error("API ключи Kandinsky не сконфигурированы: {}", str(exc))
             return None
 
-        timeout = aiohttp.ClientTimeout(
-            total=TIMEOUT_GENERATION_TOTAL_SECONDS,
-            connect=TIMEOUT_GENERATION_CONNECT_SECONDS,
-            sock_read=TIMEOUT_GENERATION_SOCK_READ_SECONDS,
-        )
-
-        connector: aiohttp.BaseConnector | None = None
         if self._proxy_url:
-            # ProxyConnector не типизирован стабильно в aiohttp, поэтому игнорируем attr‑check.
-            connector = aiohttp.ProxyConnector.from_url(self._proxy_url)  # type: ignore[attr-defined]
             bound.bind(proxy_url=self._proxy_url).info("Используется прокси для запроса к Kandinsky")
 
         try:
-            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                pipeline_id = await self._get_pipeline_id(session, headers, user_id=user_id)
-                if not pipeline_id:
-                    bound.error("Не удалось получить pipeline ID для генерации изображения")
-                    return None
+            # Используем переиспользуемую сессию
+            pipeline_id = await self._get_pipeline_id(self._session, headers, user_id=user_id)
+            if not pipeline_id:
+                bound.error("Не удалось получить pipeline ID для генерации изображения")
+                return None
 
-                uuid = await self._start_generation(session, headers, pipeline_id, prompt, user_id=user_id)
-                if not uuid:
-                    bound.error("Kandinsky не вернул UUID задачи генерации")
-                    return None
+            uuid = await self._start_generation(self._session, headers, pipeline_id, prompt, user_id=user_id)
+            if not uuid:
+                bound.error("Kandinsky не вернул UUID задачи генерации")
+                return None
 
-                image_data = await self._wait_for_generation(session, headers, uuid, user_id=user_id)
-                if image_data is None:
-                    bound.error("Не удалось получить итоговое изображение от Kandinsky")
-                    return None
+            image_data = await self._wait_for_generation(self._session, headers, uuid, user_id=user_id)
+            if image_data is None:
+                bound.error("Не удалось получить итоговое изображение от Kandinsky")
+                return None
 
-                # В логах не показываем бинарные данные, только размеры.
-                bound.bind(image_size_bytes=len(image_data)).info(
-                    "Изображение успешно получено от Kandinsky",
-                )
-                return image_data
+            # В логах не показываем бинарные данные, только размеры.
+            bound.bind(image_size_bytes=len(image_data)).info(
+                "Изображение успешно получено от Kandinsky",
+            )
+            return image_data
         except TimeoutError:
             bound.error("Таймаут верхнего уровня при генерации изображения через Kandinsky")
             return None
@@ -225,70 +216,70 @@ class KandinskyClient(ITextToImageClient):
             bound.bind(error=str(exc)).error(msg)
             return False, msg, [], (None, None)
 
+        # Используем меньший таймаут для проверки статуса
         timeout = aiohttp.ClientTimeout(
             total=TIMEOUT_CHECK_TOTAL_SECONDS,
             connect=TIMEOUT_CHECK_CONNECT_SECONDS,
             sock_read=TIMEOUT_CHECK_SOCK_READ_SECONDS,
         )
 
-        connector: aiohttp.BaseConnector | None = None
-        if self._proxy_url:
-            connector = aiohttp.ProxyConnector.from_url(self._proxy_url)  # type: ignore[attr-defined]
-
         @retry_standard(service_name="kandinsky", method_name="check_api_status")
-        async def _fetch_pipelines_status(session: aiohttp.ClientSession) -> aiohttp.ClientResponse:
-            return await session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers)
+        async def _fetch_pipelines_status() -> aiohttp.ClientResponse:
+            return await self._session.get(
+                f"{self._base_url}/key/api/v1/pipelines",
+                headers=headers,
+                timeout=timeout,
+            )
 
         try:
-            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                from utils.models_repo import ModelsRepo
+            from utils.models_repo import ModelsRepo
 
-                models_store = ModelsRepo()
-                current_pipeline_id, current_pipeline_name = await models_store.get_kandinsky_model()
+            models_store = ModelsRepo()
+            current_pipeline_id, current_pipeline_name = await models_store.get_kandinsky_model()
 
-                bound.debug("Запрос списка pipelines для dry‑run статуса")
-                async with await _fetch_pipelines_status(session) as response:
-                    status_ok = False
-                    status_message = "❌ Ошибка проверки"
-                    models_list: list[str] = []
+            bound.debug("Запрос списка pipelines для dry‑run статуса")
+            async with await _fetch_pipelines_status() as response:
+                status_ok = False
+                status_message = "❌ Ошибка проверки"
+                models_list: list[str] = []
 
-                    if response.status == HTTP_STATUS_OK:
-                        status_ok = True
-                        status_message = "✅ API доступен, ключ валиден"
-                        pipelines_data = await response.json()
-                        if isinstance(pipelines_data, list) and pipelines_data:
-                            if save_models:
-                                await models_store.set_kandinsky_available_models(pipelines_data)
-                                bound.debug(
-                                    "Сохранён список из {} моделей Kandinsky",
-                                    len(pipelines_data),
-                                )
+                if response.status == HTTP_STATUS_OK:
+                    status_ok = True
+                    status_message = "✅ API доступен, ключ валиден"
+                    pipelines_data = await response.json()
+                    if isinstance(pipelines_data, list) and pipelines_data:
+                        if save_models:
+                            await models_store.set_kandinsky_available_models(pipelines_data)
+                            bound.debug(
+                                "Сохранён список из {} моделей Kandinsky",
+                                len(pipelines_data),
+                            )
 
-                            for pipeline in pipelines_data:
-                                model_name = str(pipeline.get("name", "Unknown"))
-                                model_id = str(pipeline.get("id", "N/A"))
-                                is_current = " ⭐" if (current_pipeline_id and model_id == current_pipeline_id) else ""
-                                models_list.append(f"{model_name} (ID: {model_id}){is_current}")
-                        else:
-                            models_list = ["Модели не найдены"]
-                    elif response.status == HTTP_STATUS_UNAUTHORIZED:
-                        status_message = "❌ Неверный API ключ или секретный ключ"
-                        models_list = ["Требуется проверка авторизации"]
-                    elif response.status == HTTP_STATUS_FORBIDDEN:
-                        status_message = "❌ Доступ запрещён (проверьте права ключа)"
-                        models_list = ["Нет доступа к моделям"]
+                        for pipeline in pipelines_data:
+                            model_name = str(pipeline.get("name", "Unknown"))
+                            model_id = str(pipeline.get("id", "N/A"))
+                            is_current = " ⭐" if (current_pipeline_id and model_id == current_pipeline_id) else ""
+                            models_list.append(f"{model_name} (ID: {model_id}){is_current}")
                     else:
-                        status_message = f"⚠️  Ошибка API: {response.status}"
-                        models_list = [f"Ошибка получения моделей: {response.status}"]
+                        models_list = ["Модели не найдены"]
+                elif response.status == HTTP_STATUS_UNAUTHORIZED:
+                    status_message = "❌ Неверный API ключ или секретный ключ"
+                    models_list = ["Требуется проверка авторизации"]
+                elif response.status == HTTP_STATUS_FORBIDDEN:
+                    status_message = "❌ Доступ запрещён (проверьте права ключа)"
+                    models_list = ["Нет доступа к моделям"]
+                else:
+                    status_message = f"⚠️  Ошибка API: {response.status}"
+                    models_list = [f"Ошибка получения моделей: {response.status}"]
 
-                bound.debug(
-                    "Завершена проверка статуса Kandinsky: ok={}, models={}, current=({}, {})",
-                    status_ok,
-                    len(models_list),
-                    current_pipeline_id,
-                    current_pipeline_name,
-                )
-                return status_ok, status_message, models_list, (current_pipeline_id, current_pipeline_name)
+            bound.debug(
+                "Завершена проверка статуса Kandinsky: ok={}, models={}, current=({}, {})",
+                status_ok,
+                len(models_list),
+                current_pipeline_id,
+                current_pipeline_name,
+            )
+            return status_ok, status_message, models_list, (current_pipeline_id, current_pipeline_name)
         except TimeoutError:
             return False, "❌ Таймаут при подключении к API", [], (None, None)
         except Exception as exc:  # pragma: no cover - защитный фоллбек
@@ -369,80 +360,78 @@ class KandinskyClient(ITextToImageClient):
             bound.bind(error=str(exc)).error(msg)
             return False, msg
 
+        # Используем меньший таймаут для установки модели
         timeout = aiohttp.ClientTimeout(
             total=TIMEOUT_CHECK_TOTAL_SECONDS,
             connect=TIMEOUT_CHECK_CONNECT_SECONDS,
             sock_read=TIMEOUT_CHECK_SOCK_READ_SECONDS,
         )
 
-        connector: aiohttp.BaseConnector | None = None
-        if self._proxy_url:
-            connector = aiohttp.ProxyConnector.from_url(self._proxy_url)  # type: ignore[attr-defined]
-
         @retry_standard(service_name="kandinsky", method_name="set_model")
-        async def _fetch_pipelines_for_set_model(session: aiohttp.ClientSession) -> aiohttp.ClientResponse:
-            return await session.get(f"{self._base_url}/key/api/v1/pipelines", headers=headers)
+        async def _fetch_pipelines_for_set_model() -> aiohttp.ClientResponse:
+            return await self._session.get(
+                f"{self._base_url}/key/api/v1/pipelines",
+                headers=headers,
+                timeout=timeout,
+            )
 
         try:
-            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                async with await _fetch_pipelines_for_set_model(session) as response:
-                    if response.status != HTTP_STATUS_OK:
-                        msg = f"Ошибка API при получении списка моделей: {response.status}"
-                        bound.error(msg)
-                        return False, msg
+            async with await _fetch_pipelines_for_set_model() as response:
+                if response.status != HTTP_STATUS_OK:
+                    msg = f"Ошибка API при получении списка моделей: {response.status}"
+                    bound.error(msg)
+                    return False, msg
 
-                    pipelines_data = await response.json()
-                    if not isinstance(pipelines_data, list):
-                        return False, "Не удалось получить список моделей"
+                pipelines_data = await response.json()
+                if not isinstance(pipelines_data, list):
+                    return False, "Не удалось получить список моделей"
 
-                    # 1. Точное совпадение по ID.
-                    for pipeline_item in pipelines_data:
-                        if pipeline_item.get("id") == model_identifier:
-                            matched_model_name = str(pipeline_item.get("name", "Unknown"))
-                            matched_pipeline_id = str(pipeline_item.get("id", ""))
-                            from utils.models_repo import ModelsRepo
-
-                            models_store = ModelsRepo()
-                            await models_store.set_kandinsky_model(matched_pipeline_id, matched_model_name)
-                            msg = f"Модель установлена: {matched_model_name} (ID: {matched_pipeline_id})"
-                            bound.info(msg)
-                            return True, msg
-
-                    # 2. Частичное совпадение по названию (регистронезависимо).
-                    model_identifier_lower = model_identifier.lower()
-                    matches: list[dict[str, Any]] = []
-                    for pipeline_item in pipelines_data:
-                        pipeline_name = str(pipeline_item.get("name", ""))
-                        if model_identifier_lower in pipeline_name.lower():
-                            matches.append(pipeline_item)
-
-                    if len(matches) == 1:
-                        matched_pipeline = matches[0]
-                        selected_model_name = str(matched_pipeline.get("name", "Unknown"))
-                        selected_pipeline_id = str(matched_pipeline.get("id", ""))
+                # 1. Точное совпадение по ID.
+                for pipeline_item in pipelines_data:
+                    if pipeline_item.get("id") == model_identifier:
+                        matched_model_name = str(pipeline_item.get("name", "Unknown"))
+                        matched_pipeline_id = str(pipeline_item.get("id", ""))
                         from utils.models_repo import ModelsRepo
 
                         models_store = ModelsRepo()
-                        await models_store.set_kandinsky_model(selected_pipeline_id, selected_model_name)
-                        msg = f"Модель установлена: {selected_model_name} (ID: {selected_pipeline_id})"
+                        await models_store.set_kandinsky_model(matched_pipeline_id, matched_model_name)
+                        msg = f"Модель установлена: {matched_model_name} (ID: {matched_pipeline_id})"
                         bound.info(msg)
                         return True, msg
 
-                    if len(matches) > 1:
-                        models_list = [f"{p.get('name', 'Unknown')!s} (ID: {p.get('id', 'N/A')!s})" for p in matches]
-                        msg = (
-                            "Найдено несколько моделей:\n"
-                            + "\n".join(models_list)
-                            + "\n\nУточните название или используйте ID"
-                        )
-                        bound.warning("Несколько моделей соответствуют запросу: {}", models_list)
-                        return False, msg
+                # 2. Частичное совпадение по названию (регистронезависимо).
+                model_identifier_lower = model_identifier.lower()
+                matches: list[dict[str, Any]] = []
+                for pipeline_item in pipelines_data:
+                    pipeline_name = str(pipeline_item.get("name", ""))
+                    if model_identifier_lower in pipeline_name.lower():
+                        matches.append(pipeline_item)
 
+                if len(matches) == 1:
+                    matched_pipeline = matches[0]
+                    selected_model_name = str(matched_pipeline.get("name", "Unknown"))
+                    selected_pipeline_id = str(matched_pipeline.get("id", ""))
+                    from utils.models_repo import ModelsRepo
+
+                    models_store = ModelsRepo()
+                    await models_store.set_kandinsky_model(selected_pipeline_id, selected_model_name)
+                    msg = f"Модель установлена: {selected_model_name} (ID: {selected_pipeline_id})"
+                    bound.info(msg)
+                    return True, msg
+
+                if len(matches) > 1:
+                    models_list = [f"{p.get('name', 'Unknown')!s} (ID: {p.get('id', 'N/A')!s})" for p in matches]
                     msg = (
-                        f"Модель '{model_identifier}' не найдена. Используйте /status для просмотра доступных моделей."
+                        "Найдено несколько моделей:\n"
+                        + "\n".join(models_list)
+                        + "\n\nУточните название или используйте ID"
                     )
-                    bound.warning(msg)
+                    bound.warning("Несколько моделей соответствуют запросу: {}", models_list)
                     return False, msg
+
+                msg = f"Модель '{model_identifier}' не найдена. Используйте /status для просмотра доступных моделей."
+                bound.warning(msg)
+                return False, msg
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error("Ошибка при установке модели Kandinsky")
             return False, f"Ошибка: {str(exc)[:50]}"

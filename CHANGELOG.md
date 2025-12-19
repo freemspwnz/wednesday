@@ -4,9 +4,12 @@
 
 ### Изменено
 
-- **Переиспользование aiohttp.ClientSession в KandinskyClient (Проблема 10, Шаг 1)**:
+- **Переиспользование aiohttp.ClientSession в KandinskyClient (Проблема 10, Шаг 1-2)**:
   - Сессия создается в `__init__` один раз для переиспользования во всех методах
   - Timeout и connector сохраняются как поля класса
+  - Методы `generate()`, `check_api_status()`, `set_model()` используют переиспользуемую сессию
+  - Удалены все `async with aiohttp.ClientSession(...)` из методов
+  - Для методов с меньшими таймаутами timeout передается явно в запросы
   - Улучшена производительность за счет connection pooling
   - Единообразие с подходом `GigaChatTextClient`
 
