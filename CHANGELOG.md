@@ -10,6 +10,7 @@
   - Изменен конструктор `PromptGenerationService` для принятия `fallback_config` через dependency injection
   - Метод `get_fallback_prompt()` преобразован из статического в метод экземпляра
   - Удалена зависимость от `utils.config.ImageConfig` в domain слое
+  - Обновлен `container.py` для создания и передачи `PromptFallbackConfig` в `PromptGenerationService`
 
 - **Удалено файловое хранилище промптов**:
   - Удалён избыточный слой файлового хранилища промптов (`PromptStorageService`, `IPromptStorage`)

@@ -21,6 +21,7 @@ from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
 from services.clients.interfaces import ITextToImageClient, ITextToTextClient
 from services.domain.image_generation import ImageGenerationService
+from services.domain.prompt_fallback_config import PromptFallbackConfig
 from services.domain.prompt_generation import PromptGenerationService
 from services.infrastructure.cache.image_cache import ImageCacheService
 from services.infrastructure.cache.prompt_cache import PromptCache
@@ -75,7 +76,11 @@ def build_image_stack(
 
     # Доменные сервисы
     image_generation = ImageGenerationService(image_client)
-    prompt_generation = PromptGenerationService(text_client)
+    fallback_config = PromptFallbackConfig.from_image_config()
+    prompt_generation = PromptGenerationService(
+        text_client=text_client,
+        fallback_config=fallback_config,
+    )
 
     # Инфраструктура
     image_cache = ImageCacheService()
