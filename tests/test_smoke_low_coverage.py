@@ -18,22 +18,27 @@ pytestmark = [pytest.mark.unit]
 
 
 def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.clients.kandinsky_config import KandinskyConfig
+
     dummy_client = MagicMock()
     dummy_container = MagicMock()
 
-    monkeypatch.setattr(clients_factory, "KandinskyClient", lambda: dummy_client)
+    monkeypatch.setattr(clients_factory, "KandinskyClient", lambda config: dummy_client)
     monkeypatch.setattr(
         clients_factory,
         "get_image_client_container",
         lambda: dummy_container,
     )
 
-    clients_factory.create_image_client()
+    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    clients_factory.create_image_client(kandinsky_config=config)
 
     dummy_container.set_initial_client.assert_called_once_with(dummy_client)
 
 
 def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.clients.gigachat_config import GigaChatConfig
+
     dummy_container = MagicMock()
 
     class _DummyGigaChat:
@@ -50,7 +55,15 @@ def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> N
     # Минимизируем зависимость от реальных env/config
     monkeypatch.setenv("TEXT_MODEL_BACKEND", "gigachat")
 
-    clients_factory.create_text_client()
+    config = GigaChatConfig(
+        auth_url="https://example.test/auth",
+        api_url="https://example.test/api",
+        authorization_key="dummy",
+        scope="GIGACHAT_API_PERS",
+        model="GigaChat",
+        verify_ssl=False,
+    )
+    clients_factory.create_text_client(gigachat_config=config)
 
     dummy_container.set_initial_client.assert_called_once()
     assert isinstance(dummy_container.set_initial_client.call_args.args[0], _DummyGigaChat)
@@ -190,12 +203,14 @@ async def test_command_handlers_start_help(
 def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента KandinskyClient."""
     from services.clients.kandinsky import KandinskyClient
+    from services.clients.kandinsky_config import KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
     monkeypatch.delenv("HTTP_PROXY", raising=False)
 
-    client = KandinskyClient()
+    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    client = KandinskyClient(config=config)
 
     assert client._api_key is not None
     assert client._secret_key is not None
@@ -206,8 +221,10 @@ def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> Non
 async def test_kandinsky_client_auth_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Проверка формирования заголовков авторизации Kandinsky."""
     from services.clients.kandinsky import KandinskyClient
+    from services.clients.kandinsky_config import KandinskyConfig
 
-    client = KandinskyClient()
+    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    client = KandinskyClient(config=config)
     headers = client._get_auth_headers()
 
     assert "X-Key" in headers

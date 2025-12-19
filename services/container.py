@@ -22,7 +22,9 @@ from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
 from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
+from services.clients.gigachat_config import GigaChatConfig
 from services.clients.interfaces import ITextToImageClient, ITextToTextClient
+from services.clients.kandinsky_config import KandinskyConfig
 from services.domain.image_generation import ImageGenerationService
 from services.domain.prompt_fallback_config import PromptFallbackConfig
 from services.domain.prompt_generation import PromptGenerationService
@@ -48,8 +50,13 @@ def _create_clients() -> tuple:
     Returns:
         Кортеж (image_client, text_client) для использования в сервисах.
     """
-    image_client = create_image_client()
-    text_client = create_text_client()
+    # Создаем конфигурации из глобального config
+    gigachat_config = GigaChatConfig.from_config(config)
+    kandinsky_config = KandinskyConfig.from_config(config)
+
+    # Передаем в фабрики
+    image_client = create_image_client(kandinsky_config=kandinsky_config)
+    text_client = create_text_client(gigachat_config=gigachat_config)
     return (image_client, text_client)
 
 
@@ -73,9 +80,11 @@ def build_image_stack(
     """
     # Инфраструктура и клиенты
     if image_client is None:
-        image_client = create_image_client()
+        kandinsky_config = KandinskyConfig.from_config(config)
+        image_client = create_image_client(kandinsky_config=kandinsky_config)
     if text_client is None:
-        text_client = create_text_client()
+        gigachat_config = GigaChatConfig.from_config(config)
+        text_client = create_text_client(gigachat_config=gigachat_config)
 
     # Доменные сервисы
     image_generation = ImageGenerationService(image_client)

@@ -36,14 +36,14 @@ from loguru import logger
 from PIL import Image
 
 from services.clients import ITextToImageClient
-from utils.config import config
+from services.clients.kandinsky_config import KandinskyConfig
 from utils.retry import retry_standard
 
 HTTP_STATUS_OK = 200
 HTTP_STATUS_UNAUTHORIZED = 401
 HTTP_STATUS_FORBIDDEN = 403
 
-TIMEOUT_GENERATION_TOTAL_SECONDS = config.generation_timeout
+TIMEOUT_GENERATION_TOTAL_SECONDS = 60  # Дефолтный таймаут генерации в секундах
 TIMEOUT_GENERATION_CONNECT_SECONDS = 10
 TIMEOUT_GENERATION_SOCK_READ_SECONDS = 30
 
@@ -70,9 +70,14 @@ class KandinskyClient(ITextToImageClient):
     этот клиент.
     """
 
-    def __init__(self) -> None:
-        self._api_key: str | None = config.kandinsky_api_key
-        self._secret_key: str | None = config.kandinsky_secret_key
+    def __init__(self, config: KandinskyConfig) -> None:
+        """Инициализация клиента Kandinsky.
+
+        Args:
+            config: Конфигурация Kandinsky клиента (обязательна).
+        """
+        self._api_key: str | None = config.api_key
+        self._secret_key: str | None = config.secret_key
         self._base_url: str = "https://api-key.fusionbrain.ai"
         self._proxy_url: str | None = None
 
