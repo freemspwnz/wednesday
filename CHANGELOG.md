@@ -82,6 +82,13 @@
   - Устранена зависимость `tasks.py` → `WednesdayBot` на уровне импортов
   - Все задачи используют `get_services_context()` для получения бота через dependency injection
 
+- **Обновление container.py для внедрения зависимостей (Этап 6)**:
+  - Перенесён импорт `FrogRequestService` внутрь функции `build_bot_services()` для избежания циклических зависимостей
+  - Добавлен ленивый импорт `CeleryTaskQueue` внутри функции `build_bot_services()`
+  - Создаётся экземпляр `CeleryTaskQueue` перед созданием `FrogRequestService`
+  - `FrogRequestService` теперь получает `task_queue` через dependency injection в конструкторе
+  - Устранена зависимость от глобального состояния при создании `FrogRequestService`
+
 - **Рефакторинг PromptGenerationService: удаление зависимости от utils.config**:
   - Создан dataclass `PromptFallbackConfig` для инкапсуляции конфигурации fallback промптов
   - Добавлен метод `from_image_config()` для создания конфигурации из глобального `ImageConfig`
