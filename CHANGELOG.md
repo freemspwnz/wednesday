@@ -4,6 +4,10 @@
 
 ### Изменено
 
+- **Рефакторинг PromptGenerationService: удаление зависимости от utils.config**:
+  - Создан dataclass `PromptFallbackConfig` для инкапсуляции конфигурации fallback промптов
+  - Добавлен метод `from_image_config()` для создания конфигурации из глобального `ImageConfig`
+
 - **Удалено файловое хранилище промптов**:
   - Удалён избыточный слой файлового хранилища промптов (`PromptStorageService`, `IPromptStorage`)
   - Все промпты теперь хранятся только в базе данных PostgreSQL через `PromptsStore`
