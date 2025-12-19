@@ -82,7 +82,7 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
                 return None
 
             # Загружаем байты изображения
-            image_bytes = self._images_repo.load_image_bytes(image_record)
+            image_bytes = await self._images_repo.load_image_bytes(image_record)
 
             # Возвращаем байты и image_hash в качестве caption
             return image_bytes, image_record.image_hash
@@ -114,7 +114,7 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
                 return None
 
             # Загружаем байты изображения
-            image_bytes = self._images_repo.load_image_bytes(image_record)
+            image_bytes = await self._images_repo.load_image_bytes(image_record)
 
             # Возвращаем байты и image_hash
             return image_bytes, image_record.image_hash

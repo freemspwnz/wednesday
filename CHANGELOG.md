@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Асинхронизация метода load_image_bytes в ImagesRepo**:
+  - Метод `load_image_bytes()` в `utils/images_repo.py` теперь асинхронный
+  - Используется `asyncio.to_thread()` для неблокирующего чтения файлов
+  - Обновлен протокол `IImageRepo` в `services/protocols.py` для асинхронного метода
+  - Обновлены вызовы в `ImageCacheService` с добавлением `await`
+  - Устранена блокирующая операция I/O в асинхронном контексте
+
 - **Внедрение протокола IModelsRepo для ModelsRepo**:
   - Создан протокол `IModelsRepo` в `services/protocols.py` для абстракции репозитория моделей
   - `GigaChatTextClient` и `KandinskyClient` теперь принимают `IModelsRepo` через dependency injection вместо создания `ModelsRepo` напрямую

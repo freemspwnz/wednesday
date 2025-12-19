@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
@@ -175,8 +176,8 @@ class ImagesRepo:
         )
         return record
 
-    def load_image_bytes(self, record: ImageRecord) -> bytes:
-        """Загружает байты изображения по записи из БД.
+    async def load_image_bytes(self, record: ImageRecord) -> bytes:
+        """Загружает байты изображения по записи из БД (асинхронно).
 
         Для надёжности путь на файловой системе вычисляется по image_hash,
         а не по полю path (path используется как канонический относительный путь для БД).
@@ -191,9 +192,9 @@ class ImagesRepo:
             FileNotFoundError: Если файл изображения не найден на диске.
             OSError: При ошибке чтения файла.
         """
-
         fs_path = self._filesystem_path_for_hash(record.image_hash)
-        return fs_path.read_bytes()
+        # Используем asyncio.to_thread для чтения файла
+        return await asyncio.to_thread(fs_path.read_bytes)
 
     async def get_or_create_image(self, prompt_hash: str, image_bytes: bytes) -> ImageRecord:
         """Гарантированно возвращает запись об изображении для данного prompt_hash.

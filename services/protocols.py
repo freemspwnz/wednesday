@@ -177,8 +177,8 @@ class IImageRepo(Protocol):
         """
         ...
 
-    def load_image_bytes(self, image_record: ImageRecord) -> bytes:
-        """Загружает байты изображения из файла по ImageRecord.
+    async def load_image_bytes(self, image_record: ImageRecord) -> bytes:
+        """Загружает байты изображения из файла по ImageRecord (асинхронно).
 
         Args:
             image_record: Запись ImageRecord с метаданными изображения.
