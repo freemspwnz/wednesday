@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from prometheus_client import start_http_server
 
 from bot.support_bot import SupportBot
-from bot.wednesday_bot import WednesdayBot
+from services.container import build_bot
 from utils.config import config
 from utils.logger import get_logger, log_event
 from utils.postgres_client import get_postgres_pool, init_postgres_pool
@@ -22,6 +22,8 @@ from utils.redis_client import get_redis, init_redis_pool, redis_available
 
 if TYPE_CHECKING:
     from loguru import Logger as LoggerType
+
+    from bot.wednesday_bot import WednesdayBot
 
 # Константы вместо чисел
 SLEEP_BETWEEN_BOTS_SECONDS = 5.0
@@ -194,7 +196,7 @@ class BotRunner:
 
                 # Этап 2: запускаем основной бот
                 self.logger.info("[Supervisor] Создание экземпляра WednesdayBot")
-                self.bot = WednesdayBot()
+                self.bot = build_bot()
                 try:
                     if self.pending_startup_edit:
                         self.logger.info(

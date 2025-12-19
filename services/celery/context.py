@@ -8,16 +8,19 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from celery.signals import worker_shutdown
 
-from bot.wednesday_bot import WednesdayBot
 from services.clients import get_image_client_container, get_text_client_container
 from utils.config import config
 from utils.logger import get_logger
 from utils.postgres_client import close_postgres_pool, init_postgres_pool
 from utils.postgres_schema import ensure_schema
 from utils.redis_client import close_redis, init_redis_pool
+
+if TYPE_CHECKING:
+    from bot.wednesday_bot import WednesdayBot
 
 logger = get_logger(__name__)
 
@@ -82,8 +85,11 @@ async def get_services_context() -> dict[str, object]:
     if _services_context is None:
         async with _init_lock:
             if _services_context is None:
+                # Ленивый импорт для избежания циклических зависимостей
+                from services.container import build_bot
+
                 # Создаём экземпляры сервисов
-                bot = WednesdayBot()
+                bot = build_bot()
 
                 _services_context = {
                     "bot": bot,
@@ -156,6 +162,8 @@ class CeleryServices:
         Raises:
             RuntimeError: Если не удалось инициализировать WednesdayBot.
         """
+        from bot.wednesday_bot import WednesdayBot
+
         context = await get_services_context()
         bot = context.get("bot")
         if not isinstance(bot, WednesdayBot):

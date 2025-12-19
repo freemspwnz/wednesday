@@ -16,7 +16,6 @@ from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
 from services.bot_services import BotServices
 from services.clients import get_image_client_container, get_text_client_container
-from services.container import build_bot_services
 from utils.config import config
 from utils.logger import get_logger, log_all_methods, log_event
 
@@ -51,8 +50,11 @@ class WednesdayBot:
     корректной остановки с освобождением ресурсов.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, services: BotServices) -> None:
         """Инициализирует WednesdayBot.
+
+        Args:
+            services: Контейнер сервисов бота (внедряется через DI).
 
         Создает и настраивает все компоненты основного бота:
         - Application для работы с Telegram API
@@ -81,10 +83,9 @@ class WednesdayBot:
         self.logger.info("Создание Application с токеном")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
 
-        # Создаем сервисы через DI‑контейнер
-        self.logger.info("Инициализация сервисов через DI‑контейнер BotServices")
-        self.services: BotServices = build_bot_services()
-        # Устанавливаем ссылку на экземпляр бота для команд управления
+        # Сервисы внедряются через конструктор (DI)
+        self.services = services
+        # Устанавливаем обратную ссылку для команд управления
         self.services.bot_controller = self
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
         self.pending_startup_edit: dict[str, Any] | None = None

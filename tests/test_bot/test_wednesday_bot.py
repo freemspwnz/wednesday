@@ -121,27 +121,26 @@ def wednesday_bot(monkeypatch: Any) -> Any:
             self.callback = callback
             self.member_filter = member_filter
 
-    monkeypatch.setattr(
-        wb_module,
-        "build_bot_services",
-        lambda: SimpleNamespace(
-            image_service=DummyImageService(),
-            usage=DummyUsageTracker(),
-            chats=DummyChatsStore(),
-            dispatch_registry=DummyDispatchRegistry(),
-            metrics=DummyMetrics(),
-            settings=SimpleNamespace(scheduler_send_times=["10:00"], time_format_length=5),
-            frog_rate_limiter=SimpleNamespace(),
-            frog_request_service=SimpleNamespace(),
-            bot_controller=None,
-        ),
+    # Создаём mock-сервисы для передачи в конструктор
+    mock_services = SimpleNamespace(
+        image_service=DummyImageService(),
+        usage=DummyUsageTracker(),
+        chats=DummyChatsStore(),
+        dispatch_registry=DummyDispatchRegistry(),
+        metrics=DummyMetrics(),
+        settings=SimpleNamespace(scheduler_send_times=["10:00"], time_format_length=5),
+        frog_rate_limiter=SimpleNamespace(),
+        frog_request_service=SimpleNamespace(),
+        bot_controller=None,
     )
+
     monkeypatch.setattr(wb_module, "CommandHandler", DummyCommandHandler)
     monkeypatch.setattr(wb_module, "MessageHandler", DummyMessageHandler)
     monkeypatch.setattr(wb_module, "ChatMemberHandler", DummyChatMemberHandler)
     monkeypatch.setattr(wb_module, "filters", SimpleNamespace(COMMAND="COMMAND"))
 
-    bot = wb_module.WednesdayBot()
+    # Создаём бот с внедрёнными сервисами через DI
+    bot = wb_module.WednesdayBot(services=mock_services)  # type: ignore[arg-type]
     return bot
 
 

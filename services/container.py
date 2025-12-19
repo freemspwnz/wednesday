@@ -9,6 +9,10 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot.wednesday_bot import WednesdayBot
 
 from services.app_settings import AppSettings
 from services.application.admin_dashboard_service import AdminDashboardService
@@ -221,3 +225,36 @@ def build_bot_services() -> BotServices:
         dispatch_service=dispatch_service,
         admin_dashboard_service=admin_dashboard_service,
     )
+
+
+def build_bot(services: BotServices | None = None) -> WednesdayBot:
+    """Создаёт и настраивает экземпляр WednesdayBot.
+
+    Единственная точка создания WednesdayBot в приложении. Использует
+    Dependency Injection для передачи зависимостей в бот.
+
+    Args:
+        services: Опциональный контейнер сервисов. Если None, создаётся
+            новый через build_bot_services().
+
+    Returns:
+        Настроенный экземпляр WednesdayBot с внедрёнными зависимостями.
+
+    Note:
+        Эта функция является Composition Root для WednesdayBot. Все зависимости
+        создаются здесь и передаются в бот через конструктор.
+    """
+    # Ленивый импорт для избежания циклических зависимостей
+    from bot.wednesday_bot import WednesdayBot
+
+    if services is None:
+        services = build_bot_services()
+
+    # Создаём бот с внедрёнными зависимостями
+    bot = WednesdayBot(services=services)
+
+    # Обратная ссылка уже установлена в конструкторе бота,
+    # но убеждаемся, что она корректна
+    services.bot_controller = bot
+
+    return bot

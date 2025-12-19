@@ -4,6 +4,38 @@
 
 ### Изменено
 
+- **Рефакторинг WednesdayBot на Dependency Injection (Этап 0.1)**:
+  - Удалён импорт `build_bot_services` из `bot/wednesday_bot.py`
+  - Изменена сигнатура конструктора `WednesdayBot.__init__()` для принятия `services: BotServices` через dependency injection
+  - Удалён вызов `build_bot_services()` внутри конструктора
+  - Обратная ссылка `services.bot_controller` устанавливается после присваивания сервисов
+  - Устранена зависимость `WednesdayBot` → `container.py` на уровне импортов
+
+- **Добавлена функция build_bot() в container.py (Этап 0.2)**:
+  - Добавлена функция `build_bot()` как единственная точка создания `WednesdayBot` в приложении
+  - Функция использует ленивый импорт `WednesdayBot` для избежания циклических зависимостей
+  - Функция принимает опциональный параметр `services` для возможности переиспользования существующих сервисов
+  - Функция является Composition Root для `WednesdayBot`, обеспечивая правильный DI
+
+- **Обновление main.py для использования build_bot() (Этап 0.3)**:
+  - Заменён импорт `WednesdayBot` на импорт `build_bot` из `services.container`
+  - Заменено создание бота `WednesdayBot()` на вызов `build_bot()`
+  - Все точки создания бота теперь используют единую функцию из composition root
+
+- **Обновление services/celery/context.py для использования build_bot() (Этап 0.4)**:
+  - Удалён импорт `WednesdayBot` с уровня модуля
+  - Добавлен ленивый импорт `build_bot` внутри функции `get_services_context()`
+  - Заменено создание бота `WednesdayBot()` на вызов `build_bot()`
+  - Добавлен `from __future__ import annotations` для корректной работы строковых аннотаций типов
+  - Добавлен TYPE_CHECKING импорт для `WednesdayBot` в аннотациях типов
+  - Использован ленивый импорт в методе `get_bot()` для проверки типа
+
+- **Обновление тестов для использования нового API (Этап 0.5)**:
+  - Обновлена фикстура `wednesday_bot` для создания mock-сервисов и передачи их в конструктор
+  - Удалён monkeypatch для `build_bot_services`, так как он больше не используется
+  - Бот теперь создаётся с явной передачей сервисов через dependency injection
+  - Тесты используют новый API с явными зависимостями
+
 - **Рефакторинг PromptGenerationService: удаление зависимости от utils.config**:
   - Создан dataclass `PromptFallbackConfig` для инкапсуляции конфигурации fallback промптов
   - Добавлен метод `from_image_config()` для создания конфигурации из глобального `ImageConfig`
