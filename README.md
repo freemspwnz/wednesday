@@ -182,10 +182,11 @@ wednesday_tg_bot/
 │   └── handlers.py              # Обработчики команд и сообщений
 ├── services/
 │   ├── image_generator.py       # Генератор изображений (Kandinsky + dry-run)
-│   ├── prompt_generator.py      # Клиент GigaChat для генерации промптов
 │   ├── scheduler.py             # Планировщик задач с часовыми поясами (legacy)
-│   ├── celery_app.py            # Конфигурация Celery (брокер, beat schedule)
-│   └── celery_tasks.py          # Celery задачи (send_frog, generate_image, cleanup)
+│   ├── celery_tasks.py          # Celery задачи (send_frog, generate_image, cleanup)
+│   └── celery/                  # Celery конфигурация и задачи
+│       ├── app.py               # Конфигурация Celery (брокер, beat schedule)
+│       └── tasks.py             # Celery задачи
 ├── utils/
 │   ├── config.py                # Конфигурация и валидация
 │   ├── logger.py                # Настройка логирования (loguru)

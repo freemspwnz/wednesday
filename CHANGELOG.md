@@ -19,6 +19,11 @@
   - Обновлён `__init__.py` для экспорта только `CircuitBreakerService` и `RateLimiter`
   - Обновлены тесты для использования `CircuitBreakerService` вместо legacy-класса `CircuitBreaker`
 
+- **Удалён дубликат конфигурации Celery**:
+  - Удалён устаревший модуль `services/celery_app.py` (дубликат `services/celery/app.py`)
+  - Обновлены команды в `docker-compose.yml` и `docs/DEPLOYMENT.md` для использования `services.celery` вместо `services.celery_app`
+  - Обновлена структура проекта в `README.md` для отражения новой организации Celery модулей
+
 - **Уточнены импорты и структура административных хэндлеров**:
   - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
   - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal

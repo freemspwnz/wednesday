@@ -270,7 +270,7 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       SERVICE_NAME: celery-worker
       ENV: production
-    command: celery -A services.celery_app worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
+    command: celery -A services.celery worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
     volumes:
       - frog_images:/app/data/frogs
       - prompt_storage:/app/data/prompts
@@ -278,7 +278,7 @@ services:
       - backend
       - monitoring
     healthcheck:
-      test: ["CMD-SHELL", "celery -A services.celery_app inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "celery -A services.celery inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -326,7 +326,7 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       SERVICE_NAME: celery-beat
       ENV: production
-    command: celery -A services.celery_app beat --loglevel=info
+    command: celery -A services.celery beat --loglevel=info
     volumes:
       - beat_data:/app/data/beat
     networks:
@@ -414,8 +414,8 @@ secrets:
 ### Важные замечания
 
 1. **Celery Workers и Celery Beat используют один и тот же образ** (`wednesday-bot:prod`), но запускаются с разными командами:
-   - `celery-worker`: `celery -A services.celery_app worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance`
-   - `celery-beat`: `celery -A services.celery_app beat --loglevel=info`
+   - `celery-worker`: `celery -A services.celery worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance`
+   - `celery-beat`: `celery -A services.celery beat --loglevel=info`
 
 2. **Volumes для персистентных данных:**
    - `postgres_data` — данные PostgreSQL
@@ -774,7 +774,7 @@ docker compose -f docker-compose.yml up -d --scale celery-worker=0
 
 # 2. Дождитесь завершения текущих задач (опционально, если нужно)
 # Проверьте активные задачи:
-docker compose -f docker-compose.yml exec celery-worker celery -A services.celery_app inspect active
+docker compose -f docker-compose.yml exec celery-worker celery -A services.celery inspect active
 
 # 3. Обновляем и перезапускаем сервисы (без зависимостей, чтобы не трогать postgres/redis)
 docker compose -f docker-compose.yml up -d --no-deps bot celery-beat
@@ -1188,7 +1188,7 @@ curl http://localhost:8000/metrics | grep -E "cpu|memory|process"
 
 # 3. Проверьте количество активных задач Celery
 docker compose -f docker-compose.yml exec celery-worker \
-  celery -A services.celery_app inspect active
+  celery -A services.celery inspect active
 ```
 
 **Возможные решения:**
