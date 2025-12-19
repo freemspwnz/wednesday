@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Рефакторинг зависимостей от config в container.py**:
+  - Функции `_create_clients()`, `build_image_stack()`, `build_bot_services()` и `build_bot()` теперь принимают `config` как явный параметр
+  - Удалена скрытая зависимость от глобального `config` в `services/container.py`
+  - Обновлены вызовы `build_bot()` в `main.py` и `services/infrastructure/celery/context.py` для передачи `config`
+  - Улучшена тестируемость и явность зависимостей согласно принципам Dependency Injection
+
 ### Добавлено
 
 - **Централизованное управление жизненным циклом ресурсов в BotServices**:

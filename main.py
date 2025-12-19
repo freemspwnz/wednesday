@@ -196,7 +196,7 @@ class BotRunner:
 
                 # Этап 2: запускаем основной бот
                 self.logger.info("[Supervisor] Создание экземпляра WednesdayBot")
-                self.bot = build_bot()
+                self.bot = build_bot(config)
                 try:
                     if self.pending_startup_edit:
                         self.logger.info(

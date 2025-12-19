@@ -37,7 +37,7 @@ from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.protocols import IChatsRepo, ICircuitBreaker, IRateLimiter, IUsageTracker
 from utils.chats_repo import ChatsRepo
-from utils.config import ImageConfig, config
+from utils.config import Config, ImageConfig
 from utils.dispatch_registry import DispatchRegistry
 from utils.images_repo import ImagesRepo
 from utils.metrics import Metrics
@@ -46,13 +46,16 @@ from utils.prompts_repo import PromptsRepo
 from utils.usage_tracker import UsageTracker
 
 
-def _create_clients() -> tuple:
+def _create_clients(config: Config) -> tuple:
     """Создаёт клиенты для внешних ML‑сервисов.
+
+    Args:
+        config: Экземпляр Config для создания конфигураций клиентов.
 
     Returns:
         Кортеж (image_client, text_client) для использования в сервисах.
     """
-    # Создаем конфигурации из глобального config
+    # Создаем конфигурации из переданного config
     gigachat_config = GigaChatConfig.from_config(config)
     kandinsky_config = KandinskyConfig.from_config(config)
 
@@ -63,6 +66,7 @@ def _create_clients() -> tuple:
 
 
 def build_image_stack(
+    config: Config,
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
 ) -> ImageService:
@@ -72,6 +76,7 @@ def build_image_stack(
     чтобы упростить дальнейшее сопровождение и тестирование.
 
     Args:
+        config: Экземпляр Config для создания клиентов и чтения настроек.
         image_client: Опциональный клиент для генерации изображений.
             Если None, создаётся новый через create_image_client().
         text_client: Опциональный клиент для генерации текста.
@@ -81,12 +86,13 @@ def build_image_stack(
         Настроенный экземпляр ImageService.
     """
     # Инфраструктура и клиенты
-    if image_client is None:
-        kandinsky_config = KandinskyConfig.from_config(config)
-        image_client = create_image_client(kandinsky_config=kandinsky_config)
-    if text_client is None:
-        gigachat_config = GigaChatConfig.from_config(config)
-        text_client = create_text_client(gigachat_config=gigachat_config)
+    if image_client is None or text_client is None:
+        # Используем _create_clients() вместо дублирования логики
+        created_image_client, created_text_client = _create_clients(config)
+        if image_client is None:
+            image_client = created_image_client
+        if text_client is None:
+            text_client = created_text_client
 
     # Доменные сервисы
     image_generation = ImageGenerationService(image_client)
@@ -160,20 +166,27 @@ def build_admin_dashboard_service(
     )
 
 
-def build_bot_services() -> BotServices:
+def build_bot_services(config: Config) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
     На этом этапе:
     - image_service создаётся через build_image_stack();
     - остальные сервисы повторяют существующую инициализацию из WednesdayBot.
+
+    Args:
+        config: Экземпляр Config для создания сервисов и настроек.
+
+    Returns:
+        Настроенный экземпляр BotServices.
     """
     app_settings = AppSettings.from_config(config)
 
     # Создаём клиенты один раз для переиспользования во всех сервисах
-    image_client, text_client = _create_clients()
+    image_client, text_client = _create_clients(config)
 
     # Создаём image_service с переиспользованием клиентов
     image_service = build_image_stack(
+        config=config,
         image_client=image_client,
         text_client=text_client,
     )
@@ -248,13 +261,14 @@ def build_bot_services() -> BotServices:
     )
 
 
-def build_bot(services: BotServices | None = None) -> WednesdayBot:
+def build_bot(config: Config, services: BotServices | None = None) -> WednesdayBot:
     """Создаёт и настраивает экземпляр WednesdayBot.
 
     Единственная точка создания WednesdayBot в приложении. Использует
     Dependency Injection для передачи зависимостей в бот.
 
     Args:
+        config: Экземпляр Config для создания сервисов и зависимостей.
         services: Опциональный контейнер сервисов. Если None, создаётся
             новый через build_bot_services().
 
@@ -269,7 +283,7 @@ def build_bot(services: BotServices | None = None) -> WednesdayBot:
     from bot.wednesday_bot import WednesdayBot
 
     if services is None:
-        services = build_bot_services()
+        services = build_bot_services(config)
 
     # Создаём бот с внедрёнными зависимостями
     bot = WednesdayBot(services=services)

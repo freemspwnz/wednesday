@@ -89,7 +89,7 @@ async def get_services_context() -> dict[str, object]:
                 from services.container import build_bot
 
                 # Создаём экземпляры сервисов
-                bot = build_bot()
+                bot = build_bot(config)
 
                 _services_context = {
                     "bot": bot,
