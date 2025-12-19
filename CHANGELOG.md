@@ -66,6 +66,14 @@
   - Обновлены `support_bot.py` и тесты для использования нового API
   - Устранена зависимость Application Layer → Infrastructure Layer
 
+- **Устранение циклического импорта в Celery модуле (Этап 4)**:
+  - Удалён импорт `tasks` из `services/infrastructure/celery/__init__.py` для разрыва циклической зависимости
+  - Добавлен комментарий о причинах отсутствия импорта `tasks` в `__init__.py`
+  - Обновлён импорт `celery_app` в `tasks.py` на прямой импорт из `app.py` для надёжности
+  - Обновлён импорт `celery_app` в `celery_task_queue.py` на прямой импорт из `app.py`
+  - Tasks теперь регистрируются автоматически при импорте `tasks.py` в worker процессе
+  - Устранён циклический импорт между `__init__.py` и `tasks.py`
+
 - **Рефакторинг PromptGenerationService: удаление зависимости от utils.config**:
   - Создан dataclass `PromptFallbackConfig` для инкапсуляции конфигурации fallback промптов
   - Добавлен метод `from_image_config()` для создания конфигурации из глобального `ImageConfig`

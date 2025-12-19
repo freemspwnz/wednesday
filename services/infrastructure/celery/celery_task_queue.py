@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from services.infrastructure.celery import celery_app
+from services.infrastructure.celery.app import celery_app
 from services.infrastructure.celery.task_names import CeleryTaskNames
 from utils.logger import get_logger
 
