@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- **Создание интерфейса ITaskQueue (Этап 1)**:
+  - Добавлен Protocol `ITaskQueue` в `services/protocols.py` для абстракции очереди задач
+  - Определён метод `send_frog_manual_task()` с параметрами `chat_id`, `user_id`, `status_message_id`
+  - Протокол абстрагирует детали реализации очереди задач от application-сервисов
+
 ### Изменено
 
 - **Рефакторинг WednesdayBot на Dependency Injection (Этап 0.1)**:

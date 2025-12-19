@@ -128,3 +128,30 @@ class ICache(Protocol[T]):
             key: Ключ для удаления.
         """
         ...
+
+
+@runtime_checkable
+class ITaskQueue(Protocol):
+    """Протокол для отправки задач в очередь выполнения.
+
+    Абстрагирует детали реализации очереди задач (Celery, Redis Streams, и т.д.)
+    от application-сервисов.
+    """
+
+    async def send_frog_manual_task(
+        self,
+        chat_id: int,
+        user_id: int,
+        status_message_id: int | None,
+    ) -> None:
+        """Ставит задачу генерации и отправки жабы в очередь.
+
+        Args:
+            chat_id: ID чата для отправки изображения.
+            user_id: ID пользователя, запросившего генерацию.
+            status_message_id: ID статусного сообщения для удаления после отправки (опционально).
+
+        Raises:
+            Exception: При ошибке постановки задачи в очередь.
+        """
+        ...
