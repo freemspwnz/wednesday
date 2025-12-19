@@ -4,6 +4,21 @@
 
 ### Изменено
 
+- **Внедрён Dependency Injection для AdminDashboardService**:
+  - Конструктор `AdminDashboardService` теперь принимает все зависимости извне: `image_client`, `text_client`, `models_store`
+  - Удалены внутренние вызовы `create_image_client()`, `create_text_client()` и создание `ModelsStore()` внутри сервиса
+  - Обновлён `bot/handlers_admin.py` для создания зависимостей и передачи их в `AdminDashboardService`
+  - Сервис стал полностью управляемым через DI, упрощая тестирование и замену зависимостей
+
+- **Введён протокол IRateLimiter и DI для FrogRateLimiterService**:
+  - Добавлен новый протокол `IRateLimiter` в `services/protocols.py` с методами `is_allowed()` и `reset()`
+  - Обновлён `FrogRateLimiterService` для принятия `IRateLimiter` через dependency injection вместо создания `RateLimiter` внутри
+  - Обновлён `services/container.py` для создания экземпляров `RateLimiter` и передачи их в `FrogRateLimiterService`
+  - Обновлены `bot/support_bot.py` и тесты для использования нового API с DI
+  - Application-сервис теперь зависит от интерфейса, что упрощает тестирование и замену реализации
+
+- **Удалён дубликат конфигурации Celery**:
+
 - **Унифицировано файловое хранилище промптов**:
   - Удалён синхронный класс `PromptStorage` из `services/prompt_generator.py`, оставлена только асинхронная реализация `PromptStorageService`
   - Удалён устаревший модуль `services/prompt_generator.py` после завершения миграции на `PromptStorageService`

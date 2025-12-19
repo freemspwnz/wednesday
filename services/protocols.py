@@ -53,6 +53,19 @@ class ICircuitBreaker(Protocol):
 
 
 @runtime_checkable
+class IRateLimiter(Protocol):
+    """Протокол для сервиса rate limiting."""
+
+    async def is_allowed(self, key: str) -> bool:
+        """Возвращает True, если запрос разрешён и инкрементирует счётчик по ключу."""
+        ...
+
+    async def reset(self, key: str) -> None:
+        """Сбрасывает счётчик по ключу."""
+        ...
+
+
+@runtime_checkable
 class IImageStorage(Protocol):
     """Протокол для файлового хранилища изображений."""
 

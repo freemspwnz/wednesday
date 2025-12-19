@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from services.app_settings import AppSettings
 from services.base.base_service import BaseService
-from services.infrastructure.rate_limiting import RateLimiter
+from services.protocols import IRateLimiter
 
 # Константы
 SECONDS_PER_MINUTE = 60  # секунд в минуте
@@ -26,29 +26,22 @@ class FrogRateLimiterService(BaseService):
 
     def __init__(
         self,
+        *,
         settings: AppSettings,
+        global_limiter: IRateLimiter,
+        user_limiter: IRateLimiter,
     ) -> None:
         """Инициализирует сервис rate limiting для команды /frog.
 
         Args:
             settings: Настройки приложения с параметрами rate limit.
+            global_limiter: Лимитер для глобального лимита запросов.
+            user_limiter: Лимитер для per-user лимита запросов.
         """
         super().__init__()
         self._settings = settings
-
-        # Глобальный лимитер: окно window_seconds, лимит max_requests
-        self._global_limiter = RateLimiter(
-            prefix="frog:global:",
-            window=settings.frog_rate_limit_window_seconds,
-            limit=settings.frog_rate_limit_max_requests,
-        )
-
-        # Per-user лимитер: окно minutes * 60 секунд, лимит 1
-        self._user_limiter = RateLimiter(
-            prefix="frog:user:",
-            window=settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
-            limit=1,
-        )
+        self._global_limiter = global_limiter
+        self._user_limiter = user_limiter
 
     async def check_and_consume(
         self,

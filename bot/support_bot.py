@@ -22,6 +22,7 @@ from bot.wednesday_bot import (
     READ_TIMEOUT_SECONDS,
 )
 from services.infrastructure.rate_limiting import RateLimiter
+from services.protocols import IRateLimiter
 from utils.config import config
 from utils.logger import log_all_methods
 
@@ -98,7 +99,24 @@ class SupportBot(BaseHandlers):
         from services.application.frog_requests import FrogRequestService
         from services.bot_services import BotServices
 
-        frog_rate_limiter = FrogRateLimiterService(settings=self.settings)
+        # Создаём rate limiters для команды /frog
+        SECONDS_PER_MINUTE = 60
+        global_limiter: IRateLimiter = RateLimiter(
+            prefix="frog:global:",
+            window=self.settings.frog_rate_limit_window_seconds,
+            limit=self.settings.frog_rate_limit_max_requests,
+        )
+        user_limiter: IRateLimiter = RateLimiter(
+            prefix="frog:user:",
+            window=self.settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
+            limit=1,
+        )
+
+        frog_rate_limiter = FrogRateLimiterService(
+            settings=self.settings,
+            global_limiter=global_limiter,
+            user_limiter=user_limiter,
+        )
         frog_request_service = FrogRequestService()
         services: BotServices = BotServices(
             usage=None,  # type: ignore[arg-type]

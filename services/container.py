@@ -25,9 +25,10 @@ from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
 from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
+from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
-from services.protocols import ICircuitBreaker, IPromptStorage
+from services.protocols import ICircuitBreaker, IPromptStorage, IRateLimiter
 from utils.chats_store import ChatsStore
 from utils.config import ImageConfig, config
 from utils.dispatch_registry import DispatchRegistry
@@ -103,7 +104,25 @@ def build_bot_services() -> BotServices:
     metrics = Metrics()
     prompt_cache = PromptCache()
     user_state_store = UserStateCache()
-    frog_rate_limiter = FrogRateLimiterService(settings=app_settings)
+
+    # Создаём rate limiters для команды /frog
+    SECONDS_PER_MINUTE = 60
+    global_limiter: IRateLimiter = RateLimiter(
+        prefix="frog:global:",
+        window=app_settings.frog_rate_limit_window_seconds,
+        limit=app_settings.frog_rate_limit_max_requests,
+    )
+    user_limiter: IRateLimiter = RateLimiter(
+        prefix="frog:user:",
+        window=app_settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
+        limit=1,
+    )
+
+    frog_rate_limiter = FrogRateLimiterService(
+        settings=app_settings,
+        global_limiter=global_limiter,
+        user_limiter=user_limiter,
+    )
     frog_request_service = FrogRequestService()
     dispatch_service = DispatchService(
         usage=usage,
