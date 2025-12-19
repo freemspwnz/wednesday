@@ -38,6 +38,22 @@ class IMetrics(Protocol):
         """Увеличивает счётчик срабатываний circuit breaker."""
         ...
 
+    async def get_summary(self) -> dict[str, Any]:
+        """Возвращает сводку всех метрик производительности.
+
+        Returns:
+            Словарь с ключами:
+            - generations_total: общее количество генераций
+            - generations_success: количество успешных генераций
+            - generations_failed: количество неудачных генераций
+            - generations_retries: количество повторных попыток
+            - average_generation_time: среднее время генерации в секундах (строка)
+            - dispatches_success: количество успешных отправок
+            - dispatches_failed: количество неудачных отправок
+            - circuit_breaker_trips: количество срабатываний circuit breaker
+        """
+        ...
+
 
 @runtime_checkable
 class ICircuitBreaker(Protocol):

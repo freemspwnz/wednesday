@@ -273,6 +273,29 @@ class Metrics:
                 "UPDATE metrics SET circuit_breaker_trips = circuit_breaker_trips + 1 WHERE id = 1;",
             )
 
+    async def increment_cache_hit(self) -> None:  # noqa: PLR6301
+        """Увеличивает счётчик попаданий в кэш.
+
+        В текущей реализации используется record_metric для записи события в Redis Stream.
+        Для совместимости с протоколом IMetrics метод существует, но не обновляет
+        агрегированные метрики в таблице metrics (это делается через record_metric).
+
+        Raises:
+            Exception: При ошибке доступа к базе данных или Redis.
+        """
+        # Используем record_metric для записи события cache_hit
+        await record_metric(event_type="cache_hit", status="hit")
+
+    async def record_circuit_breaker_trip(self) -> None:
+        """Увеличивает счётчик срабатываний circuit breaker.
+
+        Алиас для increment_circuit_breaker_trip() для совместимости с протоколом IMetrics.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
+        await self.increment_circuit_breaker_trip()
+
     async def get_summary(self) -> dict[str, Any]:
         """Возвращает сводку всех метрик производительности.
 

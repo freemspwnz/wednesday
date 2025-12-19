@@ -22,8 +22,7 @@ from services.application.admin_dashboard_builders import (
 )
 from services.base.base_service import BaseService
 from services.clients.interfaces import ITextToImageClient, ITextToTextClient
-from services.protocols import IChatsRepo, IModelsRepo, IUsageTracker
-from utils.metrics import Metrics
+from services.protocols import IChatsRepo, IMetrics, IModelsRepo, IUsageTracker
 
 if TYPE_CHECKING:
     pass
@@ -45,7 +44,7 @@ class AdminDashboardService(BaseService):
         *,
         usage: IUsageTracker | None,
         chats: IChatsRepo | None,
-        metrics: Metrics | None,
+        metrics: IMetrics | None,
         image_client: ITextToImageClient,
         text_client: ITextToTextClient | None,
         models_store: IModelsRepo | None,

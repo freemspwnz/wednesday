@@ -32,7 +32,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
-from services.protocols import IChatsRepo, ICircuitBreaker, IModelsRepo, IRateLimiter, IUsageTracker
+from services.protocols import IChatsRepo, ICircuitBreaker, IMetrics, IModelsRepo, IRateLimiter, IUsageTracker
 from utils.chats_repo import ChatsRepo
 from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, KandinskyConfig
 from utils.dispatch_registry import DispatchRegistry
@@ -138,7 +138,7 @@ def build_image_stack(
 def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     usage: IUsageTracker,
     chats: IChatsRepo,
-    metrics: Metrics,
+    metrics: IMetrics,
     image_client: ITextToImageClient,
     text_client: ITextToTextClient | None,
     models_repo: IModelsRepo | None = None,

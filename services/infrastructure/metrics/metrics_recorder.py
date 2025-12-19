@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from services.base.base_service import BaseService
 from services.protocols import IMetrics
 from utils.metrics import Metrics
@@ -107,3 +109,21 @@ class MetricsRecorder(BaseService, IMetrics):
             )
         except Exception as e:
             self.logger.warning(f"Ошибка при записи метрики record_circuit_breaker_trip: {e}")
+
+    async def get_summary(self) -> dict[str, Any]:
+        """Возвращает сводку всех метрик производительности."""
+        try:
+            return await self._metrics.get_summary()
+        except Exception as e:
+            self.logger.warning(f"Ошибка при получении сводки метрик: {e}")
+            # Возвращаем пустую сводку при ошибке
+            return {
+                "generations_total": 0,
+                "generations_success": 0,
+                "generations_failed": 0,
+                "generations_retries": 0,
+                "average_generation_time": "0.00s",
+                "dispatches_success": 0,
+                "dispatches_failed": 0,
+                "circuit_breaker_trips": 0,
+            }

@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Унификация использования протокола IMetrics**:
+  - Добавлен метод `get_summary()` в протокол `IMetrics` в `services/protocols.py`
+  - Добавлены недостающие методы `increment_cache_hit()` и `record_circuit_breaker_trip()` в класс `Metrics` для полного соответствия протоколу
+  - Добавлен метод `get_summary()` в `MetricsRecorder` для полной реализации протокола
+  - Заменены типы параметров с `Metrics` на `IMetrics` в `BotServices`, `DispatchService`, `AdminDashboardService` и `build_admin_dashboard_service()`
+  - Обновлены импорты для использования протокола `IMetrics` вместо конкретного класса `Metrics`
+  - Улучшена абстракция и тестируемость через использование протоколов
+
 - **Централизованное закрытие ресурсов в BotServices.cleanup()**:
   - Добавлено закрытие Redis соединений через `close_redis()` в `BotServices.cleanup()`
   - Добавлено закрытие PostgreSQL pool через `close_postgres_pool()` в `BotServices.cleanup()`

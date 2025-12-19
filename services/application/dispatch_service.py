@@ -19,9 +19,8 @@ from telegram.error import NetworkError, TelegramError
 
 from services.application.image_service import ImageService
 from services.base.base_service import BaseService
-from services.protocols import IChatsRepo, IUsageTracker
+from services.protocols import IChatsRepo, IMetrics, IUsageTracker
 from utils.dispatch_registry import DispatchRegistry
-from utils.metrics import Metrics
 from utils.retry import retry_on_connect_error
 
 
@@ -47,7 +46,7 @@ class DispatchService(BaseService):
         usage: IUsageTracker,
         chats: IChatsRepo,
         dispatch_registry: DispatchRegistry,
-        metrics: Metrics,
+        metrics: IMetrics,
         image_service: ImageService | None,
     ) -> None:
         super().__init__()

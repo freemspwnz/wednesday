@@ -15,10 +15,9 @@ from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.image_service import ImageService
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.protocols import IChatsRepo, IUsageTracker
+from services.protocols import IChatsRepo, IMetrics, IUsageTracker
 from utils.config import AppSettings
 from utils.dispatch_registry import DispatchRegistry
-from utils.metrics import Metrics
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
@@ -36,7 +35,7 @@ class BotServices:
     usage: IUsageTracker
     chats: IChatsRepo
     dispatch_registry: DispatchRegistry
-    metrics: Metrics
+    metrics: IMetrics
     prompt_cache: PromptCache
     user_state_store: UserStateCache
     settings: AppSettings
