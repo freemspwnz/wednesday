@@ -4,7 +4,6 @@
 """
 
 import asyncio
-import os
 from typing import Any
 
 from telegram import Update
@@ -46,7 +45,7 @@ class WednesdayBot:
     - Управляет лимитами генераций и rate limiting
     - Отслеживает метрики производительности
     - Интегрируется с Redis для кэширования и хранения состояния
-    - Использует планировщик задач (TaskScheduler или Celery) для автоматических отправок
+    - Использует Celery для планирования и выполнения автоматических отправок
 
     Бот управляет жизненным циклом всех компонентов: от инициализации до
     корректной остановки с освобождением ресурсов.
@@ -58,7 +57,6 @@ class WednesdayBot:
         Создает и настраивает все компоненты основного бота:
         - Application для работы с Telegram API
         - ImageGenerator для генерации изображений
-        - TaskScheduler (опционально) для планирования задач
         - UsageTracker для отслеживания лимитов генераций
         - ChatsStore для управления списком чатов
         - PromptCache, UserStateCache, RateLimiter для работы с Redis
@@ -97,8 +95,11 @@ class WednesdayBot:
 
         # Создаем обработчики команд
         self.logger.info("Создание специализированных наборов хендлеров")
-        # Для get_next_run используем scheduler если он есть, иначе None (Celery управляет расписанием)
-        get_next_run_fn = self.services.scheduler.get_next_run if self.services.scheduler else lambda: None
+        # Celery управляет расписанием, поэтому get_next_run всегда None
+
+        def get_next_run_fn() -> None:
+            return None
+
         # Узкоспециализированные наборы для регистрации в PTB по зонам ответственности
         self.user_handlers: UserHandlers = UserHandlers(self.services, get_next_run_fn)
         # Админские и пользовательские команды должны разделять общее состояние (лимиты, хранилища),
@@ -114,7 +115,6 @@ class WednesdayBot:
         self.is_running: bool = False
 
         # Задача планировщика (инициализируется при старте)
-        self.scheduler_task: asyncio.Task[None] | None = None
 
         self.logger.info("WednesdayBot успешно инициализирован")
 
@@ -492,44 +492,6 @@ class WednesdayBot:
             )
             return False
 
-    def setup_scheduler(self) -> None:
-        """Настраивает планировщик задач для автоматической отправки жабы.
-
-        Настраивает TaskScheduler для автоматической отправки изображений жабы
-        по расписанию. Используется только если USE_OLD_SCHEDULER=true.
-        Иначе используется Celery (запускается отдельно через celery worker/beat).
-
-        Side Effects:
-            - Планирует задачу отправки жабы каждую среду через scheduler.schedule_wednesday_task().
-            - Опционально планирует тестовый интервал через scheduler.schedule_interval_task(),
-              если установлена переменная окружения SCHEDULER_TEST_MINUTES.
-
-        Note:
-            Если TaskScheduler отключен (self.services.scheduler is None), метод ничего не делает,
-            так как планирование выполняется через Celery.
-        """
-        if not self.services.scheduler:
-            self.logger.info("TaskScheduler отключен, используется Celery для планирования задач")
-            return
-
-        self.logger.info("Настраиваю планировщик задач (старый TaskScheduler)")
-
-        # Планируем отправку жабы каждую среду
-        self.services.scheduler.schedule_wednesday_task(self.send_wednesday_frog)
-
-        # Необязательный тестовый интервал для проверки планировщика
-        test_minutes = os.getenv("SCHEDULER_TEST_MINUTES")
-        if test_minutes:
-            try:
-                minutes = int(test_minutes)
-                if minutes > 0:
-                    self.logger.info(f"Включен тестовый интервал планировщика: каждые {minutes} минут")
-                    self.services.scheduler.schedule_interval_task(self.send_wednesday_frog, minutes)
-            except ValueError:
-                self.logger.warning("Переменная SCHEDULER_TEST_MINUTES должна быть целым числом")
-
-        self.logger.info("Планировщик задач настроен")
-
     async def start(self) -> None:
         """Запускает бота и планировщик задач.
 
@@ -562,7 +524,6 @@ class WednesdayBot:
 
         Side Effects:
             - Настраивает обработчики команд через setup_handlers().
-            - Настраивает планировщик через setup_scheduler() (если включен).
             - Инициализирует приложение через application.initialize().
             - Запускает polling через updater.start_polling().
             - Сохраняет сервисы в bot_data для доступа обработчиков.
@@ -586,16 +547,10 @@ class WednesdayBot:
         wednesday_day = _config.scheduler_wednesday_day
         timezone = _config.scheduler_tz or "Europe/Moscow"
 
-        if self.services.scheduler:
-            self.logger.info(
-                "Валидация планировщика (TaskScheduler): "
-                f"день недели={wednesday_day}, времена={configured_times}, TZ={timezone}",
-            )
-        else:
-            self.logger.info(
-                "Используется Celery для планирования задач: "
-                f"день недели={wednesday_day}, времена={configured_times}, TZ={timezone}",
-            )
+        self.logger.info(
+            "Используется Celery для планирования задач: "
+            f"день недели={wednesday_day}, времена={configured_times}, TZ={timezone}",
+        )
 
         if not configured_times:
             self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
@@ -605,7 +560,6 @@ class WednesdayBot:
             self.setup_handlers()
 
             # Настраиваем и запускаем планировщик (только если используется старый планировщик)
-            self.setup_scheduler()
 
             # Проверяем доступность чата перед отправкой сообщения
             await self._check_chat_access()
@@ -638,11 +592,10 @@ class WednesdayBot:
 
             # Отправляем сообщение о запуске после старта
             try:
-                scheduler_status = "включен (Celery)" if not self.services.scheduler else "включен (TaskScheduler)"
                 startup_message = (
                     "🚀 Wednesday Frog Bot запущен!\n\n"
                     "✅ Бот активен и готов к работе\n"
-                    f"📅 Планировщик: {scheduler_status}\n"
+                    "📅 Планировщик: включен (Celery)\n"
                     "🎨 Генератор изображений: Kandinsky API\n"
                     "📝 Логирование: включено\n\n"
                     "🐸 Используйте команду /frog для генерации жабы!"
@@ -730,12 +683,8 @@ class WednesdayBot:
             except Exception as e:
                 self.logger.warning(f"Не удалось обновить статусное сообщение SupportBot: {e}")
 
-            # Запускаем планировщик в фоновой задаче (только если используется старый планировщик)
-            if self.services.scheduler:
-                self.scheduler_task = asyncio.create_task(self.services.scheduler.start())
-            else:
-                self.scheduler_task = None
-                self.logger.info("Celery используется для планирования, TaskScheduler не запущен")
+            # Celery используется для планирования задач
+            self.logger.info("Celery используется для планирования задач")
 
             # Устанавливаем флаг запуска
             self.is_running = True
@@ -904,7 +853,6 @@ class WednesdayBot:
         Side Effects:
             - Устанавливает флаг is_running в False.
             - Останавливает планировщик через scheduler.stop() (если включен).
-            - Отменяет задачу планировщика (scheduler_task.cancel()).
             - Останавливает updater через updater.stop().
             - Отправляет сообщения об остановке в CHAT_ID и админам.
             - Редактирует статусные сообщения об остановке (если есть).
@@ -920,18 +868,6 @@ class WednesdayBot:
         try:
             # Устанавливаем флаг остановки
             self.is_running = False
-
-            # Останавливаем планировщик (только если используется старый планировщик)
-            try:
-                if self.services.scheduler and hasattr(self, "scheduler_task") and self.scheduler_task:
-                    self.services.scheduler.stop()
-                    self.scheduler_task.cancel()
-                    try:
-                        await self.scheduler_task
-                    except asyncio.CancelledError:
-                        pass
-            except Exception as e:
-                self.logger.warning(f"Ошибка при остановке планировщика: {e}")
 
             # Безопасная остановка updater'а
             try:

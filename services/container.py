@@ -27,8 +27,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.infrastructure.storage.prompt_storage import PromptStorageService
-from services.protocols import ICircuitBreaker, IPromptStorage, IScheduler
-from services.scheduler import TaskScheduler
+from services.protocols import ICircuitBreaker, IPromptStorage
 from utils.chats_store import ChatsStore
 from utils.config import ImageConfig, config
 from utils.dispatch_registry import DispatchRegistry
@@ -93,17 +92,6 @@ def build_bot_services() -> BotServices:
     app_settings = AppSettings.from_config(config)
     image_service = build_image_stack()
 
-    scheduler: IScheduler | None = (
-        TaskScheduler(
-            send_times=config.scheduler_send_times,
-            wednesday_day=config.scheduler_wednesday_day,
-            check_interval=30,
-            timezone=config.scheduler_tz or "Europe/Moscow",
-        )
-        if config.use_old_scheduler
-        else None
-    )
-
     usage = UsageTracker(
         storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
         monthly_quota=100,
@@ -136,7 +124,6 @@ def build_bot_services() -> BotServices:
         image_service=image_service,
         frog_rate_limiter=frog_rate_limiter,
         frog_request_service=frog_request_service,
-        scheduler=scheduler,
         bot_controller=None,
         dispatch_service=dispatch_service,
     )

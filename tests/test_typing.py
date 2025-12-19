@@ -21,7 +21,6 @@ def test_mypy_config_present() -> None:
 def test_imports() -> None:
     """Проверяет, что все основные модули импортируются без ошибок."""
     import bot.wednesday_bot  # noqa: F401
-    import services.scheduler  # noqa: F401
     import utils.usage_tracker  # noqa: F401
 
     assert True
@@ -32,12 +31,10 @@ def test_type_annotations_exist() -> None:
     from bot.support_bot import SupportBot
     from bot.wednesday_bot import WednesdayBot
     from services.infrastructure.storage.prompt_storage import PromptStorageService
-    from services.scheduler import TaskScheduler
 
     # Проверяем, что классы существуют и имеют методы
     assert hasattr(WednesdayBot, "__init__")
     assert hasattr(SupportBot, "__init__")
     assert hasattr(PromptStorageService, "__init__")
-    assert hasattr(TaskScheduler, "__init__")
 
     assert True

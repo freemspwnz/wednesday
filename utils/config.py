@@ -635,16 +635,6 @@ class Config:  # noqa: PLR0904
         """
         return int(Config._get_env_var("SCHEDULER_WEDNESDAY_DAY") or "2")
 
-    @property
-    def use_old_scheduler(self) -> bool:
-        """
-        Флаг для использования старого TaskScheduler вместо Celery.
-
-        Returns:
-            True если USE_OLD_SCHEDULER=true, False иначе (по умолчанию используется Celery)
-        """
-        return Config._get_env_var("USE_OLD_SCHEDULER") == "true"
-
 
 # Создаем глобальный экземпляр конфигурации
 config = Config()

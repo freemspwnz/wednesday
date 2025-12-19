@@ -111,7 +111,6 @@ class SupportBot(BaseHandlers):
             image_service=None,  # type: ignore[arg-type]
             frog_rate_limiter=frog_rate_limiter,
             frog_request_service=frog_request_service,
-            scheduler=None,
             bot_controller=None,
         )
         # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)

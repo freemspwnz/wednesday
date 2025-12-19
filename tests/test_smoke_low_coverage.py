@@ -158,7 +158,6 @@ async def test_command_handlers_start_help(
         image_service=MagicMock(),
         frog_rate_limiter=frog_rate_limiter,
         frog_request_service=frog_request_service,
-        scheduler=None,
     )
     handler = UserHandlers(services=services, next_run_provider=None)
     async_retry_stub(handler)

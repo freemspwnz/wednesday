@@ -61,13 +61,6 @@ def wednesday_bot(monkeypatch: Any) -> Any:
         async def generate_frog_image(self, user_id: int | None = None) -> tuple[bytes, str]:
             return b"img", "caption"
 
-    class DummyScheduler:
-        def __init__(self) -> None:
-            self.send_times: list[str] = ["10:00"]
-
-        def get_next_run(self) -> Any:
-            return None
-
     class DummyUsageTracker:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.total: int = 0
@@ -133,7 +126,6 @@ def wednesday_bot(monkeypatch: Any) -> Any:
         "build_bot_services",
         lambda: SimpleNamespace(
             image_service=DummyImageService(),
-            scheduler=DummyScheduler(),
             usage=DummyUsageTracker(),
             chats=DummyChatsStore(),
             dispatch_registry=DummyDispatchRegistry(),
@@ -158,8 +150,6 @@ def test_wednesday_bot_initializes_components(wednesday_bot: Any) -> None:
     assert wednesday_bot.user_handlers is not None
     assert wednesday_bot.admin_handlers is not None
     assert wednesday_bot.model_handlers is not None
-    # scheduler может быть None если USE_OLD_SCHEDULER=false (используется Celery)
-    # assert wednesday_bot.scheduler is not None
     assert wednesday_bot.is_running is False
 
 
@@ -172,9 +162,6 @@ def test_setup_handlers_registers_all_callbacks(wednesday_bot: Any) -> None:
 async def test_send_wednesday_frog_dispatches_to_targets(monkeypatch: Any, wednesday_bot: Any) -> None:
     wednesday_bot.chat_id = "222"
     wednesday_bot.chats.chat_ids = [111]
-    # scheduler может быть None, если используется Celery
-    if wednesday_bot.scheduler is not None:
-        wednesday_bot.scheduler.send_times = ["10:00"]
 
     def fake_generate(metrics: Any = None) -> tuple[bytes, str]:
         return b"img", "caption"
@@ -303,7 +290,6 @@ async def test_on_my_chat_member_removed(wednesday_bot: Any, cleanup_tables: Any
 @pytest.mark.asyncio
 async def test_stop_bot(wednesday_bot: Any) -> None:
     wednesday_bot.is_running = True
-    wednesday_bot.scheduler_task = None
 
     await wednesday_bot.stop()
 

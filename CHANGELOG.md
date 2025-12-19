@@ -30,6 +30,17 @@
   - Модуль `tasks.py` содержит бизнес-логику Celery задач
   - Обновлены все импорты в тестах и документации для использования нового пути `services.celery.context`
 
+- **Удалён legacy планировщик TaskScheduler**:
+  - Удалён модуль `services/scheduler.py` с классом `TaskScheduler` (legacy планировщик на основе asyncio)
+  - Удалён неиспользуемый модуль `services/application/scheduler_service.py`
+  - Удалён протокол `IScheduler` из `services/protocols.py` (больше не используется)
+  - Удалено поле `scheduler` из `BotServices` и логика создания TaskScheduler в `container.py`
+  - Удалён метод `setup_scheduler()` и все использования scheduler из `WednesdayBot`
+  - Удалён флаг `use_old_scheduler` из `utils/config.py` и переменная окружения `USE_OLD_SCHEDULER` из `env_example.txt`
+  - Удалены тесты для TaskScheduler (`tests/test_services/test_scheduler.py`)
+  - Обновлена документация: удалены упоминания TaskScheduler из `docs/ARCHITECTURE.md`
+  - Теперь используется только Celery Beat для планирования задач (production-ready решение)
+
 - **Уточнены импорты и структура административных хэндлеров**:
   - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
   - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal

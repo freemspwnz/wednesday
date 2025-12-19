@@ -16,7 +16,6 @@ from services.application.frog_requests import FrogRequestService
 from services.application.image_service import ImageService
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.protocols import IScheduler
 from utils.chats_store import ChatsStore
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
@@ -44,6 +43,5 @@ class BotServices:
     image_service: ImageService
     frog_rate_limiter: FrogRateLimiterService
     frog_request_service: FrogRequestService
-    scheduler: IScheduler | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
