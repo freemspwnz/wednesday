@@ -440,18 +440,24 @@ async def test_image_generator_with_di():
 
 ### Тестирование сервисов с внешними зависимостями
 
-#### Пример: Тестирование PromptGenerator
+#### Пример: Тестирование PromptStorageService
 
 ```python
 @pytest.mark.unit
-def test_prompt_storage(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_prompt_storage(tmp_path, monkeypatch):
     """Тест хранилища промптов."""
     # Мокируем логгер
     fake_logger = MagicMock()
-    monkeypatch.setattr("services.prompt_generator.get_logger", lambda *args, **kwargs: fake_logger)
+    monkeypatch.setattr(
+        "services.infrastructure.storage.prompt_storage.get_logger",
+        lambda *args, **kwargs: fake_logger,
+    )
 
-    storage = PromptStorage(base_dir=tmp_path)
-    path_str = storage.save_prompt("A frog", source="test")
+    from services.infrastructure.storage.prompt_storage import PromptStorageService
+
+    storage = PromptStorageService(base_dir=tmp_path)
+    path_str = await storage.save("A frog", source="test")
 
     assert path_str is not None
     file_path = Path(path_str)

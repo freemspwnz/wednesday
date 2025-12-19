@@ -6,10 +6,12 @@
 
 - **Унифицировано файловое хранилище промптов**:
   - Удалён синхронный класс `PromptStorage` из `services/prompt_generator.py`, оставлена только асинхронная реализация `PromptStorageService`
+  - Удалён устаревший модуль `services/prompt_generator.py` после завершения миграции на `PromptStorageService`
   - `GigaChatTextClient` теперь принимает `IPromptStorage` через dependency injection вместо создания хранилища внутри себя
   - Фабрика `create_text_client()` в `services/clients/factory.py` принимает опциональный параметр `prompt_storage` для передачи в клиент
   - В `services/container.py` создаётся единый экземпляр `PromptStorageService` и передаётся в `create_text_client()` и `PromptService`
   - Обновлены тесты для использования асинхронного `PromptStorageService` вместо синхронного `PromptStorage`
+  - Обновлён пример в `docs/TESTING_GUIDE.md` для использования `PromptStorageService` вместо устаревшего `PromptStorage`
 
 - **Консолидирован circuit breaker**:
   - Удалён legacy-класс `CircuitBreaker` из `services/infrastructure/rate_limiting/rate_limiter.py`
