@@ -35,7 +35,7 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
-from services.protocols import ICircuitBreaker, IRateLimiter
+from services.protocols import IChatsRepo, ICircuitBreaker, IRateLimiter, IUsageTracker
 from utils.chats_repo import ChatsRepo
 from utils.config import ImageConfig, config
 from utils.dispatch_registry import DispatchRegistry
@@ -131,8 +131,8 @@ def build_image_stack(
 
 
 def build_admin_dashboard_service(
-    usage: UsageTracker,
-    chats: ChatsRepo,
+    usage: IUsageTracker,
+    chats: IChatsRepo,
     metrics: Metrics,
     image_client: ITextToImageClient,
     text_client: ITextToTextClient | None,

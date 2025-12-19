@@ -281,6 +281,46 @@ class IUsageTracker(Protocol):
         """
         ...
 
+    async def can_use_frog(self, when: datetime | None = None) -> bool:
+        """Проверяет, не превышен ли порог ручных /frog для месяца.
+
+        Args:
+            when: Дата для проверки. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            True если можно использовать команду /frog (не превышен порог),
+            False иначе.
+        """
+        ...
+
+    async def set_frog_threshold(self, threshold: int) -> int:
+        """Устанавливает порог ручных генераций (/frog).
+
+        Args:
+            threshold: Новое значение порога для ручных генераций.
+
+        Returns:
+            Установленное значение порога (после ограничения диапазоном).
+        """
+        ...
+
+    async def set_month_total(self, total: int, when: datetime | None = None) -> int:
+        """Устанавливает текущее значение использования за месяц в абсолютном виде.
+
+        Args:
+            total: Абсолютное значение счётчика генераций для установки.
+            when: Дата для установки значения. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Установленное значение счётчика.
+        """
+        ...
+
+    @property
+    def monthly_quota(self) -> int:
+        """Возвращает месячную квоту генераций."""
+        ...
+
 
 @runtime_checkable
 class IChatsRepo(Protocol):
@@ -291,5 +331,22 @@ class IChatsRepo(Protocol):
 
         Returns:
             Список идентификаторов чатов, отсортированный по chat_id.
+        """
+        ...
+
+    async def add_chat(self, chat_id: int, title: str | None = None) -> None:
+        """Добавляет или обновляет чат в списке рассылки.
+
+        Args:
+            chat_id: Идентификатор чата для добавления или обновления.
+            title: Название чата. Если не указано, используется пустая строка.
+        """
+        ...
+
+    async def remove_chat(self, chat_id: int) -> None:
+        """Удаляет чат из списка рассылки.
+
+        Args:
+            chat_id: Идентификатор чата для удаления.
         """
         ...

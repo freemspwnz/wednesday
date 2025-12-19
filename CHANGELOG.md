@@ -7,8 +7,8 @@
 - **Создание протоколов IUsageTracker и IChatsRepo (Проблема 5, Шаг 1)**:
   - Добавлены протоколы `IUsageTracker` и `IChatsRepo` в `services/protocols.py`
   - Протоколы определяют интерфейсы для трекера использования и репозитория чатов
-  - `IUsageTracker` содержит методы `increment()` и `get_limits_info()`
-  - `IChatsRepo` содержит метод `list_chat_ids()`
+  - `IUsageTracker` содержит методы: `increment()`, `get_limits_info()`, `can_use_frog()`, `set_frog_threshold()`, `set_month_total()`, свойство `monthly_quota`
+  - `IChatsRepo` содержит методы: `list_chat_ids()`, `add_chat()`, `remove_chat()`
   - Соответствуют принципу Dependency Inversion (DIP)
 
 ### Изменено
@@ -23,6 +23,12 @@
   - Заменены типы параметров конструктора с конкретных классов на протоколы `IUsageTracker` и `IChatsRepo`
   - Удалены прямые импорты `UsageTracker` и `ChatsRepo` из модуля
   - Application слой больше не зависит от конкретных реализаций из `utils/`
+  - Соответствует принципу Dependency Inversion (DIP)
+
+- **Рефакторинг BotServices для использования протоколов (Проблема 5, Шаг 4)**:
+  - Заменены типы полей dataclass с конкретных классов на протоколы `IUsageTracker` и `IChatsRepo`
+  - Удалены прямые импорты `UsageTracker` и `ChatsRepo` из модуля
+  - Контейнер зависимостей использует протоколы для типизации
   - Соответствует принципу Dependency Inversion (DIP)
 
 - **Создание протоколов IImageRepo и IPromptRepo (Проблема 4, Шаг 1)**:
