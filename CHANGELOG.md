@@ -4,6 +4,14 @@
 
 ### Добавлено
 
+- **Создание dataclass для конфигурации GigaChat (Проблема 3, Шаг 1)**:
+  - Создан файл `services/clients/gigachat_config.py` с dataclass `GigaChatConfig`
+  - Инкапсулирует все параметры конфигурации GigaChat клиента (auth_url, api_url, authorization_key, scope, model, verify_ssl)
+  - Добавлен метод `from_config()` для создания из глобального Config
+  - Использует `frozen=True` для иммутабельности конфигурации
+
+### Добавлено
+
 - **Создание интерфейса ITaskQueue (Этап 1)**:
   - Добавлен Protocol `ITaskQueue` в `services/protocols.py` для абстракции очереди задач
   - Определён метод `send_frog_manual_task()` с параметрами `chat_id`, `user_id`, `status_message_id`
