@@ -158,3 +158,23 @@ class CircuitBreakerService(RedisBackendService):
                 f"Ошибка при регистрации неудачи в circuit breaker ({self.key}): {e}",
                 exc_info=True,
             )
+
+    async def reset(self) -> None:
+        """Полностью сбрасывает состояние circuit breaker.
+
+        Удаляет все данные о состоянии circuit breaker из Redis и из in-memory fallback,
+        сбрасывая счётчик ошибок и время последней ошибки.
+
+        Note:
+            При ошибке Redis сброс выполняется только в fallback кэше.
+        """
+
+        async def _delete_operation(backend: RedisBackend) -> None:
+            await backend.delete(self.key)
+
+        try:
+            await self._execute_with_fallback(_delete_operation, log_on_fallback=True)
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при сбросе circuit breaker ({self.key}): {e}",
+            )

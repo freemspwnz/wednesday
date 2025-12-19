@@ -6,7 +6,8 @@ import pytest
 
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from services.infrastructure.rate_limiting import CircuitBreaker, RateLimiter
+from services.infrastructure.rate_limiting import RateLimiter
+from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from utils.redis_client import _InMemoryRedis
 
 pytestmark = [pytest.mark.unit]
@@ -72,7 +73,7 @@ async def test_rate_limiter_allows_until_limit() -> None:
 @pytest.mark.asyncio
 async def test_circuit_breaker_opens_after_threshold() -> None:
     backend = _InMemoryRedis()
-    breaker = CircuitBreaker(redis_client=backend, key="test:cb", threshold=2, window=60, cooldown=60)
+    breaker = CircuitBreakerService(redis_client=backend, key="test:cb", threshold=2, window=60, cooldown=60)
 
     assert await breaker.is_open() is False
 

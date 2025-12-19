@@ -11,6 +11,12 @@
   - В `services/container.py` создаётся единый экземпляр `PromptStorageService` и передаётся в `create_text_client()` и `PromptService`
   - Обновлены тесты для использования асинхронного `PromptStorageService` вместо синхронного `PromptStorage`
 
+- **Консолидирован circuit breaker**:
+  - Удалён legacy-класс `CircuitBreaker` из `services/infrastructure/rate_limiting/rate_limiter.py`
+  - Оставлена только реализация `CircuitBreakerService` в отдельном модуле `circuit_breaker.py`
+  - Обновлён `__init__.py` для экспорта только `CircuitBreakerService` и `RateLimiter`
+  - Обновлены тесты для использования `CircuitBreakerService` вместо legacy-класса `CircuitBreaker`
+
 - **Уточнены импорты и структура административных хэндлеров**:
   - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
   - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal

@@ -76,9 +76,11 @@ async def test_prompt_cache_inmemory_roundtrip() -> None:
 
 @pytest.mark.asyncio
 async def test_rate_limiter_and_circuit_breaker_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
+
     backend = _InMemoryRedis()
     rate = rate_limiter_module.RateLimiter(redis_client=backend, limit=1, window=1)
-    cb = rate_limiter_module.CircuitBreaker(redis_client=backend, key="cb:test", threshold=1, window=1, cooldown=5)
+    cb = CircuitBreakerService(redis_client=backend, key="cb:test", threshold=1, window=1, cooldown=5)
 
     # Первый вызов разрешён, второй — блок
     assert await rate.is_allowed("u1") is True
