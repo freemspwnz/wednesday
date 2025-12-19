@@ -9,6 +9,13 @@
   - Определён метод `send_frog_manual_task()` с параметрами `chat_id`, `user_id`, `status_message_id`
   - Протокол абстрагирует детали реализации очереди задач от application-сервисов
 
+- **Создание реализации CeleryTaskQueue (Этап 2)**:
+  - Создан класс `CeleryTaskQueue` в `services/infrastructure/celery/celery_task_queue.py`
+  - Класс реализует `ITaskQueue` Protocol через Celery
+  - Принимает `celery_app` в конструкторе с дефолтным значением
+  - Использует `CeleryTaskNames` для имен задач
+  - Инкапсулирует детали работы с Celery для отправки задач генерации жабы
+
 ### Изменено
 
 - **Рефакторинг WednesdayBot на Dependency Injection (Этап 0.1)**:
