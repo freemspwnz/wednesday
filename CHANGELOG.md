@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- **Создание протоколов IImageRepo и IPromptRepo (Проблема 4, Шаг 1)**:
+  - Добавлены протоколы `IImageRepo` и `IPromptRepo` в `services/protocols.py`
+  - Протоколы определяют интерфейсы для репозиториев изображений и промптов в БД
+  - Используют TYPE_CHECKING для импорта типов ImageRecord и PromptRecord
+  - Соответствуют принципу Dependency Inversion (DIP)
+
 ### Изменено
 
 - **Переименование классов репозиториев БД Store → Repo (Проблема 4, Подготовка)**:
