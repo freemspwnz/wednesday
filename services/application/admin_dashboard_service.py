@@ -21,6 +21,9 @@ from utils.metrics import Metrics
 from utils.models_store import ModelsStore
 from utils.usage_tracker import UsageTracker
 
+if TYPE_CHECKING:
+    pass
+
 if TYPE_CHECKING:  # pragma: no cover - используется только для типизации
     pass
 
@@ -52,6 +55,24 @@ class AdminDashboardService(BaseService):
         self._image_client = image_client
         self._text_client = text_client
         self._models_store = models_store
+
+    @property
+    def image_client(self) -> ITextToImageClient:
+        """Возвращает клиент для генерации изображений.
+
+        Предоставляет публичный доступ к клиенту для установки моделей
+        и других операций, требующих прямого взаимодействия с клиентом.
+        """
+        return self._image_client
+
+    @property
+    def text_client(self) -> ITextToTextClient | None:
+        """Возвращает клиент для генерации текста.
+
+        Предоставляет публичный доступ к клиенту для установки моделей
+        и других операций, требующих прямого взаимодействия с клиентом.
+        """
+        return self._text_client
 
     async def build_status_message(
         self,

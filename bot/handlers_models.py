@@ -28,8 +28,8 @@ class ModelHandlers(BaseHandlers):
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
         dashboard_service = self.services.admin_dashboard_service
-        self.image_client = dashboard_service._image_client
-        self.text_client = dashboard_service._text_client
+        self.image_client = dashboard_service.image_client
+        self.text_client = dashboard_service.text_client
         self._dashboard_service = dashboard_service
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
