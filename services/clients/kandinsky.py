@@ -86,6 +86,22 @@ class KandinskyClient(ITextToImageClient):
 
         self._proxy_url = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
 
+        # Настройка timeout для сессии (используем таймауты генерации как основные)
+        self._timeout = aiohttp.ClientTimeout(
+            total=TIMEOUT_GENERATION_TOTAL_SECONDS,
+            connect=TIMEOUT_GENERATION_CONNECT_SECONDS,
+            sock_read=TIMEOUT_GENERATION_SOCK_READ_SECONDS,
+        )
+
+        # Создаём connector (один раз для переиспользования)
+        connector: aiohttp.BaseConnector | None = None
+        if self._proxy_url:
+            # ProxyConnector не типизирован стабильно в aiohttp, поэтому игнорируем attr‑check.
+            connector = aiohttp.ProxyConnector.from_url(self._proxy_url)  # type: ignore[attr-defined]
+
+        # Создаём сессию для переиспользования во всех методах
+        self._session = aiohttp.ClientSession(timeout=self._timeout, connector=connector)
+
     # ------------------------------------------------------------------ #
     # Публичный интерфейс ITextToImageClient                             #
     # ------------------------------------------------------------------ #

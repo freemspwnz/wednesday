@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Переиспользование aiohttp.ClientSession в KandinskyClient (Проблема 10, Шаг 1)**:
+  - Сессия создается в `__init__` один раз для переиспользования во всех методах
+  - Timeout и connector сохраняются как поля класса
+  - Улучшена производительность за счет connection pooling
+  - Единообразие с подходом `GigaChatTextClient`
+
 ### Добавлено
 
 - **Создание протоколов IUsageTracker и IChatsRepo (Проблема 5, Шаг 1)**:
