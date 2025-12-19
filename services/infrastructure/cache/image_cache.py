@@ -6,9 +6,7 @@ from hashlib import sha256
 
 from services.base.base_service import BaseService
 from services.base.exceptions import CacheError
-from services.protocols import ICache
-from utils.images_repo import ImagesRepo
-from utils.prompts_repo import PromptsRepo
+from services.protocols import ICache, IImageRepo, IPromptRepo
 
 IMAGE_CACHE_VALUE_TUPLE_LENGTH = 2
 
@@ -22,20 +20,30 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
 
     def __init__(
         self,
-        images_store: ImagesRepo | None = None,
-        prompts_store: PromptsRepo | None = None,
+        images_repo: IImageRepo | None = None,
+        prompts_repo: IPromptRepo | None = None,
     ) -> None:
         """Инициализирует сервис кэширования изображений.
 
         Args:
-            images_store: Экземпляр ImagesRepo для работы с изображениями.
-                Если None, создаётся новый экземпляр.
-            prompts_store: Экземпляр PromptsRepo для работы с промптами.
-                Если None, создаётся новый экземпляр.
+            images_repo: Экземпляр репозитория изображений (IImageRepo).
+                Если None, создаётся новый экземпляр ImagesRepo.
+            prompts_repo: Экземпляр репозитория промптов (IPromptRepo).
+                Если None, создаётся новый экземпляр PromptsRepo.
         """
         super().__init__()
-        self._images_store = images_store or ImagesRepo()
-        self._prompts_store = prompts_store or PromptsRepo()
+        # Примечание: создание по умолчанию можно оставить для обратной совместимости,
+        # но лучше передавать из container.py
+        if images_repo is None:
+            from utils.images_repo import ImagesRepo  # Импорт только для fallback
+
+            images_repo = ImagesRepo()
+        if prompts_repo is None:
+            from utils.prompts_repo import PromptsRepo  # Импорт только для fallback
+
+            prompts_repo = PromptsRepo()
+        self._images_store = images_repo
+        self._prompts_store = prompts_repo
 
     @staticmethod
     def _normalize_prompt(prompt: str) -> str:

@@ -12,6 +12,13 @@
 
 ### Изменено
 
+- **Рефакторинг ImageCacheService для использования протоколов (Проблема 4, Шаг 2)**:
+  - Заменены типы параметров конструктора с конкретных классов на протоколы `IImageRepo` и `IPromptRepo`
+  - Удалены прямые импорты `ImagesRepo` и `PromptsRepo` из модуля
+  - Импорты конкретных классов перенесены внутрь `__init__` для fallback-создания
+  - Infrastructure слой больше не зависит от конкретных реализаций из `utils/`
+  - Соответствует принципу Dependency Inversion (DIP)
+
 - **Переименование классов репозиториев БД Store → Repo (Проблема 4, Подготовка)**:
   - Переименованы классы репозиториев БД для единообразия: `ImagesStore` → `ImagesRepo`, `PromptsStore` → `PromptsRepo`, `ChatsStore` → `ChatsRepo`, `AdminsStore` → `AdminsRepo`, `ModelsStore` → `ModelsRepo`
   - Переименованы файлы: `*_store.py` → `*_repo.py` в `utils/`
