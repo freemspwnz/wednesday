@@ -10,6 +10,12 @@
   - Добавлен метод `from_config()` для создания из глобального Config
   - Использует `frozen=True` для иммутабельности конфигурации
 
+- **Создание dataclass для конфигурации Kandinsky (Проблема 3, Шаг 2)**:
+  - Создан файл `services/clients/kandinsky_config.py` с dataclass `KandinskyConfig`
+  - Инкапсулирует все параметры конфигурации Kandinsky клиента (api_key, secret_key)
+  - Добавлен метод `from_config()` для создания из глобального Config
+  - Использует `frozen=True` для иммутабельности конфигурации
+
 ### Добавлено
 
 - **Создание интерфейса ITaskQueue (Этап 1)**:
