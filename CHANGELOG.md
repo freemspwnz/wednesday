@@ -10,6 +10,14 @@
   - Основной метод `send_wednesday_frog` теперь является тонким координирующим методом, вызывающим эти шаги
   - Каждый приватный метод инкапсулирует свою часть логики и может быть покрыт отдельными unit-тестами
 
+- **Выделение форматирования сообщений из AdminDashboardService**:
+  - Создан модуль `admin_dashboard_builders.py` с билдерами для форматирования сообщений
+  - Добавлен `StatusMessageBuilder` для форматирования сообщения `/status`
+  - Добавлен `ModelsListMessageBuilder` для форматирования сообщения `/list_models`
+  - Созданы dataclass'ы `StatusData` и `ModelsListData` для передачи данных в билдеры
+  - `AdminDashboardService` теперь фокусируется на сборе данных, а билдеры отвечают за форматирование
+  - Упрощено unit-тестирование форматирования независимо от источников данных
+
 - **Внедрён Dependency Injection для AdminDashboardService**:
   - Конструктор `AdminDashboardService` теперь принимает все зависимости извне: `image_client`, `text_client`, `models_store`
   - Удалены внутренние вызовы `create_image_client()`, `create_text_client()` и создание `ModelsStore()` внутри сервиса
