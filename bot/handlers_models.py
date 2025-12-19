@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -25,7 +22,6 @@ class ModelHandlers(BaseHandlers):
     def __init__(
         self,
         services: BotServices,
-        next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
         super().__init__(services)
         # Клиенты используются для команд установки моделей,
@@ -37,7 +33,6 @@ class ModelHandlers(BaseHandlers):
             chats=self.services.chats,
             metrics=self.services.metrics,
         )
-        self.next_run_provider: Callable[[], datetime | None] | None = next_run_provider
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_kandinsky_model.

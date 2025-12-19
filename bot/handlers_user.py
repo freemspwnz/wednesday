@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime
-
 from telegram import Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
@@ -25,17 +22,14 @@ class UserHandlers(BaseHandlers):
     def __init__(
         self,
         services: BotServices,
-        next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
         super().__init__(services)
-        self.next_run_provider: Callable[[], datetime | None] | None = next_run_provider
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.
 
         Приветствует пользователя и показывает основную информацию о боте,
-        включая доступные команды и время следующей автоматической отправки
-        (если доступно).
+        включая доступные команды.
 
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
@@ -52,15 +46,6 @@ class UserHandlers(BaseHandlers):
 
         self.logger.info(f"Получена команда /start от пользователя {update.effective_user.id}")
 
-        next_run_info = ""
-        if self.next_run_provider:
-            try:
-                next_dt = self.next_run_provider()
-                if next_dt:
-                    next_run_info = f"\n📅 Следующая отправка: {next_dt.strftime('%Y-%m-%d %H:%M')}"
-            except Exception:
-                pass
-
         welcome_message = (
             "🐸 Привет! Я Wednesday Frog Bot!\n\n"
             "Я генерирую изображения жабы по расписанию (каждую среду) и по команде.\n\n"
@@ -68,7 +53,6 @@ class UserHandlers(BaseHandlers):
             "/start - Показать это сообщение\n"
             "/help - Справка по командам\n"
             "/frog - Сгенерировать жабу прямо сейчас\n"
-            f"{next_run_info}"
         )
 
         try:
@@ -111,15 +95,6 @@ class UserHandlers(BaseHandlers):
 
         if is_admin:
             # Админская справка
-            next_run_hint = ""
-            if self.next_run_provider:
-                try:
-                    nxt = self.next_run_provider()
-                    if nxt:
-                        next_run_hint = f"\n   (Следующая отправка: {nxt.strftime('%Y-%m-%d %H:%M')})"
-                except Exception:
-                    pass
-
             help_message = (
                 "🛠 Админ-справка по командам\n\n"
                 "Пользовательские команды:\n"
@@ -128,7 +103,7 @@ class UserHandlers(BaseHandlers):
                 "• /frog — сгенерировать жабу сейчас (rate limit, учитывается в лимитах)\n\n"
                 "Админ-команды:\n"
                 "• /status — расширенный статус: бот, планировщик, генерации, "
-                "активные чаты, проверка API и метрики" + next_run_hint + "\n"
+                "активные чаты, проверка API и метрики\n"
                 "• /log [count] — отправить логи за N дней (1..10), без аргумента — последний файл\n"
                 "• /add_chat <chat_id> — добавить чат в рассылку\n"
                 "• /remove_chat <chat_id> — удалить чат из рассылки\n"
@@ -150,27 +125,13 @@ class UserHandlers(BaseHandlers):
             self.logger.info("Отправлена админская справка")
         else:
             # Пользовательская справка
-            # Получаем информацию о следующей отправке
-            scheduler_info = ""
-            if self.next_run_provider:
-                try:
-                    next_dt = self.next_run_provider()
-                    if next_dt:
-                        # Определяем день недели на русском
-                        weekdays = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
-                        weekday = weekdays[next_dt.weekday()]
-                        next_dt_str = next_dt.strftime("%Y-%m-%d %H:%M")
-                        scheduler_info = f"\n• Ближайшая автоматическая отправка: {next_dt_str} ({weekday})"
-                except Exception:
-                    pass
-
             help_message = (
                 "📚 Справка по командам Wednesday Frog Bot\n\n"
                 "🔹 /start - Приветствие и основная информация\n"
                 "🔹 /help - Эта справка\n"
                 "🔹 /frog - Сгенерировать изображение жабы прямо сейчас\n\n"
                 "ℹ️ Информация:\n"
-                f"• Автоматическая отправка каждый раз по расписанию{scheduler_info}\n"
+                "• Автоматическая отправка каждый раз по расписанию\n"
                 "• Изображения генерируются с помощью нейросети Kandinsky\n\n"
                 "🐛 Если что-то не работает, обратитесь к администратору."
             )

@@ -95,17 +95,12 @@ class WednesdayBot:
 
         # Создаем обработчики команд
         self.logger.info("Создание специализированных наборов хендлеров")
-        # Celery управляет расписанием, поэтому get_next_run всегда None
-
-        def get_next_run_fn() -> None:
-            return None
-
         # Узкоспециализированные наборы для регистрации в PTB по зонам ответственности
-        self.user_handlers: UserHandlers = UserHandlers(self.services, get_next_run_fn)
+        self.user_handlers: UserHandlers = UserHandlers(self.services)
         # Админские и пользовательские команды должны разделять общее состояние (лимиты, хранилища),
-        # поэтому используем единый контейнер сервисов и один и тот же next_run_provider.
-        self.admin_handlers: AdminHandlers = AdminHandlers(self.services, get_next_run_fn)
-        self.model_handlers: ModelHandlers = ModelHandlers(self.services, get_next_run_fn)
+        # поэтому используем единый контейнер сервисов.
+        self.admin_handlers: AdminHandlers = AdminHandlers(self.services)
+        self.model_handlers: ModelHandlers = ModelHandlers(self.services)
 
         # ID чата для отправки сообщений
         self.chat_id: str | None = config.chat_id

@@ -14,7 +14,7 @@ from bot.handlers_user import UserHandlers
 async def test_start_command_replies(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services, next_run_provider=lambda: None)
+    handler = UserHandlers(services=services)
     async_retry_stub(handler)
 
     await handler.start_command(fake_update, fake_context)
@@ -26,7 +26,7 @@ async def test_start_command_replies(fake_update: Any, fake_context: Any, async_
 async def test_help_command_replies(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services, next_run_provider=None)
+    handler = UserHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminNo:
@@ -48,7 +48,7 @@ async def test_help_command_replies(fake_update: Any, fake_context: Any, async_r
 async def test_start_command_handles_retry_failure(fake_update: Any, fake_context: Any, monkeypatch: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services, next_run_provider=None)
+    handler = UserHandlers(services=services)
 
     def failing_retry(func: Any, *args: Any, **kwargs: Any) -> Any:
         raise RuntimeError("boom")
@@ -67,7 +67,7 @@ async def test_start_command_handles_retry_failure(fake_update: Any, fake_contex
 async def test_help_command_admin_version(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services, next_run_provider=lambda: None)
+    handler = UserHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -101,7 +101,7 @@ async def test_set_frog_limit_command_success(fake_update: Any, fake_context: An
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = FakeUsage()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     class _AdminOk2:
         async def is_admin(self, _uid: int) -> bool:
@@ -122,7 +122,7 @@ async def test_set_frog_limit_command_success(fake_update: Any, fake_context: An
 async def test_set_frog_limit_command_invalid(fake_update: Any, fake_context: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     class _AdminOk:
         async def is_admin(self, _uid: int) -> bool:
@@ -164,7 +164,7 @@ async def test_frog_command_success(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = DummyUsage()
-    handler = UserHandlers(services=services, next_run_provider=None)
+    handler = UserHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminNo:
@@ -226,7 +226,7 @@ async def test_frog_command_usage_limit(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = LimitedUsage()
-    handler = UserHandlers(services=services, next_run_provider=None)
+    handler = UserHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminNo2:
@@ -280,7 +280,7 @@ async def test_status_command_integration_with_postgres_stores(
     services.chats = ChatsStore(storage_path="ignored.json")
     services.metrics = Metrics(storage_path="ignored.json")
 
-    handler = AdminHandlers(services=services, next_run_provider=lambda: None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -327,7 +327,7 @@ async def test_force_send_command_integration_with_postgres_stores(
     services.chats = ChatsStore(storage_path="ignored.json")
     services.usage = UsageTracker(storage_path="ignored.json")
 
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -365,7 +365,7 @@ async def test_set_frog_used_command_success(fake_update: Any, fake_context: Any
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = FakeUsage()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -386,7 +386,7 @@ async def test_set_frog_used_command_success(fake_update: Any, fake_context: Any
 async def test_set_frog_used_command_invalid(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -407,7 +407,7 @@ async def test_set_frog_used_command_invalid(fake_update: Any, fake_context: Any
 async def test_set_frog_used_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -428,7 +428,7 @@ async def test_set_frog_used_command_no_args(fake_update: Any, fake_context: Any
 async def test_unknown_command(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services, next_run_provider=None)
+    handler = UserHandlers(services=services)
     async_retry_stub(handler)
 
     await handler.unknown_command(fake_update, fake_context)
@@ -456,7 +456,7 @@ async def test_admin_add_chat_command_success(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.chats = ChatsStore(storage_path="ignored.json")
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -483,7 +483,7 @@ async def test_admin_add_chat_command_success(
 async def test_admin_add_chat_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -504,7 +504,7 @@ async def test_admin_add_chat_command_no_args(fake_update: Any, fake_context: An
 async def test_admin_add_chat_command_invalid_id(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -536,7 +536,7 @@ async def test_admin_remove_chat_command_success(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.chats = ChatsStore(storage_path="ignored.json")
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -564,7 +564,7 @@ async def test_admin_remove_chat_command_success(
 async def test_admin_remove_chat_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -596,7 +596,7 @@ async def test_list_chats_command_success(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.chats = ChatsStore(storage_path="ignored.json")
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -632,7 +632,7 @@ async def test_list_chats_command_no_chats(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.chats = ChatsStore(storage_path="ignored.json")
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -653,7 +653,7 @@ async def test_list_chats_command_no_chats(
 async def test_stop_command_non_admin(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminNo:
@@ -674,7 +674,7 @@ async def test_stop_command_non_admin(fake_update: Any, fake_context: Any, async
 async def test_stop_command_admin(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -700,7 +700,7 @@ async def test_stop_command_admin(fake_update: Any, fake_context: Any, async_ret
 async def test_set_kandinsky_model_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = ModelHandlers(services=services, next_run_provider=None)
+    handler = ModelHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -729,7 +729,7 @@ async def test_set_kandinsky_model_command_success(fake_update: Any, fake_contex
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services, next_run_provider=None)
+    handler = ModelHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -752,7 +752,7 @@ async def test_set_kandinsky_model_command_success(fake_update: Any, fake_contex
 async def test_set_gigachat_model_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = ModelHandlers(services=services, next_run_provider=None)
+    handler = ModelHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -778,7 +778,7 @@ async def test_set_gigachat_model_command_no_client(fake_update: Any, fake_conte
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services, next_run_provider=None)
+    handler = ModelHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -807,7 +807,7 @@ async def test_set_gigachat_model_command_success(fake_update: Any, fake_context
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services, next_run_provider=None)
+    handler = ModelHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -851,7 +851,7 @@ async def test_mod_command_success(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     # Используем реальный AdminsStore для теста
@@ -878,7 +878,7 @@ async def test_mod_command_no_args(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     # Не нужно мокать admins_store, так как теперь проверяется _is_super_admin
@@ -915,7 +915,7 @@ async def test_unmod_command_success(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     # Используем реальный AdminsStore для теста
@@ -954,7 +954,7 @@ async def test_unmod_command_no_args_shows_list(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -998,7 +998,7 @@ async def test_list_mods_command_success(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     # Используем реальный AdminsStore для теста
@@ -1031,7 +1031,7 @@ async def test_list_models_command(fake_update: Any, fake_context: Any, async_re
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services, next_run_provider=None)
+    handler = ModelHandlers(services=services)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -1054,7 +1054,7 @@ async def test_extract_target_user_id_from_reply(fake_update: Any, fake_context:
     """Тест извлечения target_user_id из reply на сообщение."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     # Создаем reply_to_message
     reply_user = SimpleNamespace(id=12345)
@@ -1071,7 +1071,7 @@ async def test_extract_target_user_id_from_args(fake_update: Any, fake_context: 
     """Тест извлечения target_user_id из аргументов команды."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     fake_update.message.reply_to_message = None
     fake_context.args = ["67890"]
@@ -1085,7 +1085,7 @@ async def test_extract_target_user_id_priority_reply_over_args(fake_update: Any,
     """Тест приоритета reply над аргументами."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     # Есть и reply, и аргументы - должен вернуть reply
     reply_user = SimpleNamespace(id=11111)
@@ -1102,7 +1102,7 @@ async def test_extract_target_user_id_invalid_args(fake_update: Any, fake_contex
     """Тест обработки невалидных аргументов."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     fake_update.message.reply_to_message = None
     fake_context.args = ["not_a_number"]
@@ -1116,7 +1116,7 @@ async def test_extract_target_user_id_multiple_args(fake_update: Any, fake_conte
     """Тест обработки множественных аргументов (должен вернуть None)."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     fake_update.message.reply_to_message = None
     fake_context.args = ["111", "222"]
@@ -1130,7 +1130,7 @@ async def test_extract_target_user_id_no_reply_no_args(fake_update: Any, fake_co
     """Тест отсутствия reply и аргументов (должен вернуть None)."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
 
     fake_update.message.reply_to_message = None
     fake_context.args = []
@@ -1146,7 +1146,7 @@ async def test_is_super_admin_true(monkeypatch: Any) -> None:
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     assert handler._is_super_admin(42) is True
 
 
@@ -1157,7 +1157,7 @@ async def test_is_super_admin_false(monkeypatch: Any) -> None:
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     assert handler._is_super_admin(42) is False
 
 
@@ -1181,7 +1181,7 @@ async def test_mod_command_non_super_admin_denied(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -1217,7 +1217,7 @@ async def test_mod_command_with_reply(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -1258,7 +1258,7 @@ async def test_mod_command_with_args(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -1295,7 +1295,7 @@ async def test_unmod_command_non_super_admin_denied(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -1331,7 +1331,7 @@ async def test_unmod_command_with_reply(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -1374,7 +1374,7 @@ async def test_unmod_command_with_args(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -1412,7 +1412,7 @@ async def test_unmod_command_cannot_remove_super_admin(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()
@@ -1448,7 +1448,7 @@ async def test_unmod_command_shows_admin_list_when_no_args(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, next_run_provider=None)
+    handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
     admins = AdminsStore()

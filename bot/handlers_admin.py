@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -31,7 +30,6 @@ class AdminHandlers(BaseHandlers):
     def __init__(
         self,
         services: BotServices,
-        next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> None:
         super().__init__(services)
         self._dashboard_service = AdminDashboardService(
@@ -39,7 +37,6 @@ class AdminHandlers(BaseHandlers):
             chats=self.services.chats,
             metrics=self.services.metrics,
         )
-        self.next_run_provider: Callable[[], datetime | None] | None = next_run_provider
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.
@@ -87,7 +84,6 @@ class AdminHandlers(BaseHandlers):
             bot_info = await context.bot.get_me()
             status_message = await self._dashboard_service.build_status_message(
                 bot_name=bot_info.first_name,
-                next_run_provider=self.next_run_provider,
             )
 
             try:

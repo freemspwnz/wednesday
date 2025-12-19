@@ -12,8 +12,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from services.base.base_service import BaseService
@@ -63,22 +61,10 @@ class AdminDashboardService(BaseService):
     async def build_status_message(
         self,
         bot_name: str,
-        next_run_provider: Callable[[], datetime | None] | None = None,
     ) -> str:
         """Строит текст расширенного статуса бота для команды /status."""
 
-        # Информация о следующем запуске по данным планировщика
-        next_run_line = ""
-        scheduler_status = "❌ Не настроен"
-        if next_run_provider:
-            try:
-                next_dt = next_run_provider()
-                if next_dt:
-                    formatted = next_dt.strftime("%Y-%m-%d %H:%M")
-                    next_run_line = f"📅 Следующая отправка: {formatted}\n"
-                    scheduler_status = f"✅ Следующая отправка: {formatted}"
-            except Exception as e:  # pragma: no cover - защитное логирование
-                self.logger.warning(f"Не удалось получить время следующего запуска: {e}")
+        scheduler_status = "✅ Настроен (Celery)"
 
         # Проверка статуса Kandinsky API
         api_status: str = "⏳ Проверка..."
@@ -177,7 +163,6 @@ class AdminDashboardService(BaseService):
         status_message = (
             f"🤖 Статус бота: {bot_name}\n\n"
             "✅ Бот активен и работает\n"
-            f"{next_run_line}"
             "🎨 Генератор изображений: Kandinsky API\n"
             "📝 Логирование: включено\n\n"
             "🔌 Проверка систем:\n"

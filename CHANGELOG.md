@@ -41,6 +41,14 @@
   - Обновлена документация: удалены упоминания TaskScheduler из `docs/ARCHITECTURE.md`
   - Теперь используется только Celery Beat для планирования задач (production-ready решение)
 
+- **Удалён неиспользуемый атрибут next_run_provider из handlers**:
+  - Удалён параметр `next_run_provider` из конструкторов `UserHandlers`, `AdminHandlers` и `ModelHandlers`
+  - Удалена логика отображения времени следующей отправки из команд `/start`, `/help` и `/status`
+  - Удалён параметр `next_run_provider` из `AdminDashboardService.build_status_message()`
+  - Упрощены сообщения пользователям: убрана информация о следующей отправке (недоступна после удаления TaskScheduler)
+  - Обновлены все тесты: убраны параметры `next_run_provider` из вызовов handlers
+  - Удалены неиспользуемые импорты `Callable` и `datetime` из handlers
+
 - **Уточнены импорты и структура административных хэндлеров**:
   - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
   - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal
