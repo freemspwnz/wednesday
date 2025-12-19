@@ -10,7 +10,7 @@ import random
 
 from services.base.base_service import BaseService
 from services.clients import ITextToTextClient
-from utils.config import ImageConfig
+from services.domain.prompt_fallback_config import PromptFallbackConfig
 
 
 class PromptGenerationService(BaseService):
@@ -20,15 +20,21 @@ class PromptGenerationService(BaseService):
     на статический промпт. Не зависит от инфраструктуры (кэш, файлы, БД).
     """
 
-    def __init__(self, text_client: ITextToTextClient | None = None) -> None:
+    def __init__(
+        self,
+        text_client: ITextToTextClient | None = None,
+        fallback_config: PromptFallbackConfig | None = None,
+    ) -> None:
         """Инициализирует сервис генерации промптов.
 
         Args:
             text_client: Клиент для генерации текста (опционально). Если None,
                 используется только статический fallback.
+            fallback_config: Конфигурация для fallback промптов (опционально).
         """
         super().__init__()
         self._text_client = text_client
+        self._fallback_config = fallback_config
 
     async def generate(self) -> str | None:
         """Генерирует промпт для генерации изображения.
@@ -90,16 +96,19 @@ class PromptGenerationService(BaseService):
             # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
             return None
 
-    @staticmethod
-    def get_fallback_prompt() -> str:
+    def get_fallback_prompt(self) -> str:
         """Возвращает статический промпт из конфигурации (fallback).
 
         Используется когда не удалось получить промпт через текстовый клиент.
-        Выбирает случайный промпт и стиль из конфигурации.
+        Выбирает случайный промпт и стиль из переданной конфигурации.
 
         Returns:
             Статический промпт для генерации изображения.
         """
-        frog_prompt = random.choice(ImageConfig.FROG_PROMPTS)
-        style = random.choice(ImageConfig.STYLES)
+        if not self._fallback_config or not self._fallback_config.frog_prompts or not self._fallback_config.styles:
+            # Fallback на дефолтный промпт, если конфигурация не предоставлена
+            return "cartoon frog, green, high quality, detailed, Wednesday frog meme"
+
+        frog_prompt = random.choice(self._fallback_config.frog_prompts)
+        style = random.choice(self._fallback_config.styles)
         return f"{frog_prompt}, {style}, high quality, detailed, Wednesday frog meme"

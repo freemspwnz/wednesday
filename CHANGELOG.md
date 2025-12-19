@@ -7,6 +7,9 @@
 - **Рефакторинг PromptGenerationService: удаление зависимости от utils.config**:
   - Создан dataclass `PromptFallbackConfig` для инкапсуляции конфигурации fallback промптов
   - Добавлен метод `from_image_config()` для создания конфигурации из глобального `ImageConfig`
+  - Изменен конструктор `PromptGenerationService` для принятия `fallback_config` через dependency injection
+  - Метод `get_fallback_prompt()` преобразован из статического в метод экземпляра
+  - Удалена зависимость от `utils.config.ImageConfig` в domain слое
 
 - **Удалено файловое хранилище промптов**:
   - Удалён избыточный слой файлового хранилища промптов (`PromptStorageService`, `IPromptStorage`)
