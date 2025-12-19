@@ -4,6 +4,13 @@
 
 ### Добавлено
 
+- **Создание протоколов IUsageTracker и IChatsRepo (Проблема 5, Шаг 1)**:
+  - Добавлены протоколы `IUsageTracker` и `IChatsRepo` в `services/protocols.py`
+  - Протоколы определяют интерфейсы для трекера использования и репозитория чатов
+  - `IUsageTracker` содержит методы `increment()` и `get_limits_info()`
+  - `IChatsRepo` содержит метод `list_chat_ids()`
+  - Соответствуют принципу Dependency Inversion (DIP)
+
 - **Создание протоколов IImageRepo и IPromptRepo (Проблема 4, Шаг 1)**:
   - Добавлены протоколы `IImageRepo` и `IPromptRepo` в `services/protocols.py`
   - Протоколы определяют интерфейсы для репозиториев изображений и промптов в БД

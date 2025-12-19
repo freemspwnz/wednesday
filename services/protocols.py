@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
@@ -239,5 +240,56 @@ class IPromptRepo(Protocol):
 
         Returns:
             PromptRecord если промпт найден, None иначе.
+        """
+        ...
+
+
+@runtime_checkable
+class IUsageTracker(Protocol):
+    """Протокол для трекера использования генераций изображений."""
+
+    async def increment(
+        self,
+        count: int = 1,
+        when: datetime | None = None,
+    ) -> int:
+        """Увеличивает счётчик генераций за месяц и возвращает новое значение.
+
+        Args:
+            count: Количество генераций для добавления (по умолчанию 1).
+            when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Новое значение счётчика генераций за месяц.
+        """
+        ...
+
+    async def get_limits_info(
+        self,
+        when: datetime | None = None,
+    ) -> tuple[int, int, int]:
+        """Возвращает информацию о лимитах использования для месяца.
+
+        Args:
+            when: Дата для получения информации. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Кортеж (total, frog_threshold, monthly_quota), где:
+            - total: текущее количество использованных генераций
+            - frog_threshold: порог для ручных генераций /frog
+            - monthly_quota: месячная квота генераций
+        """
+        ...
+
+
+@runtime_checkable
+class IChatsRepo(Protocol):
+    """Протокол для репозитория чатов в БД."""
+
+    async def list_chat_ids(self) -> list[int]:
+        """Возвращает список ID всех зарегистрированных чатов.
+
+        Returns:
+            Список идентификаторов чатов, отсортированный по chat_id.
         """
         ...
