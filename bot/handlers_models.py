@@ -4,10 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
-from services.application.admin_dashboard_service import AdminDashboardService
 from services.bot_services import BotServices
-from services.clients.factory import create_image_client, create_text_client
-from utils.models_store import ModelsStore
 
 # Константы
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
@@ -27,18 +24,13 @@ class ModelHandlers(BaseHandlers):
         super().__init__(services)
         # Клиенты используются для команд установки моделей,
         # а агрегированные списки моделей отдаёт AdminDashboardService.
-        self.image_client = create_image_client()
-        self.text_client = create_text_client()
-        models_store = ModelsStore()
-
-        self._dashboard_service = AdminDashboardService(
-            usage=self.services.usage,
-            chats=self.services.chats,
-            metrics=self.services.metrics,
-            image_client=self.image_client,
-            text_client=self.text_client,
-            models_store=models_store,
-        )
+        # Используем те же клиенты, что и в AdminDashboardService из BotServices.
+        if self.services.admin_dashboard_service is None:
+            raise ValueError("admin_dashboard_service must be provided in BotServices")
+        dashboard_service = self.services.admin_dashboard_service
+        self.image_client = dashboard_service._image_client
+        self.text_client = dashboard_service._text_client
+        self._dashboard_service = dashboard_service
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_kandinsky_model.

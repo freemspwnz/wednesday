@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from services.app_settings import AppSettings
+from services.application.admin_dashboard_service import AdminDashboardService
 from services.application.dispatch_service import DispatchService
 from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.frog_requests import FrogRequestService
@@ -43,5 +44,6 @@ class BotServices:
     image_service: ImageService
     frog_rate_limiter: FrogRateLimiterService
     frog_request_service: FrogRequestService
+    admin_dashboard_service: AdminDashboardService | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None

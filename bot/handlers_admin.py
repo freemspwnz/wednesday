@@ -8,10 +8,7 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
-from services.application.admin_dashboard_service import AdminDashboardService
 from services.bot_services import BotServices
-from services.clients.factory import create_image_client, create_text_client
-from utils.models_store import ModelsStore
 from utils.paths import LOGS_DIR
 
 # Константы
@@ -34,18 +31,9 @@ class AdminHandlers(BaseHandlers):
         services: BotServices,
     ) -> None:
         super().__init__(services)
-        image_client = create_image_client()
-        text_client = create_text_client()
-        models_store = ModelsStore()
-
-        self._dashboard_service = AdminDashboardService(
-            usage=self.services.usage,
-            chats=self.services.chats,
-            metrics=self.services.metrics,
-            image_client=image_client,
-            text_client=text_client,
-            models_store=models_store,
-        )
+        if self.services.admin_dashboard_service is None:
+            raise ValueError("admin_dashboard_service must be provided in BotServices")
+        self._dashboard_service = self.services.admin_dashboard_service
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.

@@ -7,7 +7,10 @@
 - **Внедрён Dependency Injection для AdminDashboardService**:
   - Конструктор `AdminDashboardService` теперь принимает все зависимости извне: `image_client`, `text_client`, `models_store`
   - Удалены внутренние вызовы `create_image_client()`, `create_text_client()` и создание `ModelsStore()` внутри сервиса
-  - Обновлён `bot/handlers_admin.py` для создания зависимостей и передачи их в `AdminDashboardService`
+  - Создана функция `build_admin_dashboard_service()` в `services/container.py` для сборки сервиса в composition root
+  - `AdminDashboardService` добавлен в `BotServices` контейнер для передачи в handlers
+  - Обновлены `bot/handlers_admin.py` и `bot/handlers_models.py` для использования `admin_dashboard_service` из `BotServices`
+  - Все клиенты создаются один раз в `build_bot_services()` с единым `prompt_storage`, обеспечивая правильный DI и отсутствие дублирования
   - Сервис стал полностью управляемым через DI, упрощая тестирование и замену зависимостей
 
 - **Введён протокол IRateLimiter и DI для FrogRateLimiterService**:
