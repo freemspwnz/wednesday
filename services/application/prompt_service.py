@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from services.base.base_service import BaseService
 from services.domain.prompt_generation import PromptGenerationService
-from services.infrastructure.cache.prompt_cache import PromptCache
 from services.protocols import ICache
 
 
@@ -23,7 +22,7 @@ class PromptService(BaseService):
     def __init__(
         self,
         prompt_generation_service: PromptGenerationService,
-        prompt_cache: PromptCache | ICache[dict | str] | None = None,
+        prompt_cache: ICache[dict | str] | None = None,
     ) -> None:
         """Инициализирует сервис координации промптов.
 

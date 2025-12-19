@@ -26,6 +26,13 @@
 
 ### Изменено
 
+- **Устранение зависимости от конкретных реализаций в PromptService (Проблема 2)**:
+  - Удалён импорт конкретного класса `PromptCache` из `services/application/prompt_service.py`
+  - Упрощены типы в конструкторе `PromptService`: убран union с конкретным классом, оставлен только протокол `ICache[dict | str]`
+  - Application слой теперь зависит только от абстракций (Protocol), а не от конкретных реализаций Infrastructure слоя
+  - Улучшено соответствие принципу Dependency Inversion (DIP)
+  - Упрощена замена реализаций кэша без изменения Application слоя
+
 - **Рефакторинг WednesdayBot на Dependency Injection (Этап 0.1)**:
   - Удалён импорт `build_bot_services` из `bot/wednesday_bot.py`
   - Изменена сигнатура конструктора `WednesdayBot.__init__()` для принятия `services: BotServices` через dependency injection
