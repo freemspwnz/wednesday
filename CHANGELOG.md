@@ -49,6 +49,14 @@
   - Обновлены все тесты: убраны параметры `next_run_provider` из вызовов handlers
   - Удалены неиспользуемые импорты `Callable` и `datetime` из handlers
 
+- **Исправлено форматирование строк в логировании**:
+  - Заменено старое форматирование (`%s`, `%r`, `%d`) на f-strings во всех logger вызовах в `services/`
+  - Исправлено в `services/application/dispatch_service.py` (7 мест)
+  - Исправлено в `services/application/image_service.py` (2 места)
+  - Исправлено в `services/infrastructure/cache/image_cache.py` (1 место)
+  - Исправлено в `services/clients/factory.py` (2 места)
+  - Loguru не поддерживает старое форматирование, теперь используется f-strings для совместимости
+
 - **Уточнены импорты и структура административных хэндлеров**:
   - В `bot/handlers_admin.py` импорт `LOGS_DIR` перенесён на уровень модуля для соблюдения единого стиля группировки импортов
   - Структура импортов в ключевых модулях (`bot/wednesday_bot.py`, `services/application/image_service.py`) проверена на соответствие порядку stdlib → third‑party → internal

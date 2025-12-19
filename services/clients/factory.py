@@ -62,8 +62,7 @@ def create_image_client() -> ITextToImageClient:
     backend = os.getenv("IMAGE_MODEL_BACKEND", DEFAULT_IMAGE_BACKEND).lower()
     if backend != "kandinsky":
         logger.warning(
-            "Неизвестный IMAGE_MODEL_BACKEND=%r, будет использован kandinsky",
-            backend,
+            f"Неизвестный IMAGE_MODEL_BACKEND={backend!r}, будет использован kandinsky",
         )
 
     # Создаём реальный HTTP‑клиент один раз и регистрируем его в singleton‑контейнере.
@@ -113,8 +112,7 @@ def create_text_client(prompt_storage: IPromptStorage | None = None) -> ITextToT
     backend = os.getenv("TEXT_MODEL_BACKEND", DEFAULT_TEXT_BACKEND).lower()
     if backend not in {"gigachat", ""}:
         logger.warning(
-            "Неизвестный TEXT_MODEL_BACKEND=%r, будет использован gigachat",
-            backend,
+            f"Неизвестный TEXT_MODEL_BACKEND={backend!r}, будет использован gigachat",
         )
 
     # Создаём хранилище промптов, если не передано

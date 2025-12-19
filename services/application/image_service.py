@@ -86,8 +86,7 @@ class ImageService(BaseService):
             return await self._storage.get_random()
         except Exception as e:  # pragma: no cover - защитный слой от неожиданных ошибок файловой системы
             self.logger.warning(
-                "Ошибка при получении случайного сохранённого изображения из файлового хранилища: %s",
-                e,
+                f"Ошибка при получении случайного сохранённого изображения из файлового хранилища: {e}",
             )
             return None
 
@@ -188,9 +187,7 @@ class ImageService(BaseService):
                         result_caption = str(cached_caption) or caption
                     else:
                         self.logger.warning(
-                            "Неподдерживаемый формат значения в кэше для prompt=%s: %r",
-                            prompt,
-                            cached_obj,
+                            f"Неподдерживаемый формат значения в кэше для prompt={prompt}: {cached_obj!r}",
                         )
                         image_data = None
 

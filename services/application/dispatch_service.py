@@ -125,9 +125,7 @@ class DispatchService(BaseService):
 
             if already_dispatched_for_all:
                 self.logger.info(
-                    "Уже отправлено ранее для всех чатов в слот %s_%s. Пропускаю генерацию.",
-                    slot_date,
-                    slot_time,
+                    f"Уже отправлено ранее для всех чатов в слот {slot_date}_{slot_time}. Пропускаю генерацию.",
                 )
                 return result
 
@@ -149,10 +147,7 @@ class DispatchService(BaseService):
                         target_chat,
                     ):
                         self.logger.info(
-                            "Пропускаем отправку в %s - уже отправлено в слот %s_%s",
-                            target_chat,
-                            slot_date,
-                            slot_time,
+                            f"Пропускаем отправку в {target_chat} - уже отправлено в слот {slot_date}_{slot_time}",
                         )
                         continue
 
@@ -179,7 +174,7 @@ class DispatchService(BaseService):
                         except Exception:  # pragma: no cover - метрики не критичны
                             pass
                         result["success_count"] += 1
-                        self.logger.info("Жаба отправлена в чат %s", target_chat)
+                        self.logger.info(f"Жаба отправлена в чат {target_chat}")
                     except (TelegramError, NetworkError) as send_error:
                         # Сетевые/Telegram-ошибки после всех попыток
                         error_str = str(send_error).lower()
@@ -206,9 +201,8 @@ class DispatchService(BaseService):
                     except Exception as send_error:
                         # Неожиданные программные ошибки
                         self.logger.error(
-                            "Неожиданная программная ошибка при отправке изображения в чат %s: %s",
-                            target_chat,
-                            send_error,
+                            f"Неожиданная программная ошибка при отправке изображения в чат "
+                            f"{target_chat}: {send_error}",
                             exc_info=True,
                         )
                         try:
@@ -257,10 +251,8 @@ class DispatchService(BaseService):
                         target_chat,
                     ):
                         self.logger.info(
-                            "Пропускаем fallback отправку в %s - уже отправлено в слот %s_%s",
-                            target_chat,
-                            slot_date,
-                            slot_time,
+                            f"Пропускаем fallback отправку в {target_chat} - "
+                            f"уже отправлено в слот {slot_date}_{slot_time}",
                         )
                         continue
 
@@ -282,7 +274,7 @@ class DispatchService(BaseService):
                         result["success_count"] += 1
 
                 except Exception as send_error:
-                    self.logger.error("Ошибка при отправке fallback в чат %s: %s", target_chat, send_error)
+                    self.logger.error(f"Ошибка при отправке fallback в чат {target_chat}: {send_error}")
                     result["failed_count"] += 1
 
             return result
@@ -324,10 +316,8 @@ class DispatchService(BaseService):
                         target_chat,
                     ):
                         self.logger.info(
-                            "Пропускаем fallback отправку в %s - уже отправлено в слот %s_%s",
-                            target_chat,
-                            slot_date,
-                            slot_time,
+                            f"Пропускаем fallback отправку в {target_chat} - "
+                            f"уже отправлено в слот {slot_date}_{slot_time}",
                         )
                         continue
 
@@ -342,7 +332,7 @@ class DispatchService(BaseService):
                             pass
                         result["success_count"] += 1
                 except Exception as send_error:
-                    self.logger.error("Ошибка при отправке fallback в чат %s: %s", target_chat, send_error)
+                    self.logger.error(f"Ошибка при отправке fallback в чат {target_chat}: {send_error}")
                     result["failed_count"] += 1
 
             return result

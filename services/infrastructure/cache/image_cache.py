@@ -205,4 +205,4 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
         В текущей версии кэша удаление по ключу не требуется бизнес-логикой,
         поэтому метод является no-op с логированием для диагностики.
         """
-        self.logger.debug("ICache.delete() вызван для ImageCacheService, key=%s (no-op)", key)
+        self.logger.debug(f"ICache.delete() вызван для ImageCacheService, key={key} (no-op)")
