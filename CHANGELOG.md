@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Декомпозиция DispatchService.send_wednesday_frog**:
+  - Разбит толстый метод `send_wednesday_frog` на приватные методы для улучшения читаемости и тестируемости
+  - Выделены методы: `_init_result`, `_prepare_targets`, `_already_dispatched_for_all`, `_generate_image`, `_send_single_photo`, `_send_to_targets`, `_send_fallback_to_targets`, `_handle_generation_failure`, `_handle_unexpected_error`
+  - Основной метод `send_wednesday_frog` теперь является тонким координирующим методом, вызывающим эти шаги
+  - Каждый приватный метод инкапсулирует свою часть логики и может быть покрыт отдельными unit-тестами
+
 - **Внедрён Dependency Injection для AdminDashboardService**:
   - Конструктор `AdminDashboardService` теперь принимает все зависимости извне: `image_client`, `text_client`, `models_store`
   - Удалены внутренние вызовы `create_image_client()`, `create_text_client()` и создание `ModelsStore()` внутри сервиса
