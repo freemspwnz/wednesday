@@ -15,16 +15,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from services.base.base_service import BaseService
-from services.clients.factory import create_image_client, create_text_client
+from services.clients.interfaces import ITextToImageClient, ITextToTextClient
 from utils.chats_store import ChatsStore
 from utils.metrics import Metrics
-from utils.models_store import ModelsStore as RuntimeModelsStore
+from utils.models_store import ModelsStore
 from utils.usage_tracker import UsageTracker
 
 if TYPE_CHECKING:  # pragma: no cover - используется только для типизации
-    from utils.models_store import ModelsStore as _ModelsStore
-else:  # pragma: no cover - на рантайме достаточно object вместо точного типа
-    _ModelsStore = object
+    pass
 
 
 # Магические числа, связанные с форматированием и усечением сообщений,
@@ -37,26 +35,23 @@ TELEGRAM_SAFE_MESSAGE_LENGTH = 4000
 class AdminDashboardService(BaseService):
     """Application‑сервис для построения админских сводок."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         usage: UsageTracker | None,
         chats: ChatsStore | None,
         metrics: Metrics | None,
+        image_client: ITextToImageClient,
+        text_client: ITextToTextClient | None,
+        models_store: ModelsStore | None,
     ) -> None:
         super().__init__()
         self._usage = usage
         self._chats = chats
         self._metrics = metrics
-
-        # Клиенты ML‑сервисов создаём один раз на уровне сервиса,
-        # чтобы не плодить подключения в каждом хендлере.
-        self._image_client = create_image_client()
-        self._text_client = create_text_client()
-
-        # ModelsStore может не инициализироваться на очень ранних этапах старта,
-        # поэтому импортируем его с защитой от ошибок.
-        self._models_store: _ModelsStore | None
-        self._models_store = RuntimeModelsStore() if RuntimeModelsStore is not None else None
+        self._image_client = image_client
+        self._text_client = text_client
+        self._models_store = models_store
 
     async def build_status_message(
         self,

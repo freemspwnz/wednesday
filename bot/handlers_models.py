@@ -7,6 +7,7 @@ from bot.base_handlers import BaseHandlers
 from services.application.admin_dashboard_service import AdminDashboardService
 from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
+from utils.models_store import ModelsStore
 
 # Константы
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
@@ -28,10 +29,15 @@ class ModelHandlers(BaseHandlers):
         # а агрегированные списки моделей отдаёт AdminDashboardService.
         self.image_client = create_image_client()
         self.text_client = create_text_client()
+        models_store = ModelsStore()
+
         self._dashboard_service = AdminDashboardService(
             usage=self.services.usage,
             chats=self.services.chats,
             metrics=self.services.metrics,
+            image_client=self.image_client,
+            text_client=self.text_client,
+            models_store=models_store,
         )
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
