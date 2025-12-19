@@ -18,7 +18,7 @@ pytestmark = [pytest.mark.unit]
 
 
 def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.clients.kandinsky_config import KandinskyConfig
+    from utils.config import KandinskyConfig
 
     dummy_client = MagicMock()
     dummy_container = MagicMock()
@@ -37,7 +37,7 @@ def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.clients.gigachat_config import GigaChatConfig
+    from utils.config import GigaChatConfig
 
     dummy_container = MagicMock()
 
@@ -203,7 +203,7 @@ async def test_command_handlers_start_help(
 def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента KandinskyClient."""
     from services.clients.kandinsky import KandinskyClient
-    from services.clients.kandinsky_config import KandinskyConfig
+    from utils.config import KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
@@ -224,7 +224,7 @@ def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> Non
 async def test_kandinsky_client_auth_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Проверка формирования заголовков авторизации Kandinsky."""
     from services.clients.kandinsky import KandinskyClient
-    from services.clients.kandinsky_config import KandinskyConfig
+    from utils.config import KandinskyConfig
 
     config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
     client = KandinskyClient(config=config)
@@ -242,7 +242,7 @@ async def test_kandinsky_client_aclose(monkeypatch: pytest.MonkeyPatch) -> None:
     from unittest.mock import AsyncMock, MagicMock
 
     from services.clients.kandinsky import KandinskyClient
-    from services.clients.kandinsky_config import KandinskyConfig
+    from utils.config import KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
@@ -277,8 +277,8 @@ async def test_kandinsky_client_aclose(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента GigaChatTextClient."""
 
-    from services.clients.gigachat_config import GigaChatConfig
     from services.clients.gigachat_text import GigaChatTextClient
+    from utils.config import GigaChatConfig
 
     # Мокируем aiohttp.ClientSession и TCPConnector, чтобы избежать реальных HTTP-запросов
     mock_session = MagicMock()

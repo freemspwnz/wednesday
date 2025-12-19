@@ -20,30 +20,18 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
 
     def __init__(
         self,
-        images_repo: IImageRepo | None = None,
-        prompts_repo: IPromptRepo | None = None,
+        images_repo: IImageRepo,
+        prompts_repo: IPromptRepo,
     ) -> None:
         """Инициализирует сервис кэширования изображений.
 
         Args:
             images_repo: Экземпляр репозитория изображений (IImageRepo).
-                Если None, создаётся новый экземпляр ImagesRepo.
             prompts_repo: Экземпляр репозитория промптов (IPromptRepo).
-                Если None, создаётся новый экземпляр PromptsRepo.
         """
         super().__init__()
-        # Примечание: создание по умолчанию можно оставить для обратной совместимости,
-        # но лучше передавать из container.py
-        if images_repo is None:
-            from utils.images_repo import ImagesRepo  # Импорт только для fallback
-
-            images_repo = ImagesRepo()
-        if prompts_repo is None:
-            from utils.prompts_repo import PromptsRepo  # Импорт только для fallback
-
-            prompts_repo = PromptsRepo()
-        self._images_store = images_repo
-        self._prompts_store = prompts_repo
+        self._images_repo = images_repo
+        self._prompts_repo = prompts_repo
 
     @staticmethod
     def _normalize_prompt(prompt: str) -> str:
@@ -89,12 +77,12 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
             prompt_hash = self._compute_prompt_hash(normalized)
 
             # Ищем изображение по prompt_hash
-            image_record = await self._images_store.get_by_prompt_hash(prompt_hash)
+            image_record = await self._images_repo.get_by_prompt_hash(prompt_hash)
             if image_record is None:
                 return None
 
             # Загружаем байты изображения
-            image_bytes = self._images_store.load_image_bytes(image_record)
+            image_bytes = self._images_repo.load_image_bytes(image_record)
 
             # Возвращаем байты и image_hash в качестве caption
             return image_bytes, image_record.image_hash
@@ -121,12 +109,12 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
         """
         try:
             # Ищем изображение по prompt_hash
-            image_record = await self._images_store.get_by_prompt_hash(prompt_hash)
+            image_record = await self._images_repo.get_by_prompt_hash(prompt_hash)
             if image_record is None:
                 return None
 
             # Загружаем байты изображения
-            image_bytes = self._images_store.load_image_bytes(image_record)
+            image_bytes = self._images_repo.load_image_bytes(image_record)
 
             # Возвращаем байты и image_hash
             return image_bytes, image_record.image_hash
@@ -160,13 +148,13 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
             CacheError: При ошибках сохранения в кэш.
         """
         try:
-            # Регистрируем промпт в PromptsStore (нормализация выполняется внутри)
-            prompt_record = await self._prompts_store.get_or_create_prompt(prompt)
+            # Регистрируем промпт в PromptsRepo (нормализация выполняется внутри)
+            prompt_record = await self._prompts_repo.get_or_create_prompt(prompt)
             prompt_hash = prompt_record.prompt_hash
 
-            # Сохраняем изображение в ImagesStore
+            # Сохраняем изображение в ImagesRepo
             # get_or_create_image автоматически сохраняет файл и создаёт запись в БД
-            image_record = await self._images_store.get_or_create_image(prompt_hash, image_data)
+            image_record = await self._images_repo.get_or_create_image(prompt_hash, image_data)
 
             self.logger.info(
                 f"Изображение сохранено в кэш: prompt_hash={image_record.prompt_hash}, "

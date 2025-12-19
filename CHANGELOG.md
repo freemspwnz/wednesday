@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Централизация конфигураций клиентов в config.py**:
+  - Классы `GigaChatConfig`, `KandinskyConfig` и `AppSettings` перенесены из отдельных модулей в `utils/config.py`
+  - Все конфигурации теперь находятся в одном месте, аналогично `ImageConfig` и `SchedulerConfig`
+  - Удалены файлы `services/clients/gigachat_config.py`, `services/clients/kandinsky_config.py` и `services/app_settings.py`
+  - Обновлены все импорты для использования классов из `utils/config`
+  - Улучшена централизация конфигурации и уменьшено количество модулей
+
 - **Рефакторинг зависимостей от config в container.py**:
   - Функции `_create_clients()`, `build_image_stack()`, `build_bot_services()` и `build_bot()` теперь принимают `config` как явный параметр
   - Удалена скрытая зависимость от глобального `config` в `services/container.py`

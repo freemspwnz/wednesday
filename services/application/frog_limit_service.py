@@ -6,9 +6,9 @@
 
 from __future__ import annotations
 
-from services.app_settings import AppSettings
 from services.base.base_service import BaseService
 from services.protocols import IRateLimiter
+from utils.config import AppSettings
 
 # Константы
 SECONDS_PER_MINUTE = 60  # секунд в минуте

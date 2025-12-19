@@ -34,7 +34,7 @@ import aiohttp
 from loguru import logger
 
 from services.clients import ITextToTextClient
-from services.clients.gigachat_config import GigaChatConfig
+from utils.config import GigaChatConfig
 from utils.models_repo import ModelsRepo
 from utils.retry import retry_critical, retry_standard
 

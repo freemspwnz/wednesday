@@ -90,7 +90,7 @@ class SupportBot(BaseHandlers):
         # режиме и не блокирует админа.
         self.rate_limiter: RateLimiter = RateLimiter(prefix="rate:support:", window=60, limit=20)
         # Настройки приложения для доступа к конфигурации через DI
-        from services.app_settings import AppSettings
+        from utils.config import AppSettings
 
         self.settings: AppSettings = AppSettings.from_config(config)
         # Создаем минимальный BotServices только с settings для использования BaseHandlers

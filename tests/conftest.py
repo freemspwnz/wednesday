@@ -605,7 +605,7 @@ async def gigachat_client() -> AsyncIterator[Any]:
             finally:
                 await client.aclose()
     """
-    from services.clients.gigachat_config import GigaChatConfig
+    from utils.config import GigaChatConfig
     from services.clients.gigachat_text import GigaChatTextClient
 
     config = GigaChatConfig(

@@ -36,7 +36,7 @@ from loguru import logger
 from PIL import Image
 
 from services.clients import ITextToImageClient
-from services.clients.kandinsky_config import KandinskyConfig
+from utils.config import KandinskyConfig
 from utils.retry import retry_standard
 
 HTTP_STATUS_OK = 200

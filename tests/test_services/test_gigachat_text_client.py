@@ -6,8 +6,8 @@ from typing import Any
 import pytest
 from loguru import logger
 
-from services.clients.gigachat_config import GigaChatConfig
 from services.clients.gigachat_text import GigaChatTextClient
+from utils.config import GigaChatConfig
 
 
 class _DummyResponse:

@@ -21,12 +21,11 @@ import os
 from typing import Final
 
 from services.clients import ITextToImageClient, ITextToTextClient
-from services.clients.gigachat_config import GigaChatConfig
 from services.clients.gigachat_text import GigaChatTextClient
 from services.clients.image_client_container import get_image_client_container
 from services.clients.kandinsky import KandinskyClient
-from services.clients.kandinsky_config import KandinskyConfig
 from services.clients.text_client_container import get_text_client_container
+from utils.config import GigaChatConfig, KandinskyConfig
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

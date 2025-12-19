@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 
-from services.app_settings import AppSettings
 from services.application.admin_dashboard_service import AdminDashboardService
 from services.application.dispatch_service import DispatchService
 from services.application.frog_limit_service import FrogRateLimiterService
@@ -22,9 +21,7 @@ from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
 from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
-from services.clients.gigachat_config import GigaChatConfig
 from services.clients.interfaces import ITextToImageClient, ITextToTextClient
-from services.clients.kandinsky_config import KandinskyConfig
 from services.domain.image_generation import ImageGenerationService
 from services.domain.prompt_fallback_config import PromptFallbackConfig
 from services.domain.prompt_generation import PromptGenerationService
@@ -37,7 +34,7 @@ from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.protocols import IChatsRepo, ICircuitBreaker, IRateLimiter, IUsageTracker
 from utils.chats_repo import ChatsRepo
-from utils.config import Config, ImageConfig
+from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, KandinskyConfig
 from utils.dispatch_registry import DispatchRegistry
 from utils.images_repo import ImagesRepo
 from utils.metrics import Metrics

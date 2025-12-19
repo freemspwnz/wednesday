@@ -4,6 +4,7 @@
 """
 
 import os
+from dataclasses import dataclass
 from typing import ClassVar
 
 from dotenv import load_dotenv
@@ -768,3 +769,123 @@ class SchedulerConfig:
 
     # Часовой пояс для расписания
     TZ = Config._get_env_var("SCHEDULER_TZ") or "Europe/Moscow"
+
+
+# Конфигурации для клиентов (аналогично ImageConfig и SchedulerConfig)
+@dataclass(frozen=True)
+class GigaChatConfig:
+    """Конфигурация для GigaChat клиента.
+
+    Инкапсулирует все параметры, необходимые для инициализации GigaChatTextClient.
+    """
+
+    auth_url: str
+    api_url: str
+    authorization_key: str
+    scope: str
+    model: str
+    verify_ssl: bool | str = True
+
+    @classmethod
+    def from_config(cls, config: Config) -> "GigaChatConfig":
+        """Создает GigaChatConfig из Config.
+
+        Args:
+            config: Экземпляр Config.
+
+        Returns:
+            Экземпляр GigaChatConfig с настройками из config.
+        """
+        return cls(
+            auth_url=config.gigachat_auth_url,
+            api_url=config.gigachat_api_url,
+            authorization_key=config.gigachat_authorization_key,
+            scope=config.gigachat_scope,
+            model=config.gigachat_model,
+            verify_ssl=config.gigachat_verify_ssl,
+        )
+
+
+@dataclass(frozen=True)
+class KandinskyConfig:
+    """Конфигурация для Kandinsky клиента.
+
+    Инкапсулирует все параметры, необходимые для инициализации KandinskyClient.
+    """
+
+    api_key: str | None
+    secret_key: str | None
+
+    @classmethod
+    def from_config(cls, config: Config) -> "KandinskyConfig":
+        """Создает KandinskyConfig из Config.
+
+        Args:
+            config: Экземпляр Config.
+
+        Returns:
+            Экземпляр KandinskyConfig с настройками из config.
+        """
+        return cls(
+            api_key=config.kandinsky_api_key,
+            secret_key=config.kandinsky_secret_key,
+        )
+
+
+@dataclass(frozen=True)
+class AppSettings:
+    """Настройки приложения для DI.
+
+    Легковесный объект настроек, доступный через BotServices,
+    вместо прямого чтения из глобального config.
+    Инкапсулирует основные настройки, которые ранее читались напрямую
+    из глобального config в хендлерах и других компонентах.
+    """
+
+    admin_chat_id: int | None
+    chat_id: int | None
+    scheduler_send_times: list[str]
+    frog_rate_limit_minutes: int = 5
+    frog_rate_limit_window_seconds: int = 60
+    frog_rate_limit_max_requests: int = 10
+    scheduler_tz: str = "Europe/Amsterdam"
+    time_format_length: int = 5
+
+    @classmethod
+    def from_config(cls, config: Config) -> "AppSettings":
+        """Создает AppSettings из Config.
+
+        Args:
+            config: Экземпляр Config.
+
+        Returns:
+            Экземпляр AppSettingsConfig с настройками из config.
+        """
+        # Преобразуем admin_chat_id из str в int, если задан
+        admin_chat_id: int | None = None
+        admin_chat_id_str = config.admin_chat_id
+        if admin_chat_id_str:
+            try:
+                admin_chat_id = int(admin_chat_id_str)
+            except (ValueError, TypeError):
+                admin_chat_id = None
+
+        # Преобразуем chat_id из str в int, если задан
+        chat_id: int | None = None
+        chat_id_str = config.chat_id
+        if chat_id_str:
+            try:
+                chat_id = int(chat_id_str)
+            except (ValueError, TypeError):
+                chat_id = None
+
+        return cls(
+            admin_chat_id=admin_chat_id,
+            chat_id=chat_id,
+            scheduler_send_times=config.scheduler_send_times,
+            frog_rate_limit_minutes=5,  # Значение по умолчанию из bot/handlers.py
+            frog_rate_limit_window_seconds=60,  # Значение по умолчанию из bot/handlers.py
+            frog_rate_limit_max_requests=10,  # Значение по умолчанию из bot/handlers.py
+            scheduler_tz=config.scheduler_tz,
+            time_format_length=TIME_FORMAT_LENGTH,
+        )
