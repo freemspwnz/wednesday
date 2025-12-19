@@ -35,7 +35,7 @@ from loguru import logger
 
 from services.clients import ITextToTextClient
 from services.clients.gigachat_config import GigaChatConfig
-from utils.models_store import ModelsStore
+from utils.models_repo import ModelsRepo
 from utils.retry import retry_critical, retry_standard
 
 HTTP_STATUS_OK = 200
@@ -397,7 +397,7 @@ class GigaChatTextClient(ITextToTextClient):
             available_models = await self.get_available_models(save_models=False)
             if model_name in available_models:
                 # Сохраняем модель в async-хранилище
-                models_store = ModelsStore()
+                models_store = ModelsRepo()
                 await models_store.set_gigachat_model(model_name)
                 self._model = model_name
 
@@ -536,7 +536,7 @@ class GigaChatTextClient(ITextToTextClient):
             Название текущей модели.
         """
         try:
-            models_store = ModelsStore()
+            models_store = ModelsRepo()
             stored_model = await models_store.get_gigachat_model()
             if stored_model:
                 return stored_model

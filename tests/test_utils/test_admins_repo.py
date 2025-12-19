@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from utils.admins_store import AdminsStore
+from utils.admins_repo import AdminsRepo
 
 pytestmark = [
     pytest.mark.integration,
@@ -13,7 +13,7 @@ pytestmark = [
 
 @pytest.mark.asyncio
 async def test_admins_store_add_admin(postgres_transaction: Any) -> None:
-    store = AdminsStore()
+    store = AdminsRepo()
 
     # Добавляем админа
     result = await store.add_admin(12345)
@@ -25,7 +25,7 @@ async def test_admins_store_add_admin(postgres_transaction: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
-    store = AdminsStore()
+    store = AdminsRepo()
 
     # Добавляем админа дважды
     result1 = await store.add_admin(12345)
@@ -37,7 +37,7 @@ async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
-    store = AdminsStore()
+    store = AdminsRepo()
 
     # Добавляем админа
     await store.add_admin(12345)
@@ -51,7 +51,7 @@ async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None:
-    store = AdminsStore()
+    store = AdminsRepo()
 
     # Пытаемся удалить несуществующего админа
     result = await store.remove_admin(99999)
@@ -60,7 +60,7 @@ async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None
 
 @pytest.mark.asyncio
 async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
-    store = AdminsStore()
+    store = AdminsRepo()
 
     # Добавляем нескольких админов
     await store.add_admin(11111)
@@ -77,7 +77,7 @@ async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_admins_store_list_all_admins(cleanup_tables: Any) -> None:
-    store = AdminsStore()
+    store = AdminsRepo()
 
     # Добавляем админов
     await store.add_admin(11111)

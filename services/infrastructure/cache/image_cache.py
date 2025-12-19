@@ -7,8 +7,8 @@ from hashlib import sha256
 from services.base.base_service import BaseService
 from services.base.exceptions import CacheError
 from services.protocols import ICache
-from utils.images_store import ImagesStore
-from utils.prompts_store import PromptsStore
+from utils.images_repo import ImagesRepo
+from utils.prompts_repo import PromptsRepo
 
 IMAGE_CACHE_VALUE_TUPLE_LENGTH = 2
 
@@ -16,26 +16,26 @@ IMAGE_CACHE_VALUE_TUPLE_LENGTH = 2
 class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
     """Сервис для кэширования изображений по промптам.
 
-    Использует ImagesStore и PromptsStore для работы с кэшем изображений
+    Использует ImagesRepo и PromptsRepo для работы с кэшем изображений
     в базе данных PostgreSQL.
     """
 
     def __init__(
         self,
-        images_store: ImagesStore | None = None,
-        prompts_store: PromptsStore | None = None,
+        images_store: ImagesRepo | None = None,
+        prompts_store: PromptsRepo | None = None,
     ) -> None:
         """Инициализирует сервис кэширования изображений.
 
         Args:
-            images_store: Экземпляр ImagesStore для работы с изображениями.
+            images_store: Экземпляр ImagesRepo для работы с изображениями.
                 Если None, создаётся новый экземпляр.
-            prompts_store: Экземпляр PromptsStore для работы с промптами.
+            prompts_store: Экземпляр PromptsRepo для работы с промптами.
                 Если None, создаётся новый экземпляр.
         """
         super().__init__()
-        self._images_store = images_store or ImagesStore()
-        self._prompts_store = prompts_store or PromptsStore()
+        self._images_store = images_store or ImagesRepo()
+        self._prompts_store = prompts_store or PromptsRepo()
 
     @staticmethod
     def _normalize_prompt(prompt: str) -> str:

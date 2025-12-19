@@ -451,9 +451,9 @@ async def send_frog_manual(
                 logger.warning("Нет сохраненных изображений для отправки как fallback")
 
             # Уведомляем администраторов
-            from utils.admins_store import AdminsStore
+            from utils.admins_repo import AdminsRepo
 
-            admins_store = AdminsStore()
+            admins_store = AdminsRepo()
             all_admins = await admins_store.list_all_admins()
             if all_admins:
                 admin_message = (
@@ -548,9 +548,9 @@ async def send_frog_manual(
             bot_instance = _get_wednesday_bot(context)
             import traceback
 
-            from utils.admins_store import AdminsStore
+            from utils.admins_repo import AdminsRepo
 
-            admins_store = AdminsStore()
+            admins_store = AdminsRepo()
             all_admins = await admins_store.list_all_admins()
             if all_admins:
                 full_error = traceback.format_exc()

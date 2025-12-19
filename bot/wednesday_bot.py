@@ -366,9 +366,9 @@ class WednesdayBot:
             - Автоматически обрезает длинные сообщения до безопасного размера.
             - Логирует ошибки при отправке.
         """
-        from utils.admins_store import AdminsStore
+        from utils.admins_repo import AdminsRepo
 
-        admins_store = AdminsStore()
+        admins_store = AdminsRepo()
         all_admins = await admins_store.list_all_admins()
 
         if not all_admins:
@@ -602,7 +602,7 @@ class WednesdayBot:
                 )
                 # Дублируем в админ-чат, если задан, избегая повтора, если CHAT_ID совпадает
                 try:
-                    from utils.admins_store import AdminsStore as _AdminsStore
+                    from utils.admins_repo import AdminsRepo as _AdminsRepo
                     from utils.config import config as _cfg
 
                     admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
@@ -620,7 +620,7 @@ class WednesdayBot:
                     else:
                         # Если ADMIN_CHAT_ID не задан, разошлем всем админам из хранилища (без дубля с CHAT_ID)
                         try:
-                            admins = await _AdminsStore().list_all_admins()
+                            admins = await _AdminsRepo().list_all_admins()
                             for admin_id in admins:
                                 try:
                                     chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None
@@ -971,7 +971,7 @@ class WednesdayBot:
                 shutdown_message = (
                     "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
                 )
-                from utils.admins_store import AdminsStore
+                from utils.admins_repo import AdminsRepo
                 from utils.config import config as _cfg
 
                 admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
@@ -996,7 +996,7 @@ class WednesdayBot:
                     except Exception:
                         pass
                 else:
-                    admins = await AdminsStore().list_all_admins()
+                    admins = await AdminsRepo().list_all_admins()
                     for admin_id in admins:
                         try:
                             chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None

@@ -19,7 +19,7 @@ from telegram.error import NetworkError, TelegramError
 
 from services.application.image_service import ImageService
 from services.base.base_service import BaseService
-from utils.chats_store import ChatsStore
+from utils.chats_repo import ChatsRepo
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
 from utils.retry import retry_on_connect_error
@@ -46,7 +46,7 @@ class DispatchService(BaseService):
         self,
         *,
         usage: UsageTracker,
-        chats: ChatsStore,
+        chats: ChatsRepo,
         dispatch_registry: DispatchRegistry,
         metrics: Metrics,
         image_service: ImageService | None,

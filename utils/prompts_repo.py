@@ -48,7 +48,7 @@ class PromptRecord:
 
 
 @log_all_methods()
-class PromptsStore:
+class PromptsRepo:
     """
     Репозиторий для работы с таблицей `prompts`.
 

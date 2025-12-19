@@ -47,7 +47,7 @@ def support_bot(monkeypatch: Any) -> Any:
 
     monkeypatch.setattr(sb_module, "HTTPXRequest", http_request)
 
-    class DummyAdminsStore:
+    class DummyAdminsRepo:
         def __init__(self) -> None:
             self.admins: set[int] = {1}
 
@@ -67,7 +67,7 @@ def support_bot(monkeypatch: Any) -> Any:
             self.command_filter = command_filter
             self.callback = callback
 
-    monkeypatch.setattr(sb_module, "AdminsStore", DummyAdminsStore)
+    monkeypatch.setattr(sb_module, "AdminsRepo", DummyAdminsRepo)
     monkeypatch.setattr(sb_module, "CommandHandler", DummyCommandHandler)
     monkeypatch.setattr(sb_module, "MessageHandler", DummyMessageHandler)
     monkeypatch.setattr(sb_module, "filters", SimpleNamespace(COMMAND="COMMAND"))

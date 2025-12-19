@@ -16,7 +16,7 @@ from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.image_service import ImageService
 from services.infrastructure.cache.prompt_cache import PromptCache
 from services.infrastructure.cache.user_state_cache import UserStateCache
-from utils.chats_store import ChatsStore
+from utils.chats_repo import ChatsRepo
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
 from utils.usage_tracker import UsageTracker
@@ -35,7 +35,7 @@ class BotServices:
     """
 
     usage: UsageTracker
-    chats: ChatsStore
+    chats: ChatsRepo
     dispatch_registry: DispatchRegistry
     metrics: Metrics
     prompt_cache: PromptCache

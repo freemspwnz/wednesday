@@ -22,9 +22,9 @@ from services.application.admin_dashboard_builders import (
 )
 from services.base.base_service import BaseService
 from services.clients.interfaces import ITextToImageClient, ITextToTextClient
-from utils.chats_store import ChatsStore
+from utils.chats_repo import ChatsRepo
 from utils.metrics import Metrics
-from utils.models_store import ModelsStore
+from utils.models_repo import ModelsRepo
 from utils.usage_tracker import UsageTracker
 
 if TYPE_CHECKING:
@@ -46,11 +46,11 @@ class AdminDashboardService(BaseService):
         self,
         *,
         usage: UsageTracker | None,
-        chats: ChatsStore | None,
+        chats: ChatsRepo | None,
         metrics: Metrics | None,
         image_client: ITextToImageClient,
         text_client: ITextToTextClient | None,
-        models_store: ModelsStore | None,
+        models_store: ModelsRepo | None,
         status_builder: StatusMessageBuilder | None = None,
         models_list_builder: ModelsListMessageBuilder | None = None,
     ) -> None:

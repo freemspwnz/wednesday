@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from utils.images_store import ImagesStore
-from utils.prompts_store import PromptsStore
+from utils.images_repo import ImagesRepo
+from utils.prompts_repo import PromptsRepo
 
 IMAGE_HASH_HEX_LENGTH = 64
 
@@ -28,10 +28,10 @@ async def test_get_or_create_image_saves_file_and_metadata(
     """
 
     # Перенаправляем папку с изображениями в tmp_path, чтобы не трогать реальные данные.
-    monkeypatch.setattr("utils.images_store.FROGS_DIR", tmp_path)
+    monkeypatch.setattr("utils.images_repo.FROGS_DIR", tmp_path)
 
-    prompts_store = PromptsStore()
-    images_store = ImagesStore()
+    prompts_store = PromptsRepo()
+    images_store = ImagesRepo()
 
     prompt_record = await prompts_store.get_or_create_prompt("A simple frog")
     image_bytes = b"test-image-bytes"
@@ -62,15 +62,15 @@ async def test_get_or_create_image_handles_concurrent_insert(
     и должна вернуть ту же запись.
     """
 
-    monkeypatch.setattr("utils.images_store.FROGS_DIR", tmp_path)
+    monkeypatch.setattr("utils.images_repo.FROGS_DIR", tmp_path)
 
-    prompts_store = PromptsStore()
+    prompts_store = PromptsRepo()
     prompt_record = await prompts_store.get_or_create_prompt("Concurrent frog")
     prompt_hash = prompt_record.prompt_hash
     image_bytes = b"concurrent-image"
 
-    store1 = ImagesStore()
-    store2 = ImagesStore()
+    store1 = ImagesRepo()
+    store2 = ImagesRepo()
 
     async def _create_with_store1() -> None:
         await store1.get_or_create_image(prompt_hash, image_bytes)
@@ -85,6 +85,6 @@ async def test_get_or_create_image_handles_concurrent_insert(
     await asyncio.gather(_create_with_store1(), _create_with_store2())
 
     # В таблице должна быть одна запись для этого prompt_hash.
-    images_store = ImagesStore()
+    images_store = ImagesRepo()
     record = await images_store.get_by_prompt_hash(prompt_hash)
     assert record is not None

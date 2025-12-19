@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from utils.chats_store import ChatsStore
+from utils.chats_repo import ChatsRepo
 
 pytestmark = [
     pytest.mark.integration,
@@ -13,7 +13,7 @@ pytestmark = [
 
 @pytest.mark.asyncio
 async def test_chats_store_add_chat(postgres_transaction: Any) -> None:
-    store = ChatsStore()
+    store = ChatsRepo()
 
     await store.add_chat(12345, "Test Chat")
 
@@ -23,7 +23,7 @@ async def test_chats_store_add_chat(postgres_transaction: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_chats_store_remove_chat(postgres_transaction: Any) -> None:
-    store = ChatsStore()
+    store = ChatsRepo()
 
     await store.add_chat(12345, "Test Chat")
     await store.remove_chat(12345)
@@ -34,7 +34,7 @@ async def test_chats_store_remove_chat(postgres_transaction: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_chats_store_list_chat_ids(postgres_transaction: Any) -> None:
-    store = ChatsStore()
+    store = ChatsRepo()
 
     await store.add_chat(11111, "Chat 1")
     await store.add_chat(22222, "Chat 2")
@@ -49,7 +49,7 @@ async def test_chats_store_list_chat_ids(postgres_transaction: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_chats_store_list_chat_ids_empty(cleanup_tables: Any) -> None:
-    store = ChatsStore()
+    store = ChatsRepo()
 
     chat_ids = await store.list_chat_ids()
     assert chat_ids == []

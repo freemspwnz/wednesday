@@ -36,11 +36,11 @@ from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreaker
 from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.protocols import ICircuitBreaker, IRateLimiter
-from utils.chats_store import ChatsStore
+from utils.chats_repo import ChatsRepo
 from utils.config import ImageConfig, config
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
-from utils.models_store import ModelsStore
+from utils.models_repo import ModelsRepo
 from utils.usage_tracker import UsageTracker
 
 
@@ -125,7 +125,7 @@ def build_image_stack(
 
 def build_admin_dashboard_service(
     usage: UsageTracker,
-    chats: ChatsStore,
+    chats: ChatsRepo,
     metrics: Metrics,
     image_client: ITextToImageClient,
     text_client: ITextToTextClient | None,
@@ -142,7 +142,7 @@ def build_admin_dashboard_service(
     Returns:
         Экземпляр AdminDashboardService с внедрёнными зависимостями.
     """
-    models_store = ModelsStore()
+    models_store = ModelsRepo()
     return AdminDashboardService(
         usage=usage,
         chats=chats,
@@ -177,7 +177,7 @@ def build_bot_services() -> BotServices:
         frog_threshold=70,
     )
 
-    chats = ChatsStore()
+    chats = ChatsRepo()
     dispatch_registry = DispatchRegistry()
     metrics = Metrics()
     prompt_cache = PromptCache()

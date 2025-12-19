@@ -56,7 +56,7 @@ class ImageRecord:
 
 
 @log_all_methods()
-class ImagesStore:
+class ImagesRepo:
     """
     Репозиторий для работы с таблицей `images`.
 

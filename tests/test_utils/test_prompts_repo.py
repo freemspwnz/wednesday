@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from utils.prompts_store import PromptsStore
+from utils.prompts_repo import PromptsRepo
 
 SHA256_HEX_LENGTH = 64
 
@@ -18,7 +18,7 @@ pytestmark = [
 
 @pytest.mark.asyncio
 async def test_get_or_create_prompt_inserts_and_deduplicates(cleanup_tables: Any) -> None:
-    store = PromptsStore()
+    store = PromptsRepo()
 
     text = "  A frog  "
     record1 = await store.get_or_create_prompt(text)
@@ -37,7 +37,7 @@ async def test_get_or_create_prompt_inserts_and_deduplicates(cleanup_tables: Any
 
 @pytest.mark.asyncio
 async def test_get_prompt_by_hash_returns_existing(cleanup_tables: Any) -> None:
-    store = PromptsStore()
+    store = PromptsRepo()
 
     record = await store.get_or_create_prompt("Wednesday frog")
     loaded = await store.get_prompt_by_hash(record.prompt_hash)
@@ -50,7 +50,7 @@ async def test_get_prompt_by_hash_returns_existing(cleanup_tables: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_get_prompt_by_hash_missing_returns_none(cleanup_tables: Any) -> None:
-    store = PromptsStore()
+    store = PromptsRepo()
 
     loaded = await store.get_prompt_by_hash("0" * 64)
     assert loaded is None
@@ -58,7 +58,7 @@ async def test_get_prompt_by_hash_missing_returns_none(cleanup_tables: Any) -> N
 
 @pytest.mark.asyncio
 async def test_get_random_prompt_returns_record(cleanup_tables: Any) -> None:
-    store = PromptsStore()
+    store = PromptsRepo()
 
     await store.get_or_create_prompt("Prompt A")
     await store.get_or_create_prompt("Prompt B")
@@ -79,8 +79,8 @@ async def test_get_or_create_prompt_concurrent_insert(cleanup_tables: Any) -> No
     ON CONFLICT + повторным SELECT должна гарантировать отсутствие дубликатов.
     """
 
-    store1 = PromptsStore()
-    store2 = PromptsStore()
+    store1 = PromptsRepo()
+    store2 = PromptsRepo()
     text = "Concurrent prompt"
 
     async def _create_with_store1() -> None:
@@ -91,6 +91,6 @@ async def test_get_or_create_prompt_concurrent_insert(cleanup_tables: Any) -> No
 
     await asyncio.gather(_create_with_store1(), _create_with_store2())
 
-    store = PromptsStore()
+    store = PromptsRepo()
     record = await store.get_or_create_prompt(text)
     assert record.id > 0

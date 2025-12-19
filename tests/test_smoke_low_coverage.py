@@ -146,7 +146,7 @@ async def test_command_handlers_start_help(
     async_retry_stub: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Мокируем AdminsStore, чтобы не требовался Postgres
+    # Мокируем AdminsRepo, чтобы не требовался Postgres
     class _AdminNo:
         async def is_admin(self, _uid: int) -> bool:
             return False
@@ -154,7 +154,7 @@ async def test_command_handlers_start_help(
         async def list_all_admins(self) -> list[int]:
             return []
 
-    monkeypatch.setattr("utils.admins_store.AdminsStore", _AdminNo)
+    monkeypatch.setattr("utils.admins_repo.AdminsRepo", _AdminNo)
     from services.application.frog_limit_service import FrogRateLimiterService
     from services.application.frog_requests import FrogRequestService
     from services.infrastructure.celery.celery_task_queue import CeleryTaskQueue
@@ -277,8 +277,8 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.asyncio
 async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Тест метода is_admin в AdminsStore с моком Postgres."""
-    from utils.admins_store import AdminsStore
+    """Тест метода is_admin в AdminsRepo с моком Postgres."""
+    from utils.admins_repo import AdminsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -305,7 +305,7 @@ async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("utils.admins_store.get_postgres_pool", _mock_get_pool)
     monkeypatch.setenv("ADMIN_CHAT_ID", "999999")
 
-    store = AdminsStore()
+    store = AdminsRepo()
     result = await store.is_admin(12345)
 
     assert isinstance(result, bool)
@@ -317,8 +317,8 @@ async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Тест метода list_admins в AdminsStore с моком Postgres."""
-    from utils.admins_store import AdminsStore
+    """Тест метода list_admins в AdminsRepo с моком Postgres."""
+    from utils.admins_repo import AdminsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -346,7 +346,7 @@ async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr("utils.admins_store.get_postgres_pool", _mock_get_pool)
 
-    store = AdminsStore()
+    store = AdminsRepo()
     result = await store.list_admins()
 
     assert isinstance(result, list)
@@ -357,8 +357,8 @@ async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None
 
 @pytest.mark.asyncio
 async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Базовые тесты get/set моделей Kandinsky в ModelsStore с моком Postgres."""
-    from utils.models_store import ModelsStore
+    """Базовые тесты get/set моделей Kandinsky в ModelsRepo с моком Postgres."""
+    from utils.models_repo import ModelsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -385,7 +385,7 @@ async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr("utils.models_store.get_postgres_pool", _mock_get_pool)
 
-    store = ModelsStore()
+    store = ModelsRepo()
 
     # Тест set
     await store.set_kandinsky_model("pipeline_123", "Test Model")
@@ -401,8 +401,8 @@ async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_models_store_gigachat_get_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Базовые тесты get/set моделей GigaChat в ModelsStore с моком Postgres."""
-    from utils.models_store import ModelsStore
+    """Базовые тесты get/set моделей GigaChat в ModelsRepo с моком Postgres."""
+    from utils.models_repo import ModelsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -429,7 +429,7 @@ async def test_models_store_gigachat_get_set(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr("utils.models_store.get_postgres_pool", _mock_get_pool)
 
-    store = ModelsStore()
+    store = ModelsRepo()
 
     # Тест set
     await store.set_gigachat_model("GigaChat-Pro")
@@ -586,8 +586,8 @@ async def test_usage_tracker_get_month_total(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Тест добавления чата в ChatsStore с моком Postgres."""
-    from utils.chats_store import ChatsStore
+    """Тест добавления чата в ChatsRepo с моком Postgres."""
+    from utils.chats_repo import ChatsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -611,7 +611,7 @@ async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("utils.chats_store.get_postgres_pool", _mock_get_pool)
 
-    store = ChatsStore()
+    store = ChatsRepo()
     await store.add_chat(12345, "Test Chat")
 
     mock_conn.execute.assert_called_once()
@@ -619,8 +619,8 @@ async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_chats_store_list_chat_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Тест получения списка чатов в ChatsStore с моком Postgres."""
-    from utils.chats_store import ChatsStore
+    """Тест получения списка чатов в ChatsRepo с моком Postgres."""
+    from utils.chats_repo import ChatsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -649,7 +649,7 @@ async def test_chats_store_list_chat_ids(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr("utils.chats_store.get_postgres_pool", _mock_get_pool)
 
-    store = ChatsStore()
+    store = ChatsRepo()
     result = await store.list_chat_ids()
 
     assert isinstance(result, list)

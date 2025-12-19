@@ -102,7 +102,7 @@ def session_env_defaults() -> Generator[None, None, None]:
     _session_monkeypatch.undo()
 
 
-class _InMemoryModelsStore:
+class _InMemoryModelsRepo:
     """Простое хранилище моделей для тестов без файловой системы."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -441,33 +441,33 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def patch_models_store(monkeypatch: Any, request: Any) -> Generator[None, None, None]:
+def patch_models_repo(monkeypatch: Any, request: Any) -> Generator[None, None, None]:
     """
     Подменяет ModelsStore на простую in-memory реализацию.
 
     Исключает тесты из test_utils/test_models_store.py и интеграционные тесты,
     которые должны использовать реальный ModelsStore с Postgres.
     """
-    import utils.admins_store as admins_store_module
-    import utils.models_store as models_store_module
+    import utils.admins_repo as admins_repo_module
+    import utils.models_repo as models_repo_module
 
-    # Не подменяем ModelsStore для тестов, которые явно тестируют его или используют реальные хранилища
+    # Не подменяем ModelsRepo для тестов, которые явно тестируют его или используют реальные хранилища
     test_file = request.node.fspath.strpath if hasattr(request.node, "fspath") else ""
     test_name = request.node.name if hasattr(request.node, "name") else ""
 
     markers = {marker.name for marker in request.node.iter_markers()}
     should_skip_patch = (
-        "test_models_store.py" in test_file
+        "test_models_repo.py" in test_file
         or "integration_with_postgres_stores" in test_name
         or markers.intersection({"db", "integration", "e2e", "celery", "infra"})
     )
 
     if not should_skip_patch:
-        monkeypatch.setattr(models_store_module, "ModelsStore", _InMemoryModelsStore)
+        monkeypatch.setattr(models_repo_module, "ModelsRepo", _InMemoryModelsRepo)
 
-    # Создаём совместимый с AdminsStore объект для тестов
+    # Создаём совместимый с AdminsRepo объект для тестов
 
-    class _TestAdminsStore:
+    class _TestAdminsRepo:
         async def is_admin(self, user_id: int) -> bool:  # pragma: no cover - простая заглушка
             return False
 
@@ -477,7 +477,7 @@ def patch_models_store(monkeypatch: Any, request: Any) -> Generator[None, None, 
         async def list_all_admins(self) -> list[int]:  # pragma: no cover - простая заглушка
             return []
 
-    monkeypatch.setattr(admins_store_module, "AdminsStore", lambda *args, **kwargs: _TestAdminsStore())
+    monkeypatch.setattr(admins_repo_module, "AdminsRepo", lambda *args, **kwargs: _TestAdminsRepo())
     yield
 
 

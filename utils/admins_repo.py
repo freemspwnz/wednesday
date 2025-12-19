@@ -13,7 +13,7 @@ from utils.postgres_client import get_postgres_pool
 
 
 @log_all_methods()
-class AdminsStore:
+class AdminsRepo:
     """
     Репозиторий для управления списком администраторов.
 

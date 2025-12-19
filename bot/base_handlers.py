@@ -15,7 +15,7 @@ from telegram import Bot, Message, Update
 from telegram.ext import ContextTypes
 
 from services.bot_services import BotServices
-from utils.admins_store import AdminsStore
+from utils.admins_repo import AdminsRepo
 from utils.logger import get_logger
 from utils.retry import (
     retry_on_connect_error as global_retry_on_connect_error,
@@ -40,7 +40,7 @@ class BaseHandlers:
         """
         self.logger = get_logger(__name__)
         self.services: BotServices = services
-        self.admins_store: AdminsStore = AdminsStore()
+        self.admins_store: AdminsRepo = AdminsRepo()
 
     async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.

@@ -68,7 +68,7 @@ def wednesday_bot(monkeypatch: Any) -> Any:
         async def increment(self, value: int) -> None:
             self.total += value
 
-    class DummyChatsStore:
+    class DummyChatsRepo:
         def __init__(self) -> None:
             self.chat_ids: list[int] = [111]
 
@@ -125,7 +125,7 @@ def wednesday_bot(monkeypatch: Any) -> Any:
     mock_services = SimpleNamespace(
         image_service=DummyImageService(),
         usage=DummyUsageTracker(),
-        chats=DummyChatsStore(),
+        chats=DummyChatsRepo(),
         dispatch_registry=DummyDispatchRegistry(),
         metrics=DummyMetrics(),
         settings=SimpleNamespace(scheduler_send_times=["10:00"], time_format_length=5),

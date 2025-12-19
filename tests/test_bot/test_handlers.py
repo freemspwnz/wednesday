@@ -263,7 +263,7 @@ async def test_status_command_integration_with_postgres_stores(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_store import ChatsStore
+    from utils.chats_repo import ChatsRepo
     from utils.metrics import Metrics
     from utils.usage_tracker import UsageTracker
 
@@ -277,7 +277,7 @@ async def test_status_command_integration_with_postgres_stores(
     services = MagicMock()
     services.image_generator = image_generator
     services.usage = UsageTracker(storage_path="ignored.json")
-    services.chats = ChatsStore(storage_path="ignored.json")
+    services.chats = ChatsRepo(storage_path="ignored.json")
     services.metrics = Metrics(storage_path="ignored.json")
 
     handler = AdminHandlers(services=services)
@@ -311,7 +311,7 @@ async def test_force_send_command_integration_with_postgres_stores(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_store import ChatsStore
+    from utils.chats_repo import ChatsRepo
     from utils.usage_tracker import UsageTracker
 
     class _DummyGenerator:
@@ -324,7 +324,7 @@ async def test_force_send_command_integration_with_postgres_stores(
 
     services = MagicMock()
     services.image_generator = image_generator
-    services.chats = ChatsStore(storage_path="ignored.json")
+    services.chats = ChatsRepo(storage_path="ignored.json")
     services.usage = UsageTracker(storage_path="ignored.json")
 
     handler = AdminHandlers(services=services)
@@ -451,11 +451,11 @@ async def test_admin_add_chat_command_success(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_store import ChatsStore
+    from utils.chats_repo import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    services.chats = ChatsStore(storage_path="ignored.json")
+    services.chats = ChatsRepo(storage_path="ignored.json")
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
@@ -531,11 +531,11 @@ async def test_admin_remove_chat_command_success(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_store import ChatsStore
+    from utils.chats_repo import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    services.chats = ChatsStore(storage_path="ignored.json")
+    services.chats = ChatsRepo(storage_path="ignored.json")
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
@@ -591,11 +591,11 @@ async def test_list_chats_command_success(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_store import ChatsStore
+    from utils.chats_repo import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    services.chats = ChatsStore(storage_path="ignored.json")
+    services.chats = ChatsRepo(storage_path="ignored.json")
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
@@ -627,11 +627,11 @@ async def test_list_chats_command_no_chats(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_store import ChatsStore
+    from utils.chats_repo import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    services.chats = ChatsStore(storage_path="ignored.json")
+    services.chats = ChatsRepo(storage_path="ignored.json")
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
@@ -842,20 +842,20 @@ async def test_mod_command_success(
 ) -> None:
     """Тест успешного выполнения команды /mod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    # Импортируем реальный AdminsStore напрямую из модуля, обходя патч
-    import utils.admins_store as admins_store_module
+    # Импортируем реальный AdminsRepo напрямую из модуля, обходя патч
+    import utils.admins_repo as admins_repo_module
 
     # Перезагружаем модуль, чтобы получить реальный класс
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    # Используем реальный AdminsStore для теста
-    admins = AdminsStore()
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo()
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
     fake_context.args = ["99999"]
@@ -906,20 +906,20 @@ async def test_unmod_command_success(
 ) -> None:
     """Тест успешного выполнения команды /unmod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    # Импортируем реальный AdminsStore напрямую из модуля, обходя патч
-    import utils.admins_store as admins_store_module
+    # Импортируем реальный AdminsRepo напрямую из модуля, обходя патч
+    import utils.admins_repo as admins_repo_module
 
     # Перезагружаем модуль, чтобы получить реальный класс
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    # Используем реальный AdminsStore для теста
-    admins = AdminsStore()
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo()
     await admins.add_admin(99999)
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
@@ -947,17 +947,17 @@ async def test_unmod_command_no_args_shows_list(
 ) -> None:
     """Тест команды /unmod без аргументов (теперь показывает список админов)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     handler.admins_store = admins
     fake_context.args = []
     fake_update.message.reply_to_message = None
@@ -989,20 +989,20 @@ async def test_list_mods_command_success(
     cleanup_tables: Any,
     monkeypatch: Any,
 ) -> None:
-    # Импортируем реальный AdminsStore напрямую из модуля, обходя патч
-    import utils.admins_store as admins_store_module
+    # Импортируем реальный AdminsRepo напрямую из модуля, обходя патч
+    import utils.admins_repo as admins_repo_module
 
     # Перезагружаем модуль, чтобы получить реальный класс
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    # Используем реальный AdminsStore для теста
-    admins = AdminsStore()
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo()
     # Делаем пользователя 42 администратором
     await admins.add_admin(fake_update.effective_user.id)
     await admins.add_admin(11111)
@@ -1174,17 +1174,17 @@ async def test_mod_command_non_super_admin_denied(
 ) -> None:
     """Тест отказа команды /mod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     await admins.add_admin(fake_update.effective_user.id)  # Делаем пользователя 42 админом, но не супер-админом
     handler.admins_store = admins
     fake_context.args = ["99999"]
@@ -1210,17 +1210,17 @@ async def test_mod_command_with_reply(
 ) -> None:
     """Тест команды /mod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     handler.admins_store = admins
     fake_context.args = []
 
@@ -1251,17 +1251,17 @@ async def test_mod_command_with_args(
 ) -> None:
     """Тест команды /mod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     handler.admins_store = admins
     fake_context.args = ["54321"]
     fake_update.message.reply_to_message = None
@@ -1288,17 +1288,17 @@ async def test_unmod_command_non_super_admin_denied(
 ) -> None:
     """Тест отказа команды /unmod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     await admins.add_admin(fake_update.effective_user.id)
     handler.admins_store = admins
     fake_context.args = ["99999"]
@@ -1324,17 +1324,17 @@ async def test_unmod_command_with_reply(
 ) -> None:
     """Тест команды /unmod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     await admins.add_admin(12345)  # Добавляем админа для удаления
     handler.admins_store = admins
     fake_context.args = []
@@ -1367,17 +1367,17 @@ async def test_unmod_command_with_args(
 ) -> None:
     """Тест команды /unmod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     await admins.add_admin(54321)
     handler.admins_store = admins
     fake_context.args = ["54321"]
@@ -1405,17 +1405,17 @@ async def test_unmod_command_cannot_remove_super_admin(
 ) -> None:
     """Тест попытки удалить главного администратора (должен быть отказ)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     handler.admins_store = admins
     fake_context.args = ["42"]  # Пытаемся удалить самого себя (главного админа)
     fake_update.message.reply_to_message = None
@@ -1441,17 +1441,17 @@ async def test_unmod_command_shows_admin_list_when_no_args(
 ) -> None:
     """Тест показа списка админов при вызове /unmod без аргументов."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
-    import utils.admins_store as admins_store_module
+    import utils.admins_repo as admins_repo_module
 
-    importlib.reload(admins_store_module)
-    AdminsStore = admins_store_module.AdminsStore
+    importlib.reload(admins_repo_module)
+    AdminsRepo = admins_repo_module.AdminsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    admins = AdminsStore()
+    admins = AdminsRepo()
     await admins.add_admin(11111)
     await admins.add_admin(22222)
     handler.admins_store = admins

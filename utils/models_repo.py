@@ -14,7 +14,7 @@ from utils.postgres_client import get_postgres_pool
 
 
 @log_all_methods()
-class ModelsStore:
+class ModelsRepo:
     """
     Репозиторий настроек моделей Kandinsky и GigaChat.
 
