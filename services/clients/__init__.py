@@ -15,6 +15,13 @@
 - централизовать политику ретраев и обработку сетевых ошибок.
 """
 
+from services.clients.exceptions import (
+    APIError,
+    AuthenticationError,
+    ClientError,
+    NetworkError,
+    RateLimitError,
+)
 from services.clients.image_client_container import (
     ImageClientContainer,
     get_image_client_container,
@@ -26,9 +33,14 @@ from services.clients.text_client_container import (
 from services.protocols import ITextToImageClient, ITextToTextClient
 
 __all__ = [
+    "APIError",
+    "AuthenticationError",
+    "ClientError",
     "ITextToImageClient",
     "ITextToTextClient",
     "ImageClientContainer",
+    "NetworkError",
+    "RateLimitError",
     "TextClientContainer",
     "get_image_client_container",
     "get_text_client_container",

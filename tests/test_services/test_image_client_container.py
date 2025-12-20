@@ -17,7 +17,7 @@ class _ClosableMockImageClient(ITextToImageClient):
         self.closed: bool = False
         self.calls: list[dict[str, Any]] = []
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
         self.calls.append({"method": "generate", "prompt": prompt, "user_id": user_id})
         return f"{self.name}:{prompt}".encode()
 
@@ -140,7 +140,7 @@ async def test_container_handles_client_without_optional_methods() -> None:
         определять это через hasattr и возвращать безопасные значения.
         """
 
-        async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
+        async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
             return b"minimal-result"
 
     # Используем cast для создания клиента без всех методов Protocol
@@ -263,7 +263,7 @@ async def test_aclose_handles_client_without_aclose_method() -> None:
     class _NoCloseClient(ITextToImageClient):
         """Клиент без метода aclose."""
 
-        async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
+        async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
             return b"no-close-result"
 
         async def check_api_status(

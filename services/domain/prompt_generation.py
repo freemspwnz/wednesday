@@ -9,6 +9,12 @@ from __future__ import annotations
 import random
 
 from services.base.base_service import BaseService
+from services.clients.exceptions import (
+    APIError,
+    AuthenticationError,
+    ClientError,
+    NetworkError,
+)
 from services.domain.prompt_fallback_config import PromptFallbackConfig
 from services.protocols import ITextToTextClient
 
@@ -39,15 +45,16 @@ class PromptGenerationService(BaseService):
     async def generate(self) -> str | None:
         """Генерирует промпт для генерации изображения.
 
-        Выполняет генерацию через ITextToTextClient. При ошибке или пустом
-        ответе возвращает None, что сигнализирует о необходимости использовать
-        статический fallback в вызывающем коде.
+        Выполняет генерацию через ITextToTextClient. При ошибке возвращает None,
+        что сигнализирует о необходимости использовать статический fallback
+        в вызывающем коде.
 
         Returns:
             Сгенерированный промпт или None, если генерация не удалась.
 
-        Raises:
-            PromptGenerationError: При критических ошибках генерации.
+        Note:
+            Метод не пробрасывает исключения клиента, а возвращает None,
+            чтобы вызывающий код мог использовать fallback промпт.
         """
         if self._text_client is None:
             self.log_event(
@@ -68,23 +75,50 @@ class PromptGenerationService(BaseService):
 
             prompt = await self._text_client.generate("prompt_for_kandinsky")
 
-            if prompt:
-                self.log_event(
-                    event="prompt_generation_success",
-                    status="success",
-                    level="info",
-                    message=f"Промпт успешно сгенерирован: {prompt[:100]}...",
-                )
-                return prompt
-
             self.log_event(
-                event="prompt_generation_empty",
-                status="empty",
-                level="warning",
-                message="Текстовый клиент вернул пустой промпт",
+                event="prompt_generation_success",
+                status="success",
+                level="info",
+                message=f"Промпт успешно сгенерирован: {prompt[:100]}...",
             )
-            return None
+            return prompt
 
+        except AuthenticationError as exc:
+            self.log_event(
+                event="prompt_generation_failed",
+                status="auth_error",
+                level="warning",
+                message=f"Ошибка аутентификации при генерации промпта: {exc}",
+            )
+            # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
+            return None
+        except NetworkError as exc:
+            self.log_event(
+                event="prompt_generation_failed",
+                status="network_error",
+                level="warning",
+                message=f"Сетевая ошибка при генерации промпта: {exc}",
+            )
+            # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
+            return None
+        except APIError as exc:
+            self.log_event(
+                event="prompt_generation_failed",
+                status="api_error",
+                level="warning",
+                message=f"Ошибка API при генерации промпта: HTTP {exc.status_code}",
+            )
+            # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
+            return None
+        except ClientError as exc:
+            self.log_event(
+                event="prompt_generation_failed",
+                status="client_error",
+                level="warning",
+                message=f"Ошибка клиента при генерации промпта: {exc}",
+            )
+            # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
+            return None
         except Exception as e:
             self.logger.error(f"Ошибка при генерации промпта: {e}", exc_info=True)
             self.log_event(

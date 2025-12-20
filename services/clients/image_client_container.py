@@ -176,7 +176,7 @@ class ImageClientContainer(ITextToImageClient):
     # Реализация интерфейса ITextToImageClient (делегирование)          #
     # ------------------------------------------------------------------ #
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
         """Генерирует изображение по текстовому промпту через текущий активный клиент.
 
         Проксирует вызов метода generate к текущему активному клиенту.
@@ -186,18 +186,21 @@ class ImageClientContainer(ITextToImageClient):
             user_id: Идентификатор пользователя для трейсинга и логирования (опционально).
 
         Returns:
-            Байтовое представление изображения или None при ошибке или отсутствии клиента.
+            Байтовое представление изображения.
 
-        Note:
-            Если клиент не инициализирован, логируется предупреждение и возвращается None.
+        Raises:
+            RuntimeError: Если активный клиент не установлен.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
+
         """
         client = self._client
         if client is None:
-            self._logger.warning(
-                "Вызван generate(), но клиент генерации изображений не инициализирован (вернём None)",
-                prompt_preview=prompt[:50],
-            )
-            return None
+            error_msg = "Клиент генерации изображений не инициализирован"
+            self._logger.error(error_msg, prompt_preview=prompt[:50])
+            raise RuntimeError(error_msg)
         return await client.generate(prompt, user_id=user_id)
 
     async def check_api_status(

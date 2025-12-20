@@ -37,6 +37,13 @@ from loguru import logger
 from PIL import Image
 from pydantic import ValidationError
 
+from services.clients.exceptions import (
+    APIError,
+    AuthenticationError,
+    NetworkError,
+    RateLimitError,
+    map_http_status_to_exception,
+)
 from services.clients.models import (
     KandinskyGenerationParams,
     KandinskyGenerationRequest,
@@ -109,7 +116,7 @@ class KandinskyClient(ITextToImageClient):
     # Публичный интерфейс ITextToImageClient                             #
     # ------------------------------------------------------------------ #
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
         """Генерирует изображение по текстовому промпту через Kandinsky API.
 
         Выполняет полный цикл генерации: получение pipeline ID, запуск генерации,
@@ -120,13 +127,14 @@ class KandinskyClient(ITextToImageClient):
             user_id: Идентификатор пользователя для логирования (опционально).
 
         Returns:
-            Байты изображения в формате PNG или None при ошибке.
+            Байты изображения в формате PNG.
 
         Raises:
             ValueError: Если API ключи не сконфигурированы.
-            TimeoutError: При таймауте генерации.
-            aiohttp.ClientConnectorError: При ошибке подключения к API.
-            aiohttp.ClientError: При других ошибках HTTP-клиента.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         bound = logger.bind(event="kandinsky_generate", user_id=user_id)
         bound.info("Запрос генерации изображения через Kandinsky API получен")
@@ -135,7 +143,7 @@ class KandinskyClient(ITextToImageClient):
             headers = self._get_auth_headers()
         except ValueError as exc:
             bound.error("API ключи Kandinsky не сконфигурированы: {}", str(exc))
-            return None
+            raise
 
         if self._proxy_url:
             bound.bind(proxy_url=self._proxy_url).info("Используется прокси для запроса к Kandinsky")
@@ -143,43 +151,50 @@ class KandinskyClient(ITextToImageClient):
         try:
             # Используем переиспользуемую сессию
             pipeline_id = await self._get_pipeline_id(self._session, headers, user_id=user_id)
-            if not pipeline_id:
-                bound.error("Не удалось получить pipeline ID для генерации изображения")
-                return None
 
             uuid = await self._start_generation(self._session, headers, pipeline_id, prompt, user_id=user_id)
-            if not uuid:
-                bound.error("Kandinsky не вернул UUID задачи генерации")
-                return None
 
             image_data = await self._wait_for_generation(self._session, headers, uuid, user_id=user_id)
-            if image_data is None:
-                bound.error("Не удалось получить итоговое изображение от Kandinsky")
-                return None
 
             # В логах не показываем бинарные данные, только размеры.
             bound.bind(image_size_bytes=len(image_data)).info(
                 "Изображение успешно получено от Kandinsky",
             )
             return image_data
-        except TimeoutError:
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            # Пробрасываем доменные исключения как есть
+            raise
+        except TimeoutError as exc:
             bound.error("Таймаут верхнего уровня при генерации изображения через Kandinsky")
-            return None
+            raise NetworkError(
+                "Таймаут при генерации изображения через Kandinsky",
+                original_error=exc,
+            ) from exc
         except aiohttp.ClientConnectorError as exc:
             bound.error(
                 "Ошибка подключения к Kandinsky API: {}. Возможные причины: проблемы с сетью, "
                 "недоступность сервера или прокси.",
                 str(exc),
             )
-            return None
+            raise NetworkError(
+                f"Ошибка подключения к Kandinsky API: {exc}",
+                original_error=exc,
+            ) from exc
         except aiohttp.ClientError as exc:
             bound.error("Ошибка клиента aiohttp при запросе к Kandinsky API: {}", str(exc))
-            return None
+            raise NetworkError(
+                f"Ошибка клиента aiohttp при запросе к Kandinsky API: {exc}",
+                original_error=exc,
+            ) from exc
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error(
                 "Неожиданная ошибка при генерации изображения через Kandinsky",
             )
-            return None
+            raise APIError(
+                f"Неожиданная ошибка при генерации изображения через Kandinsky: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     # ------------------------------------------------------------------ #
     # Дополнительные методы для healthcheck и админ‑команд               #
@@ -465,7 +480,7 @@ class KandinskyClient(ITextToImageClient):
         headers: dict[str, str],
         *,
         user_id: str | None = None,
-    ) -> str | None:
+    ) -> str:
         """Выбирает актуальный pipeline ID, используя сохранённую модель или первую доступную."""
         bound = logger.bind(event="kandinsky_get_pipeline", user_id=user_id)
         from utils.postgres_client import get_postgres_pool
@@ -480,13 +495,23 @@ class KandinskyClient(ITextToImageClient):
         try:
             async with await _fetch_pipelines() as response:
                 if response.status != HTTP_STATUS_OK:
+                    error_text = await response.text()
                     bound.error("Ошибка при получении списка pipelines: HTTP {}", response.status)
-                    return None
+                    exception = map_http_status_to_exception(
+                        status_code=response.status,
+                        message=f"Ошибка при получении списка pipelines: HTTP {response.status}",
+                        response_body=error_text,
+                        response=response,
+                    )
+                    raise exception
 
                 data_json = await response.json()
                 if not data_json or not isinstance(data_json, list):
                     bound.error("Пустой ответ при получении pipelines от Kandinsky")
-                    return None
+                    raise APIError(
+                        "Пустой ответ при получении pipelines от Kandinsky",
+                        status_code=response.status,
+                    )
 
                 try:
                     pipelines = [KandinskyPipelineResponse.model_validate(p) for p in data_json]
@@ -495,7 +520,11 @@ class KandinskyClient(ITextToImageClient):
                         error=str(e),
                         data_sample=str(data_json)[:200],
                     ).error("Ошибка валидации ответа Kandinsky API при получении pipelines")
-                    return None
+                    raise APIError(
+                        f"Ошибка валидации ответа Kandinsky API при получении pipelines: {e}",
+                        status_code=response.status,
+                        original_error=e,
+                    ) from e
 
                 if saved_pipeline_id:
                     for pipeline in pipelines:
@@ -519,23 +548,38 @@ class KandinskyClient(ITextToImageClient):
                     "Выбран pipeline для генерации через Kandinsky",
                 )
                 return pipeline_id
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            raise
         except aiohttp.ClientConnectorError as exc:
             bound.error(
                 "Ошибка подключения к Kandinsky API при получении pipeline ID: {}",
                 str(exc),
             )
-            return None
+            raise NetworkError(
+                f"Ошибка подключения к Kandinsky API при получении pipeline ID: {exc}",
+                original_error=exc,
+            ) from exc
         except aiohttp.ClientError as exc:
             bound.error("Ошибка клиента при получении pipeline ID: {}", str(exc))
-            return None
-        except TimeoutError:
+            raise NetworkError(
+                f"Ошибка клиента при получении pipeline ID: {exc}",
+                original_error=exc,
+            ) from exc
+        except TimeoutError as exc:
             bound.error("Таймаут при получении pipeline ID от Kandinsky")
-            return None
+            raise NetworkError(
+                "Таймаут при получении pipeline ID от Kandinsky",
+                original_error=exc,
+            ) from exc
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error(
                 "Неожиданная ошибка при получении pipeline ID от Kandinsky",
             )
-            return None
+            raise APIError(
+                f"Неожиданная ошибка при получении pipeline ID от Kandinsky: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     async def _start_generation(
         self,
@@ -545,7 +589,7 @@ class KandinskyClient(ITextToImageClient):
         prompt: str,
         *,
         user_id: str | None = None,
-    ) -> str | None:
+    ) -> str:
         """Создаёт задачу генерации и возвращает UUID."""
         bound = logger.bind(event="kandinsky_start_generation", user_id=user_id, pipeline_id=pipeline_id)
 
@@ -586,26 +630,48 @@ class KandinskyClient(ITextToImageClient):
                             error=str(e),
                             data_sample=str(result_json)[:200],
                         ).error("Ошибка валидации ответа Kandinsky API при запуске генерации")
-                        return None
+                        raise APIError(
+                            f"Ошибка валидации ответа Kandinsky API при запуске генерации: {e}",
+                            status_code=response.status,
+                            original_error=e,
+                        ) from e
 
                 error_text = await response.text()
                 bound.bind(
                     http_status=response.status,
                     error_text=error_text[:300],
                 ).error("Ошибка при запуске генерации на Kandinsky")
-                return None
+                exception = map_http_status_to_exception(
+                    status_code=response.status,
+                    message=f"Ошибка при запуске генерации на Kandinsky: HTTP {response.status}",
+                    response_body=error_text,
+                    response=response,
+                )
+                raise exception
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            raise
         except aiohttp.ClientConnectorError as exc:
             bound.error(
                 "Ошибка подключения к Kandinsky API при запуске генерации: {}",
                 str(exc),
             )
-            return None
+            raise NetworkError(
+                f"Ошибка подключения к Kandinsky API при запуске генерации: {exc}",
+                original_error=exc,
+            ) from exc
         except aiohttp.ClientError as exc:
             bound.error("Ошибка клиента при запуске генерации на Kandinsky: {}", str(exc))
-            return None
+            raise NetworkError(
+                f"Ошибка клиента при запуске генерации на Kandinsky: {exc}",
+                original_error=exc,
+            ) from exc
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error("Неожиданная ошибка при запуске генерации на Kandinsky")
-            return None
+            raise APIError(
+                f"Неожиданная ошибка при запуске генерации на Kandinsky: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     async def _wait_for_generation(
         self,
@@ -614,7 +680,7 @@ class KandinskyClient(ITextToImageClient):
         uuid: str,
         *,
         user_id: str | None = None,
-    ) -> bytes | None:
+    ) -> bytes:
         """Ожидает завершения задачи генерации и возвращает байты изображения."""
         bound = logger.bind(event="kandinsky_poll_generation", user_id=user_id, task_uuid=uuid)
 
@@ -625,14 +691,22 @@ class KandinskyClient(ITextToImageClient):
                 headers=headers,
             )
 
+        last_exception: Exception | None = None
         for attempt in range(1, MAX_STATUS_ATTEMPTS + 1):
             try:
                 async with await _fetch_status() as response:
                     if response.status != HTTP_STATUS_OK:
+                        error_text = await response.text()
                         bound.bind(http_status=response.status, attempt=attempt).error(
                             "Ошибка при проверке статуса генерации на Kandinsky",
                         )
-                        return None
+                        exception = map_http_status_to_exception(
+                            status_code=response.status,
+                            message=f"Ошибка при проверке статуса генерации на Kandinsky: HTTP {response.status}",
+                            response_body=error_text,
+                            response=response,
+                        )
+                        raise exception
 
                     data_json = await response.json()
                     try:
@@ -643,19 +717,29 @@ class KandinskyClient(ITextToImageClient):
                             data_sample=str(data_json)[:200],
                             attempt=attempt,
                         ).error("Ошибка валидации ответа Kandinsky API при проверке статуса")
-                        return None
+                        raise APIError(
+                            f"Ошибка валидации ответа Kandinsky API при проверке статуса: {e}",
+                            status_code=response.status,
+                            original_error=e,
+                        ) from e
 
                     status = status_response.status
 
                     if status == KandinskyStatus.DONE:
                         if not status_response.result:
                             bound.error("Ответ Kandinsky со статусом DONE без результата")
-                            return None
+                            raise APIError(
+                                "Ответ Kandinsky со статусом DONE без результата",
+                                status_code=response.status,
+                            )
 
                         files = status_response.result.files
                         if not files:
                             bound.error("Ответ Kandinsky со статусом DONE без файлов результата")
-                            return None
+                            raise APIError(
+                                "Ответ Kandinsky со статусом DONE без файлов результата",
+                                status_code=response.status,
+                            )
 
                         image_base64 = files[0]
                         try:
@@ -664,7 +748,11 @@ class KandinskyClient(ITextToImageClient):
                             bound.bind(error=str(exc)).error(
                                 "Не удалось декодировать base64‑изображение от Kandinsky",
                             )
-                            return None
+                            raise APIError(
+                                f"Не удалось декодировать base64‑изображение от Kandinsky: {exc}",
+                                status_code=response.status,
+                                original_error=exc,
+                            ) from exc
 
                         # Валидация, что это действительно изображение.
                         try:
@@ -673,7 +761,11 @@ class KandinskyClient(ITextToImageClient):
                             bound.bind(error=str(exc)).error(
                                 "Полученные данные от Kandinsky не являются валидным изображением",
                             )
-                            return None
+                            raise APIError(
+                                f"Полученные данные от Kandinsky не являются валидным изображением: {exc}",
+                                status_code=response.status,
+                                original_error=exc,
+                            ) from exc
 
                         bound.bind(attempt=attempt).info(
                             "Генерация изображения на Kandinsky завершена успешно",
@@ -685,7 +777,10 @@ class KandinskyClient(ITextToImageClient):
                         bound.bind(error_description=error_desc, attempt=attempt).error(
                             "Генерация на Kandinsky завершилась с ошибкой",
                         )
-                        return None
+                        raise APIError(
+                            f"Генерация на Kandinsky завершилась с ошибкой: {error_desc}",
+                            status_code=response.status,
+                        )
 
                     if status in {KandinskyStatus.INITIAL, KandinskyStatus.PROCESSING}:
                         bound.bind(status=str(status), attempt=attempt).info(
@@ -697,21 +792,31 @@ class KandinskyClient(ITextToImageClient):
                     bound.bind(raw_status=str(status), attempt=attempt).error(
                         "Kandinsky вернул неизвестный статус генерации",
                     )
-                    return None
+                    raise APIError(
+                        f"Kandinsky вернул неизвестный статус генерации: {status}",
+                        status_code=response.status,
+                    )
 
+            except (AuthenticationError, RateLimitError, APIError):
+                # Пробрасываем доменные исключения как есть
+                raise
             except aiohttp.ClientConnectorError as exc:
+                last_exception = exc
                 bound.bind(attempt=attempt, error=str(exc)).error(
                     "Ошибка подключения при проверке статуса генерации Kandinsky",
                 )
             except aiohttp.ClientError as exc:
+                last_exception = exc
                 bound.bind(attempt=attempt, error=str(exc)).error(
                     "Ошибка клиента при проверке статуса генерации Kandinsky",
                 )
-            except TimeoutError:
+            except TimeoutError as exc:
+                last_exception = exc
                 bound.bind(attempt=attempt).warning(
                     "Таймаут при проверке статуса генерации Kandinsky",
                 )
             except Exception as exc:  # pragma: no cover - защитный фоллбек
+                last_exception = exc
                 bound.bind(attempt=attempt, error=str(exc)).error(
                     "Неожиданная ошибка при проверке статуса генерации Kandinsky",
                 )
@@ -723,7 +828,26 @@ class KandinskyClient(ITextToImageClient):
             "Превышено максимальное количество попыток проверки статуса генерации Kandinsky ({} попыток)",
             MAX_STATUS_ATTEMPTS,
         )
-        return None
+        if last_exception:
+            if isinstance(
+                last_exception,
+                aiohttp.ClientConnectorError | aiohttp.ClientError | TimeoutError,
+            ):
+                raise NetworkError(
+                    f"Превышено максимальное количество попыток проверки статуса генерации Kandinsky: {last_exception}",
+                    original_error=last_exception,
+                ) from last_exception
+            else:
+                raise APIError(
+                    f"Превышено максимальное количество попыток проверки статуса генерации Kandinsky: {last_exception}",
+                    status_code=0,
+                    original_error=last_exception,
+                ) from last_exception
+        else:
+            raise APIError(
+                "Превышено максимальное количество попыток проверки статуса генерации Kandinsky",
+                status_code=0,
+            )
 
     async def aclose(self) -> None:
         """Закрывает клиент и освобождает ресурсы.

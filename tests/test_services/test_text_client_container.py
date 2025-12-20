@@ -17,7 +17,7 @@ class _ClosableMockTextClient(ITextToTextClient):
         self.closed: bool = False
         self.calls: list[dict[str, Any]] = []
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> str | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> str:
         self.calls.append({"method": "generate", "prompt": prompt, "user_id": user_id})
         return f"{self.name}:{prompt}"
 

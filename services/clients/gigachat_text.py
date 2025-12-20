@@ -36,6 +36,13 @@ import aiohttp
 from loguru import logger
 from pydantic import ValidationError
 
+from services.clients.exceptions import (
+    APIError,
+    AuthenticationError,
+    NetworkError,
+    RateLimitError,
+    map_http_status_to_exception,
+)
 from services.clients.models import (
     GigaChatCompletionResponse,
     GigaChatModelInfo,
@@ -174,32 +181,30 @@ class GigaChatTextClient(ITextToTextClient):
     # Публичный интерфейс ITextToTextClient                             #
     # ------------------------------------------------------------------ #
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> str | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> str:
         """Генерирует промпт для Kandinsky через GigaChat API.
 
         Выполняет запрос к GigaChat API для генерации промпта для генерации изображения
         Wednesday Frog. Использует системное сообщение и пользовательский запрос из
-        конфигурации. При любой ошибке возвращает None и логирует детали ошибки.
+        конфигурации.
 
         Args:
             prompt: Высокоуровневое описание задачи (для логов, не используется в запросе).
             user_id: Идентификатор пользователя для логирования.
 
         Returns:
-            Сгенерированный промпт или None при ошибке.
+            Сгенерированный промпт.
 
         Raises:
-            TimeoutError: При таймауте запроса к API.
-            aiohttp.ClientConnectorError: При ошибке подключения к API.
-            aiohttp.ClientError: При других ошибках HTTP-клиента.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         bound = logger.bind(event="gigachat_generate", user_id=user_id)
         bound.info("Запрос генерации промпта через GigaChat API")
 
         access_token = await self._get_access_token()
-        if not access_token:
-            bound.error("Не удалось получить access token для генерации промпта")
-            return None
 
         try:
             # Получаем текущую модель из хранилища или используем дефолтную
@@ -235,7 +240,10 @@ class GigaChatTextClient(ITextToTextClient):
                         completion_response = GigaChatCompletionResponse.model_validate(result_json)
                         if not completion_response.choices or not completion_response.choices[0]:
                             bound.error("Ответ GigaChat API не содержит choices")
-                            return None
+                            raise APIError(
+                                "Ответ GigaChat API не содержит choices",
+                                status_code=response.status,
+                            )
 
                         generated_prompt = completion_response.choices[0].message.content.strip()
                         generated_prompt = self._clean_prompt(generated_prompt)
@@ -248,25 +256,51 @@ class GigaChatTextClient(ITextToTextClient):
                             error=str(e),
                             data_sample=str(result_json)[:200],
                         ).error("Ошибка валидации ответа GigaChat API при генерации промпта")
-                        return None
+                        raise APIError(
+                            f"Ошибка валидации ответа GigaChat API при генерации промпта: {e}",
+                            status_code=response.status,
+                            original_error=e,
+                        ) from e
                 else:
-                    error_text = (await response.text())[:MAX_ERROR_TEXT_LENGTH]
+                    error_text = await response.text()
+                    error_preview = error_text[:MAX_ERROR_TEXT_LENGTH]
                     bound.error(
-                        f"Ошибка GigaChat API при генерации промпта: {response.status} - {error_text}",
+                        f"Ошибка GigaChat API при генерации промпта: {response.status} - {error_preview}",
                     )
-                    return None
-        except TimeoutError:
+                    exception = map_http_status_to_exception(
+                        status_code=response.status,
+                        message=f"Ошибка GigaChat API при генерации промпта: HTTP {response.status}",
+                        response_body=error_text,
+                        response=response,
+                    )
+                    raise exception
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            raise
+        except TimeoutError as exc:
             bound.error(f"Таймаут при генерации промпта через GigaChat ({self._config.prompt_timeout.total} секунд)")
-            return None
-        except aiohttp.ClientConnectorError as e:
-            bound.error(f"Ошибка подключения к GigaChat API при генерации промпта: {e}")
-            return None
-        except aiohttp.ClientError as e:
-            bound.error(f"Ошибка клиента при генерации промпта: {e}")
-            return None
-        except Exception as e:
-            bound.error(f"Неожиданная ошибка при генерации промпта: {e}", exc_info=True)
-            return None
+            raise NetworkError(
+                f"Таймаут при генерации промпта через GigaChat ({self._config.prompt_timeout.total} секунд)",
+                original_error=exc,
+            ) from exc
+        except aiohttp.ClientConnectorError as exc:
+            bound.error(f"Ошибка подключения к GigaChat API при генерации промпта: {exc}")
+            raise NetworkError(
+                f"Ошибка подключения к GigaChat API при генерации промпта: {exc}",
+                original_error=exc,
+            ) from exc
+        except aiohttp.ClientError as exc:
+            bound.error(f"Ошибка клиента при генерации промпта: {exc}")
+            raise NetworkError(
+                f"Ошибка клиента при генерации промпта: {exc}",
+                original_error=exc,
+            ) from exc
+        except Exception as exc:
+            bound.error(f"Неожиданная ошибка при генерации промпта: {exc}", exc_info=True)
+            raise APIError(
+                f"Неожиданная ошибка при генерации промпта: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     async def check_api_status(self) -> tuple[bool, str]:
         """Проверяет статус GigaChat API без траты токенов (dry-run).
@@ -519,11 +553,18 @@ class GigaChatTextClient(ITextToTextClient):
             # По умолчанию включаем проверку SSL
             return True
 
-    async def _get_access_token(self) -> str | None:
+    async def _get_access_token(self) -> str:
         """Получает access token для работы с API, кэшируя до истечения срока действия.
 
         Returns:
-            Access token или None при ошибке.
+            Access token.
+
+        Raises:
+            ValueError: Если authorization_key не установлен.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         # Сначала быстрая проверка без блокировки.
         if self._access_token and self._token_expiry_time and time.time() < self._token_expiry_time:
@@ -540,7 +581,7 @@ class GigaChatTextClient(ITextToTextClient):
 
             if not self._authorization_key:
                 bound.error("GIGACHAT_AUTHORIZATION_KEY не установлен в конфигурации")
-                return None
+                raise ValueError("GIGACHAT_AUTHORIZATION_KEY не установлен в конфигурации")
 
             # Логируем диагностическую информацию (без вывода полного ключа)
             key_length = len(self._authorization_key)
@@ -582,26 +623,52 @@ class GigaChatTextClient(ITextToTextClient):
                                 error=str(e),
                                 data_sample=str(token_data_json)[:200],
                             ).error("Ошибка валидации ответа GigaChat API при получении токена")
-                            return None
+                            raise APIError(
+                                f"Ошибка валидации ответа GigaChat API при получении токена: {e}",
+                                status_code=response.status,
+                                original_error=e,
+                            ) from e
                     else:
-                        error_text = (await response.text())[:MAX_ERROR_TEXT_LENGTH]
+                        error_text = await response.text()
+                        error_preview = error_text[:MAX_ERROR_TEXT_LENGTH]
                         bound.error(
-                            f"Ошибка аутентификации GigaChat: {response.status} - {error_text}. "
+                            f"Ошибка аутентификации GigaChat: {response.status} - {error_preview}. "
                             "Проверьте, что GIGACHAT_AUTHORIZATION_KEY правильно настроен",
                         )
-                        return None
-            except TimeoutError:
+                        exception = map_http_status_to_exception(
+                            status_code=response.status,
+                            message=f"Ошибка аутентификации GigaChat: HTTP {response.status}",
+                            response_body=error_text,
+                            response=response,
+                        )
+                        raise exception
+            except (AuthenticationError, RateLimitError, NetworkError, APIError):
+                raise
+            except TimeoutError as exc:
                 bound.error(f"Таймаут при получении токена GigaChat ({self._config.token_timeout.total} секунд)")
-                return None
-            except aiohttp.ClientConnectorError as e:
-                bound.error(f"Ошибка подключения к GigaChat API при получении токена: {e}")
-                return None
-            except aiohttp.ClientError as e:
-                bound.error(f"Ошибка клиента при получении токена: {e}")
-                return None
-            except Exception as e:
-                bound.error(f"Неожиданная ошибка при получении токена GigaChat: {e}", exc_info=True)
-                return None
+                raise NetworkError(
+                    f"Таймаут при получении токена GigaChat ({self._config.token_timeout.total} секунд)",
+                    original_error=exc,
+                ) from exc
+            except aiohttp.ClientConnectorError as exc:
+                bound.error(f"Ошибка подключения к GigaChat API при получении токена: {exc}")
+                raise NetworkError(
+                    f"Ошибка подключения к GigaChat API при получении токена: {exc}",
+                    original_error=exc,
+                ) from exc
+            except aiohttp.ClientError as exc:
+                bound.error(f"Ошибка клиента при получении токена: {exc}")
+                raise NetworkError(
+                    f"Ошибка клиента при получении токена: {exc}",
+                    original_error=exc,
+                ) from exc
+            except Exception as exc:
+                bound.error(f"Неожиданная ошибка при получении токена GigaChat: {exc}", exc_info=True)
+                raise APIError(
+                    f"Неожиданная ошибка при получении токена GigaChat: {exc}",
+                    status_code=0,
+                    original_error=exc,
+                ) from exc
 
     async def _get_current_model(self) -> str:
         """Получает текущую модель из хранилища или использует дефолтную.

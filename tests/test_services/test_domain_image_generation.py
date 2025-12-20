@@ -16,11 +16,11 @@ from services.protocols import ITextToImageClient
 class MockImageClient(ITextToImageClient):
     """Мок клиента для генерации изображений."""
 
-    def __init__(self, response: bytes | None = b"mock-image-data") -> None:
+    def __init__(self, response: bytes = b"mock-image-data") -> None:
         self.response = response
         self.calls: list[tuple[str, str | None]] = []
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
         """Сохраняет вызов и возвращает настроенный ответ."""
         self.calls.append((prompt, user_id))
         return self.response
@@ -159,15 +159,30 @@ class TestGenerate:
         assert mock_client.calls[0][1] == "123"
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_client_returns_none(self) -> None:
-        """Тест на возврат None, когда клиент возвращает None."""
-        mock_client = MockImageClient(response=None)
+    async def test_raises_exception_when_client_raises_exception(self) -> None:
+        """Тест на проброс исключения, когда клиент пробрасывает исключение."""
+        from services.clients.exceptions import APIError
+
+        class FailingMockClient(ITextToImageClient):
+            async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
+                raise APIError("Test error", status_code=500)
+
+            async def check_api_status(
+                self, save_models: bool = True
+            ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
+                return (False, "Error", [], (None, None))
+
+            async def get_available_models(self, save_models: bool = True) -> list[str]:
+                return []
+
+            async def set_model(self, model_identifier: str) -> tuple[bool, str]:
+                return (False, "Error")
+
+        mock_client = FailingMockClient()
         service = ImageGenerationService(mock_client)
 
-        result = await service.generate("valid prompt")
-
-        assert result is None
-        assert len(mock_client.calls) == 1
+        with pytest.raises(ImageGenerationError):
+            await service.generate("valid prompt")
 
     @pytest.mark.asyncio
     async def test_normalizes_prompt_before_validation(self) -> None:

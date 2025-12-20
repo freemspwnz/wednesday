@@ -452,7 +452,7 @@ class ITextToImageClient(Protocol):
     что позволяет унифицировать работу с различными TTI‑провайдерами через контейнер.
     """
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> bytes | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
         """Генерирует изображение по текстовому промпту.
 
         Args:
@@ -460,7 +460,14 @@ class ITextToImageClient(Protocol):
             user_id: Идентификатор пользователя (для трейсинга и логирования), опционально.
 
         Returns:
-            Байтовое представление изображения или None при ошибке.
+            Байтовое представление изображения.
+
+        Raises:
+            ValueError: Если API ключи не сконфигурированы.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def check_api_status(
@@ -508,7 +515,7 @@ class ITextToTextClient(Protocol):
     и возврат итоговой строки без бизнес‑обвязки бота.
     """
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> str | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> str:
         """Генерирует текстовый ответ по текстовому промпту.
 
         Args:
@@ -516,7 +523,14 @@ class ITextToTextClient(Protocol):
             user_id: Идентификатор пользователя (для трейсинга и логирования), опционально.
 
         Returns:
-            Сгенерированный текст или None при ошибке.
+            Сгенерированный текст.
+
+        Raises:
+            ValueError: Если API ключи не сконфигурированы.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def check_api_status(self) -> tuple[bool, str]:

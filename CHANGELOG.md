@@ -147,6 +147,17 @@
   - Удалены старые файлы `utils/images_repo.py` и `utils/prompts_repo.py`
   - Репозитории теперь находятся в правильном архитектурном слое согласно принципам чистой архитектуры
 
+- **Маппинг HTTP-ошибок в доменные исключения для клиентов**:
+  - Создан модуль `services/clients/exceptions.py` с доменными исключениями (`ClientError`, `AuthenticationError`, `RateLimitError`, `NetworkError`, `APIError`)
+  - Добавлена функция `map_http_status_to_exception()` для маппинга HTTP статусов в доменные исключения
+  - Обновлен `KandinskyClient`: методы `generate()`, `_get_pipeline_id()`, `_start_generation()`, `_wait_for_generation()` теперь пробрасывают исключения вместо возврата `None`
+  - Обновлен `GigaChatTextClient`: методы `generate()` и `_get_access_token()` теперь пробрасывают исключения вместо возврата `None`
+  - Обновлены интерфейсы `ITextToImageClient` и `ITextToTextClient`: удален `Optional` из возвращаемых типов методов `generate()`, добавлена документация исключений в docstrings
+  - Обновлен `ImageGenerationService`: добавлена специфичная обработка исключений клиентов с маппингом в доменные исключения
+  - Обновлен `PromptGenerationService`: добавлена обработка исключений клиентов с возвратом `None` для использования fallback промпта
+  - Добавлен экспорт исключений в `services/clients/__init__.py` для удобного импорта
+  - **BREAKING CHANGE**: Методы клиентов больше не возвращают `None`, а пробрасывают исключения. Вызывающий код должен обрабатывать исключения через try/except
+
 - **Добавление валидации и нормализации промптов в ImageGenerationService**:
   - Добавлены константы `MIN_PROMPT_LENGTH` и `MAX_PROMPT_LENGTH` для валидации промптов
   - Добавлен метод `_normalize_prompt()` для нормализации промптов (удаление пробелов по краям и лишних пробелов внутри)

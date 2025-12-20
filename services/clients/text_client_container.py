@@ -172,7 +172,7 @@ class TextClientContainer(ITextToTextClient):
     # Реализация интерфейса ITextToTextClient (делегирование)           #
     # ------------------------------------------------------------------ #
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> str | None:
+    async def generate(self, prompt: str, user_id: str | None = None) -> str:
         """Генерирует текстовый ответ по текстовому промпту через текущий активный клиент.
 
         Проксирует вызов метода generate к текущему активному клиенту.
@@ -182,18 +182,23 @@ class TextClientContainer(ITextToTextClient):
             user_id: Идентификатор пользователя для трейсинга и логирования (опционально).
 
         Returns:
+            Сгенерированный текст.
+
+        Raises:
+            RuntimeError: Если активный клиент не установлен.
+            ValueError: Если API ключи не сконфигурированы.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
             Сгенерированный текст или None при ошибке или отсутствии клиента.
 
-        Note:
-            Если клиент не инициализирован, логируется предупреждение и возвращается None.
         """
         client = self._client
         if client is None:
-            self._logger.warning(
-                "Вызван generate(), но текстовый клиент не инициализирован (вернём None)",
-                prompt_preview=prompt[:50],
-            )
-            return None
+            error_msg = "Текстовый клиент не инициализирован"
+            self._logger.error(error_msg, prompt_preview=prompt[:50])
+            raise RuntimeError(error_msg)
         return await client.generate(prompt, user_id=user_id)
 
     async def check_api_status(self) -> tuple[bool, str]:

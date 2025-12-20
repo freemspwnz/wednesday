@@ -11,6 +11,12 @@ from __future__ import annotations
 
 from services.base.base_service import BaseService
 from services.base.exceptions import ImageGenerationError
+from services.clients.exceptions import (
+    APIError,
+    AuthenticationError,
+    ClientError,
+    NetworkError,
+)
 from services.protocols import ITextToImageClient
 
 MIN_PROMPT_LENGTH = 1
@@ -82,7 +88,7 @@ class ImageGenerationService(BaseService):
         self,
         prompt: str,
         user_id: int | None = None,
-    ) -> bytes | None:
+    ) -> bytes:
         """Генерирует изображение по промпту.
 
         Выполняет валидацию и нормализацию промпта, затем чистую генерацию
@@ -94,7 +100,7 @@ class ImageGenerationService(BaseService):
             user_id: Идентификатор пользователя для логирования (опционально).
 
         Returns:
-            Байты изображения или None при ошибке.
+            Байты изображения.
 
         Raises:
             ImageGenerationError: При невалидном промпте или критических ошибках генерации.
@@ -122,25 +128,55 @@ class ImageGenerationService(BaseService):
 
             image_data = await self._image_client.generate(normalized_prompt, user_id=user_id_str)
 
-            if image_data:
-                self.log_event(
-                    event="image_generation_success",
-                    user_id=user_id_str,
-                    status="success",
-                    level="info",
-                    message="Изображение успешно сгенерировано",
-                )
-                return image_data
+            self.log_event(
+                event="image_generation_success",
+                user_id=user_id_str,
+                status="success",
+                level="info",
+                message="Изображение успешно сгенерировано",
+            )
+            return image_data
 
+        except AuthenticationError as exc:
+            # Специфичная обработка ошибок аутентификации
             self.log_event(
                 event="image_generation_failed",
                 user_id=user_id_str,
-                status="error",
-                level="warning",
-                message="Клиент вернул None при генерации изображения",
+                status="auth_error",
+                level="error",
+                message=f"Ошибка аутентификации при генерации изображения: {exc}",
             )
-            return None
-
+            raise ImageGenerationError("Ошибка аутентификации при генерации изображения") from exc
+        except NetworkError as exc:
+            # Специфичная обработка сетевых ошибок (можно retry)
+            self.log_event(
+                event="image_generation_failed",
+                user_id=user_id_str,
+                status="network_error",
+                level="warning",
+                message=f"Сетевая ошибка при генерации изображения: {exc}",
+            )
+            raise ImageGenerationError("Сетевая ошибка при генерации изображения") from exc
+        except APIError as exc:
+            # Обработка других ошибок API
+            self.log_event(
+                event="image_generation_failed",
+                user_id=user_id_str,
+                status="api_error",
+                level="error",
+                message=f"Ошибка API при генерации изображения: HTTP {exc.status_code}",
+            )
+            raise ImageGenerationError(f"Ошибка API при генерации изображения: {exc.status_code}") from exc
+        except ClientError as exc:
+            # Общая обработка ошибок клиента
+            self.log_event(
+                event="image_generation_failed",
+                user_id=user_id_str,
+                status="client_error",
+                level="error",
+                message=f"Ошибка клиента при генерации изображения: {exc}",
+            )
+            raise ImageGenerationError("Ошибка клиента при генерации изображения") from exc
         except Exception as e:
             self.logger.error(f"Ошибка при генерации изображения: {e}", exc_info=True)
             raise ImageGenerationError(f"Ошибка при генерации изображения: {e}") from e
