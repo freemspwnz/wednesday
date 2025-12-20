@@ -113,6 +113,18 @@ class IImageStorage(Protocol):
         """
         ...
 
+    async def delete(self, path: str) -> None:
+        """Удаляет файл из хранилища.
+
+        Args:
+            path: Путь к файлу для удаления.
+
+        Raises:
+            FileNotFoundError: Если файл не найден.
+            OSError: При ошибках файловой системы.
+        """
+        ...
+
 
 T = TypeVar("T")
 

@@ -204,3 +204,30 @@ class ImageStorageService(BaseService):
         Возвращает кортеж (image_data, file_name).
         """
         return await self.get_random(folder=self.base_dir)
+
+    async def delete(self, path: str) -> None:
+        """Удаляет файл из хранилища.
+
+        Args:
+            path: Путь к файлу для удаления.
+
+        Raises:
+            FileNotFoundError: Если файл не найден.
+            StorageError: При ошибках файловой системы.
+        """
+        try:
+            file_path = Path(path)
+            # Проверяем существование файла асинхронно
+            exists = await asyncio.to_thread(file_path.exists)
+            if not exists:
+                raise FileNotFoundError(f"Файл не найден: {path}")
+
+            # Удаляем файл асинхронно
+            await asyncio.to_thread(file_path.unlink)
+            self.logger.info(f"Файл удален из хранилища: {path}")
+        except FileNotFoundError:
+            raise
+        except OSError as e:
+            raise StorageError(f"Ошибка при удалении файла {path}: {e}") from e
+        except Exception as e:
+            raise StorageError(f"Неожиданная ошибка при удалении файла {path}: {e}") from e
