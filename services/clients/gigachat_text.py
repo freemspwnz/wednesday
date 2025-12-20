@@ -36,12 +36,12 @@ import aiohttp
 from loguru import logger
 from pydantic import ValidationError
 
+from services.clients.base import BaseHTTPClient
 from services.clients.exceptions import (
     APIError,
     AuthenticationError,
     NetworkError,
     RateLimitError,
-    map_http_status_to_exception,
 )
 from services.clients.models import (
     APIStatusResult,
@@ -54,7 +54,6 @@ from services.clients.models import (
 from services.infrastructure.repositories import ModelsRepo
 from services.protocols import IModelsRepo, ITextToTextClient
 from utils.config import GigaChatConfig
-from utils.retry import retry_critical, retry_standard
 
 HTTP_STATUS_OK: Final[int] = 200
 TOKEN_EXPIRY_BUFFER_SECONDS: Final[int] = 300
@@ -108,7 +107,7 @@ FALLBACK_MODELS = [
 ]
 
 
-class GigaChatTextClient(ITextToTextClient):
+class GigaChatTextClient(ITextToTextClient, BaseHTTPClient):
     """HTTP‑клиент GigaChat, реализующий интерфейс `ITextToTextClient`.
 
     Архитектурно клиент отвечает только за:
@@ -121,6 +120,9 @@ class GigaChatTextClient(ITextToTextClient):
     Любые бизнес‑аспекты (сохранение промптов в файлы, кеш, Prometheus)
     реализуются на уровне сервисов, использующих этот клиент.
     """
+
+    # Константы эндпоинтов (используются как относительные пути)
+    # base_url будет установлен в __init__ на основе config.api_url
 
     def __init__(
         self,
@@ -161,6 +163,15 @@ class GigaChatTextClient(ITextToTextClient):
         ssl_context = self._get_ssl_context()
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         self._session = aiohttp.ClientSession(timeout=self._timeout, connector=connector)
+
+        # Инициализируем базовый класс
+        # Используем api_url как base_url для базового класса
+        super().__init__(
+            base_url=config.api_url,
+            session=self._session,
+            service_name="gigachat",
+            default_timeout=config.prompt_timeout.to_client_timeout(),
+        )
 
         # Настройка SSL
         # Примечание: urllib3 используется только для отключения предупреждений при verify_ssl=False.
@@ -230,52 +241,43 @@ class GigaChatTextClient(ITextToTextClient):
                 "Accept": "application/json",
             }
 
-            @retry_standard(service_name="gigachat", method_name="generate")
-            async def _post_generate() -> aiohttp.ClientResponse:
-                return await self._session.post(self._api_url, headers=headers, json=payload)
-
             bound.debug("Отправка запроса к GigaChat API для генерации промпта")
-            async with await _post_generate() as response:
-                if response.status == HTTP_STATUS_OK:
-                    result_json = await response.json()
-                    try:
-                        completion_response = GigaChatCompletionResponse.model_validate(result_json)
-                        if not completion_response.choices or not completion_response.choices[0]:
-                            bound.error("Ответ GigaChat API не содержит choices")
-                            raise APIError(
-                                "Ответ GigaChat API не содержит choices",
-                                status_code=response.status,
-                            )
+            # api_url уже полный URL, передаем его как endpoint
+            response = await self._post(
+                endpoint=self._api_url,
+                method_name="generate",
+                headers=headers,
+                json=payload,
+            )
 
-                        generated_prompt = completion_response.choices[0].message.content.strip()
-                        generated_prompt = self._clean_prompt(generated_prompt)
-
-                        bound.info(f"Промпт успешно сгенерирован ({len(generated_prompt)} символов)")
-
-                        return generated_prompt
-                    except ValidationError as e:
-                        bound.bind(
-                            error=str(e),
-                            data_sample=str(result_json)[:200],
-                        ).error("Ошибка валидации ответа GigaChat API при генерации промпта")
+            async with response:
+                await self._validate_response(response)
+                result_json = await response.json()
+                try:
+                    completion_response = GigaChatCompletionResponse.model_validate(result_json)
+                    if not completion_response.choices or not completion_response.choices[0]:
+                        bound.error("Ответ GigaChat API не содержит choices")
                         raise APIError(
-                            f"Ошибка валидации ответа GigaChat API при генерации промпта: {e}",
+                            "Ответ GigaChat API не содержит choices",
                             status_code=response.status,
-                            original_error=e,
-                        ) from e
-                else:
-                    error_text = await response.text()
-                    error_preview = error_text[:MAX_ERROR_TEXT_LENGTH]
-                    bound.error(
-                        f"Ошибка GigaChat API при генерации промпта: {response.status} - {error_preview}",
-                    )
-                    exception = map_http_status_to_exception(
+                        )
+
+                    generated_prompt = completion_response.choices[0].message.content.strip()
+                    generated_prompt = self._clean_prompt(generated_prompt)
+
+                    bound.info(f"Промпт успешно сгенерирован ({len(generated_prompt)} символов)")
+
+                    return generated_prompt
+                except ValidationError as e:
+                    bound.bind(
+                        error=str(e),
+                        data_sample=str(result_json)[:200],
+                    ).error("Ошибка валидации ответа GigaChat API при генерации промпта")
+                    raise APIError(
+                        f"Ошибка валидации ответа GigaChat API при генерации промпта: {e}",
                         status_code=response.status,
-                        message=f"Ошибка GigaChat API при генерации промпта: HTTP {response.status}",
-                        response_body=error_text,
-                        response=response,
-                    )
-                    raise exception
+                        original_error=e,
+                    ) from e
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             raise
         except TimeoutError as exc:
@@ -386,31 +388,24 @@ class GigaChatTextClient(ITextToTextClient):
                 original_error=exc,
             ) from exc
 
-        models_url = self._models_url
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
         }
 
-        @retry_standard(service_name="gigachat", method_name="get_available_models")
-        async def _get_models() -> aiohttp.ClientResponse:
-            timeout = self._config.models_timeout.to_client_timeout()
-            return await self._session.get(models_url, headers=headers, timeout=timeout)
-
         try:
             bound.debug("Отправка запроса к GigaChat API для получения списка моделей")
-            async with await _get_models() as response:
-                if response.status != HTTP_STATUS_OK:
-                    error_text = await response.text()
-                    bound.error("Ошибка GigaChat API при получении списка моделей: HTTP {}", response.status)
-                    exception = map_http_status_to_exception(
-                        status_code=response.status,
-                        message=f"Ошибка GigaChat API при получении списка моделей: HTTP {response.status}",
-                        response_body=error_text,
-                        response=response,
-                    )
-                    raise exception
+            timeout = self._config.models_timeout.to_client_timeout()
+            # models_url может быть полным URL или относительным путем
+            response = await self._get(
+                endpoint=self._models_url,
+                method_name="get_available_models",
+                headers=headers,
+                timeout=timeout,
+            )
 
+            async with response:
+                await self._validate_response(response)
                 data_json = await response.json()
                 models_list: list[str] = []
 
@@ -667,56 +662,47 @@ class GigaChatTextClient(ITextToTextClient):
             )
             bound.debug(f"Используется authorization_key длиной {key_length} символов: {key_preview}")
 
-            @retry_critical(service_name="gigachat", method_name="get_access_token")
-            async def _fetch_token() -> aiohttp.ClientResponse:
-                headers = {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json",
-                    "RqUID": str(uuid.uuid4()),
-                    "Authorization": f"Basic {self._authorization_key}",
-                }
+            headers = {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
+                "RqUID": str(uuid.uuid4()),
+                "Authorization": f"Basic {self._authorization_key}",
+            }
 
-                payload = {"scope": self._scope}
-
-                timeout = self._config.token_timeout.to_client_timeout()
-                return await self._session.post(self._auth_url, headers=headers, data=payload, timeout=timeout)
+            payload = {"scope": self._scope}
+            timeout = self._config.token_timeout.to_client_timeout()
 
             try:
-                async with await _fetch_token() as response:
-                    if response.status == HTTP_STATUS_OK:
-                        token_data_json = await response.json()
-                        try:
-                            token_response = GigaChatTokenResponse.model_validate(token_data_json)
-                            self._access_token = token_response.access_token
-                            expires_in = token_response.expires_in
-                            self._token_expiry_time = time.time() + expires_in - TOKEN_EXPIRY_BUFFER_SECONDS
+                # auth_url может быть полным URL или относительным путем
+                response = await self._post(
+                    endpoint=self._auth_url,
+                    method_name="get_access_token",
+                    headers=headers,
+                    data=payload,
+                    timeout=timeout,
+                )
 
-                            bound.info("Успешно получен access token для GigaChat")
-                            return self._access_token
-                        except ValidationError as e:
-                            bound.bind(
-                                error=str(e),
-                                data_sample=str(token_data_json)[:200],
-                            ).error("Ошибка валидации ответа GigaChat API при получении токена")
-                            raise APIError(
-                                f"Ошибка валидации ответа GigaChat API при получении токена: {e}",
-                                status_code=response.status,
-                                original_error=e,
-                            ) from e
-                    else:
-                        error_text = await response.text()
-                        error_preview = error_text[:MAX_ERROR_TEXT_LENGTH]
-                        bound.error(
-                            f"Ошибка аутентификации GigaChat: {response.status} - {error_preview}. "
-                            "Проверьте, что GIGACHAT_AUTHORIZATION_KEY правильно настроен",
-                        )
-                        exception = map_http_status_to_exception(
+                async with response:
+                    await self._validate_response(response)
+                    token_data_json = await response.json()
+                    try:
+                        token_response = GigaChatTokenResponse.model_validate(token_data_json)
+                        self._access_token = token_response.access_token
+                        expires_in = token_response.expires_in
+                        self._token_expiry_time = time.time() + expires_in - TOKEN_EXPIRY_BUFFER_SECONDS
+
+                        bound.info("Успешно получен access token для GigaChat")
+                        return self._access_token
+                    except ValidationError as e:
+                        bound.bind(
+                            error=str(e),
+                            data_sample=str(token_data_json)[:200],
+                        ).error("Ошибка валидации ответа GigaChat API при получении токена")
+                        raise APIError(
+                            f"Ошибка валидации ответа GigaChat API при получении токена: {e}",
                             status_code=response.status,
-                            message=f"Ошибка аутентификации GigaChat: HTTP {response.status}",
-                            response_body=error_text,
-                            response=response,
-                        )
-                        raise exception
+                            original_error=e,
+                        ) from e
             except (AuthenticationError, RateLimitError, NetworkError, APIError):
                 raise
             except TimeoutError as exc:
