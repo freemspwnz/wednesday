@@ -336,7 +336,6 @@ class KandinskyClient(ITextToImageClient):
 
         Получает список доступных pipelines (моделей) через API или из хранилища.
         Сначала пытается получить модели через check_api_status, затем из хранилища.
-        Если оба способа не сработали, возвращает пустой список.
 
         Args:
             save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей
@@ -344,6 +343,12 @@ class KandinskyClient(ITextToImageClient):
 
         Returns:
             Список доступных моделей в формате "Name (ID: xxx)".
+
+        Raises:
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         bound = logger.bind(event="kandinsky_get_available_models", save_models=save_models)
         bound.debug("Запрос списка доступных моделей Kandinsky")
@@ -354,24 +359,38 @@ class KandinskyClient(ITextToImageClient):
             if result.models:
                 bound.debug("Получен список из {} моделей через check_api_status", len(result.models))
                 return result.models
+            # Если список пустой, пробрасываем исключение
+            bound.warning("check_api_status вернул пустой список моделей")
+            raise APIError(
+                "Не удалось получить список моделей Kandinsky: API вернул пустой список",
+                status_code=0,
+            )
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            # Пробрасываем доменные исключения как есть
+            raise
         except Exception as exc:
-            bound.warning("Не удалось получить модели через check_api_status: {}", str(exc))
+            # Fallback: пытаемся получить из хранилища
+            bound.debug("Попытка получить модели из хранилища после ошибки API")
+            try:
+                from utils.postgres_client import get_postgres_pool
 
-        # Fallback: пытаемся получить из хранилища
-        try:
-            from utils.postgres_client import get_postgres_pool
+                models_store = (
+                    self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+                )
+                stored_models = await models_store.get_kandinsky_available_models()
+                if stored_models:
+                    bound.debug("Получен список из {} моделей из хранилища", len(stored_models))
+                    return stored_models
+            except Exception as store_exc:
+                bound.warning("Не удалось получить модели из хранилища: {}", str(store_exc))
 
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-            stored_models = await models_store.get_kandinsky_available_models()
-            if stored_models:
-                bound.debug("Получен список из {} моделей из хранилища", len(stored_models))
-                return stored_models
-        except Exception as exc:
-            bound.warning("Не удалось получить модели из хранилища: {}", str(exc))
-
-        # Если ничего не получилось, возвращаем пустой список
-        bound.warning("Не удалось получить список моделей, возвращаем пустой список")
-        return []
+            # Если ничего не получилось, пробрасываем исходное исключение
+            bound.error("Не удалось получить список моделей ни через API, ни из хранилища")
+            raise APIError(
+                f"Не удалось получить список моделей Kandinsky: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     async def set_model(self, model_identifier: str) -> SetModelResult:
         """Устанавливает текущую модель (pipeline) по ID или части названия.

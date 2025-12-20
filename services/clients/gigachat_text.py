@@ -356,117 +356,159 @@ class GigaChatTextClient(ITextToTextClient):
         """Возвращает список доступных моделей GigaChat через API.
 
         Выполняет запрос к API для получения списка доступных моделей GigaChat.
-        При любой ошибке (таймаут, ошибка подключения и т.д.) возвращается
-        fallback-список стандартных моделей для обеспечения отказоустойчивости.
 
         Args:
             save_models: Флаг, указывающий, нужно ли сохранять полученный список
                 в хранилище для последующего использования.
 
         Returns:
-            Список доступных моделей. В случае ошибки возвращает fallback-список
-            стандартных моделей GigaChat.
+            Список доступных моделей.
+
+        Raises:
+            ValueError: Если API ключи не сконфигурированы.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         bound = logger.bind(event="gigachat_get_models", save_models=save_models)
         bound.info("Запрос списка моделей GigaChat")
 
-        access_token = await self._get_access_token()
-        if not access_token:
-            bound.warning("Не удалось получить токен для запроса списка моделей, используем fallback")
-            return FALLBACK_MODELS.copy()
+        try:
+            access_token = await self._get_access_token()
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            raise
+        except Exception as exc:
+            bound.error(f"Неожиданная ошибка при получении токена: {exc}", exc_info=True)
+            raise APIError(
+                f"Неожиданная ошибка при получении токена GigaChat: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
+
+        models_url = self._models_url
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        @retry_standard(service_name="gigachat", method_name="get_available_models")
+        async def _get_models() -> aiohttp.ClientResponse:
+            timeout = self._config.models_timeout.to_client_timeout()
+            return await self._session.get(models_url, headers=headers, timeout=timeout)
 
         try:
-            models_url = self._models_url
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Accept": "application/json",
-            }
-
-            @retry_standard(service_name="gigachat", method_name="get_available_models")
-            async def _get_models() -> aiohttp.ClientResponse:
-                timeout = self._config.models_timeout.to_client_timeout()
-                return await self._session.get(models_url, headers=headers, timeout=timeout)
-
             bound.debug("Отправка запроса к GigaChat API для получения списка моделей")
             async with await _get_models() as response:
-                if response.status == HTTP_STATUS_OK:
-                    data_json = await response.json()
-
-                    models_list: list[str] = []
-
-                    # GigaChat может вернуть dict или list
-                    if isinstance(data_json, list):
-                        # Прямой список моделей (может быть list[dict] или list[str])
-                        try:
-                            models_parsed: list[GigaChatModelInfo] = []
-                            for item in data_json:
-                                if isinstance(item, dict):
-                                    models_parsed.append(GigaChatModelInfo.model_validate(item))
-                                elif isinstance(item, str):
-                                    models_parsed.append(GigaChatModelInfo(id=item, name=item, model=None))
-                            for model in models_parsed:
-                                model_name = model.get_model_name()
-                                if model_name:
-                                    models_list.append(model_name)
-                        except ValidationError as e:
-                            bound.bind(
-                                error=str(e),
-                                data_sample=str(data_json)[:200],
-                            ).warning("Ошибка валидации списка моделей, используем fallback")
-                            return FALLBACK_MODELS.copy()
-                    elif isinstance(data_json, dict):
-                        # Dict с data/models
-                        try:
-                            models_response = GigaChatModelsListResponse.model_validate(data_json)
-                            models_list_parsed = models_response.get_models_list()
-                            for model in models_list_parsed:
-                                model_name = model.get_model_name()
-                                if model_name:
-                                    models_list.append(model_name)
-                        except ValidationError as e:
-                            bound.bind(
-                                error=str(e),
-                                data_sample=str(data_json)[:200],
-                            ).warning("Ошибка валидации ответа моделей, используем fallback")
-                            return FALLBACK_MODELS.copy()
-                    else:
-                        bound.warning(f"Неожиданный формат ответа от API моделей: {type(data_json)}")
-                        return FALLBACK_MODELS.copy()
-
-                    if models_list:
-                        bound.info(f"Получен список из {len(models_list)} моделей GigaChat через API")
-                        if save_models:
-                            # Сохраняем список моделей в async-хранилище
-                            # Пока не сохраняем, так как это бизнес-логика
-                            # В будущем можно добавить сохранение списка моделей
-                            pass
-
-                        return models_list
-                    else:
-                        bound.warning("API вернул пустой список моделей, используем fallback")
-                        return FALLBACK_MODELS.copy()
-                else:
-                    error_text = (await response.text())[:MAX_ERROR_TEXT_LENGTH]
-                    bound.warning(
-                        f"Ошибка при запросе списка моделей: {response.status} - {error_text}, используем fallback",
+                if response.status != HTTP_STATUS_OK:
+                    error_text = await response.text()
+                    bound.error("Ошибка GigaChat API при получении списка моделей: HTTP {}", response.status)
+                    exception = map_http_status_to_exception(
+                        status_code=response.status,
+                        message=f"Ошибка GigaChat API при получении списка моделей: HTTP {response.status}",
+                        response_body=error_text,
+                        response=response,
                     )
-                    return FALLBACK_MODELS.copy()
+                    raise exception
 
-        except TimeoutError:
+                data_json = await response.json()
+                models_list: list[str] = []
+
+                # GigaChat может вернуть dict или list
+                if isinstance(data_json, list):
+                    # Прямой список моделей (может быть list[dict] или list[str])
+                    try:
+                        models_parsed: list[GigaChatModelInfo] = []
+                        for item in data_json:
+                            if isinstance(item, dict):
+                                models_parsed.append(GigaChatModelInfo.model_validate(item))
+                            elif isinstance(item, str):
+                                models_parsed.append(GigaChatModelInfo(id=item, name=item, model=None))
+                        for model in models_parsed:
+                            model_name = model.get_model_name()
+                            if model_name:
+                                models_list.append(model_name)
+                    except ValidationError as e:
+                        bound.bind(
+                            error=str(e),
+                            data_sample=str(data_json)[:200],
+                        ).error("Ошибка валидации списка моделей GigaChat")
+                        raise APIError(
+                            f"Ошибка валидации списка моделей GigaChat: {e}",
+                            status_code=response.status,
+                            original_error=e,
+                        ) from e
+                elif isinstance(data_json, dict):
+                    # Dict с data/models
+                    try:
+                        models_response = GigaChatModelsListResponse.model_validate(data_json)
+                        models_list_parsed = models_response.get_models_list()
+                        for model in models_list_parsed:
+                            model_name = model.get_model_name()
+                            if model_name:
+                                models_list.append(model_name)
+                    except ValidationError as e:
+                        bound.bind(
+                            error=str(e),
+                            data_sample=str(data_json)[:200],
+                        ).error("Ошибка валидации ответа моделей GigaChat")
+                        raise APIError(
+                            f"Ошибка валидации ответа моделей GigaChat: {e}",
+                            status_code=response.status,
+                            original_error=e,
+                        ) from e
+                else:
+                    bound.error(f"Неожиданный формат ответа от API моделей: {type(data_json)}")
+                    raise APIError(
+                        f"Неожиданный формат ответа от GigaChat API: {type(data_json)}",
+                        status_code=response.status,
+                    )
+
+                if models_list:
+                    bound.info(f"Получен список из {len(models_list)} моделей GigaChat через API")
+                    if save_models:
+                        # Сохраняем список моделей в async-хранилище
+                        # Пока не сохраняем, так как это бизнес-логика
+                        # В будущем можно добавить сохранение списка моделей
+                        pass
+
+                    return models_list
+                else:
+                    bound.warning("API вернул пустой список моделей")
+                    raise APIError(
+                        "GigaChat API вернул пустой список моделей",
+                        status_code=response.status,
+                    )
+
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            # Пробрасываем доменные исключения как есть
+            raise
+        except TimeoutError as exc:
             timeout_sec = self._config.models_timeout.total
-            bound.warning(
-                f"Таймаут при запросе списка моделей GigaChat ({timeout_sec} секунд), используем fallback",
-            )
-            return FALLBACK_MODELS.copy()
-        except aiohttp.ClientConnectorError as e:
-            bound.warning(f"Ошибка подключения при запросе списка моделей GigaChat: {e}, используем fallback")
-            return FALLBACK_MODELS.copy()
-        except aiohttp.ClientError as e:
-            bound.warning(f"Ошибка запроса при получении списка моделей GigaChat: {e}, используем fallback")
-            return FALLBACK_MODELS.copy()
-        except Exception as e:
-            bound.warning(f"Неожиданная ошибка при получении списка моделей: {e}, используем fallback", exc_info=True)
-            return FALLBACK_MODELS.copy()
+            bound.error(f"Таймаут при запросе списка моделей GigaChat ({timeout_sec} секунд)")
+            raise NetworkError(
+                f"Таймаут при запросе списка моделей GigaChat ({timeout_sec} секунд)",
+                original_error=exc,
+            ) from exc
+        except aiohttp.ClientConnectorError as exc:
+            bound.error(f"Ошибка подключения при запросе списка моделей GigaChat: {exc}")
+            raise NetworkError(
+                f"Ошибка подключения при запросе списка моделей GigaChat: {exc}",
+                original_error=exc,
+            ) from exc
+        except aiohttp.ClientError as exc:
+            bound.error(f"Ошибка запроса при получении списка моделей GigaChat: {exc}")
+            raise NetworkError(
+                f"Ошибка запроса при получении списка моделей GigaChat: {exc}",
+                original_error=exc,
+            ) from exc
+        except Exception as exc:
+            bound.error(f"Неожиданная ошибка при получении списка моделей: {exc}", exc_info=True)
+            raise APIError(
+                f"Неожиданная ошибка при получении списка моделей GigaChat: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     async def set_model(self, model_name: str) -> SetModelResult:
         """Устанавливает текущую модель GigaChat.

@@ -494,8 +494,13 @@ class ITextToImageClient(Protocol):
             save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
 
         Returns:
-            Список доступных моделей. Для провайдеров, которые не поддерживают
-            получение списка моделей, можно вернуть пустой список.
+            Список доступных моделей.
+
+        Raises:
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def set_model(self, model_identifier: str) -> SetModelResult:
@@ -562,6 +567,12 @@ class ITextToTextClient(Protocol):
 
         Returns:
             Список доступных моделей.
+
+        Raises:
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def set_model(self, model_name: str) -> SetModelResult:

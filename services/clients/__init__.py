@@ -15,6 +15,7 @@
 - централизовать политику ретраев и обработку сетевых ошибок.
 """
 
+from services.clients.error_handling import log_client_error, should_retry
 from services.clients.exceptions import (
     APIError,
     AuthenticationError,
@@ -44,4 +45,6 @@ __all__ = [
     "TextClientContainer",
     "get_image_client_container",
     "get_text_client_container",
+    "log_client_error",
+    "should_retry",
 ]

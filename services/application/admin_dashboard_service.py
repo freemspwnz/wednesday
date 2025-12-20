@@ -119,12 +119,15 @@ class AdminDashboardService(BaseService):
                 current_gigachat = result.current_model_name
 
                 # Получаем доступные модели GigaChat и сохраняем их при наличии ModelsStore
-                gigachat_models = await self._text_client.get_available_models()
-                if self._models_store is not None and gigachat_models:
-                    try:
-                        await self._models_store.set_gigachat_available_models(gigachat_models)
-                    except Exception as store_error:  # pragma: no cover
-                        self.logger.warning(f"Не удалось сохранить список моделей GigaChat: {store_error}")
+                try:
+                    gigachat_models = await self._text_client.get_available_models()
+                    if self._models_store is not None and gigachat_models:
+                        try:
+                            await self._models_store.set_gigachat_available_models(gigachat_models)
+                        except Exception as store_error:  # pragma: no cover
+                            self.logger.warning(f"Не удалось сохранить список моделей GigaChat: {store_error}")
+                except (AuthenticationError, NetworkError, APIError) as e:
+                    self.logger.warning(f"Не удалось получить список моделей GigaChat: {e}")
 
                 if self._models_store is not None and not current_gigachat:
                     current_gigachat = await self._models_store.get_gigachat_model() or "GigaChat"
@@ -246,8 +249,15 @@ class AdminDashboardService(BaseService):
                         current_gigachat = await self._models_store.get_gigachat_model()
                     except Exception as store_error:  # pragma: no cover
                         self.logger.warning(f"Не удалось сохранить или получить модели GigaChat: {store_error}")
-            except Exception as e:
+            except (AuthenticationError, NetworkError, APIError) as e:
                 self.logger.error(f"Ошибка при получении моделей GigaChat: {e}")
+                if self._models_store is not None:
+                    try:
+                        current_gigachat = await self._models_store.get_gigachat_model()
+                    except Exception:  # pragma: no cover
+                        current_gigachat = None
+            except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
+                self.logger.error(f"Неожиданная ошибка при получении моделей GigaChat: {e}")
                 if self._models_store is not None:
                     try:
                         current_gigachat = await self._models_store.get_gigachat_model()
