@@ -70,3 +70,28 @@ async def test_usage_tracker_threshold_and_totals(cleanup_tables: Any, async_pos
 
     new_threshold = await tracker.set_frog_threshold(25)
     assert new_threshold == tracker.monthly_quota  # ограничено квотой
+
+
+@pytest.mark.asyncio
+async def test_usage_tracker_increment_with_connection(
+    cleanup_tables: Any,
+    async_postgres_pool: Any,
+) -> None:
+    """Тест increment с переданным соединением (в транзакции)."""
+    from services.infrastructure.database_unit_of_work import DatabaseUnitOfWork
+
+    tracker = UsageTracker(
+        pool=async_postgres_pool,
+        monthly_quota=TEST_QUOTA_10,
+        frog_threshold=TEST_THRESHOLD_5,
+    )
+    when = datetime(2025, 1, 1)
+
+    # Используем DatabaseUnitOfWork для транзакции
+    async with DatabaseUnitOfWork(pool=async_postgres_pool) as uow:
+        connection = uow.connection
+        result = await tracker.increment(TEST_INCREMENT_2, when=when, connection=connection)
+
+    # После коммита транзакции проверяем, что значение сохранилось
+    assert result == TEST_INCREMENT_2
+    assert await tracker.get_month_total(when=when) == TEST_INCREMENT_2

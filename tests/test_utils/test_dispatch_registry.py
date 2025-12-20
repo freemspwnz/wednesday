@@ -64,3 +64,25 @@ async def test_dispatch_registry_cleanup_old(cleanup_tables: Any, async_postgres
 
     # Запись может остаться или быть удалена в зависимости от даты
     # Главное - метод выполнился без ошибок
+
+
+@pytest.mark.asyncio
+async def test_dispatch_registry_mark_dispatched_with_connection(
+    cleanup_tables: Any,
+    async_postgres_pool: Any,
+) -> None:
+    """Тест mark_dispatched с переданным соединением (в транзакции)."""
+    from services.infrastructure.database_unit_of_work import DatabaseUnitOfWork
+
+    registry = DispatchRegistry(pool=async_postgres_pool)
+
+    today_str = date.today().strftime("%Y-%m-%d")
+
+    # Используем DatabaseUnitOfWork для транзакции
+    async with DatabaseUnitOfWork(pool=async_postgres_pool) as uow:
+        connection = uow.connection
+        await registry.mark_dispatched(today_str, "10:00", 12345, connection=connection)
+
+    # После коммита транзакции проверяем, что запись есть
+    result = await registry.is_dispatched(today_str, "10:00", 12345)
+    assert result is True
