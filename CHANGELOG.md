@@ -4,6 +4,14 @@
 
 ### Добавлено
 
+- **TargetPreparationService для подготовки целевых чатов**:
+  - Создан сервис `TargetPreparationService` в `services/application/target_preparation_service.py`
+  - Сервис инкапсулирует логику подготовки целевых чатов для рассылки
+  - Методы: `prepare_targets()`, `is_already_dispatched_for_all()`
+  - Выделена ответственность за работу с чатами и dispatch registry
+
+### Добавлено
+
 - **CaptionService для работы с подписями к изображениям**:
   - Создан доменный сервис `CaptionService` в `services/domain/caption_service.py`
   - Добавлен протокол `ICaptionProvider` в `services/protocols.py`
