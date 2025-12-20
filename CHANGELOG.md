@@ -16,6 +16,7 @@
   - Обновлены импорты в контейнерах клиентов (`image_client_container.py`, `text_client_container.py`) для использования `services.protocols`
   - Обновлены импорты в тестах для использования `services.protocols`
   - Удалены все прямые импорты из `services.clients.interfaces`
+  - Удален файл `services/clients/interfaces.py` после переноса всех протоколов
   - Domain слой теперь зависит только от абстракций в `services.protocols`, а не от модуля `services.clients`
   - Улучшена изоляция domain слоя от инфраструктуры согласно принципу Dependency Inversion
 
