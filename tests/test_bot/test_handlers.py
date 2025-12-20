@@ -279,7 +279,7 @@ async def test_status_command_integration_with_postgres_stores(
     mock_pool = MockPool()
     services = MagicMock()
     services.image_generator = image_generator
-    services.usage = UsageTracker(pool=mock_pool, storage_path="ignored.json")
+    services.usage = UsageTracker(pool=mock_pool)
     services.chats = ChatsRepo(pool=mock_pool)
     services.metrics = Metrics(pool=mock_pool)
 
@@ -331,7 +331,7 @@ async def test_force_send_command_integration_with_postgres_stores(
     services = MagicMock()
     services.image_generator = image_generator
     services.chats = ChatsRepo(pool=mock_pool)
-    services.usage = UsageTracker(pool=mock_pool, storage_path="ignored.json")
+    services.usage = UsageTracker(pool=mock_pool)
 
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)

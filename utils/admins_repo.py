@@ -22,14 +22,12 @@ class AdminsRepo:
     и всегда имеет права независимо от содержимого таблицы.
     """
 
-    def __init__(self, pool: asyncpg.Pool, storage_path: str | None = None) -> None:
+    def __init__(self, pool: asyncpg.Pool) -> None:
         """Инициализирует репозиторий администраторов.
 
         Args:
             pool: Пул подключений PostgreSQL.
-            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
         """
-        # storage_path оставлен для обратной совместимости и игнорируется.
         self._pool = pool
         self.logger = get_logger(__name__)
 

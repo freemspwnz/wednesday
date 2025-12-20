@@ -13,7 +13,7 @@ pytestmark = [
 
 @pytest.mark.asyncio
 async def test_models_store_initial_defaults(cleanup_tables: Any, async_postgres_pool: Any) -> None:
-    store = ModelsRepo(pool=async_postgres_pool, storage_path="ignored.json")
+    store = ModelsRepo(pool=async_postgres_pool)
 
     assert await store.get_gigachat_model() is None
     assert await store.get_gigachat_available_models() == []
@@ -23,7 +23,7 @@ async def test_models_store_initial_defaults(cleanup_tables: Any, async_postgres
 
 @pytest.mark.asyncio
 async def test_models_store_persistence(cleanup_tables: Any, async_postgres_pool: Any) -> None:
-    store = ModelsRepo(pool=async_postgres_pool, storage_path="ignored.json")
+    store = ModelsRepo(pool=async_postgres_pool)
 
     await store.set_gigachat_model("GigaChat-2")
     await store.set_gigachat_available_models(["A", "B"])
@@ -40,7 +40,7 @@ async def test_models_store_persistence(cleanup_tables: Any, async_postgres_pool
 
 @pytest.mark.asyncio
 async def test_models_store_handles_string_models(cleanup_tables: Any, async_postgres_pool: Any) -> None:
-    store = ModelsRepo(pool=async_postgres_pool, storage_path="ignored.json")
+    store = ModelsRepo(pool=async_postgres_pool)
 
     # Метод set_kandinsky_available_models принимает List[str]
     await store.set_kandinsky_available_models(["Model X", "Model Y"])

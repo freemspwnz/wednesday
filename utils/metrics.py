@@ -155,12 +155,11 @@ class Metrics:
     текущих сценариев мониторинга.
     """
 
-    def __init__(self, pool: asyncpg.Pool, storage_path: str | None = None) -> None:
+    def __init__(self, pool: asyncpg.Pool) -> None:
         """Инициализирует репозиторий метрик.
 
         Args:
             pool: Пул подключений PostgreSQL.
-            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
         """
         self._pool = pool
         self.logger = get_logger(__name__)

@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -219,7 +218,6 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
 
     usage = UsageTracker(
         pool=db_pool,
-        storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
         monthly_quota=100,
         frog_threshold=70,
     )

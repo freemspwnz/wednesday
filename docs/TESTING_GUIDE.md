@@ -652,10 +652,13 @@ async def test_status_command_with_postgres(fake_update, fake_context, cleanup_t
     services.image_generator = MagicMock()
     handler = CommandHandlers(services=services, next_run_provider=None)
 
-    # Используем реальные хранилища
-    usage = UsageTracker(storage_path="ignored.json")
-    chats = ChatsStore(storage_path="ignored.json")
-    metrics = Metrics(storage_path="ignored.json")
+    # Используем реальные хранилища (требуется async_postgres_pool фикстура)
+    from utils.postgres_client import get_postgres_pool
+
+    pool = get_postgres_pool()
+    usage = UsageTracker(pool=pool)
+    chats = ChatsRepo(pool=pool)
+    metrics = Metrics(pool=pool)
 
     fake_context.application.bot_data["usage"] = usage
     fake_context.application.bot_data["chats"] = chats

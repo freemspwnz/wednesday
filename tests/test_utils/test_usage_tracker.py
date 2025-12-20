@@ -27,7 +27,6 @@ pytestmark = [
 def test_usage_tracker_initial_save(async_postgres_pool: Any) -> None:
     tracker = UsageTracker(
         pool=async_postgres_pool,
-        storage_path="ignored.json",
         monthly_quota=TEST_QUOTA_50,
         frog_threshold=TEST_THRESHOLD_20,
     )
@@ -40,7 +39,6 @@ def test_usage_tracker_initial_save(async_postgres_pool: Any) -> None:
 async def test_usage_tracker_increment_and_limits(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     tracker = UsageTracker(
         pool=async_postgres_pool,
-        storage_path="ignored.json",
         monthly_quota=TEST_QUOTA_10,
         frog_threshold=TEST_THRESHOLD_5,
     )
@@ -59,7 +57,6 @@ async def test_usage_tracker_increment_and_limits(cleanup_tables: Any, async_pos
 async def test_usage_tracker_threshold_and_totals(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     tracker = UsageTracker(
         pool=async_postgres_pool,
-        storage_path="ignored.json",
         monthly_quota=TEST_QUOTA_15,
         frog_threshold=TEST_THRESHOLD_10,
     )

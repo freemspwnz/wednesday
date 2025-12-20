@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Удаление устаревшего параметра storage_path из репозиториев**:
+  - Удален параметр `storage_path` из конструкторов всех репозиториев (`ChatsRepo`, `AdminsRepo`, `ModelsRepo`, `UsageTracker`, `DispatchRegistry`, `Metrics`)
+  - Параметр был оставлен для обратной совместимости после миграции с JSON-файлов на PostgreSQL, но не использовался
+  - Обновлены все места создания репозиториев в коде и тестах
+  - Обновлена документация в `docs/TESTING_GUIDE.md`
+
 - **Удаление обратной совместимости для репозиториев**:
   - Параметр `pool` теперь обязателен во всех репозиториях (`PromptsRepo`, `ImagesRepo`, `ChatsRepo`, `AdminsRepo`, `ModelsRepo`, `UsageTracker`, `DispatchRegistry`, `Metrics`)
   - Обновлены функции `build_bot_services()` и `build_bot()` для обязательной передачи пула

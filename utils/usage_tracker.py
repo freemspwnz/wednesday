@@ -26,7 +26,6 @@ class UsageTracker:
     def __init__(
         self,
         pool: asyncpg.Pool,
-        storage_path: str | None = None,
         monthly_quota: int = 100,
         frog_threshold: int = 70,
     ) -> None:
@@ -34,7 +33,6 @@ class UsageTracker:
 
         Args:
             pool: Пул подключений PostgreSQL.
-            storage_path: Параметр оставлен для обратной совместимости и игнорируется.
             monthly_quota: Месячная квота генераций (по умолчанию 100).
             frog_threshold: Порог для ручных генераций /frog (по умолчанию 70).
         """
