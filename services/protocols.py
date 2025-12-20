@@ -443,6 +443,15 @@ class IModelsRepo(Protocol):
 
 
 @runtime_checkable
+class ICaptionProvider(Protocol):
+    """Протокол для провайдера подписей."""
+
+    def get_captions(self) -> list[str]:
+        """Возвращает список доступных подписей."""
+        ...
+
+
+@runtime_checkable
 class ITextToImageClient(Protocol):
     """Интерфейс клиента текст‑к‑изображению.
 
