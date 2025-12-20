@@ -25,13 +25,13 @@ class ImageService(BaseService):
     Координирует работу:
     - ImageGenerationService (генерация с retry логикой)
     - CaptionService (выбор подписей)
-    - ImageCacheService (кэш)
-    - ImageStorageService (хранение)
+    - ImageStorageUnitOfWork (сохранение в кэш и хранилище через Unit of Work)
     - PromptService (промпты)
     - CircuitBreakerService (circuit breaker)
     - MetricsRecorder (метрики)
 
     Retry логика для генерации изображений находится в ImageGenerationService (domain слой).
+    Сохранение изображений управляется через ImageStorageUnitOfWork для обеспечения согласованности данных.
     """
 
     def __init__(  # noqa: PLR0913, PLR0917
@@ -106,7 +106,7 @@ class ImageService(BaseService):
         3. Генерирует промпт через PromptService
         4. Проверяет кэш изображений (если доступен)
         5. Генерирует изображение через ImageGenerationService (retry логика в domain слое)
-        6. Сохраняет в кэш и хранилище (если доступны)
+        6. Сохраняет в кэш и хранилище через ImageStorageUnitOfWork (с компенсационными действиями)
         7. Записывает метрики (если доступны)
 
         Args:
