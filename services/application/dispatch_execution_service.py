@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 
 from telegram.error import NetworkError, TelegramError
 
+from services.application.database_operations_service import DatabaseOperationsService
 from services.application.dispatch_result import DispatchResult
 from services.base.base_service import BaseService
 from services.protocols import IMetrics, IUsageTracker
@@ -28,6 +29,7 @@ class DispatchExecutionService(BaseService):
         dispatch_registry: DispatchRegistry,
         metrics: IMetrics,
         usage_tracker: IUsageTracker,
+        database_operations: DatabaseOperationsService | None = None,
     ) -> None:
         """Инициализирует сервис выполнения отправки.
 
@@ -35,11 +37,21 @@ class DispatchExecutionService(BaseService):
             dispatch_registry: Реестр отправок для регистрации.
             metrics: Сервис метрик.
             usage_tracker: Трекер использования.
+            database_operations: Сервис для групповых операций БД в транзакциях (опционально).
         """
         super().__init__()
         self._dispatch_registry = dispatch_registry
         self._metrics = metrics
         self._usage_tracker = usage_tracker
+
+        # Создаём DatabaseOperationsService, если не передан
+        if database_operations is None:
+            database_operations = DatabaseOperationsService(
+                dispatch_registry=dispatch_registry,
+                usage_tracker=usage_tracker,
+                metrics=metrics,
+            )
+        self._database_operations = database_operations
 
     async def send_single_photo(  # noqa: PLR0913, PLR0917
         self,
@@ -77,18 +89,17 @@ class DispatchExecutionService(BaseService):
                 delay=2.0,
                 handle_rate_limit=True,
             )
-            # Отмечаем в реестре успешную отправку
-            await self._dispatch_registry.mark_dispatched(
-                slot_date,
-                slot_time,
-                target_chat,
-            )
-            # Инкрементируем счётчик после успешной отправки
-            await self._usage_tracker.increment(1)
+            # Используем DatabaseOperationsService для атомарной регистрации
             try:
-                await self._metrics.increment_dispatch_success()
-            except Exception:  # pragma: no cover - метрики не критичны
-                pass
+                await self._database_operations.record_dispatch_success(
+                    slot_date=slot_date,
+                    slot_time=slot_time,
+                    chat_id=target_chat,
+                )
+            except Exception as e:
+                self.logger.error(f"Ошибка при регистрации отправки: {e}")
+                # Отправка успешна, но регистрация не удалась
+                # Это менее критично, чем сама отправка
             result["success_count"] += 1
             self.logger.info(f"Жаба отправлена в чат {target_chat}")
             return True

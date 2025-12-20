@@ -32,6 +32,13 @@
   - Добавлен опциональный параметр `connection` в метод `IUsageTracker.increment()`
   - Протоколы теперь поддерживают работу с транзакциями через опциональное соединение
 
+- **DispatchExecutionService использует DatabaseOperationsService**:
+  - Добавлен параметр `database_operations` в конструктор `DispatchExecutionService`
+  - Автоматическое создание `DatabaseOperationsService`, если не передан
+  - Метод `send_single_photo()` использует `record_dispatch_success()` для атомарной регистрации
+  - Заменены прямые вызовы репозиториев на использование транзакционного сервиса
+  - Обеспечена атомарность операций: регистрация отправки, инкремент счётчика, обновление метрик
+
 - **Отложенное пересоздание кэша при ошибках сохранения**:
   - Добавлен метод `get_by_path()` в протокол `IImageStorage` и реализацию `ImageStorageService`
   - Реализован метод `rebuild_cache_from_storage()` в `ImageStorageUnitOfWork` с использованием `@retry_standard` для exponential retry
