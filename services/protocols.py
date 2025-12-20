@@ -6,19 +6,23 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
+    import asyncpg
+
     from services.clients.models.status import APIStatusResult, SetModelResult
     from services.infrastructure.repositories import ImageRecord, PromptRecord
+else:
+    import asyncpg
 
 
 @runtime_checkable
 class IMetrics(Protocol):
     """Протокол для системы метрик."""
 
-    async def increment_generation_success(self) -> None:
+    async def increment_generation_success(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик успешных генераций изображений."""
         ...
 
-    async def increment_generation_failed(self) -> None:
+    async def increment_generation_failed(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик неудачных генераций изображений."""
         ...
 
@@ -26,11 +30,11 @@ class IMetrics(Protocol):
         """Увеличивает счётчик попаданий в кэш."""
         ...
 
-    async def increment_dispatch_success(self) -> None:
+    async def increment_dispatch_success(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик успешных отправок сообщений."""
         ...
 
-    async def increment_dispatch_failed(self) -> None:
+    async def increment_dispatch_failed(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик неудачных отправок сообщений."""
         ...
 
@@ -295,12 +299,14 @@ class IUsageTracker(Protocol):
         self,
         count: int = 1,
         when: datetime | None = None,
+        connection: asyncpg.Connection | None = None,
     ) -> int:
         """Увеличивает счётчик генераций за месяц и возвращает новое значение.
 
         Args:
             count: Количество генераций для добавления (по умолчанию 1).
             when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
+            connection: Соединение БД для использования в транзакции (опционально).
 
         Returns:
             Новое значение счётчика генераций за месяц.
