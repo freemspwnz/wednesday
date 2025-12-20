@@ -19,14 +19,11 @@ from services.clients.image_client_container import (
     ImageClientContainer,
     get_image_client_container,
 )
-from services.clients.interfaces import (
-    ITextToImageClient,
-    ITextToTextClient,
-)
 from services.clients.text_client_container import (
     TextClientContainer,
     get_text_client_container,
 )
+from services.protocols import ITextToImageClient, ITextToTextClient
 
 __all__ = [
     "ITextToImageClient",
