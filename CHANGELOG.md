@@ -32,6 +32,18 @@
   - Retry логика теперь полностью находится в ImageGenerationService (domain слой)
   - Упрощена обработка ошибок генерации в ImageService
 
+- **Добавление тестов для CaptionService**:
+  - Создан файл `tests/test_services/test_domain_caption_service.py` с unit-тестами
+  - Тесты покрывают все методы CaptionService: `get_random_caption()`, `get_all_captions()`, `has_captions()`
+  - Тесты проверяют валидацию пустого списка подписей
+  - Тесты проверяют работу с кортежами и списками подписей
+
+- **Обновление документации ImageService**:
+  - Обновлены docstrings в ImageService для отражения изменений
+  - Добавлено упоминание CaptionService в описании координации
+  - Обновлено описание последовательности генерации изображений
+  - Уточнено, что retry логика находится в ImageGenerationService
+
 ### Добавлено
 
 - **Документация по добавлению новых эндпоинтов в HTTP-клиентах**:
