@@ -18,6 +18,13 @@
   - Retry логика теперь находится в domain слое, а не в application слое
   - Улучшено соблюдение принципа Single Responsibility Principle
 
+- **Обновление ImageService для использования CaptionService**:
+  - Заменён параметр `captions` на `caption_service: CaptionService | None` в конструкторе
+  - Удалён метод `_get_random_caption()` из ImageService
+  - Обновлено использование подписей для использования CaptionService
+  - Удалён импорт `random` из ImageService
+  - Обновлён `container.py` для создания CaptionService из ImageConfig.CAPTIONS
+
 ### Добавлено
 
 - **Документация по добавлению новых эндпоинтов в HTTP-клиентах**:

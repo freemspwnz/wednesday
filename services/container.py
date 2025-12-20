@@ -22,6 +22,7 @@ from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
 from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
+from services.domain.caption_service import CaptionService
 from services.domain.image_generation import ImageGenerationService
 from services.domain.prompt_generation import PromptGenerationService
 from services.infrastructure.cache.image_cache import ImageCacheService
@@ -154,15 +155,18 @@ def build_image_stack(
         prompt_cache=prompt_cache,
     )
 
+    # Создаём CaptionService из конфигурации
+    caption_service = CaptionService(ImageConfig.CAPTIONS) if ImageConfig.CAPTIONS else None
+
     return ImageService(
         image_generation_service=image_generation,
         prompt_service=prompt_service,
+        caption_service=caption_service,
         image_cache=image_cache,
         image_storage=image_storage,
         circuit_breaker=circuit_breaker,
         metrics=metrics,
         max_retries=config.max_retries,
-        captions=ImageConfig.CAPTIONS,
     )
 
 

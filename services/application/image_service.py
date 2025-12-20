@@ -7,12 +7,12 @@
 from __future__ import annotations
 
 import asyncio
-import random
 import time
 
 from services.application.prompt_service import PromptService
 from services.base.base_service import BaseService
 from services.base.exceptions import CircuitBreakerOpen, ImageGenerationError
+from services.domain.caption_service import CaptionService
 from services.domain.image_generation import ImageGenerationService
 from services.protocols import ICache, ICircuitBreaker, IImageStorage, IMetrics
 
@@ -35,42 +35,34 @@ class ImageService(BaseService):
         self,
         image_generation_service: ImageGenerationService,
         prompt_service: PromptService,
+        caption_service: CaptionService | None = None,
         image_cache: ICache[tuple[bytes, str]] | None = None,
         image_storage: IImageStorage | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         metrics: IMetrics | None = None,
         max_retries: int = 1,
-        captions: list[str] | tuple[str, ...] | None = None,
     ) -> None:
         """Инициализирует сервис координации изображений.
 
         Args:
             image_generation_service: Сервис генерации изображений (обязателен).
             prompt_service: Сервис генерации промптов (обязателен).
+            caption_service: Сервис работы с подписями (опционально).
             image_cache: Сервис кэширования изображений (опционально).
             image_storage: Сервис хранения изображений (опционально).
             circuit_breaker: Сервис circuit breaker (опционально).
             metrics: Сервис записи метрик (опционально).
             max_retries: Максимальное количество попыток генерации.
-            captions: Набор возможных подписей для сгенерированных изображений.
         """
         super().__init__()
         self._generation_service = image_generation_service
         self._prompt_service = prompt_service
+        self._caption_service = caption_service
         self._cache = image_cache
         self._storage = image_storage
         self._circuit_breaker = circuit_breaker
         self._metrics = metrics
         self._max_retries = max_retries
-        self._captions = list(captions or [])
-
-    def _get_random_caption(self) -> str:
-        """Возвращает случайную подпись для изображения.
-
-        Returns:
-            Случайная подпись из конфигурации.
-        """
-        return random.choice(self._captions)
 
     async def get_random_saved_image(self) -> tuple[bytes, str] | None:
         """Возвращает случайное сохранённое изображение из файлового хранилища.
@@ -146,7 +138,10 @@ class ImageService(BaseService):
         )
 
         # Выбираем случайную подпись
-        caption = self._get_random_caption()
+        if self._caption_service:
+            caption = self._caption_service.get_random_caption()
+        else:
+            caption = ""
         self.log_event(
             event="generation_caption_selected",
             user_id=user_id_str,
