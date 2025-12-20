@@ -15,23 +15,11 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from services.application.dispatch_execution_service import DispatchExecutionService
+from services.application.dispatch_result import DispatchResult
 from services.application.fallback_service import FallbackService
 from services.application.image_service import ImageService
 from services.application.target_preparation_service import TargetPreparationService
 from services.base.base_service import BaseService
-
-
-class DispatchResult(dict):
-    """Простейший контейнер результата отправки.
-
-    Ключи:
-        - slot_date: дата слота (YYYY-MM-DD)
-        - slot_time: время слота (HH:MM)
-        - total_targets: всего целевых чатов
-        - success_count: количество успешных отправок
-        - failed_count: количество неуспешных отправок (по Telegram/программным ошибкам)
-        - used_fallback: использован ли fallback‑сценарий вместо свежей генерации
-    """
 
 
 class DispatchService(BaseService):

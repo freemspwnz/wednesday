@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from services.application.dispatch_execution_service import DispatchExecutionService
-from services.application.dispatch_service import DispatchResult
+from services.application.dispatch_result import DispatchResult
 from services.application.image_service import ImageService
 from services.base.base_service import BaseService
 from services.protocols import IMetrics

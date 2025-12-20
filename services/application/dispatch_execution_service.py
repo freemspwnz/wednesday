@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 
 from telegram.error import NetworkError, TelegramError
 
-from services.application.dispatch_service import DispatchResult
+from services.application.dispatch_result import DispatchResult
 from services.base.base_service import BaseService
 from services.protocols import IMetrics, IUsageTracker
 from utils.dispatch_registry import DispatchRegistry
