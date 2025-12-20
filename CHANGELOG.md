@@ -10,7 +10,10 @@
   - Обновлены декораторы `retry_standard`, `retry_critical`, `retry_optional` для использования `RetryConfig`
   - Добавлена возможность переопределения параметров через аргументы декораторов
   - Добавлены переменные окружения `RETRY_STANDARD_MAX_ATTEMPTS`, `RETRY_CRITICAL_MAX_ATTEMPTS`, `RETRY_OPTIONAL_MAX_ATTEMPTS`
-  - Сохранена обратная совместимость (существующий код работает без изменений)
+  - Обновлен `RetryConfig.from_config()` для чтения напрямую из переменных окружения
+  - Обновлен `retry_with_logging` для использования `RetryConfig`
+  - **BREAKING CHANGE**: Удалены старые свойства `retry_max_attempts`, `retry_multiplier`, `retry_min_wait`, `retry_max_wait` из класса `Config`
+  - Используйте `config.get_retry_config()` для получения настроек retry
 
 - **Dependency Injection для Redis клиента**:
   - Сделан параметр `redis_client` обязательным во всех сервисах Redis (`RedisBackendService`, `PromptCache`, `UserStateCache`, `RateLimiter`, `CircuitBreakerService`)

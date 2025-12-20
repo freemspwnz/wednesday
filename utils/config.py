@@ -298,46 +298,6 @@ class Config:  # noqa: PLR0904
 
     # --- Retry configuration ---
 
-    @property
-    def retry_max_attempts(self) -> int:
-        """
-        Максимальное количество попыток для retry-механики.
-
-        Returns:
-            Количество попыток из переменной RETRY_MAX_ATTEMPTS или 5 по умолчанию
-        """
-        return int(Config._get_env_var("RETRY_MAX_ATTEMPTS") or "5")
-
-    @property
-    def retry_multiplier(self) -> float:
-        """
-        Множитель для экспоненциального backoff.
-
-        Returns:
-            Множитель из переменной RETRY_MULTIPLIER или 1.0 по умолчанию
-        """
-        return float(Config._get_env_var("RETRY_MULTIPLIER") or "1.0")
-
-    @property
-    def retry_min_wait(self) -> float:
-        """
-        Минимальное время ожидания между попытками в секундах.
-
-        Returns:
-            Время из переменной RETRY_MIN_WAIT или 2.0 по умолчанию
-        """
-        return float(Config._get_env_var("RETRY_MIN_WAIT") or "2.0")
-
-    @property
-    def retry_max_wait(self) -> float:
-        """
-        Максимальное время ожидания между попытками в секундах.
-
-        Returns:
-            Время из переменной RETRY_MAX_WAIT или 30.0 по умолчанию
-        """
-        return float(Config._get_env_var("RETRY_MAX_WAIT") or "30.0")
-
     def get_retry_config(self) -> "RetryConfig":
         """Возвращает конфигурацию retry механизмов.
 
@@ -868,20 +828,26 @@ class RetryConfig:
             config: Экземпляр Config.
 
         Returns:
-            Экземпляр RetryConfig с настройками из config и переменных окружения.
+            Экземпляр RetryConfig с настройками из переменных окружения.
         """
-        # Читаем настройки из переменных окружения с fallback на значения по умолчанию
+        # Читаем настройки напрямую из переменных окружения
         standard_max = int(Config._get_env_var("RETRY_STANDARD_MAX_ATTEMPTS") or "3")
-        critical_max = int(Config._get_env_var("RETRY_CRITICAL_MAX_ATTEMPTS") or config.retry_max_attempts or "5")
+        critical_max = int(
+            Config._get_env_var("RETRY_CRITICAL_MAX_ATTEMPTS") or Config._get_env_var("RETRY_MAX_ATTEMPTS") or "5"
+        )
         optional_max = int(Config._get_env_var("RETRY_OPTIONAL_MAX_ATTEMPTS") or "2")
+
+        multiplier = float(Config._get_env_var("RETRY_MULTIPLIER") or "1.0")
+        min_wait = float(Config._get_env_var("RETRY_MIN_WAIT") or "2.0")
+        max_wait = float(Config._get_env_var("RETRY_MAX_WAIT") or "30.0")
 
         return cls(
             standard_max_attempts=standard_max,
             critical_max_attempts=critical_max,
             optional_max_attempts=optional_max,
-            multiplier=config.retry_multiplier,
-            min_wait=config.retry_min_wait,
-            max_wait=config.retry_max_wait,
+            multiplier=multiplier,
+            min_wait=min_wait,
+            max_wait=max_wait,
         )
 
 

@@ -398,17 +398,18 @@ def retry_with_logging(
     max_attempts: int | None = None,
 ) -> Callable[[F], F]:
     """
-    Универсальный декоратор retry с логированием (использует настройки из конфига).
+    Универсальный декоратор retry с логированием (использует настройки из RetryConfig).
 
     Args:
         service_name: Имя сервиса (например, "kandinsky", "gigachat")
         method_name: Имя метода для логирования (опционально)
-        max_attempts: Максимальное количество попыток (по умолчанию из конфига)
+        max_attempts: Максимальное количество попыток (по умолчанию из RetryConfig)
 
     Returns:
         Декоратор retry
     """
-    attempts = max_attempts or config.retry_max_attempts
+    retry_cfg = config.get_retry_config()
+    attempts = max_attempts or retry_cfg.critical_max_attempts
     return retry_critical(service_name=service_name, method_name=method_name, max_attempts=attempts)
 
 
