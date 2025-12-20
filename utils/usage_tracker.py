@@ -72,12 +72,18 @@ class UsageTracker:
                 int(self.frog_threshold),
             )
 
-    async def increment(self, count: int = 1, when: datetime | None = None) -> int:
+    async def increment(
+        self,
+        count: int = 1,
+        when: datetime | None = None,
+        connection: asyncpg.Connection | None = None,
+    ) -> int:
         """Увеличивает счётчик генераций за месяц и возвращает новое значение.
 
         Args:
             count: Количество генераций для добавления (по умолчанию 1).
             when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
+            connection: Соединение БД для использования в транзакции (опционально).
 
         Returns:
             Новое значение счётчика генераций за месяц.
@@ -88,14 +94,16 @@ class UsageTracker:
         await self._ensure_settings_row()
         dt = when or datetime.utcnow()
         key = self._month_key(dt)
-        async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
+
+        # Используем переданное соединение или получаем новое
+        if connection is not None:
+            row = await connection.fetchrow(
                 "SELECT count FROM usage_stats WHERE month = $1;",
                 key,
             )
             current = int(row["count"]) if row is not None else 0
             new_value = current + int(count)
-            await conn.execute(
+            await connection.execute(
                 """
                 INSERT INTO usage_stats (month, count)
                 VALUES ($1, $2)
@@ -105,6 +113,24 @@ class UsageTracker:
                 key,
                 new_value,
             )
+        else:
+            async with self._pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT count FROM usage_stats WHERE month = $1;",
+                    key,
+                )
+                current = int(row["count"]) if row is not None else 0
+                new_value = current + int(count)
+                await conn.execute(
+                    """
+                    INSERT INTO usage_stats (month, count)
+                    VALUES ($1, $2)
+                    ON CONFLICT (month) DO UPDATE
+                    SET count = EXCLUDED.count;
+                    """,
+                    key,
+                    new_value,
+                )
         return new_value
 
     async def get_month_total(self, when: datetime | None = None) -> int:
