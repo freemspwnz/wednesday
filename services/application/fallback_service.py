@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from services.application.database_operations_service import DatabaseOperationsService
 from services.application.dispatch_execution_service import DispatchExecutionService
 from services.application.dispatch_result import DispatchResult
 from services.application.image_service import ImageService
@@ -28,6 +29,7 @@ class FallbackService(BaseService):
         dispatch_execution_service: DispatchExecutionService,
         dispatch_registry: DispatchRegistry,
         metrics: IMetrics | None = None,
+        database_operations: DatabaseOperationsService | None = None,
     ) -> None:
         """Инициализирует сервис fallback.
 
@@ -36,12 +38,18 @@ class FallbackService(BaseService):
             dispatch_execution_service: Сервис выполнения отправки.
             dispatch_registry: Реестр отправок для проверки.
             metrics: Сервис метрик.
+            database_operations: Сервис для групповых операций БД в транзакциях (опционально).
         """
         super().__init__()
         self._image_service = image_service
         self._dispatch_execution_service = dispatch_execution_service
         self._dispatch_registry = dispatch_registry
         self._metrics = metrics
+
+        # Используем DatabaseOperationsService из dispatch_execution_service, если доступен
+        if database_operations is None and hasattr(dispatch_execution_service, "_database_operations"):
+            database_operations = dispatch_execution_service._database_operations
+        self._database_operations = database_operations
 
     async def send_fallback_to_targets(  # noqa: PLR0913, PLR0917
         self,
@@ -80,17 +88,30 @@ class FallbackService(BaseService):
 
                 # Отправляем случайное изображение
                 if await send_fallback_image(target_chat):
-                    # Отмечаем в реестре успешную отправку
-                    await self._dispatch_registry.mark_dispatched(
-                        slot_date,
-                        slot_time,
-                        target_chat,
-                    )
-                    if self._metrics:
+                    # Используем DatabaseOperationsService для атомарной регистрации
+                    if self._database_operations:
                         try:
-                            await self._metrics.increment_dispatch_success()
-                        except Exception:  # pragma: no cover
-                            pass
+                            await self._database_operations.record_dispatch_success(
+                                slot_date=slot_date,
+                                slot_time=slot_time,
+                                chat_id=target_chat,
+                            )
+                        except Exception as e:
+                            self.logger.error(f"Ошибка при регистрации fallback отправки: {e}")
+                            # Отправка успешна, но регистрация не удалась
+                            # Это менее критично, чем сама отправка
+                    else:
+                        # Fallback: используем прямые вызовы, если DatabaseOperationsService недоступен
+                        await self._dispatch_registry.mark_dispatched(
+                            slot_date,
+                            slot_time,
+                            target_chat,
+                        )
+                        if self._metrics:
+                            try:
+                                await self._metrics.increment_dispatch_success()
+                            except Exception:  # pragma: no cover
+                                pass
                     result["success_count"] += 1
 
             except Exception as send_error:

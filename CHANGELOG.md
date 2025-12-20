@@ -63,6 +63,20 @@
   - Добавлены тесты для работы с опциональным соединением в транзакциях
   - Тесты проверяют атомарность операций через DatabaseUnitOfWork
 
+### Изменено
+
+- **FallbackService использует DatabaseOperationsService**:
+  - Добавлен параметр `database_operations` в конструктор `FallbackService`
+  - Заменены прямые вызовы репозиториев на использование `record_dispatch_success()`
+  - Обеспечена атомарность операций при регистрации fallback отправок
+  - Добавлен fallback на прямые вызовы, если `DatabaseOperationsService` недоступен
+
+- **Добавлено debug-логирование в DatabaseUnitOfWork**:
+  - Логирование начала транзакции в `begin()`
+  - Логирование успешного коммита в `commit()`
+  - Логирование отката транзакции в `rollback()`
+  - Улучшен мониторинг транзакций для отладки
+
 - **Отложенное пересоздание кэша при ошибках сохранения**:
   - Добавлен метод `get_by_path()` в протокол `IImageStorage` и реализацию `ImageStorageService`
   - Реализован метод `rebuild_cache_from_storage()` в `ImageStorageUnitOfWork` с использованием `@retry_standard` для exponential retry

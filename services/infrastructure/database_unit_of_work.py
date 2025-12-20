@@ -71,6 +71,7 @@ class DatabaseUnitOfWork(BaseService):
             await self._transaction.start()
             self._is_committed = False
             self._is_rolled_back = False
+            self.logger.debug("Транзакция начата")
         except Exception as e:
             # Если не удалось начать транзакцию, освобождаем соединение
             if self._connection is not None:
@@ -93,6 +94,7 @@ class DatabaseUnitOfWork(BaseService):
         try:
             await self._transaction.commit()
             self._is_committed = True
+            self.logger.debug("Транзакция закоммичена")
         except Exception as e:
             self.logger.error(f"Ошибка при коммите транзакции: {e}", exc_info=True)
             # Пытаемся откатить при ошибке коммита
@@ -127,6 +129,7 @@ class DatabaseUnitOfWork(BaseService):
         try:
             await self._transaction.rollback()
             self._is_rolled_back = True
+            self.logger.debug("Транзакция откачена")
         except Exception as e:
             self.logger.error(f"Ошибка при откате транзакции: {e}", exc_info=True)
             # Продолжаем освобождение ресурсов даже при ошибке отката
