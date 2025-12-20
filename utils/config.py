@@ -1070,3 +1070,15 @@ class AppSettings:
             scheduler_tz=config.scheduler_tz,
             time_format_length=TIME_FORMAT_LENGTH,
         )
+
+
+@dataclass(frozen=True)
+class PromptFallbackConfig:
+    """Конфигурация для fallback промптов генерации изображений.
+
+    Группирует связанные данные (промпты и стили) для использования
+    в PromptGenerationService при генерации fallback промптов.
+    """
+
+    frog_prompts: list[str]
+    styles: list[str]

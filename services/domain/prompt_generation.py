@@ -15,8 +15,8 @@ from services.clients.exceptions import (
     ClientError,
     NetworkError,
 )
-from services.domain.prompt_fallback_config import PromptFallbackConfig
 from services.protocols import ITextToTextClient
+from utils.config import PromptFallbackConfig
 
 
 class PromptGenerationService(BaseService):

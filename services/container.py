@@ -23,7 +23,6 @@ from services.application.prompt_service import PromptService
 from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
 from services.domain.image_generation import ImageGenerationService
-from services.domain.prompt_fallback_config import PromptFallbackConfig
 from services.domain.prompt_generation import PromptGenerationService
 from services.infrastructure.cache.image_cache import ImageCacheService
 from services.infrastructure.cache.prompt_cache import PromptCache
@@ -43,7 +42,14 @@ from services.protocols import (
     ITextToTextClient,
     IUsageTracker,
 )
-from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, KandinskyConfig
+from utils.config import (
+    AppSettings,
+    Config,
+    GigaChatConfig,
+    ImageConfig,
+    KandinskyConfig,
+    PromptFallbackConfig,
+)
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
 from utils.usage_tracker import UsageTracker

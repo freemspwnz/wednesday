@@ -21,6 +21,12 @@
 
 ### Изменено
 
+- **Рефакторинг конфигурации fallback промптов**:
+  - Перенесён dataclass `PromptFallbackConfig` из `services/domain/prompt_fallback_config.py` в `utils/config.py`
+  - Обновлены импорты в `services/domain/prompt_generation.py` и `services/container.py`
+  - Удалён избыточный модуль `services/domain/prompt_fallback_config.py`
+  - Конфигурация теперь находится вместе с другими конфигурационными классами
+
 - **Упрощение обработки ошибок в методах клиентов**:
   - Удалены избыточные обработчики сетевых ошибок (TimeoutError, ClientConnectorError, ClientError) из методов клиентов
   - Сетевые ошибки теперь автоматически обрабатываются в базовом классе BaseHTTPClient и преобразуются в NetworkError
