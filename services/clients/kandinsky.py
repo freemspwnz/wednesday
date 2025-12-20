@@ -82,7 +82,7 @@ class KandinskyClient(ITextToImageClient):
         """
         self._api_key: str | None = config.api_key
         self._secret_key: str | None = config.secret_key
-        self._base_url: str = "https://api-key.fusionbrain.ai"
+        self._base_url: str = config.base_url
         self._proxy_url: str | None = None
         self._models_repo: IModelsRepo | None = models_repo
 

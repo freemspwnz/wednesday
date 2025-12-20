@@ -175,6 +175,16 @@ class Config:  # noqa: PLR0904
         return Config._get_env_var("KANDINSKY_SECRET_KEY")
 
     @property
+    def kandinsky_base_url(self) -> str:
+        """
+        Базовый URL для Kandinsky API.
+
+        Returns:
+            URL из переменной KANDINSKY_BASE_URL или значение по умолчанию
+        """
+        return Config._get_env_var("KANDINSKY_BASE_URL") or "https://api-key.fusionbrain.ai"
+
+    @property
     def chat_id(self) -> str | None:
         """
         ID чата или канала для отправки сообщений.
@@ -481,6 +491,16 @@ class Config:  # noqa: PLR0904
         return Config._get_env_var("GIGACHAT_API_URL") or "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
 
     @property
+    def gigachat_models_url(self) -> str:
+        """
+        URL для получения списка моделей GigaChat API.
+
+        Returns:
+            URL из переменной GIGACHAT_MODELS_URL или значение по умолчанию
+        """
+        return Config._get_env_var("GIGACHAT_MODELS_URL") or "https://gigachat.devices.sberbank.ru/api/v1/models"
+
+    @property
     def gigachat_authorization_key(self) -> str:
         """
         Authorization key для GigaChat API (Base64 encoded).
@@ -757,6 +777,7 @@ class GigaChatConfig:
 
     auth_url: str
     api_url: str
+    models_url: str
     authorization_key: str
     scope: str
     model: str
@@ -775,6 +796,7 @@ class GigaChatConfig:
         return cls(
             auth_url=config.gigachat_auth_url,
             api_url=config.gigachat_api_url,
+            models_url=config.gigachat_models_url,
             authorization_key=config.gigachat_authorization_key,
             scope=config.gigachat_scope,
             model=config.gigachat_model,
@@ -791,6 +813,7 @@ class KandinskyConfig:
 
     api_key: str | None
     secret_key: str | None
+    base_url: str = "https://api-key.fusionbrain.ai"
 
     @classmethod
     def from_config(cls, config: Config) -> "KandinskyConfig":
@@ -805,6 +828,7 @@ class KandinskyConfig:
         return cls(
             api_key=config.kandinsky_api_key,
             secret_key=config.kandinsky_secret_key,
+            base_url=config.kandinsky_base_url,
         )
 
 

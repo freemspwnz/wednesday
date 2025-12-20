@@ -58,6 +58,7 @@ def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> N
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
+        models_url="https://example.test/models",
         authorization_key="dummy",
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
@@ -366,6 +367,7 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
+        models_url="https://example.test/models",
         authorization_key="dummy",
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
@@ -406,6 +408,7 @@ async def test_gigachat_text_client_context_manager(monkeypatch: pytest.MonkeyPa
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
+        models_url="https://example.test/models",
         authorization_key="dummy",
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
@@ -446,6 +449,7 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
+        models_url="https://example.test/models",
         authorization_key="dummy",
         scope="GIGACHAT_API_PERS",
         model="GigaChat",

@@ -123,6 +123,7 @@ class GigaChatTextClient(ITextToTextClient):
         """
         self._auth_url: str = config.auth_url
         self._api_url: str = config.api_url
+        self._models_url: str = config.models_url
         self._authorization_key: str = config.authorization_key
         self._scope: str = config.scope
         self._verify_ssl: bool | str = config.verify_ssl
@@ -305,7 +306,7 @@ class GigaChatTextClient(ITextToTextClient):
             return FALLBACK_MODELS.copy()
 
         try:
-            models_url = "https://gigachat.devices.sberbank.ru/api/v1/models"
+            models_url = self._models_url
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Accept": "application/json",

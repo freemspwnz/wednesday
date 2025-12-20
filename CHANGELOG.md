@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Вынос захардкоженных URL в конфигурацию клиентов**:
+  - Добавлено поле `base_url` в `KandinskyConfig` для настройки базового URL через переменные окружения
+  - Добавлено свойство `kandinsky_base_url` в класс `Config`
+  - Обновлен `KandinskyClient` для использования `config.base_url` вместо захардкоженного значения
+  - Добавлено поле `models_url` в `GigaChatConfig` для настройки URL получения списка моделей
+  - Добавлено свойство `gigachat_models_url` в класс `Config`
+  - Обновлен `GigaChatTextClient` для использования `config.models_url` вместо захардкоженного значения
+  - Добавлены переменные окружения `KANDINSKY_BASE_URL` и `GIGACHAT_MODELS_URL`
+  - Упрощено тестирование (можно подменить URL в конфиге)
+  - Поддержка разных окружений без изменения кода
+
 - **Вынос настроек circuit breaker в конфигурацию (CircuitBreakerConfig)**:
   - Создан dataclass `CircuitBreakerConfig` для централизованного управления настройками circuit breaker
   - Добавлен метод `get_circuit_breaker_config()` в класс `Config`

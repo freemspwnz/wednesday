@@ -68,6 +68,7 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
+        models_url="https://example.test/models",
         authorization_key="dummy",
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
@@ -106,6 +107,7 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
+        models_url="https://example.test/models",
         authorization_key=full_key,
         scope="GIGACHAT_API_PERS",
         model="GigaChat",

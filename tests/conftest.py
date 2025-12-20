@@ -611,6 +611,7 @@ async def gigachat_client() -> AsyncIterator[Any]:
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
+        models_url="https://example.test/models",
         authorization_key="dummy",
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
