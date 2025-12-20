@@ -20,6 +20,7 @@
   - Все методы имеют полные type hints, mypy может статически проверять типы
   - Docstrings синхронизированы с type hints через статическую проверку mypy
   - Улучшено автодополнение в IDE за счет полной типизации
+  - Обновлен `docs/TYPING_GUIDE.md` с разделом о правильном использовании docstrings и type hints
 
 - **KandinskyClient: использование Pydantic моделей вместо dict[str, Any]**:
   - Обновлен метод `_get_pipeline_id()` для использования `KandinskyPipelineResponse`
