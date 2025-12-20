@@ -33,7 +33,6 @@ if TYPE_CHECKING:  # pragma: no cover - используется только д
 
 # Магические числа, связанные с форматированием и усечением сообщений
 MAX_ERROR_DETAILS_LENGTH = 500
-PERCENT_MULTIPLIER = 100
 
 
 class AdminDashboardService(BaseService):
@@ -140,66 +139,48 @@ class AdminDashboardService(BaseService):
         else:
             gigachat_status = "⚠️  Не настроен (GIGACHAT_AUTHORIZATION_KEY не указан)"
 
-        # Информация по лимитам использования
-        usage_info = "N/A"
+        # Собираем сырые данные для usage_info
+        usage_total = None
+        usage_threshold = None
+        usage_quota = None
         if self._usage:
             try:
-                total, threshold, quota = await self._usage.get_limits_info()
-                used_percent = int(total / quota * PERCENT_MULTIPLIER) if quota else 0
-                usage_info = f"{total}/{quota} ({used_percent}%), порог: {threshold}"
+                usage_total, usage_threshold, usage_quota = await self._usage.get_limits_info()
             except Exception as e:  # pragma: no cover - защита от нештатных ошибок
                 self.logger.warning(f"Не удалось получить информацию об использовании: {e}")
 
-        # Информация об активных чатах
-        chats_info: str | int = "N/A"
+        # Собираем сырые данные для chats_info
+        chats_count = None
         if self._chats:
             try:
                 chats_ids = await self._chats.list_chat_ids()
-                chats_info = len(chats_ids)
+                chats_count = len(chats_ids) if chats_ids else 0
             except Exception as e:  # pragma: no cover
                 self.logger.warning(f"Не удалось получить список чатов: {e}")
 
-        # Метрики производительности
-        metrics_text = "Не настроены"
+        # Собираем сырые данные для metrics_text
+        metrics_summary = None
         if self._metrics:
             try:
-                m_sum = await self._metrics.get_summary()
-                total_requests = m_sum["generations_total"]
-                successful = m_sum["generations_success"]
-                success_rate = (successful / total_requests * PERCENT_MULTIPLIER) if total_requests > 0 else 0
-                metrics_text = (
-                    f"• Всего запросов на генерацию: {total_requests}\n"
-                    f"• Успешных генераций: {successful}\n"
-                    f"• Процент успеха: {success_rate:.1f}%\n"
-                    f"• Среднее время генерации: {m_sum['average_generation_time']}\n"
-                    f"• Срабатываний circuit breaker: {m_sum['circuit_breaker_trips']}"
-                )
+                metrics_summary = await self._metrics.get_summary()
             except Exception as e:  # pragma: no cover
                 self.logger.warning(f"Не удалось получить метрики производительности: {e}")
-
-        # Форматирование информации о текущих моделях
-        if current_kandinsky[0]:
-            kandinsky_current_text = f"  ⭐ Текущая модель: {current_kandinsky[1] or current_kandinsky[0]}"
-        else:
-            kandinsky_current_text = "  ⚠️ Модель не выбрана"
-
-        if current_gigachat:
-            gigachat_current_text = f"  ⭐ Текущая модель: {current_gigachat}"
-        else:
-            gigachat_current_text = "  ⚠️ Модель не выбрана"
 
         # Формируем данные для билдера
         status_data = StatusData(
             bot_name=bot_name,
             next_run_line="",  # Может быть расширено позже для отображения следующего запуска
             api_status=api_status,
-            kandinsky_current_text=kandinsky_current_text,
+            kandinsky_current_id=current_kandinsky[0],
+            kandinsky_current_name=current_kandinsky[1],
             gigachat_status=gigachat_status,
-            gigachat_current_text=gigachat_current_text,
+            gigachat_current=current_gigachat,
             scheduler_status=scheduler_status,
-            usage_info=usage_info,
-            chats_info=chats_info,
-            metrics_text=metrics_text,
+            usage_total=usage_total,
+            usage_threshold=usage_threshold,
+            usage_quota=usage_quota,
+            chats_count=chats_count,
+            metrics_summary=metrics_summary,
         )
 
         return self._status_builder.build(status_data)

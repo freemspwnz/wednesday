@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 # Магические числа, связанные с форматированием и усечением сообщений
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000
@@ -19,21 +20,129 @@ class StatusData:
     bot_name: str
     next_run_line: str
     api_status: str
-    kandinsky_current_text: str
+
+    # Сырые данные вместо отформатированных строк
+    kandinsky_current_id: str | None
+    kandinsky_current_name: str | None
+
     gigachat_status: str
-    gigachat_current_text: str
+    gigachat_current: str | None
+
     scheduler_status: str
-    usage_info: str
-    chats_info: str | int
-    metrics_text: str
+
+    # Сырые данные для usage_info
+    usage_total: int | None
+    usage_threshold: int | None
+    usage_quota: int | None
+
+    # Сырые данные для chats_info
+    chats_count: int | None
+
+    # Сырые данные для metrics_text
+    metrics_summary: dict[str, Any] | None
 
 
 class StatusMessageBuilder:
     """Билдер для форматирования сообщения статуса бота."""
 
+    PERCENT_MULTIPLIER = 100  # Константа для вычисления процентов
+
     def __init__(self) -> None:
         """Инициализирует билдер."""
         self._telegram_safe_length = TELEGRAM_SAFE_MESSAGE_LENGTH
+
+    def _format_usage_info(
+        self,
+        total: int | None,
+        threshold: int | None,
+        quota: int | None,
+    ) -> str:
+        """Форматирует информацию об использовании.
+
+        Args:
+            total: Количество использований.
+            threshold: Порог.
+            quota: Квота.
+
+        Returns:
+            Отформатированная строка информации об использовании.
+        """
+        if total is None or threshold is None or quota is None:
+            return "N/A"
+
+        used_percent = int(total / quota * self.PERCENT_MULTIPLIER) if quota else 0
+        return f"{total}/{quota} ({used_percent}%), порог: {threshold}"
+
+    @staticmethod
+    def _format_chats_info(chats_count: int | None) -> str:
+        """Форматирует информацию о чатах.
+
+        Args:
+            chats_count: Количество активных чатов.
+
+        Returns:
+            Отформатированная строка с количеством чатов.
+        """
+        if chats_count is None:
+            return "N/A"
+        return str(chats_count)
+
+    def _format_metrics_text(self, metrics_summary: dict[str, Any] | None) -> str:
+        """Форматирует метрики производительности.
+
+        Args:
+            metrics_summary: Словарь с метриками.
+
+        Returns:
+            Отформатированный текст метрик.
+        """
+        if not metrics_summary:
+            return "Не настроены"
+
+        total_requests = metrics_summary.get("generations_total", 0)
+        successful = metrics_summary.get("generations_success", 0)
+        success_rate = (successful / total_requests * self.PERCENT_MULTIPLIER) if total_requests > 0 else 0
+
+        return (
+            f"• Всего запросов на генерацию: {total_requests}\n"
+            f"• Успешных генераций: {successful}\n"
+            f"• Процент успеха: {success_rate:.1f}%\n"
+            f"• Среднее время генерации: {metrics_summary.get('average_generation_time', 'N/A')}\n"
+            f"• Срабатываний circuit breaker: {metrics_summary.get('circuit_breaker_trips', 0)}"
+        )
+
+    @staticmethod
+    def _format_kandinsky_current(
+        current_id: str | None,
+        current_name: str | None,
+    ) -> str:
+        """Форматирует информацию о текущей модели Kandinsky.
+
+        Args:
+            current_id: ID текущей модели.
+            current_name: Название текущей модели.
+
+        Returns:
+            Отформатированная строка с информацией о модели.
+        """
+        if current_id:
+            model_display = current_name or current_id
+            return f"  ⭐ Текущая модель: {model_display}"
+        return "  ⚠️ Модель не выбрана"
+
+    @staticmethod
+    def _format_gigachat_current(current: str | None) -> str:
+        """Форматирует информацию о текущей модели GigaChat.
+
+        Args:
+            current: Текущая модель GigaChat.
+
+        Returns:
+            Отформатированная строка с информацией о модели.
+        """
+        if current:
+            return f"  ⭐ Текущая модель: {current}"
+        return "  ⚠️ Модель не выбрана"
 
     def build(self, data: StatusData) -> str:
         """Строит текст сообщения статуса на основе данных.
@@ -44,6 +153,20 @@ class StatusMessageBuilder:
         Returns:
             Отформатированное сообщение статуса, обрезанное до безопасной длины Telegram.
         """
+        # Форматируем данные через методы билдера
+        usage_info = self._format_usage_info(
+            data.usage_total,
+            data.usage_threshold,
+            data.usage_quota,
+        )
+        chats_info = StatusMessageBuilder._format_chats_info(data.chats_count)
+        metrics_text = self._format_metrics_text(data.metrics_summary)
+        kandinsky_current_text = StatusMessageBuilder._format_kandinsky_current(
+            data.kandinsky_current_id,
+            data.kandinsky_current_name,
+        )
+        gigachat_current_text = StatusMessageBuilder._format_gigachat_current(data.gigachat_current)
+
         message = (
             f"🤖 Статус бота: {data.bot_name}\n\n"
             "✅ Бот активен и работает\n"
@@ -52,15 +175,15 @@ class StatusMessageBuilder:
             "📝 Логирование: включено\n\n"
             "🔌 Проверка систем:\n"
             f"• API Kandinsky: {data.api_status}\n"
-            f"{data.kandinsky_current_text}\n"
+            f"{kandinsky_current_text}\n"
             f"• API GigaChat: {data.gigachat_status}\n"
-            f"{data.gigachat_current_text}\n"
+            f"{gigachat_current_text}\n"
             f"• Планировщик: {data.scheduler_status}\n\n"
             "📊 Статистика:\n"
-            f"• Генерации: {data.usage_info}\n"
-            f"• Активных чатов: {data.chats_info}\n\n"
+            f"• Генерации: {usage_info}\n"
+            f"• Активных чатов: {chats_info}\n\n"
             "📈 Метрики производительности:\n"
-            f"{data.metrics_text}\n\n"
+            f"{metrics_text}\n\n"
             "💡 Используйте /list_models для просмотра всех доступных моделей\n\n"
             "🔄 Последняя проверка: прямо сейчас\n"
             "💚 Все системы работают нормально!"
