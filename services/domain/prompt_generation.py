@@ -9,8 +9,8 @@ from __future__ import annotations
 import random
 
 from services.base.base_service import BaseService
-from services.clients import ITextToTextClient
 from services.domain.prompt_fallback_config import PromptFallbackConfig
+from services.protocols import ITextToTextClient
 
 
 class PromptGenerationService(BaseService):

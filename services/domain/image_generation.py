@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from services.base.base_service import BaseService
 from services.base.exceptions import ImageGenerationError
-from services.clients import ITextToImageClient
+from services.protocols import ITextToImageClient
 
 
 class ImageGenerationService(BaseService):
