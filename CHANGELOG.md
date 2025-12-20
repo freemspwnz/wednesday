@@ -4,6 +4,14 @@
 
 ### Добавлено
 
+- **ImageStorageUnitOfWork для управления сохранением изображений**:
+  - Создан сервис `ImageStorageUnitOfWork` в `services/application/image_storage_unit_of_work.py`
+  - Реализован паттерн Unit of Work для группировки операций сохранения изображений
+  - Добавлен класс `ImageSaveOperation` для представления операций сохранения
+  - Методы: `save_image()`, `commit()`, `rollback()`, `clear()`
+  - Используется стратегия компенсационных действий для улучшения согласованности данных
+  - Приоритет сохранения: сначала хранилище (критичное), затем кэш (второстепенное)
+
 - **APIStatusService для инкапсуляции проверки статуса API**:
   - Создан сервис `APIStatusService` в `services/application/api_status_service.py`
   - Сервис инкапсулирует логику проверки статуса различных API (Kandinsky, GigaChat)
