@@ -16,10 +16,13 @@ if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 
 from services.application.admin_dashboard_service import AdminDashboardService
+from services.application.dispatch_execution_service import DispatchExecutionService
 from services.application.dispatch_service import DispatchService
+from services.application.fallback_service import FallbackService
 from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
+from services.application.target_preparation_service import TargetPreparationService
 from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
 from services.domain.caption_service import CaptionService
@@ -280,11 +283,30 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     # Создаём task queue и передаём в FrogRequestService
     task_queue = CeleryTaskQueue()
     frog_request_service = FrogRequestService(task_queue=task_queue)
-    dispatch_service = DispatchService(
-        usage=usage,
-        chats=chats,
+
+    # Создаём сервисы для DispatchService
+    target_preparation_service = TargetPreparationService(
+        chats_repo=chats,
+        dispatch_registry=dispatch_registry,
+    )
+
+    dispatch_execution_service = DispatchExecutionService(
         dispatch_registry=dispatch_registry,
         metrics=metrics,
+        usage_tracker=usage,
+    )
+
+    fallback_service = FallbackService(
+        image_service=image_service,
+        dispatch_execution_service=dispatch_execution_service,
+        dispatch_registry=dispatch_registry,
+        metrics=metrics,
+    )
+
+    dispatch_service = DispatchService(
+        target_preparation_service=target_preparation_service,
+        dispatch_execution_service=dispatch_execution_service,
+        fallback_service=fallback_service,
         image_service=image_service,
     )
 

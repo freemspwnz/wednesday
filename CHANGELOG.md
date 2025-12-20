@@ -22,6 +22,17 @@
   - Методы: `send_fallback_to_targets()`, `handle_generation_failure()`, `handle_unexpected_error()`
   - Выделена ответственность за обработку ошибок и fallback логику
 
+### Изменено
+
+- **Рефакторинг DispatchService для использования выделенных сервисов**:
+  - Обновлён конструктор `DispatchService` для принятия новых сервисов
+  - Упрощён метод `send_wednesday_frog()` для координации между сервисами
+  - Удалены методы, перенесённые в другие сервисы: `_prepare_targets()`, `_already_dispatched_for_all()`, `_send_single_photo()`, `_send_to_targets()`, `_send_fallback_to_targets()`, `_handle_generation_failure()`, `_handle_unexpected_error()`
+  - Удалён метод `_generate_image()` (заменён прямым вызовом `image_service.generate_frog_image()`)
+  - Упрощена структура сервиса: с ~535 строк до ~200 строк
+  - Улучшено соблюдение SRP: сервис фокусируется только на координации
+  - Обновлён `container.py` для создания новых сервисов и передачи их в DispatchService
+
 ### Добавлено
 
 - **CaptionService для работы с подписями к изображениям**:
