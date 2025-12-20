@@ -11,6 +11,8 @@
   - Реализована фоновая задача `_rebuild_failed_caches_loop()` через `asyncio.create_task` для неблокирующего пересоздания кэша
   - Автоматическое добавление операций в очередь при ошибке сохранения в кэш (но успешном сохранении в хранилище)
   - Улучшенная надёжность: кэш пересоздаётся даже при временных сбоях (пул исчерпан, таймауты)
+  - Добавлены unit-тесты для `ImageStorageUnitOfWork` в `tests/test_services/test_image_storage_unit_of_work.py`
+  - Обновлена документация в `ImageStorageUnitOfWork` с описанием отложенного пересоздания кэша
 
 - **ImageStorageUnitOfWork для управления сохранением изображений**:
   - Создан сервис `ImageStorageUnitOfWork` в `services/application/image_storage_unit_of_work.py`
