@@ -12,6 +12,20 @@
   - Единый интерфейс для получения статуса всех API с обработкой ошибок
   - Автоматическое сохранение списков моделей в хранилище при проверке статуса
 
+### Изменено
+
+- **Рефакторинг AdminDashboardService для использования APIStatusService**:
+  - Обновлён конструктор `AdminDashboardService` для принятия `APIStatusService` вместо клиентов
+  - Удалены прямые зависимости от `ITextToImageClient`, `ITextToTextClient` и `IModelsRepo`
+  - Удалены свойства `image_client` и `text_client` (breaking change)
+  - Упрощены методы `build_status_message()` и `build_models_list_message()` для использования `APIStatusService`
+  - Улучшена инкапсуляция: детали работы с клиентами скрыты в `APIStatusService`
+  - Обновлён `container.py` для создания `APIStatusService` и передачи его в `AdminDashboardService`
+
+- **Обновление ModelHandlers для получения клиентов из контейнеров**:
+  - Обновлён `ModelHandlers` для получения клиентов напрямую из контейнеров вместо свойств `AdminDashboardService`
+  - Используются `get_image_client_container()` и `get_text_client_container()` для доступа к клиентам
+
 - **Перенос логики форматирования из AdminDashboardService в билдеры**:
   - Обновлён `StatusData` для передачи сырых данных вместо отформатированных строк
   - Добавлены методы форматирования в `StatusMessageBuilder`: `_format_usage_info()`, `_format_chats_info()`, `_format_metrics_text()`, `_format_kandinsky_current()`, `_format_gigachat_current()`

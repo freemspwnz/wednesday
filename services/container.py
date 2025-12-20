@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 
 from services.application.admin_dashboard_service import AdminDashboardService
+from services.application.api_status_service import APIStatusService
 from services.application.dispatch_execution_service import DispatchExecutionService
 from services.application.dispatch_service import DispatchService
 from services.application.fallback_service import FallbackService
@@ -188,7 +189,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
         metrics: Метрики производительности.
         image_client: Клиент для генерации изображений.
         text_client: Клиент для генерации текста.
-        models_repo: Репозиторий моделей для передачи в сервис через DI.
+        models_repo: Репозиторий моделей для передачи в APIStatusService через DI.
 
     Returns:
         Экземпляр AdminDashboardService с внедрёнными зависимостями.
@@ -196,13 +197,19 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     from utils.postgres_client import get_postgres_pool
 
     models_store = models_repo if models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+
+    # Создаём APIStatusService для инкапсуляции проверки статуса API
+    api_status_service = APIStatusService(
+        image_client=image_client,
+        text_client=text_client,
+        models_store=models_store,
+    )
+
     return AdminDashboardService(
         usage=usage,
         chats=chats,
         metrics=metrics,
-        image_client=image_client,
-        text_client=text_client,
-        models_store=models_store,
+        api_status_service=api_status_service,
     )
 
 

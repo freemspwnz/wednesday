@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
+from services.clients import get_image_client_container, get_text_client_container
 from services.clients.exceptions import APIError, AuthenticationError, NetworkError
 
 # Константы
@@ -25,13 +26,15 @@ class ModelHandlers(BaseHandlers):
         super().__init__(services)
         # Клиенты используются для команд установки моделей,
         # а агрегированные списки моделей отдаёт AdminDashboardService.
-        # Используем те же клиенты, что и в AdminDashboardService из BotServices.
+        # Получаем клиенты напрямую из контейнеров.
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
-        dashboard_service = self.services.admin_dashboard_service
-        self.image_client = dashboard_service.image_client
-        self.text_client = dashboard_service.text_client
-        self._dashboard_service = dashboard_service
+        self._dashboard_service = self.services.admin_dashboard_service
+        # Получаем клиенты из контейнеров для установки моделей
+        image_container = get_image_client_container()
+        text_container = get_text_client_container()
+        self.image_client = image_container
+        self.text_client = text_container if text_container else None
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_kandinsky_model.

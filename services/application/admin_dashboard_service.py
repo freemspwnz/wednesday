@@ -22,19 +22,15 @@ from services.application.admin_dashboard_builders import (
     StatusData,
     StatusMessageBuilder,
 )
+from services.application.api_status_service import APIStatusService
 from services.base.base_service import BaseService
-from services.clients.exceptions import APIError, AuthenticationError, NetworkError
-from services.protocols import IChatsRepo, IMetrics, IModelsRepo, ITextToImageClient, ITextToTextClient, IUsageTracker
+from services.protocols import IChatsRepo, IMetrics, IUsageTracker
 
 if TYPE_CHECKING:
     pass
 
 if TYPE_CHECKING:  # pragma: no cover - используется только для типизации
     pass
-
-
-# Магические числа, связанные с форматированием и усечением сообщений
-MAX_ERROR_DETAILS_LENGTH = 500
 
 
 class AdminDashboardService(BaseService):
@@ -50,39 +46,27 @@ class AdminDashboardService(BaseService):
         usage: IUsageTracker | None,
         chats: IChatsRepo | None,
         metrics: IMetrics | None,
-        image_client: ITextToImageClient,
-        text_client: ITextToTextClient | None,
-        models_store: IModelsRepo | None,
+        api_status_service: APIStatusService,
         status_builder: StatusMessageBuilder | None = None,
         models_list_builder: ModelsListMessageBuilder | None = None,
     ) -> None:
+        """Инициализирует сервис админского дашборда.
+
+        Args:
+            usage: Трекер использования (опционально).
+            chats: Репозиторий чатов (опционально).
+            metrics: Сервис метрик (опционально).
+            api_status_service: Сервис проверки статуса API (обязателен).
+            status_builder: Билдер сообщений статуса (опционально).
+            models_list_builder: Билдер сообщений списка моделей (опционально).
+        """
         super().__init__()
         self._usage = usage
         self._chats = chats
         self._metrics = metrics
-        self._image_client = image_client
-        self._text_client = text_client
-        self._models_store = models_store
+        self._api_status_service = api_status_service
         self._status_builder = status_builder or StatusMessageBuilder()
         self._models_list_builder = models_list_builder or ModelsListMessageBuilder()
-
-    @property
-    def image_client(self) -> ITextToImageClient:
-        """Возвращает клиент для генерации изображений.
-
-        Предоставляет публичный доступ к клиенту для установки моделей
-        и других операций, требующих прямого взаимодействия с клиентом.
-        """
-        return self._image_client
-
-    @property
-    def text_client(self) -> ITextToTextClient | None:
-        """Возвращает клиент для генерации текста.
-
-        Предоставляет публичный доступ к клиенту для установки моделей
-        и других операций, требующих прямого взаимодействия с клиентом.
-        """
-        return self._text_client
 
     async def build_status_message(
         self,
@@ -93,57 +77,14 @@ class AdminDashboardService(BaseService):
         scheduler_status = "✅ Настроен (Celery)"
 
         # Проверка статуса Kandinsky API
-        api_status: str = "⏳ Проверка..."
-        current_kandinsky: tuple[str | None, str | None] = (None, None)
-        try:
-            result = await self._image_client.check_api_status()
-            api_status = result.message
-            api_models = result.models
-            current_kandinsky = (result.current_model_id, result.current_model_name)
-
-            # При наличии ModelsStore можно сохранить список доступных моделей
-            if self._models_store is not None and api_models:
-                try:
-                    await self._models_store.set_kandinsky_available_models(api_models)
-                except Exception as store_error:  # pragma: no cover - побочный эффект не критичен
-                    self.logger.warning(f"Не удалось сохранить список моделей Kandinsky: {store_error}")
-        except (AuthenticationError, NetworkError, APIError) as e:
-            api_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
-            self.logger.error(f"Ошибка при проверке API Kandinsky: {e}", exc_info=True)
-        except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
-            api_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
-            self.logger.error(f"Неожиданная ошибка при проверке API Kandinsky: {e}", exc_info=True)
+        kandinsky_status = await self._api_status_service.check_image_api_status()
+        api_status = kandinsky_status.status_message
+        current_kandinsky = (kandinsky_status.current_model_id, kandinsky_status.current_model_name)
 
         # Проверка GigaChat API
-        gigachat_status: str = "N/A"
-        current_gigachat: str | None = None
-        if self._text_client:
-            try:
-                result = await self._text_client.check_api_status()
-                gigachat_status = result.message
-                current_gigachat = result.current_model_name
-
-                # Получаем доступные модели GigaChat и сохраняем их при наличии ModelsStore
-                try:
-                    gigachat_models = await self._text_client.get_available_models()
-                    if self._models_store is not None and gigachat_models:
-                        try:
-                            await self._models_store.set_gigachat_available_models(gigachat_models)
-                        except Exception as store_error:  # pragma: no cover
-                            self.logger.warning(f"Не удалось сохранить список моделей GigaChat: {store_error}")
-                except (AuthenticationError, NetworkError, APIError) as e:
-                    self.logger.warning(f"Не удалось получить список моделей GigaChat: {e}")
-
-                if self._models_store is not None and not current_gigachat:
-                    current_gigachat = await self._models_store.get_gigachat_model() or "GigaChat"
-            except (AuthenticationError, NetworkError, APIError) as e:
-                gigachat_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
-                self.logger.error(f"Ошибка при проверке GigaChat API: {e}", exc_info=True)
-            except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
-                gigachat_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
-                self.logger.error(f"Неожиданная ошибка при проверке GigaChat API: {e}", exc_info=True)
-        else:
-            gigachat_status = "⚠️  Не настроен (GIGACHAT_AUTHORIZATION_KEY не указан)"
+        gigachat_status_obj = await self._api_status_service.check_text_api_status()
+        gigachat_status = gigachat_status_obj.status_message
+        current_gigachat = gigachat_status_obj.current_model
 
         # Собираем сырые данные для usage_info
         usage_total = None
@@ -194,62 +135,17 @@ class AdminDashboardService(BaseService):
     async def build_models_list_message(self) -> str:
         """Строит текст для команды /list_models."""
 
-        kandinsky_models: list[str] = []
-        current_kandinsky: tuple[str | None, str | None] = (None, None)
-        gigachat_models: list[str] = []
-        current_gigachat: str | None = None
-        gigachat_configured = self._text_client is not None
+        # Получаем статусы API
+        kandinsky_status = await self._api_status_service.check_image_api_status()
+        gigachat_status_obj = await self._api_status_service.check_text_api_status()
 
-        # Kandinsky
-        try:
-            result = await self._image_client.check_api_status()
-            if result.models:
-                kandinsky_models = result.models
-                current_kandinsky = (result.current_model_id, result.current_model_name)
-                if self._models_store is not None:
-                    try:
-                        await self._models_store.set_kandinsky_available_models(result.models)
-                    except Exception as store_error:  # pragma: no cover
-                        self.logger.warning(f"Не удалось сохранить список моделей Kandinsky: {store_error}")
-        except (AuthenticationError, NetworkError, APIError) as e:
-            self.logger.error(f"Ошибка при получении моделей Kandinsky: {e}")
-            if self._models_store is not None:
-                try:
-                    current_kandinsky = await self._models_store.get_kandinsky_model()
-                except Exception:  # pragma: no cover
-                    current_kandinsky = (None, None)
-        except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
-            self.logger.error(f"Неожиданная ошибка при получении моделей Kandinsky: {e}")
-            if self._models_store is not None:
-                try:
-                    current_kandinsky = await self._models_store.get_kandinsky_model()
-                except Exception:  # pragma: no cover
-                    current_kandinsky = (None, None)
-
-        # GigaChat
-        if self._text_client:
-            try:
-                gigachat_models = await self._text_client.get_available_models()
-                if self._models_store is not None:
-                    try:
-                        await self._models_store.set_gigachat_available_models(gigachat_models)
-                        current_gigachat = await self._models_store.get_gigachat_model()
-                    except Exception as store_error:  # pragma: no cover
-                        self.logger.warning(f"Не удалось сохранить или получить модели GigaChat: {store_error}")
-            except (AuthenticationError, NetworkError, APIError) as e:
-                self.logger.error(f"Ошибка при получении моделей GigaChat: {e}")
-                if self._models_store is not None:
-                    try:
-                        current_gigachat = await self._models_store.get_gigachat_model()
-                    except Exception:  # pragma: no cover
-                        current_gigachat = None
-            except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
-                self.logger.error(f"Неожиданная ошибка при получении моделей GigaChat: {e}")
-                if self._models_store is not None:
-                    try:
-                        current_gigachat = await self._models_store.get_gigachat_model()
-                    except Exception:  # pragma: no cover
-                        current_gigachat = None
+        kandinsky_models = kandinsky_status.available_models
+        current_kandinsky = (kandinsky_status.current_model_id, kandinsky_status.current_model_name)
+        gigachat_models = gigachat_status_obj.available_models
+        current_gigachat = gigachat_status_obj.current_model
+        gigachat_configured = (
+            gigachat_status_obj.status_message != "⚠️ Не настроен (GIGACHAT_AUTHORIZATION_KEY не указан)"
+        )
 
         # Формируем данные для билдера
         models_list_data = ModelsListData(
