@@ -4,6 +4,14 @@
 
 ### Добавлено
 
+- **DatabaseUnitOfWork для управления транзакциями БД**:
+  - Создан класс `DatabaseUnitOfWork` в `services/infrastructure/database_unit_of_work.py`
+  - Реализован паттерн Unit of Work для группировки операций БД в одну транзакцию
+  - Поддержка async context manager для автоматического коммита/отката
+  - Методы: `begin()`, `commit()`, `rollback()`, `connection` property
+  - Надёжная обработка ошибок с гарантированным освобождением соединений
+  - Защита от повторного коммита/отката транзакций
+
 - **Отложенное пересоздание кэша при ошибках сохранения**:
   - Добавлен метод `get_by_path()` в протокол `IImageStorage` и реализацию `ImageStorageService`
   - Реализован метод `rebuild_cache_from_storage()` в `ImageStorageUnitOfWork` с использованием `@retry_standard` для exponential retry
