@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from utils.prompts_repo import PromptsRepo
+from services.infrastructure.repositories import PromptsRepo
 
 SHA256_HEX_LENGTH = 64
 

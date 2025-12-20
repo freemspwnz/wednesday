@@ -6,8 +6,7 @@ from typing import Any
 
 import pytest
 
-from utils.images_repo import ImagesRepo
-from utils.prompts_repo import PromptsRepo
+from services.infrastructure.repositories import ImagesRepo, PromptsRepo
 
 IMAGE_HASH_HEX_LENGTH = 64
 
@@ -28,7 +27,7 @@ async def test_get_or_create_image_saves_file_and_metadata(
     """
 
     # Перенаправляем папку с изображениями в tmp_path, чтобы не трогать реальные данные.
-    monkeypatch.setattr("utils.images_repo.FROGS_DIR", tmp_path)
+    monkeypatch.setattr("services.infrastructure.repositories.images_repo.FROGS_DIR", tmp_path)
 
     prompts_store = PromptsRepo()
     images_store = ImagesRepo()
@@ -62,7 +61,7 @@ async def test_get_or_create_image_handles_concurrent_insert(
     и должна вернуть ту же запись.
     """
 
-    monkeypatch.setattr("utils.images_repo.FROGS_DIR", tmp_path)
+    monkeypatch.setattr("services.infrastructure.repositories.images_repo.FROGS_DIR", tmp_path)
 
     prompts_store = PromptsRepo()
     prompt_record = await prompts_store.get_or_create_prompt("Concurrent frog")

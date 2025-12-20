@@ -6,8 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
-    from utils.images_repo import ImageRecord
-    from utils.prompts_repo import PromptRecord
+    from services.infrastructure.repositories import ImageRecord, PromptRecord
 
 
 @runtime_checkable

@@ -4,6 +4,16 @@
 
 ### Изменено
 
+- **Перенос репозиториев из utils/ в services/infrastructure/repositories/**:
+  - Создана директория `services/infrastructure/repositories/` для репозиториев
+  - Перенесены `ImagesRepo` и `ImageRecord` из `utils/images_repo.py` в `services/infrastructure/repositories/images_repo.py`
+  - Перенесены `PromptsRepo` и `PromptRecord` из `utils/prompts_repo.py` в `services/infrastructure/repositories/prompts_repo.py`
+  - Обновлены импорты в `services/protocols.py` для использования новых путей
+  - Обновлены импорты в `services/container.py` для использования новых путей
+  - Обновлены импорты в тестах `test_images_repo.py` и `test_prompts_repo.py`
+  - Обновлены пути в monkeypatch для тестов
+  - Репозитории теперь находятся в правильном архитектурном слое согласно принципам чистой архитектуры
+
 - **Добавление валидации и нормализации промптов в ImageGenerationService**:
   - Добавлены константы `MIN_PROMPT_LENGTH` и `MAX_PROMPT_LENGTH` для валидации промптов
   - Добавлен метод `_normalize_prompt()` для нормализации промптов (удаление пробелов по краям и лишних пробелов внутри)
