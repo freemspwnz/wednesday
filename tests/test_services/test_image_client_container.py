@@ -6,6 +6,7 @@ from typing import Any, cast
 import pytest
 
 from services.clients.image_client_container import ImageClientContainer
+from services.clients.models.status import APIStatusResult, SetModelResult
 from services.protocols import ITextToImageClient
 
 
@@ -21,19 +22,22 @@ class _ClosableMockImageClient(ITextToImageClient):
         self.calls.append({"method": "generate", "prompt": prompt, "user_id": user_id})
         return f"{self.name}:{prompt}".encode()
 
-    async def check_api_status(
-        self, save_models: bool = True
-    ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
+    async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
         self.calls.append({"method": "check_api_status", "save_models": save_models})
-        return True, f"{self.name}:ok", [f"{self.name}-model"], (f"{self.name}-id", f"{self.name}-name")
+        return APIStatusResult.success(
+            message=f"{self.name}:ok",
+            models=[f"{self.name}-model"],
+            current_model_id=f"{self.name}-id",
+            current_model_name=f"{self.name}-name",
+        )
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
         self.calls.append({"method": "get_available_models", "save_models": save_models})
         return [f"{self.name}-model"]
 
-    async def set_model(self, model_identifier: str) -> tuple[bool, str]:
+    async def set_model(self, model_identifier: str) -> SetModelResult:
         self.calls.append({"method": "set_model", "model_identifier": model_identifier})
-        return True, f"{self.name}:set:{model_identifier}"
+        return SetModelResult.ok(f"{self.name}:set:{model_identifier}")
 
     async def aclose(self) -> None:
         """Помечает клиента как закрытого."""
@@ -46,18 +50,19 @@ async def test_container_delegates_calls_to_current_client() -> None:
     container = ImageClientContainer(initial_client=client)
 
     result_generate = await container.generate("hello", user_id="42")
-    status_ok, status_msg, models, current = await container.check_api_status(save_models=False)
+    status_result = await container.check_api_status(save_models=False)
     available_models = await container.get_available_models(save_models=False)
-    set_ok, set_msg = await container.set_model("TestModel")
+    set_result = await container.set_model("TestModel")
 
     assert result_generate == b"c1:hello"
-    assert status_ok is True
-    assert "c1:ok" in status_msg
-    assert models == ["c1-model"]
-    assert current == ("c1-id", "c1-name")
+    assert status_result.is_available is True
+    assert "c1:ok" in status_result.message
+    assert status_result.models == ["c1-model"]
+    assert status_result.current_model_id == "c1-id"
+    assert status_result.current_model_name == "c1-name"
     assert available_models == ["c1-model"]
-    assert set_ok is True
-    assert "c1:set:TestModel" in set_msg
+    assert set_result.success is True
+    assert "c1:set:TestModel" in set_result.message
 
 
 @pytest.mark.asyncio
@@ -88,16 +93,14 @@ async def test_aclose_closes_current_client_and_detaches_it() -> None:
     await container.aclose()
 
     assert client.closed is True
-    # После aclose клиент должен считаться неинициализированным и возвращать
-    # безопасные значения.
-    assert await container.generate("x") is None
-    ok, _msg, models, current = await container.check_api_status()
-    assert ok is False
-    assert models == []
-    assert current == (None, None)
+    # После aclose клиент должен считаться неинициализированным и пробрасывать RuntimeError
+    with pytest.raises(RuntimeError):
+        await container.generate("x")
+    with pytest.raises(RuntimeError):
+        await container.check_api_status()
     assert await container.get_available_models() == []
-    ok_set, _msg_set = await container.set_model("m")
-    assert ok_set is False
+    with pytest.raises(RuntimeError):
+        await container.set_model("m")
 
 
 @pytest.mark.asyncio
@@ -154,19 +157,17 @@ async def test_container_handles_client_without_optional_methods() -> None:
     result = await container.generate("test")
     assert result == b"minimal-result"
 
-    # Опциональные методы должны возвращать безопасные значения, так как
+    # Опциональные методы должны пробрасывать RuntimeError, так как
     # контейнер проверяет hasattr и определяет, что методы отсутствуют
-    ok, msg, models, current = await container.check_api_status()
-    assert ok is False
-    assert "не поддерживает" in msg
-    assert models == []
-    assert current == (None, None)
+    with pytest.raises(RuntimeError) as exc_info:
+        await container.check_api_status()
+    assert "не поддерживает" in str(exc_info.value)
 
     assert await container.get_available_models() == []
 
-    ok_set, msg_set = await container.set_model("test")
-    assert ok_set is False
-    assert "не поддерживает" in msg_set
+    with pytest.raises(RuntimeError) as exc_info:
+        await container.set_model("test")
+    assert "не поддерживает" in str(exc_info.value)
 
 
 def test_set_initial_client_only_works_when_no_client() -> None:
@@ -210,17 +211,16 @@ async def test_container_logs_warning_when_client_not_initialized() -> None:
     """Тест проверяет, что контейнер корректно обрабатывает отсутствие клиента."""
     container = ImageClientContainer()
 
-    # Все методы должны возвращать безопасные значения при отсутствии клиента
-    assert await container.generate("test") is None
-    ok, msg, models, current = await container.check_api_status()
-    assert ok is False
-    assert "не инициализирован" in msg
-    assert models == []
-    assert current == (None, None)
+    # Все методы должны пробрасывать RuntimeError при отсутствии клиента
+    with pytest.raises(RuntimeError):
+        await container.generate("test")
+    with pytest.raises(RuntimeError) as exc_info:
+        await container.check_api_status()
+    assert "не инициализирован" in str(exc_info.value)
     assert await container.get_available_models() == []
-    ok_set, msg_set = await container.set_model("test")
-    assert ok_set is False
-    assert "не инициализирован" in msg_set
+    with pytest.raises(RuntimeError) as exc_info:
+        await container.set_model("test")
+    assert "не инициализирован" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -266,16 +266,19 @@ async def test_aclose_handles_client_without_aclose_method() -> None:
         async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
             return b"no-close-result"
 
-        async def check_api_status(
-            self, save_models: bool = True
-        ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
-            return False, "Not implemented", [], (None, None)
+        async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
+            return APIStatusResult.success(
+                message="Not implemented",
+                models=[],
+                current_model_id=None,
+                current_model_name=None,
+            )
 
         async def get_available_models(self, save_models: bool = True) -> list[str]:
             return []
 
-        async def set_model(self, model_identifier: str) -> tuple[bool, str]:
-            return False, "Not implemented"
+        async def set_model(self, model_identifier: str) -> SetModelResult:
+            return SetModelResult.error("Not implemented")
 
     client = _NoCloseClient()
     container = ImageClientContainer(initial_client=client)

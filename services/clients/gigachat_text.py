@@ -44,10 +44,12 @@ from services.clients.exceptions import (
     map_http_status_to_exception,
 )
 from services.clients.models import (
+    APIStatusResult,
     GigaChatCompletionResponse,
     GigaChatModelInfo,
     GigaChatModelsListResponse,
     GigaChatTokenResponse,
+    SetModelResult,
 )
 from services.infrastructure.repositories import ModelsRepo
 from services.protocols import IModelsRepo, ITextToTextClient
@@ -302,17 +304,21 @@ class GigaChatTextClient(ITextToTextClient):
                 original_error=exc,
             ) from exc
 
-    async def check_api_status(self) -> tuple[bool, str]:
+    async def check_api_status(self) -> APIStatusResult:
         """Проверяет статус GigaChat API без траты токенов (dry-run).
 
         Выполняет проверку доступности API и валидности ключа авторизации через
         попытку получения access token.
 
         Returns:
-            Кортеж (успех_проверки, сообщение_о_статусе). Успех равен True, если API доступен и ключ валиден.
+            APIStatusResult с информацией о статусе API.
 
         Raises:
-            Exception: При ошибке проверки статуса.
+            ValueError: Если API ключи не сконфигурированы.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         bound = logger.bind(event="gigachat_check_status")
         bound.info("Проверка статуса GigaChat API")
@@ -321,14 +327,30 @@ class GigaChatTextClient(ITextToTextClient):
             token = await self._get_access_token()
             if token:
                 bound.info("✅ API доступен, ключ валиден")
-                return True, "✅ API доступен, ключ валиден"
+                # Получаем текущую модель для включения в результат
+                current_model = await self._get_current_model()
+                return APIStatusResult.success(
+                    message="✅ API доступен, ключ валиден",
+                    models=[],  # GigaChat не возвращает список моделей в check_api_status
+                    current_model_id=None,
+                    current_model_name=current_model,
+                )
             else:
                 bound.warning("❌ Не удалось получить токен доступа")
-                return False, "❌ Не удалось получить токен доступа"
-        except Exception as e:
-            error_msg = f"❌ Ошибка проверки: {str(e)[:50]}"
-            bound.error(f"Ошибка при проверке статуса: {e}", exc_info=True)
-            return False, error_msg
+                raise AuthenticationError(
+                    "Не удалось получить токен доступа GigaChat",
+                    status_code=401,
+                )
+        except (AuthenticationError, RateLimitError, NetworkError, APIError):
+            # Пробрасываем доменные исключения как есть
+            raise
+        except Exception as exc:
+            bound.error(f"Неожиданная ошибка при проверке статуса: {exc}", exc_info=True)
+            raise APIError(
+                f"Неожиданная ошибка при проверке статуса GigaChat: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
         """Возвращает список доступных моделей GigaChat через API.
@@ -446,7 +468,7 @@ class GigaChatTextClient(ITextToTextClient):
             bound.warning(f"Неожиданная ошибка при получении списка моделей: {e}, используем fallback", exc_info=True)
             return FALLBACK_MODELS.copy()
 
-    async def set_model(self, model_name: str) -> tuple[bool, str]:
+    async def set_model(self, model_name: str) -> SetModelResult:
         """Устанавливает текущую модель GigaChat.
 
         Проверяет доступность указанной модели и сохраняет её в хранилище для
@@ -456,10 +478,13 @@ class GigaChatTextClient(ITextToTextClient):
             model_name: Название модели для установки.
 
         Returns:
-            Кортеж (успех, сообщение). Успех равен True, если модель установлена успешно.
+            SetModelResult с информацией о результате установки.
 
         Raises:
-            Exception: При ошибке установки модели (например, ошибка доступа к хранилищу).
+            ValueError: Если модель не найдена.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         bound = logger.bind(event="gigachat_set_model", model_name=model_name)
         bound.info("Установка модели GigaChat")
@@ -476,15 +501,23 @@ class GigaChatTextClient(ITextToTextClient):
                 await models_store.set_gigachat_model(model_name)
                 self._model = model_name
 
-                bound.info(f"✅ Модель GigaChat установлена: {model_name}")
-                return True, f"✅ Модель GigaChat установлена: {model_name}"
+                msg = f"✅ Модель GigaChat установлена: {model_name}"
+                bound.info(msg)
+                return SetModelResult.ok(msg)
             else:
-                bound.warning(f"Попытка установить несуществующую модель: {model_name}")
-                return False, f"❌ Модель '{model_name}' не найдена в списке доступных"
-        except Exception as e:
-            error_msg = f"❌ Ошибка при установке модели: {str(e)[:50]}"
-            bound.error(f"Ошибка при установке модели: {e}", exc_info=True)
-            return False, error_msg
+                msg = f"❌ Модель '{model_name}' не найдена в списке доступных"
+                bound.warning(msg)
+                raise ValueError(msg)
+        except (ValueError, AuthenticationError, RateLimitError, NetworkError, APIError):
+            # Пробрасываем доменные исключения как есть
+            raise
+        except Exception as exc:
+            bound.error(f"Неожиданная ошибка при установке модели: {exc}", exc_info=True)
+            raise APIError(
+                f"Неожиданная ошибка при установке модели GigaChat: {exc}",
+                status_code=0,
+                original_error=exc,
+            ) from exc
 
     # ------------------------------------------------------------------ #
     # Приватные методы                                                   #

@@ -37,6 +37,7 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 
+from services.clients.models.status import APIStatusResult, SetModelResult
 from services.protocols import ITextToTextClient
 from utils.logger import get_logger
 
@@ -201,25 +202,26 @@ class TextClientContainer(ITextToTextClient):
             raise RuntimeError(error_msg)
         return await client.generate(prompt, user_id=user_id)
 
-    async def check_api_status(self) -> tuple[bool, str]:
+    async def check_api_status(self) -> APIStatusResult:
         """Проверяет статус API и валидность ключа без траты токенов (dry-run).
 
         Проксирует вызов метода check_api_status к текущему активному клиенту.
 
         Returns:
-            Кортеж, содержащий:
-            - успех_проверки: True если API доступен и ключ валиден.
-            - сообщение_о_статусе: Человекочитаемое сообщение о статусе.
+            APIStatusResult с информацией о статусе API.
 
-        Note:
-            Если клиент не инициализирован, логируется предупреждение и возвращается
-            (False, сообщение об ошибке).
+        Raises:
+            RuntimeError: Если активный клиент не установлен.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         client = self._client
         if client is None:
-            msg = "❌ Текстовый клиент не инициализирован (например, не задан GIGACHAT_AUTHORIZATION_KEY)"
-            self._logger.warning(msg)
-            return False, msg
+            error_msg = "Текстовый клиент не инициализирован (например, не задан GIGACHAT_AUTHORIZATION_KEY)"
+            self._logger.error(error_msg)
+            raise RuntimeError(error_msg)
         return await client.check_api_status()
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
@@ -245,7 +247,7 @@ class TextClientContainer(ITextToTextClient):
             return []
         return await client.get_available_models(save_models=save_models)
 
-    async def set_model(self, model_name: str) -> tuple[bool, str]:
+    async def set_model(self, model_name: str) -> SetModelResult:
         """Устанавливает текущую модель для генерации текста через текущий активный клиент.
 
         Проксирует вызов метода set_model к текущему активному клиенту.
@@ -254,22 +256,23 @@ class TextClientContainer(ITextToTextClient):
             model_name: Название модели для установки.
 
         Returns:
-            Кортеж, содержащий:
-            - успех: True если модель установлена успешно.
-            - сообщение: Человекочитаемое сообщение о результате.
+            SetModelResult с информацией о результате установки.
 
-        Note:
-            Если клиент не инициализирован, логируется предупреждение и возвращается
-            (False, сообщение об ошибке).
+        Raises:
+            RuntimeError: Если активный клиент не установлен.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
+            ValueError: Если модель не найдена.
         """
         client = self._client
         if client is None:
-            msg = "❌ Текстовый клиент не инициализирован, смена модели невозможна"
-            self._logger.warning(
-                msg,
+            error_msg = "Текстовый клиент не инициализирован, смена модели невозможна"
+            self._logger.error(
+                error_msg,
                 requested_model=model_name,
             )
-            return False, msg
+            raise RuntimeError(error_msg)
         return await client.set_model(model_name)
 
 

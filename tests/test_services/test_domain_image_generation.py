@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from services.base.exceptions import ImageGenerationError
+from services.clients.models.status import APIStatusResult, SetModelResult
 from services.domain.image_generation import (
     MAX_PROMPT_LENGTH,
     MIN_PROMPT_LENGTH,
@@ -25,19 +26,22 @@ class MockImageClient(ITextToImageClient):
         self.calls.append((prompt, user_id))
         return self.response
 
-    async def check_api_status(
-        self, save_models: bool = True
-    ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
+    async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
         """Мок метода check_api_status."""
-        return (True, "ok", [], (None, None))
+        return APIStatusResult.success(
+            message="ok",
+            models=[],
+            current_model_id=None,
+            current_model_name=None,
+        )
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
         """Мок метода get_available_models."""
         return []
 
-    async def set_model(self, model_identifier: str) -> tuple[bool, str]:
+    async def set_model(self, model_identifier: str) -> SetModelResult:
         """Мок метода set_model."""
-        return (True, "ok")
+        return SetModelResult.ok("ok")
 
 
 class TestNormalizePrompt:
@@ -167,16 +171,19 @@ class TestGenerate:
             async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
                 raise APIError("Test error", status_code=500)
 
-            async def check_api_status(
-                self, save_models: bool = True
-            ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
-                return (False, "Error", [], (None, None))
+            async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
+                return APIStatusResult.success(
+                    message="Error",
+                    models=[],
+                    current_model_id=None,
+                    current_model_name=None,
+                )
 
             async def get_available_models(self, save_models: bool = True) -> list[str]:
                 return []
 
-            async def set_model(self, model_identifier: str) -> tuple[bool, str]:
-                return (False, "Error")
+            async def set_model(self, model_identifier: str) -> SetModelResult:
+                return SetModelResult.error("Error")
 
         mock_client = FailingMockClient()
         service = ImageGenerationService(mock_client)

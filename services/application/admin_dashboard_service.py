@@ -21,6 +21,7 @@ from services.application.admin_dashboard_builders import (
     StatusMessageBuilder,
 )
 from services.base.base_service import BaseService
+from services.clients.exceptions import APIError, AuthenticationError, NetworkError
 from services.protocols import IChatsRepo, IMetrics, IModelsRepo, ITextToImageClient, ITextToTextClient, IUsageTracker
 
 if TYPE_CHECKING:
@@ -90,11 +91,10 @@ class AdminDashboardService(BaseService):
         api_status: str = "⏳ Проверка..."
         current_kandinsky: tuple[str | None, str | None] = (None, None)
         try:
-            api_ok: bool
-            api_models: list[str]
-            api_ok, api_status, api_models, current_kandinsky = await self._image_client.check_api_status()
-            if not api_ok:
-                self.logger.warning(f"Проверка API Kandinsky не прошла: {api_status}")
+            result = await self._image_client.check_api_status()
+            api_status = result.message
+            api_models = result.models
+            current_kandinsky = (result.current_model_id, result.current_model_name)
 
             # При наличии ModelsStore можно сохранить список доступных моделей
             if self._models_store is not None and api_models:
@@ -102,19 +102,21 @@ class AdminDashboardService(BaseService):
                     await self._models_store.set_kandinsky_available_models(api_models)
                 except Exception as store_error:  # pragma: no cover - побочный эффект не критичен
                     self.logger.warning(f"Не удалось сохранить список моделей Kandinsky: {store_error}")
-        except Exception as e:
+        except (AuthenticationError, NetworkError, APIError) as e:
             api_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
             self.logger.error(f"Ошибка при проверке API Kandinsky: {e}", exc_info=True)
+        except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
+            api_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
+            self.logger.error(f"Неожиданная ошибка при проверке API Kandinsky: {e}", exc_info=True)
 
         # Проверка GigaChat API
         gigachat_status: str = "N/A"
         current_gigachat: str | None = None
         if self._text_client:
             try:
-                gigachat_ok: bool
-                gigachat_ok, gigachat_status = await self._text_client.check_api_status()
-                if not gigachat_ok:
-                    self.logger.warning(f"Проверка API GigaChat не прошла: {gigachat_status}")
+                result = await self._text_client.check_api_status()
+                gigachat_status = result.message
+                current_gigachat = result.current_model_name
 
                 # Получаем доступные модели GigaChat и сохраняем их при наличии ModelsStore
                 gigachat_models = await self._text_client.get_available_models()
@@ -124,11 +126,14 @@ class AdminDashboardService(BaseService):
                     except Exception as store_error:  # pragma: no cover
                         self.logger.warning(f"Не удалось сохранить список моделей GigaChat: {store_error}")
 
-                if self._models_store is not None:
+                if self._models_store is not None and not current_gigachat:
                     current_gigachat = await self._models_store.get_gigachat_model() or "GigaChat"
-            except Exception as e:
+            except (AuthenticationError, NetworkError, APIError) as e:
                 gigachat_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
                 self.logger.error(f"Ошибка при проверке GigaChat API: {e}", exc_info=True)
+            except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
+                gigachat_status = f"❌ Ошибка: {str(e)[: MAX_ERROR_DETAILS_LENGTH // 10]}"
+                self.logger.error(f"Неожиданная ошибка при проверке GigaChat API: {e}", exc_info=True)
         else:
             gigachat_status = "⚠️  Не настроен (GIGACHAT_AUTHORIZATION_KEY не указан)"
 
@@ -207,19 +212,24 @@ class AdminDashboardService(BaseService):
 
         # Kandinsky
         try:
-            api_ok, api_status, api_models, current_kandinsky = await self._image_client.check_api_status()
-            if not api_ok:
-                self.logger.warning(f"Проверка API Kandinsky при /list_models не прошла: {api_status}")
-
-            if api_models:
-                kandinsky_models = api_models
+            result = await self._image_client.check_api_status()
+            if result.models:
+                kandinsky_models = result.models
+                current_kandinsky = (result.current_model_id, result.current_model_name)
                 if self._models_store is not None:
                     try:
-                        await self._models_store.set_kandinsky_available_models(api_models)
+                        await self._models_store.set_kandinsky_available_models(result.models)
                     except Exception as store_error:  # pragma: no cover
                         self.logger.warning(f"Не удалось сохранить список моделей Kandinsky: {store_error}")
-        except Exception as e:
+        except (AuthenticationError, NetworkError, APIError) as e:
             self.logger.error(f"Ошибка при получении моделей Kandinsky: {e}")
+            if self._models_store is not None:
+                try:
+                    current_kandinsky = await self._models_store.get_kandinsky_model()
+                except Exception:  # pragma: no cover
+                    current_kandinsky = (None, None)
+        except Exception as e:  # pragma: no cover - защита от неожиданных ошибок
+            self.logger.error(f"Неожиданная ошибка при получении моделей Kandinsky: {e}")
             if self._models_store is not None:
                 try:
                     current_kandinsky = await self._models_store.get_kandinsky_model()

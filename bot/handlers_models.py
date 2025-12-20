@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from services.bot_services import BotServices
+from services.clients.exceptions import APIError, AuthenticationError, NetworkError
 
 # Константы
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
@@ -93,23 +94,45 @@ class ModelHandlers(BaseHandlers):
             self.logger.error(f"Не удалось отправить сообщение о начале установки после {3} попыток: {e}")
 
         try:
-            success, message = await self.image_client.set_model(model_arg)
-            if success:
+            result = await self.image_client.set_model(model_arg)
+            if result.success:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    f"✅ {message}",
+                    f"✅ {result.message}",
                     max_retries=3,
                     delay=2,
                 )
             else:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    f"❌ {message}",
+                    f"❌ {result.message}",
                     max_retries=3,
                     delay=2,
                 )
-        except Exception as e:
+        except ValueError as e:
             self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"❌ {e!s}",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass
+        except (AuthenticationError, NetworkError, APIError) as e:
+            self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"❌ Ошибка API: {str(e)[:200]}",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            self.logger.error(f"Неожиданная ошибка при установке модели Kandinsky: {e}")
 
     async def set_gigachat_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_gigachat_model.
@@ -171,15 +194,37 @@ class ModelHandlers(BaseHandlers):
             return
 
         try:
-            _, message = await self.text_client.set_model(model_name)
+            result = await self.text_client.set_model(model_name)
             await self._retry_on_connect_error(
                 update.message.reply_text,
-                message,
+                result.message,
                 max_retries=3,
                 delay=2,
             )
-        except Exception as e:
+        except ValueError as e:
             self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"❌ {e!s}",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass
+        except (AuthenticationError, NetworkError, APIError) as e:
+            self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"❌ Ошибка API: {str(e)[:200]}",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            self.logger.error(f"Неожиданная ошибка при установке модели GigaChat: {e}")
 
     async def list_models_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_models.

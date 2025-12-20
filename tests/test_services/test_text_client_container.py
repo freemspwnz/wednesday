@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from services.clients.models.status import APIStatusResult, SetModelResult
 from services.clients.text_client_container import TextClientContainer
 from services.protocols import ITextToTextClient
 
@@ -21,17 +22,22 @@ class _ClosableMockTextClient(ITextToTextClient):
         self.calls.append({"method": "generate", "prompt": prompt, "user_id": user_id})
         return f"{self.name}:{prompt}"
 
-    async def check_api_status(self) -> tuple[bool, str]:
+    async def check_api_status(self) -> APIStatusResult:
         self.calls.append({"method": "check_api_status"})
-        return True, f"{self.name}:ok"
+        return APIStatusResult.success(
+            message=f"{self.name}:ok",
+            models=[],
+            current_model_id=None,
+            current_model_name=None,
+        )
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
         self.calls.append({"method": "get_available_models", "save_models": save_models})
         return [f"{self.name}-model"]
 
-    async def set_model(self, model_name: str) -> tuple[bool, str]:
+    async def set_model(self, model_name: str) -> SetModelResult:
         self.calls.append({"method": "set_model", "model_name": model_name})
-        return True, f"{self.name}:set:{model_name}"
+        return SetModelResult.ok(f"{self.name}:set:{model_name}")
 
     async def aclose(self) -> None:
         """Помечает клиента как закрытого."""
@@ -44,16 +50,16 @@ async def test_container_delegates_calls_to_current_client() -> None:
     container = TextClientContainer(initial_client=client)
 
     result_generate = await container.generate("hello", user_id="42")
-    status_ok, status_msg = await container.check_api_status()
+    status_result = await container.check_api_status()
     models = await container.get_available_models(save_models=False)
-    set_ok, set_msg = await container.set_model("TestModel")
+    set_result = await container.set_model("TestModel")
 
     assert result_generate == "c1:hello"
-    assert status_ok is True
-    assert "c1:ok" in status_msg
+    assert status_result.is_available is True
+    assert "c1:ok" in status_result.message
     assert models == ["c1-model"]
-    assert set_ok is True
-    assert "c1:set:TestModel" in set_msg
+    assert set_result.success is True
+    assert "c1:set:TestModel" in set_result.message
 
 
 @pytest.mark.asyncio
@@ -84,14 +90,14 @@ async def test_aclose_closes_current_client_and_detaches_it() -> None:
     await container.aclose()
 
     assert client.closed is True
-    # После aclose клиент должен считаться неинициализированным и возвращать
-    # безопасные значения.
-    assert await container.generate("x") is None
-    ok, _msg = await container.check_api_status()
-    assert ok is False
+    # После aclose клиент должен считаться неинициализированным и пробрасывать RuntimeError
+    with pytest.raises(RuntimeError):
+        await container.generate("x")
+    with pytest.raises(RuntimeError):
+        await container.check_api_status()
     assert await container.get_available_models() == []
-    ok_set, _msg_set = await container.set_model("m")
-    assert ok_set is False
+    with pytest.raises(RuntimeError):
+        await container.set_model("m")
 
 
 @pytest.mark.asyncio

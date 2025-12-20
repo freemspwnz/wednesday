@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
+    from services.clients.models.status import APIStatusResult, SetModelResult
     from services.infrastructure.repositories import ImageRecord, PromptRecord
 
 
@@ -470,18 +471,20 @@ class ITextToImageClient(Protocol):
             APIError: При других ошибках API (4xx, 5xx).
         """
 
-    async def check_api_status(
-        self, save_models: bool = True
-    ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
+    async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
         """Проверяет статус API и валидность ключа без генерации изображения (dry-run).
 
         Args:
             save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
 
         Returns:
-            Кортеж (успех_проверки, сообщение_о_статусе, список_моделей, (текущий_id, текущее_имя)).
-            Для провайдеров, которые не поддерживают расширенный статус, можно вернуть
-            упрощённые значения (например, пустой список моделей и (None, None) для текущей модели).
+            APIStatusResult с информацией о статусе API.
+
+        Raises:
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
@@ -495,15 +498,20 @@ class ITextToImageClient(Protocol):
             получение списка моделей, можно вернуть пустой список.
         """
 
-    async def set_model(self, model_identifier: str) -> tuple[bool, str]:
+    async def set_model(self, model_identifier: str) -> SetModelResult:
         """Устанавливает текущую модель для генерации изображений.
 
         Args:
             model_identifier: ID модели или название (или часть названия).
 
         Returns:
-            Кортеж: (успех, сообщение). Для провайдеров, которые не поддерживают
-            смену модели, можно вернуть (False, "Смена модели не поддерживается").
+            SetModelResult с информацией о результате установки.
+
+        Raises:
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
+            ValueError: Если модель не найдена.
         """
 
 
@@ -533,11 +541,17 @@ class ITextToTextClient(Protocol):
             APIError: При других ошибках API (4xx, 5xx).
         """
 
-    async def check_api_status(self) -> tuple[bool, str]:
+    async def check_api_status(self) -> APIStatusResult:
         """Проверяет статус API и валидность ключа без траты токенов (dry-run).
 
         Returns:
-            Кортеж: (успех_проверки, сообщение_о_статусе)
+            APIStatusResult с информацией о статусе API.
+
+        Raises:
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def get_available_models(self, save_models: bool = True) -> list[str]:
@@ -550,12 +564,18 @@ class ITextToTextClient(Protocol):
             Список доступных моделей.
         """
 
-    async def set_model(self, model_name: str) -> tuple[bool, str]:
+    async def set_model(self, model_name: str) -> SetModelResult:
         """Устанавливает текущую модель для генерации текста.
 
         Args:
             model_name: Название модели.
 
         Returns:
-            Кортеж: (успех, сообщение)
+            SetModelResult с информацией о результате установки.
+
+        Raises:
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
+            ValueError: Если модель не найдена.
         """

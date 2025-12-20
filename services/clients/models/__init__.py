@@ -17,8 +17,13 @@ from services.clients.models.kandinsky import (
     KandinskyStatus,
     KandinskyStatusResponse,
 )
+from services.clients.models.status import (
+    APIStatusResult,
+    SetModelResult,
+)
 
 __all__ = [
+    "APIStatusResult",
     "GigaChatChoice",
     "GigaChatCompletionResponse",
     "GigaChatMessage",
@@ -32,4 +37,5 @@ __all__ = [
     "KandinskyResult",
     "KandinskyStatus",
     "KandinskyStatusResponse",
+    "SetModelResult",
 ]

@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 
+from services.clients.models.status import APIStatusResult, SetModelResult
 from services.protocols import ITextToImageClient
 from utils.logger import get_logger
 
@@ -203,9 +204,7 @@ class ImageClientContainer(ITextToImageClient):
             raise RuntimeError(error_msg)
         return await client.generate(prompt, user_id=user_id)
 
-    async def check_api_status(
-        self, save_models: bool = True
-    ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
+    async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
         """
         Проверяет статус API и валидность ключа без генерации изображения (dry-run).
 
@@ -213,19 +212,26 @@ class ImageClientContainer(ITextToImageClient):
             save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
 
         Returns:
-            Кортеж (успех_проверки, сообщение_о_статусе, список_моделей, (текущий_id, текущее_имя)).
+            APIStatusResult с информацией о статусе API.
+
+        Raises:
+            RuntimeError: Если активный клиент не установлен.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            RateLimitError: Если превышен лимит запросов (429).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
         """
         client = self._client
         if client is None:
-            msg = "❌ Клиент генерации изображений не инициализирован"
-            self._logger.warning(msg)
-            return False, msg, [], (None, None)
+            error_msg = "Клиент генерации изображений не инициализирован"
+            self._logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
         # Проверяем, есть ли у клиента метод check_api_status
         if not hasattr(client, "check_api_status"):
-            msg = "❌ Клиент не поддерживает проверку статуса API"
-            self._logger.warning(msg, client_type=type(client).__name__)
-            return False, msg, [], (None, None)
+            error_msg = "Клиент не поддерживает проверку статуса API"
+            self._logger.error(error_msg, client_type=type(client).__name__)
+            raise RuntimeError(error_msg)
 
         return await client.check_api_status(save_models=save_models)
 
@@ -262,7 +268,7 @@ class ImageClientContainer(ITextToImageClient):
 
         return await client.get_available_models(save_models=save_models)
 
-    async def set_model(self, model_identifier: str) -> tuple[bool, str]:
+    async def set_model(self, model_identifier: str) -> SetModelResult:
         """Устанавливает текущую модель для генерации изображений через текущий активный клиент.
 
         Проксирует вызов метода set_model к текущему активному клиенту.
@@ -271,32 +277,33 @@ class ImageClientContainer(ITextToImageClient):
             model_identifier: ID модели или название (или часть названия).
 
         Returns:
-            Кортеж, содержащий:
-            - успех: True если модель установлена успешно.
-            - сообщение: Человекочитаемое сообщение о результате.
+            SetModelResult с информацией о результате установки.
 
-        Note:
-            Если клиент не инициализирован или не поддерживает метод, логируется
-            предупреждение и возвращается (False, сообщение об ошибке).
+        Raises:
+            RuntimeError: Если активный клиент не установлен.
+            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            APIError: При других ошибках API (4xx, 5xx).
+            ValueError: Если модель не найдена.
         """
         client = self._client
         if client is None:
-            msg = "❌ Клиент генерации изображений не инициализирован, смена модели невозможна"
-            self._logger.warning(
-                msg,
+            error_msg = "Клиент генерации изображений не инициализирован, смена модели невозможна"
+            self._logger.error(
+                error_msg,
                 requested_model=model_identifier,
             )
-            return False, msg
+            raise RuntimeError(error_msg)
 
         # Проверяем, есть ли у клиента метод set_model
         if not hasattr(client, "set_model"):
-            msg = "❌ Клиент не поддерживает смену модели"
-            self._logger.warning(
-                msg,
+            error_msg = "Клиент не поддерживает смену модели"
+            self._logger.error(
+                error_msg,
                 client_type=type(client).__name__,
                 requested_model=model_identifier,
             )
-            return False, msg
+            raise RuntimeError(error_msg)
 
         return await client.set_model(model_identifier)
 

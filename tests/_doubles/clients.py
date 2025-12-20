@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from services.clients import ITextToImageClient, ITextToTextClient
+from services.clients.models.status import APIStatusResult, SetModelResult
 
 
 @dataclass
@@ -44,22 +45,27 @@ class MockTextToImageClient(ITextToImageClient):
     def __init__(
         self,
         generate_response: bytes | None = b"mock-image-bytes",
-        check_api_status_response: tuple[bool, str, list[str], tuple[str | None, str | None]] | None = None,
+        check_api_status_response: APIStatusResult | None = None,
         get_available_models_response: list[str] | None = None,
-        set_model_response: tuple[bool, str] | None = None,
+        set_model_response: SetModelResult | None = None,
     ) -> None:
         self.calls: list[_Call] = []
         self._response: bytes | None = generate_response
-        self._check_api_status_response: tuple[bool, str, list[str], tuple[str | None, str | None]] = (
+        self._check_api_status_response: APIStatusResult = (
             check_api_status_response
             if check_api_status_response is not None
-            else (True, "✅ Mock API доступен", ["MockModel-1 (ID: m1)"], (None, None))
+            else APIStatusResult.success(
+                message="✅ Mock API доступен",
+                models=["MockModel-1 (ID: m1)"],
+                current_model_id=None,
+                current_model_name=None,
+            )
         )
         self._get_available_models_response: list[str] = (
             get_available_models_response if get_available_models_response is not None else ["MockModel-1 (ID: m1)"]
         )
-        self._set_model_response: tuple[bool, str] = (
-            set_model_response if set_model_response is not None else (True, "✅ Mock модель установлена")
+        self._set_model_response: SetModelResult = (
+            set_model_response if set_model_response is not None else SetModelResult.ok("✅ Mock модель установлена")
         )
 
     def set_response(self, value: bytes | None) -> None:
@@ -71,9 +77,7 @@ class MockTextToImageClient(ITextToImageClient):
         self.calls.append(_Call(prompt=prompt, user_id=user_id, kwargs={}))
         return self._response
 
-    async def check_api_status(
-        self, save_models: bool = True
-    ) -> tuple[bool, str, list[str], tuple[str | None, str | None]]:
+    async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
         """Мок проверки статуса API."""
         self.calls.append(_Call(prompt="check_api_status", user_id=None, kwargs={"save_models": save_models}))
         return self._check_api_status_response
@@ -83,7 +87,7 @@ class MockTextToImageClient(ITextToImageClient):
         self.calls.append(_Call(prompt="get_available_models", user_id=None, kwargs={"save_models": save_models}))
         return self._get_available_models_response
 
-    async def set_model(self, model_identifier: str) -> tuple[bool, str]:
+    async def set_model(self, model_identifier: str) -> SetModelResult:
         """Мок установки модели."""
         self.calls.append(_Call(prompt="set_model", user_id=None, kwargs={"model_identifier": model_identifier}))
         return self._set_model_response
@@ -99,15 +103,26 @@ class MockTextToTextClient(ITextToTextClient):
     def __init__(
         self,
         generate_response: str | None = "mock-text",
-        check_api_status_response: tuple[bool, str] = (True, "✅ Mock API доступен"),
+        check_api_status_response: APIStatusResult | None = None,
         get_available_models_response: list[str] | None = None,
-        set_model_response: tuple[bool, str] = (True, "✅ Mock модель установлена"),
+        set_model_response: SetModelResult | None = None,
     ) -> None:
         self.calls: list[_Call] = []
         self._generate_response: str | None = generate_response
-        self._check_api_status_response: tuple[bool, str] = check_api_status_response
+        self._check_api_status_response: APIStatusResult = (
+            check_api_status_response
+            if check_api_status_response is not None
+            else APIStatusResult.success(
+                message="✅ Mock API доступен",
+                models=[],
+                current_model_id=None,
+                current_model_name=None,
+            )
+        )
         self._get_available_models_response: list[str] = get_available_models_response or ["MockChat-1", "MockChat-2"]
-        self._set_model_response: tuple[bool, str] = set_model_response
+        self._set_model_response: SetModelResult = (
+            set_model_response if set_model_response is not None else SetModelResult.ok("✅ Mock модель установлена")
+        )
 
     def set_response(self, value: str | None) -> None:
         """Задаёт текстовый результат, который будет возвращён generate()."""
@@ -118,7 +133,7 @@ class MockTextToTextClient(ITextToTextClient):
         self.calls.append(_Call(prompt=prompt, user_id=user_id, kwargs={}))
         return self._generate_response
 
-    async def check_api_status(self) -> tuple[bool, str]:
+    async def check_api_status(self) -> APIStatusResult:
         """Мок проверки статуса API."""
         self.calls.append(_Call(prompt="check_api_status", user_id=None, kwargs={}))
         return self._check_api_status_response
@@ -128,7 +143,7 @@ class MockTextToTextClient(ITextToTextClient):
         self.calls.append(_Call(prompt="get_available_models", user_id=None, kwargs={"save_models": save_models}))
         return self._get_available_models_response
 
-    async def set_model(self, model_name: str) -> tuple[bool, str]:
+    async def set_model(self, model_name: str) -> SetModelResult:
         """Мок установки модели."""
         self.calls.append(_Call(prompt="set_model", user_id=None, kwargs={"model_name": model_name}))
         return self._set_model_response

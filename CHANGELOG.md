@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Рефакторинг методов проверки статуса: проброс исключений вместо кортежей с ошибками**:
+  - Созданы типизированные структуры `APIStatusResult` и `SetModelResult` для результатов проверки статуса и установки моделей
+  - Обновлены интерфейсы `ITextToImageClient` и `ITextToTextClient` для использования новых типов возвращаемых значений
+  - Методы `check_api_status()` и `set_model()` теперь пробрасывают доменные исключения (`AuthenticationError`, `RateLimitError`, `NetworkError`, `APIError`) вместо возврата кортежей с ошибками
+  - Обновлены `KandinskyClient` и `GigaChatTextClient` для проброса исключений при HTTP ошибках
+  - Обновлены контейнеры клиентов (`ImageClientContainer`, `TextClientContainer`) для проброса исключений
+  - Обновлен вызывающий код (`AdminDashboardService`, `ModelHandlers`) для обработки исключений через try/except
+  - Упрощен и улучшен код обработки ошибок в вызывающих методах
+  - Улучшена типобезопасность возвращаемых значений через dataclass вместо кортежей
+
 ### Добавлено
 
 - **Типизация Request/Response через Pydantic модели для HTTP-клиентов**:
