@@ -25,6 +25,13 @@
   - Удалён импорт `random` из ImageService
   - Обновлён `container.py` для создания CaptionService из ImageConfig.CAPTIONS
 
+- **Удаление retry логики из ImageService**:
+  - Удалён цикл retry из метода `generate_frog_image()`
+  - Удалён параметр `max_retries` из конструктора ImageService
+  - Удалён импорт `asyncio` из ImageService
+  - Retry логика теперь полностью находится в ImageGenerationService (domain слой)
+  - Упрощена обработка ошибок генерации в ImageService
+
 ### Добавлено
 
 - **Документация по добавлению новых эндпоинтов в HTTP-клиентах**:

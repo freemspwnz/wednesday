@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 
 from services.application.prompt_service import PromptService
@@ -40,7 +39,6 @@ class ImageService(BaseService):
         image_storage: IImageStorage | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         metrics: IMetrics | None = None,
-        max_retries: int = 1,
     ) -> None:
         """Инициализирует сервис координации изображений.
 
@@ -52,7 +50,6 @@ class ImageService(BaseService):
             image_storage: Сервис хранения изображений (опционально).
             circuit_breaker: Сервис circuit breaker (опционально).
             metrics: Сервис записи метрик (опционально).
-            max_retries: Максимальное количество попыток генерации.
         """
         super().__init__()
         self._generation_service = image_generation_service
@@ -62,7 +59,6 @@ class ImageService(BaseService):
         self._storage = image_storage
         self._circuit_breaker = circuit_breaker
         self._metrics = metrics
-        self._max_retries = max_retries
 
     async def get_random_saved_image(self) -> tuple[bytes, str] | None:
         """Возвращает случайное сохранённое изображение из файлового хранилища.
@@ -206,88 +202,81 @@ class ImageService(BaseService):
             except Exception as e:
                 self.logger.warning(f"Ошибка при проверке кэша: {e}")
 
-        # 4. Генерируем изображение с повторными попытками
-        image_data_result: bytes | None = None
-        for attempt in range(self._max_retries):
-            try:
-                self.log_event(
-                    event="generation_attempt",
-                    user_id=user_id_str,
-                    status="in_progress",
-                    extra={"attempt": attempt + 1, "max_retries": self._max_retries},
-                    level="info",
-                    message=f"Попытка генерации {attempt + 1}/{self._max_retries}",
-                )
-
-                image_data_result = await self._generation_service.generate(prompt, user_id=user_id)
-
-                if image_data_result:
+        # 4. Генерируем изображение (retry логика теперь в ImageGenerationService)
+        try:
+            image_data_result = await self._generation_service.generate(prompt, user_id=user_id)
+        except ImageGenerationError as e:
+            self.log_event(
+                event="generation_failed",
+                user_id=user_id_str,
+                status="error",
+                extra={"error": str(e)},
+                level="error",
+                message=f"Ошибка при генерации: {e}",
+            )
+            if self._circuit_breaker is not None:
+                try:
+                    await self._circuit_breaker.record_failure()
+                except CircuitBreakerOpen:
+                    # Circuit breaker открыт после этой ошибки
                     self.log_event(
-                        event="generation_api_ok",
+                        event="circuit_breaker_opened",
                         user_id=user_id_str,
-                        status="ok",
-                        level="info",
-                        message="Изображение успешно сгенерировано",
+                        status="circuit_breaker_open",
+                        level="warning",
+                        message="Circuit breaker открыт после ошибки генерации",
                     )
-                    break
+                    if self._metrics:
+                        try:
+                            await self._metrics.record_circuit_breaker_trip()
+                        except Exception:
+                            pass
+                    return None
+                except Exception as cb_err:
+                    self.logger.warning(f"Ошибка при записи failure в circuit breaker: {cb_err}")
 
-                self.log_event(
-                    event="generation_attempt_failed",
-                    user_id=user_id_str,
-                    status="error",
-                    extra={"attempt": attempt + 1},
-                    level="warning",
-                    message=f"Попытка {attempt + 1} не удалась",
-                )
-
-            except ImageGenerationError as e:
-                self.log_event(
-                    event="generation_attempt_exception",
-                    user_id=user_id_str,
-                    status="error",
-                    extra={"attempt": attempt + 1, "error": str(e)},
-                    level="error",
-                    message=f"Ошибка при генерации (попытка {attempt + 1}): {e}",
-                )
-                if self._circuit_breaker is not None:
-                    try:
-                        await self._circuit_breaker.record_failure()
-                    except CircuitBreakerOpen:
-                        # Circuit breaker открыт после этой ошибки
-                        self.log_event(
-                            event="circuit_breaker_opened",
-                            user_id=user_id_str,
-                            status="circuit_breaker_open",
-                            level="warning",
-                            message="Circuit breaker открыт после ошибки генерации",
-                        )
-                        if self._metrics:
-                            try:
-                                await self._metrics.record_circuit_breaker_trip()
-                            except Exception:
-                                pass
-                        return None
-                    except Exception as cb_err:
-                        self.logger.warning(f"Ошибка при записи failure в circuit breaker: {cb_err}")
-
-                # Экспоненциальная задержка перед следующей попыткой
-                if attempt < self._max_retries - 1:
-                    await asyncio.sleep(2**attempt)
-
-            except Exception as e:
-                self.logger.error(f"Неожиданная ошибка при генерации: {e}", exc_info=True)
-                if attempt < self._max_retries - 1:
-                    await asyncio.sleep(2**attempt)
-
-        if not image_data_result:
             elapsed = time.time() - start_time
             self.log_event(
-                event="generation_exhausted",
+                event="generation_failed",
                 user_id=user_id_str,
                 latency_ms=round(elapsed * 1000),
                 status="error",
                 level="error",
-                message="Все попытки генерации исчерпаны",
+                message="Генерация изображения не удалась",
+            )
+            if self._metrics:
+                try:
+                    await self._metrics.increment_generation_failed()
+                except Exception as e:
+                    self.logger.warning(f"Ошибка при записи метрики failed: {e}")
+            return None
+        except Exception as e:
+            self.logger.error(f"Неожиданная ошибка при генерации: {e}", exc_info=True)
+            elapsed = time.time() - start_time
+            self.log_event(
+                event="generation_failed",
+                user_id=user_id_str,
+                latency_ms=round(elapsed * 1000),
+                status="error",
+                level="error",
+                message="Неожиданная ошибка при генерации изображения",
+            )
+            if self._metrics:
+                try:
+                    await self._metrics.increment_generation_failed()
+                except Exception as e:
+                    self.logger.warning(f"Ошибка при записи метрики failed: {e}")
+            return None
+
+        if not image_data_result:
+            elapsed = time.time() - start_time
+            self.log_event(
+                event="generation_failed",
+                user_id=user_id_str,
+                latency_ms=round(elapsed * 1000),
+                status="error",
+                level="error",
+                message="Генерация изображения вернула пустой результат",
             )
             if self._metrics:
                 try:

@@ -166,7 +166,6 @@ def build_image_stack(
         image_storage=image_storage,
         circuit_breaker=circuit_breaker,
         metrics=metrics,
-        max_retries=config.max_retries,
     )
 
 
