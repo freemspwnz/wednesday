@@ -11,6 +11,13 @@
   - Методы: `get_random_caption()`, `get_all_captions()`, `has_captions()`
   - Валидация пустого списка подписей при инициализации
 
+### Изменено
+
+- **Перенос retry логики в ImageGenerationService**:
+  - Добавлен декоратор `@retry_standard()` к методу `generate()` в `ImageGenerationService`
+  - Retry логика теперь находится в domain слое, а не в application слое
+  - Улучшено соблюдение принципа Single Responsibility Principle
+
 ### Добавлено
 
 - **Документация по добавлению новых эндпоинтов в HTTP-клиентах**:
