@@ -306,6 +306,14 @@ class Config:  # noqa: PLR0904
         """
         return RetryConfig.from_config(self)
 
+    def get_circuit_breaker_config(self) -> "CircuitBreakerConfig":
+        """Возвращает конфигурацию circuit breaker.
+
+        Returns:
+            Экземпляр CircuitBreakerConfig с настройками из переменных окружения.
+        """
+        return CircuitBreakerConfig.from_config(self)
+
     # --- Sentry / observability ---
 
     @property
@@ -848,6 +856,39 @@ class RetryConfig:
             multiplier=multiplier,
             min_wait=min_wait,
             max_wait=max_wait,
+        )
+
+
+@dataclass(frozen=True)
+class CircuitBreakerConfig:
+    """Конфигурация для circuit breaker.
+
+    Инкапсулирует настройки circuit breaker для защиты от перегрузки внешних API.
+    """
+
+    threshold: int = 5  # Количество ошибок до открытия circuit breaker
+    window: int = 300  # Окно жизни счётчика ошибок в секундах
+    cooldown: int | None = None  # Минимальный интервал после последней ошибки (по умолчанию равен window)
+
+    @classmethod
+    def from_config(cls, config: Config) -> "CircuitBreakerConfig":
+        """Создает CircuitBreakerConfig из Config.
+
+        Args:
+            config: Экземпляр Config.
+
+        Returns:
+            Экземпляр CircuitBreakerConfig с настройками из переменных окружения.
+        """
+        threshold = int(Config._get_env_var("CIRCUIT_BREAKER_THRESHOLD") or "5")
+        window = int(Config._get_env_var("CIRCUIT_BREAKER_WINDOW") or "300")
+        cooldown_str = Config._get_env_var("CIRCUIT_BREAKER_COOLDOWN")
+        cooldown = int(cooldown_str) if cooldown_str else None
+
+        return cls(
+            threshold=threshold,
+            window=window,
+            cooldown=cooldown,
         )
 
 

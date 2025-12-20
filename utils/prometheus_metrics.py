@@ -185,6 +185,23 @@ POSTGRES_POOL_MAX: Final[Gauge] = Gauge(
     documentation="Максимальный размер пула подключений PostgreSQL",
 )
 
+# Метрики состояния circuit breaker
+# Состояние circuit breaker (1 = открыт, 0 = закрыт)
+# label key: логический ключ ресурса (например, 'cb:kandinsky_api')
+CIRCUIT_BREAKER_STATE: Final[Gauge] = Gauge(
+    name="circuit_breaker_state",
+    documentation="Состояние circuit breaker (1 = открыт, 0 = закрыт)",
+    labelnames=("key",),
+)
+
+# Количество ошибок в circuit breaker
+# label key: логический ключ ресурса
+CIRCUIT_BREAKER_FAILURES: Final[Gauge] = Gauge(
+    name="circuit_breaker_failures",
+    documentation="Количество ошибок в circuit breaker",
+    labelnames=("key",),
+)
+
 
 def update_pool_metrics(pool: asyncpg.Pool | None = None) -> None:
     """Обновляет метрики пула подключений PostgreSQL.

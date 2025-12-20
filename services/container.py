@@ -128,11 +128,17 @@ def build_image_stack(
     )
     image_storage = ImageStorageService()
     prompt_cache = PromptCache(redis_client=redis_client)
+
+    # Получаем конфигурацию circuit breaker
+    from utils.config import config
+
+    cb_config = config.get_circuit_breaker_config()
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(
         redis_client=redis_client,
         key="cb:kandinsky_api",
-        threshold=5,
-        window=300,
+        threshold=cb_config.threshold,
+        window=cb_config.window,
+        cooldown=cb_config.cooldown,
     )
     metrics = MetricsRecorder()
 

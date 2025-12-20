@@ -85,11 +85,32 @@ class CircuitBreakerService(RedisBackendService):
             return False
 
         if failures < self.threshold:
+            # Обновляем метрики Prometheus
+            try:
+                from utils.prometheus_metrics import CIRCUIT_BREAKER_FAILURES, CIRCUIT_BREAKER_STATE
+
+                CIRCUIT_BREAKER_STATE.labels(key=self.key).set(0.0)
+                CIRCUIT_BREAKER_FAILURES.labels(key=self.key).set(float(failures))
+            except Exception:
+                # Метрики не критичны, игнорируем ошибки
+                pass
             return False
 
         # Окно "покоя" после последней ошибки.
         since_last = self._now() - last_failed_at
-        return since_last < self.cooldown
+        is_open_state = since_last < self.cooldown
+
+        # Обновляем метрики Prometheus
+        try:
+            from utils.prometheus_metrics import CIRCUIT_BREAKER_FAILURES, CIRCUIT_BREAKER_STATE
+
+            CIRCUIT_BREAKER_STATE.labels(key=self.key).set(1.0 if is_open_state else 0.0)
+            CIRCUIT_BREAKER_FAILURES.labels(key=self.key).set(float(failures))
+        except Exception:
+            # Метрики не критичны, игнорируем ошибки
+            pass
+
+        return is_open_state
 
     async def record_success(self) -> None:
         """Регистрирует успешный запрос и сбрасывает счётчик ошибок.
@@ -109,6 +130,15 @@ class CircuitBreakerService(RedisBackendService):
                 level="info",
                 message=f"Circuit breaker {self.key}: успешный запрос зарегистрирован",
             )
+            # Обновляем метрики Prometheus
+            try:
+                from utils.prometheus_metrics import CIRCUIT_BREAKER_FAILURES, CIRCUIT_BREAKER_STATE
+
+                CIRCUIT_BREAKER_STATE.labels(key=self.key).set(0.0)
+                CIRCUIT_BREAKER_FAILURES.labels(key=self.key).set(0.0)
+            except Exception:
+                # Метрики не критичны, игнорируем ошибки
+                pass
         except Exception as e:
             self.logger.warning(
                 f"Ошибка при регистрации успеха в circuit breaker ({self.key}): {e}",
@@ -141,6 +171,15 @@ class CircuitBreakerService(RedisBackendService):
                 level="warning",
                 message=f"Circuit breaker {self.key}: ошибка зарегистрирована (failures={failures})",
             )
+
+            # Обновляем метрики Prometheus
+            try:
+                from utils.prometheus_metrics import CIRCUIT_BREAKER_FAILURES
+
+                CIRCUIT_BREAKER_FAILURES.labels(key=self.key).set(float(failures))
+            except Exception:
+                # Метрики не критичны, игнорируем ошибки
+                pass
 
             # Проверяем, не открылся ли circuit breaker после этой ошибки
             if failures >= self.threshold:

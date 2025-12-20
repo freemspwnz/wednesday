@@ -4,6 +4,15 @@
 
 ### Изменено
 
+- **Вынос настроек circuit breaker в конфигурацию (CircuitBreakerConfig)**:
+  - Создан dataclass `CircuitBreakerConfig` для централизованного управления настройками circuit breaker
+  - Добавлен метод `get_circuit_breaker_config()` в класс `Config`
+  - Обновлено создание `CircuitBreakerService` в `services/container.py` для использования конфига
+  - Добавлены Prometheus метрики `circuit_breaker_state` и `circuit_breaker_failures` для мониторинга
+  - Обновлен `CircuitBreakerService` для автоматического обновления метрик при изменении состояния
+  - Добавлены переменные окружения `CIRCUIT_BREAKER_THRESHOLD`, `CIRCUIT_BREAKER_WINDOW`, `CIRCUIT_BREAKER_COOLDOWN`
+  - Улучшена наблюдаемость состояния circuit breaker через метрики Prometheus
+
 - **Вынос настроек retry в конфигурацию (RetryConfig)**:
   - Создан dataclass `RetryConfig` для централизованного управления настройками retry
   - Добавлен метод `get_retry_config()` в класс `Config`
