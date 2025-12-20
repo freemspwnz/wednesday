@@ -4,6 +4,14 @@
 
 ### Добавлено
 
+- **APIStatusService для инкапсуляции проверки статуса API**:
+  - Создан сервис `APIStatusService` в `services/application/api_status_service.py`
+  - Сервис инкапсулирует логику проверки статуса различных API (Kandinsky, GigaChat)
+  - Добавлены типизированные классы `ImageAPIStatus` и `TextAPIStatus` для результатов проверки
+  - Методы: `check_image_api_status()`, `check_text_api_status()`, `get_image_models()`, `get_text_models()`
+  - Единый интерфейс для получения статуса всех API с обработкой ошибок
+  - Автоматическое сохранение списков моделей в хранилище при проверке статуса
+
 - **Перенос логики форматирования из AdminDashboardService в билдеры**:
   - Обновлён `StatusData` для передачи сырых данных вместо отформатированных строк
   - Добавлены методы форматирования в `StatusMessageBuilder`: `_format_usage_info()`, `_format_chats_info()`, `_format_metrics_text()`, `_format_kandinsky_current()`, `_format_gigachat_current()`
