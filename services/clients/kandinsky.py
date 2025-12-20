@@ -30,12 +30,21 @@ import asyncio
 import base64
 from io import BytesIO
 from types import TracebackType
-from typing import Any, Self
+from typing import Self
 
 import aiohttp
 from loguru import logger
 from PIL import Image
+from pydantic import ValidationError
 
+from services.clients.models import (
+    KandinskyGenerationParams,
+    KandinskyGenerationRequest,
+    KandinskyGenerationStartResponse,
+    KandinskyPipelineResponse,
+    KandinskyStatus,
+    KandinskyStatusResponse,
+)
 from services.infrastructure.repositories import ModelsRepo
 from services.protocols import IModelsRepo, ITextToImageClient
 from utils.config import KandinskyConfig
@@ -236,20 +245,29 @@ class KandinskyClient(ITextToImageClient):
                 if response.status == HTTP_STATUS_OK:
                     status_ok = True
                     status_message = "✅ API доступен, ключ валиден"
-                    pipelines_data = await response.json()
-                    if isinstance(pipelines_data, list) and pipelines_data:
-                        if save_models:
-                            await models_store.set_kandinsky_available_models(pipelines_data)
-                            bound.debug(
-                                "Сохранён список из {} моделей Kandinsky",
-                                len(pipelines_data),
-                            )
+                    pipelines_data_json = await response.json()
+                    if isinstance(pipelines_data_json, list) and pipelines_data_json:
+                        try:
+                            pipelines = [KandinskyPipelineResponse.model_validate(p) for p in pipelines_data_json]
+                        except ValidationError as e:
+                            bound.bind(
+                                error=str(e),
+                                data_sample=str(pipelines_data_json)[:200],
+                            ).error("Ошибка валидации ответа Kandinsky API при проверке статуса")
+                            models_list = ["Ошибка валидации данных"]
+                        else:
+                            if save_models:
+                                await models_store.set_kandinsky_available_models(pipelines_data_json)
+                                bound.debug(
+                                    "Сохранён список из {} моделей Kandinsky",
+                                    len(pipelines),
+                                )
 
-                        for pipeline in pipelines_data:
-                            model_name = str(pipeline.get("name", "Unknown"))
-                            model_id = str(pipeline.get("id", "N/A"))
-                            is_current = " ⭐" if (current_pipeline_id and model_id == current_pipeline_id) else ""
-                            models_list.append(f"{model_name} (ID: {model_id}){is_current}")
+                            for pipeline in pipelines:
+                                model_name = pipeline.name
+                                model_id = pipeline.id
+                                is_current = " ⭐" if (current_pipeline_id and model_id == current_pipeline_id) else ""
+                                models_list.append(f"{model_name} (ID: {model_id}){is_current}")
                     else:
                         models_list = ["Модели не найдены"]
                 elif response.status == HTTP_STATUS_UNAUTHORIZED:
@@ -368,15 +386,24 @@ class KandinskyClient(ITextToImageClient):
                     bound.error(msg)
                     return False, msg
 
-                pipelines_data = await response.json()
-                if not isinstance(pipelines_data, list):
+                pipelines_data_json = await response.json()
+                if not isinstance(pipelines_data_json, list):
                     return False, "Не удалось получить список моделей"
 
+                try:
+                    pipelines = [KandinskyPipelineResponse.model_validate(p) for p in pipelines_data_json]
+                except ValidationError as e:
+                    bound.bind(
+                        error=str(e),
+                        data_sample=str(pipelines_data_json)[:200],
+                    ).error("Ошибка валидации ответа Kandinsky API при установке модели")
+                    return False, "Ошибка валидации данных от API"
+
                 # 1. Точное совпадение по ID.
-                for pipeline_item in pipelines_data:
-                    if pipeline_item.get("id") == model_identifier:
-                        matched_model_name = str(pipeline_item.get("name", "Unknown"))
-                        matched_pipeline_id = str(pipeline_item.get("id", ""))
+                for pipeline in pipelines:
+                    if pipeline.id == model_identifier:
+                        matched_model_name = pipeline.name
+                        matched_pipeline_id = pipeline.id
                         from utils.postgres_client import get_postgres_pool
 
                         models_store = (
@@ -389,16 +416,15 @@ class KandinskyClient(ITextToImageClient):
 
                 # 2. Частичное совпадение по названию (регистронезависимо).
                 model_identifier_lower = model_identifier.lower()
-                matches: list[dict[str, Any]] = []
-                for pipeline_item in pipelines_data:
-                    pipeline_name = str(pipeline_item.get("name", ""))
-                    if model_identifier_lower in pipeline_name.lower():
-                        matches.append(pipeline_item)
+                matches: list[KandinskyPipelineResponse] = []
+                for pipeline in pipelines:
+                    if model_identifier_lower in pipeline.name.lower():
+                        matches.append(pipeline)
 
                 if len(matches) == 1:
                     matched_pipeline = matches[0]
-                    selected_model_name = str(matched_pipeline.get("name", "Unknown"))
-                    selected_pipeline_id = str(matched_pipeline.get("id", ""))
+                    selected_model_name = matched_pipeline.name
+                    selected_pipeline_id = matched_pipeline.id
                     from utils.postgres_client import get_postgres_pool
 
                     models_store = (
@@ -410,7 +436,7 @@ class KandinskyClient(ITextToImageClient):
                     return True, msg
 
                 if len(matches) > 1:
-                    models_list = [f"{p.get('name', 'Unknown')!s} (ID: {p.get('id', 'N/A')!s})" for p in matches]
+                    models_list = [f"{p.name} (ID: {p.id})" for p in matches]
                     msg = (
                         "Найдено несколько моделей:\n"
                         + "\n".join(models_list)
@@ -465,14 +491,23 @@ class KandinskyClient(ITextToImageClient):
                     bound.error("Ошибка при получении списка pipelines: HTTP {}", response.status)
                     return None
 
-                data: list[dict[str, Any]] = await response.json()
-                if not data:
+                data_json = await response.json()
+                if not data_json or not isinstance(data_json, list):
                     bound.error("Пустой ответ при получении pipelines от Kandinsky")
                     return None
 
+                try:
+                    pipelines = [KandinskyPipelineResponse.model_validate(p) for p in data_json]
+                except ValidationError as e:
+                    bound.bind(
+                        error=str(e),
+                        data_sample=str(data_json)[:200],
+                    ).error("Ошибка валидации ответа Kandinsky API при получении pipelines")
+                    return None
+
                 if saved_pipeline_id:
-                    for pipeline in data:
-                        if pipeline.get("id") == saved_pipeline_id:
+                    for pipeline in pipelines:
+                        if pipeline.id == saved_pipeline_id:
                             bound.bind(
                                 pipeline_id=saved_pipeline_id,
                                 pipeline_name=saved_pipeline_name,
@@ -484,10 +519,9 @@ class KandinskyClient(ITextToImageClient):
                         saved_pipeline_id,
                     )
 
-                pipeline_id_raw = data[0].get("id")
-                pipeline_name_raw = data[0].get("name", "Unknown")
-                pipeline_id = str(pipeline_id_raw) if pipeline_id_raw is not None else ""
-                pipeline_name = str(pipeline_name_raw)
+                first_pipeline = pipelines[0]
+                pipeline_id: str = str(first_pipeline.id)
+                pipeline_name: str = str(first_pipeline.name)
                 await models_store.set_kandinsky_model(pipeline_id, pipeline_name)
                 bound.bind(pipeline_id=pipeline_id, pipeline_name=pipeline_name).info(
                     "Выбран pipeline для генерации через Kandinsky",
@@ -523,22 +557,20 @@ class KandinskyClient(ITextToImageClient):
         """Создаёт задачу генерации и возвращает UUID."""
         bound = logger.bind(event="kandinsky_start_generation", user_id=user_id, pipeline_id=pipeline_id)
 
-        params = {
-            "type": "GENERATE",
-            "numImages": 1,
-            "width": 1024,
-            "height": 1024,
-            "generateParams": {
-                "query": prompt,
-            },
-        }
-
-        import json
+        params = KandinskyGenerationRequest(
+            type="GENERATE",
+            numImages=1,
+            width=1024,
+            height=1024,
+            generateParams=KandinskyGenerationParams(query=prompt),
+        )
 
         form_data = aiohttp.FormData()
         form_data.add_field("pipeline_id", pipeline_id)
         # Параметры передаём как JSON‑строку, как того требует API Fusion Brain.
-        form_data.add_field("params", json.dumps(params), content_type="application/json")
+        form_data.add_field(
+            "params", params.model_dump_json(by_alias=True, exclude_none=True), content_type="application/json"
+        )
 
         @retry_standard(service_name="kandinsky", method_name="start_generation")
         async def _post_generation() -> aiohttp.ClientResponse:
@@ -551,14 +583,18 @@ class KandinskyClient(ITextToImageClient):
         try:
             async with await _post_generation() as response:
                 if response.status in {200, 201}:
-                    result = await response.json()
-                    uuid_value = result.get("uuid")
-                    if not uuid_value:
-                        bound.error("Успешный HTTP‑ответ без UUID задачи генерации")
+                    result_json = await response.json()
+                    try:
+                        result = KandinskyGenerationStartResponse.model_validate(result_json)
+                        uuid_str: str = str(result.uuid)
+                        bound.bind(task_uuid=uuid_str).info("Задача генерации на Kandinsky успешно создана")
+                        return uuid_str
+                    except ValidationError as e:
+                        bound.bind(
+                            error=str(e),
+                            data_sample=str(result_json)[:200],
+                        ).error("Ошибка валидации ответа Kandinsky API при запуске генерации")
                         return None
-                    uuid_str = str(uuid_value)
-                    bound.bind(task_uuid=uuid_str).info("Задача генерации на Kandinsky успешно создана")
-                    return uuid_str
 
                 error_text = await response.text()
                 bound.bind(
@@ -606,12 +642,25 @@ class KandinskyClient(ITextToImageClient):
                         )
                         return None
 
-                    data: dict[str, Any] = await response.json()
-                    status = data.get("status")
+                    data_json = await response.json()
+                    try:
+                        status_response = KandinskyStatusResponse.model_validate(data_json)
+                    except ValidationError as e:
+                        bound.bind(
+                            error=str(e),
+                            data_sample=str(data_json)[:200],
+                            attempt=attempt,
+                        ).error("Ошибка валидации ответа Kandinsky API при проверке статуса")
+                        return None
 
-                    if status == "DONE":
-                        result = data.get("result", {})
-                        files = result.get("files", [])
+                    status = status_response.status
+
+                    if status == KandinskyStatus.DONE:
+                        if not status_response.result:
+                            bound.error("Ответ Kandinsky со статусом DONE без результата")
+                            return None
+
+                        files = status_response.result.files
                         if not files:
                             bound.error("Ответ Kandinsky со статусом DONE без файлов результата")
                             return None
@@ -639,21 +688,21 @@ class KandinskyClient(ITextToImageClient):
                         )
                         return image_data
 
-                    if status == "FAIL":
-                        error_desc = data.get("errorDescription", "Неизвестная ошибка")
+                    if status == KandinskyStatus.FAIL:
+                        error_desc = status_response.errorDescription or "Неизвестная ошибка"
                         bound.bind(error_description=error_desc, attempt=attempt).error(
                             "Генерация на Kandinsky завершилась с ошибкой",
                         )
                         return None
 
-                    if status in {"INITIAL", "PROCESSING"}:
-                        bound.bind(status=status, attempt=attempt).info(
+                    if status in {KandinskyStatus.INITIAL, KandinskyStatus.PROCESSING}:
+                        bound.bind(status=str(status), attempt=attempt).info(
                             "Генерация на Kandinsky ещё выполняется, продолжаем ожидание",
                         )
                         await asyncio.sleep(STATUS_POLL_DELAY_SECONDS)
                         continue
 
-                    bound.bind(raw_status=status, attempt=attempt).error(
+                    bound.bind(raw_status=str(status), attempt=attempt).error(
                         "Kandinsky вернул неизвестный статус генерации",
                     )
                     return None

@@ -13,6 +13,15 @@
 
 ### Изменено
 
+- **KandinskyClient: использование Pydantic моделей вместо dict[str, Any]**:
+  - Обновлен метод `_get_pipeline_id()` для использования `KandinskyPipelineResponse`
+  - Обновлен метод `_start_generation()` для использования `KandinskyGenerationRequest` и `KandinskyGenerationStartResponse`
+  - Обновлен метод `_wait_for_generation()` для использования `KandinskyStatusResponse` и `KandinskyStatus` enum
+  - Обновлены методы `check_api_status()` и `set_model()` для использования `KandinskyPipelineResponse`
+  - Добавлена обработка ошибок валидации через `ValidationError`
+  - Удалены ручные проверки и валидации через `.get()` и `isinstance()`
+  - Типобезопасный доступ к полям ответов API
+
 - **Вынос захардкоженных таймаутов в конфигурацию через HttpTimeoutConfig**:
   - Создан универсальный `HttpTimeoutConfig` dataclass для всех HTTP-таймаутов (total, connect, sock_read)
   - Добавлен метод `create_http_timeout()` в класс `Config` для создания таймаутов из переменных окружения
