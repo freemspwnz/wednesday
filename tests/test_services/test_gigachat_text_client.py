@@ -73,9 +73,8 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
         model="GigaChat",
         verify_ssl=False,
     )
-    client = GigaChatTextClient(config=config)
 
-    try:
+    async with GigaChatTextClient(config=config) as client:
         # Подменяем внутренний session на заглушку, чтобы не ходить в сеть.
         dummy_session = _DummySession()
         monkeypatch.setattr(client, "_session", dummy_session, raising=True)
@@ -94,8 +93,6 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
         assert all(r == "dummy-token" for r in results), f"Не все результаты равны 'dummy-token': {results}"
         # HTTP‑вызов был выполнен только один раз (благодаря lock в _get_access_token).
         assert dummy_session.post_calls == 1, f"Ожидался 1 вызов post, получено: {dummy_session.post_calls}"
-    finally:
-        await client.aclose()
 
 
 @pytest.mark.asyncio
@@ -114,9 +111,8 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
         model="GigaChat",
         verify_ssl=False,
     )
-    client = GigaChatTextClient(config=config)
 
-    try:
+    async with GigaChatTextClient(config=config) as client:
         # Подменяем session, чтобы не было реальных HTTP‑запросов.
         dummy_session = _DummySession()
         monkeypatch.setattr(client, "_session", dummy_session, raising=True)
@@ -143,5 +139,3 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
         preview = full_key[:10]
         assert preview in log_text
         assert full_key not in log_text
-    finally:
-        await client.aclose()

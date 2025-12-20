@@ -29,6 +29,8 @@ from __future__ import annotations
 import ssl
 import time
 import uuid
+from types import TracebackType
+from typing import Self
 
 import aiohttp
 from loguru import logger
@@ -433,6 +435,31 @@ class GigaChatTextClient(ITextToTextClient):
             await self._session.close()
         except Exception as exc:  # pragma: no cover - защитное логирование
             logger.warning(f"Не удалось корректно закрыть GigaChatTextClient session: {exc!s}")
+
+    async def __aenter__(self) -> Self:
+        """Вход в контекстный менеджер.
+
+        Returns:
+            Сам экземпляр клиента для использования в async with.
+        """
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Выход из контекстного менеджера.
+
+        Гарантированно вызывает aclose() даже при исключениях.
+
+        Args:
+            exc_type: Тип исключения (если было)
+            exc_val: Экземпляр исключения (если было)
+            exc_tb: Traceback (если было)
+        """
+        await self.aclose()
 
     def _get_ssl_context(self) -> bool | ssl.SSLContext:
         """Преобразует verify_ssl в формат, подходящий для aiohttp.TCPConnector.

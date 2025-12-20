@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Добавление context manager для HTTP клиентов**:
+  - Добавлены методы `__aenter__` и `__aexit__` в `KandinskyClient` для поддержки async context manager
+  - Добавлены методы `__aenter__` и `__aexit__` в `GigaChatTextClient` для поддержки async context manager
+  - Обновлены тесты для использования context manager вместо явного вызова `aclose()`
+  - Добавлены unit-тесты для проверки корректной работы context manager
+  - Гарантированное закрытие ресурсов даже при исключениях
+  - Упрощённое использование клиентов в тестах и временных операциях
+
 - **Перенос репозиториев из utils/ в services/infrastructure/repositories/**:
   - Создана директория `services/infrastructure/repositories/` для репозиториев
   - Перенесены `ImagesRepo` и `ImageRecord` из `utils/images_repo.py` в `services/infrastructure/repositories/images_repo.py`

@@ -274,6 +274,72 @@ async def test_kandinsky_client_aclose(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_kandinsky_client_context_manager(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Проверка работы context manager для KandinskyClient."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from services.clients.kandinsky import KandinskyClient
+    from utils.config import KandinskyConfig
+
+    # Мокируем переменные окружения для прокси
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
+    monkeypatch.delenv("HTTP_PROXY", raising=False)
+
+    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    mock_session = MagicMock()
+    mock_session.close = AsyncMock()
+
+    # Мокируем создание сессии
+    def _mock_session_init(*args: object, **kwargs: object) -> MagicMock:
+        return mock_session
+
+    monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
+
+    async with KandinskyClient(config=config) as client:
+        assert client._session is not None
+        assert client._session == mock_session
+
+    # После выхода из контекста сессия должна быть закрыта
+    mock_session.close.assert_called_once()
+    assert client._session is None
+
+
+@pytest.mark.asyncio
+async def test_kandinsky_client_context_manager_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Проверка автоматического закрытия при исключении в context manager."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from services.clients.kandinsky import KandinskyClient
+    from utils.config import KandinskyConfig
+
+    # Мокируем переменные окружения для прокси
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
+    monkeypatch.delenv("HTTP_PROXY", raising=False)
+
+    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    mock_session = MagicMock()
+    mock_session.close = AsyncMock()
+
+    # Мокируем создание сессии
+    def _mock_session_init(*args: object, **kwargs: object) -> MagicMock:
+        return mock_session
+
+    monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
+
+    try:
+        async with KandinskyClient(config=config) as client:
+            assert client._session is not None
+            # Имитируем исключение внутри контекста
+            raise ValueError("Test exception")
+    except ValueError:
+        pass
+
+    # После исключения сессия должна быть закрыта
+    mock_session.close.assert_called_once()
+    assert client._session is None
+
+
+@pytest.mark.asyncio
 async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента GigaChatTextClient."""
 
@@ -303,16 +369,97 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
         model="GigaChat",
         verify_ssl=False,
     )
-    client = GigaChatTextClient(config=config)
 
-    try:
+    async with GigaChatTextClient(config=config) as client:
         assert client._auth_url is not None
         assert client._api_url is not None
         assert client._authorization_key is not None
         assert client._scope is not None
         assert client._model is not None
-    finally:
-        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gigachat_text_client_context_manager(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Проверка работы context manager для GigaChatTextClient."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from services.clients.gigachat_text import GigaChatTextClient
+    from utils.config import GigaChatConfig
+
+    # Мокируем aiohttp.ClientSession и TCPConnector
+    mock_session = MagicMock()
+    mock_session.close = AsyncMock()
+
+    def _mock_session_init(*args: object, **kwargs: object) -> MagicMock:
+        return mock_session
+
+    mock_connector = MagicMock()
+
+    def _mock_connector_init(*args: object, **kwargs: object) -> MagicMock:
+        return mock_connector
+
+    monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
+    monkeypatch.setattr("aiohttp.TCPConnector", _mock_connector_init)
+
+    config = GigaChatConfig(
+        auth_url="https://example.test/auth",
+        api_url="https://example.test/api",
+        authorization_key="dummy",
+        scope="GIGACHAT_API_PERS",
+        model="GigaChat",
+        verify_ssl=False,
+    )
+
+    async with GigaChatTextClient(config=config) as client:
+        assert client._session is not None
+        assert client._session == mock_session
+
+    # После выхода из контекста сессия должна быть закрыта
+    mock_session.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Проверка автоматического закрытия при исключении в context manager."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from services.clients.gigachat_text import GigaChatTextClient
+    from utils.config import GigaChatConfig
+
+    # Мокируем aiohttp.ClientSession и TCPConnector
+    mock_session = MagicMock()
+    mock_session.close = AsyncMock()
+
+    def _mock_session_init(*args: object, **kwargs: object) -> MagicMock:
+        return mock_session
+
+    mock_connector = MagicMock()
+
+    def _mock_connector_init(*args: object, **kwargs: object) -> MagicMock:
+        return mock_connector
+
+    monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
+    monkeypatch.setattr("aiohttp.TCPConnector", _mock_connector_init)
+
+    config = GigaChatConfig(
+        auth_url="https://example.test/auth",
+        api_url="https://example.test/api",
+        authorization_key="dummy",
+        scope="GIGACHAT_API_PERS",
+        model="GigaChat",
+        verify_ssl=False,
+    )
+
+    try:
+        async with GigaChatTextClient(config=config) as client:
+            assert client._session is not None
+            # Имитируем исключение внутри контекста
+            raise ValueError("Test exception")
+    except ValueError:
+        pass
+
+    # После исключения сессия должна быть закрыта
+    mock_session.close.assert_called_once()
 
 
 @pytest.mark.asyncio

@@ -29,7 +29,8 @@ from __future__ import annotations
 import asyncio
 import base64
 from io import BytesIO
-from typing import Any
+from types import TracebackType
+from typing import Any, Self
 
 import aiohttp
 from loguru import logger
@@ -701,3 +702,28 @@ class KandinskyClient(ITextToImageClient):
                 logger.warning(f"Ошибка при закрытии сессии KandinskyClient: {exc}")
             finally:
                 self._session = None  # type: ignore[assignment]
+
+    async def __aenter__(self) -> Self:
+        """Вход в контекстный менеджер.
+
+        Returns:
+            Сам экземпляр клиента для использования в async with.
+        """
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Выход из контекстного менеджера.
+
+        Гарантированно вызывает aclose() даже при исключениях.
+
+        Args:
+            exc_type: Тип исключения (если было)
+            exc_val: Экземпляр исключения (если было)
+            exc_tb: Traceback (если было)
+        """
+        await self.aclose()
