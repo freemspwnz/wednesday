@@ -15,16 +15,3 @@ class PromptFallbackConfig:
 
     frog_prompts: list[str]
     styles: list[str]
-
-    @classmethod
-    def from_image_config(cls) -> PromptFallbackConfig:
-        """Создает PromptFallbackConfig из глобального ImageConfig.
-
-        Используется только в container.py при сборке зависимостей.
-        """
-        from utils.config import ImageConfig
-
-        return cls(
-            frog_prompts=list(ImageConfig.FROG_PROMPTS),
-            styles=list(ImageConfig.STYLES),
-        )

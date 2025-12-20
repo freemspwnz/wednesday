@@ -6,9 +6,11 @@
 
 - **Удаление зависимости domain слоя от utils.config**:
   - Обновлен `services/container.py` для прямого создания `PromptFallbackConfig` из `ImageConfig`
+  - Удален метод `from_image_config()` из `services/domain/prompt_fallback_config.py`
+  - `PromptFallbackConfig` теперь является чистым dataclass без методов создания
   - Создание конфигурации перенесено в Composition Root (`container.py`)
   - Domain слой больше не зависит от `utils.config` через метод `from_image_config()`
-  - Улучшена изоляция domain слоя от инфраструктуры конфигурации
+  - Улучшена изоляция domain слоя от инфраструктуры конфигурации согласно принципу Dependency Inversion
 
 - **Перенос протоколов ITextToImageClient и ITextToTextClient в services/protocols.py**:
   - Добавлены протоколы `ITextToImageClient` и `ITextToTextClient` в `services/protocols.py`
