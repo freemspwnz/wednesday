@@ -93,6 +93,17 @@ class BaseHTTPClient:
 
         Raises:
             ClientError: При ошибках запроса.
+
+        Example:
+            GET запрос с кастомной обработкой::
+
+                response = await self._get(
+                    endpoint="key/api/v1/pipelines",
+                    method_name="get_pipelines",
+                    headers=self._get_auth_headers(),
+                )
+                async with response:
+                    data = await self._parse_json_response(response)
         """
         url = self._build_url(endpoint)
         request_headers = headers or {}
@@ -147,6 +158,20 @@ class BaseHTTPClient:
 
         Raises:
             ClientError: При ошибках запроса.
+
+        Example:
+            POST запрос с FormData::
+
+                form_data = aiohttp.FormData()
+                form_data.add_field("file", image_data, filename=filename)
+                response = await self._post(
+                    endpoint="key/api/v1/upload",
+                    method_name="upload_image",
+                    headers=self._get_auth_headers(),
+                    data=form_data,
+                )
+                async with response:
+                    return await self._parse_json_response(response)
         """
         url = self._build_url(endpoint)
         request_headers = headers or {}
@@ -225,6 +250,19 @@ class BaseHTTPClient:
             RateLimitError: При превышении лимита запросов (429).
             APIError: При других ошибках API (4xx, 5xx).
             ValueError: При ошибках парсинга JSON.
+
+        Example:
+            GET запрос с кастомной обработкой ответа::
+
+                async def get_pipeline_info(self, pipeline_id: str) -> PipelineInfo:
+                    response = await self._get(
+                        endpoint=f"key/api/v1/pipelines/{pipeline_id}",
+                        method_name="get_pipeline_info",
+                        headers=self._get_auth_headers(),
+                    )
+                    async with response:
+                        data = await self._parse_json_response(response)
+                        return PipelineInfo.model_validate(data)
         """
         if response.status != expected_status:
             error_text = await response.text()
@@ -312,6 +350,16 @@ class BaseHTTPClient:
 
         Raises:
             ClientError: При ошибках запроса или парсинга.
+
+        Example:
+            Простой GET запрос с JSON ответом::
+
+                async def get_pipeline_info(self, pipeline_id: str) -> dict[str, Any]:
+                    return await self._get_json(
+                        endpoint=f"key/api/v1/pipelines/{pipeline_id}",
+                        method_name="get_pipeline_info",
+                        headers=self._get_auth_headers(),
+                    )
         """
         response = await self._get(
             endpoint=endpoint,
@@ -349,6 +397,19 @@ class BaseHTTPClient:
 
         Raises:
             ClientError: При ошибках запроса или парсинга.
+
+        Example:
+            POST запрос с JSON данными::
+
+                async def update_settings(
+                    self, pipeline_id: str, settings: dict[str, Any]
+                ) -> dict[str, Any]:
+                    return await self._post_json(
+                        endpoint=f"key/api/v1/pipelines/{pipeline_id}/settings",
+                        method_name="update_settings",
+                        headers=self._get_auth_headers(),
+                        json=settings,
+                    )
         """
         response = await self._post(
             endpoint=endpoint,
