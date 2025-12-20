@@ -31,7 +31,6 @@ from asyncpg import UniqueViolationError
 
 from utils.logger import get_logger, log_all_methods
 from utils.paths import FROGS_DIR
-from utils.postgres_client import get_postgres_pool
 
 logger = get_logger(__name__)
 
@@ -68,14 +67,13 @@ class ImagesRepo:
     - обработка гонок при параллельной генерации одного и того же промпта.
     """
 
-    def __init__(self, pool: asyncpg.Pool | None = None) -> None:
+    def __init__(self, pool: asyncpg.Pool) -> None:
         """Инициализирует репозиторий изображений.
 
         Args:
-            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
-                  (для обратной совместимости).
+            pool: Пул подключений PostgreSQL.
         """
-        self._pool = pool or get_postgres_pool()
+        self._pool = pool
         self._logger = get_logger(__name__)
 
     @staticmethod

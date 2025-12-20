@@ -12,7 +12,6 @@ from typing import Any
 import asyncpg
 
 from utils.logger import get_logger, log_all_methods
-from utils.postgres_client import get_postgres_pool
 
 
 @log_all_methods()
@@ -23,15 +22,14 @@ class ModelsRepo:
     Все методы асинхронные и используют Postgres в качестве единственного источника истины.
     """
 
-    def __init__(self, storage_path: str | None = None, pool: asyncpg.Pool | None = None) -> None:
+    def __init__(self, pool: asyncpg.Pool, storage_path: str | None = None) -> None:
         """Инициализирует репозиторий моделей.
 
         Args:
+            pool: Пул подключений PostgreSQL.
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
-            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
-                  (для обратной совместимости).
         """
-        self._pool = pool or get_postgres_pool()
+        self._pool = pool
         self.logger = get_logger(__name__)
 
     async def _ensure_rows(self) -> None:

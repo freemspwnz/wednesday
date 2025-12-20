@@ -452,8 +452,9 @@ async def send_frog_manual(
 
             # Уведомляем администраторов
             from utils.admins_repo import AdminsRepo
+            from utils.postgres_client import get_postgres_pool
 
-            admins_store = AdminsRepo()
+            admins_store = AdminsRepo(pool=get_postgres_pool())
             all_admins = await admins_store.list_all_admins()
             if all_admins:
                 admin_message = (
@@ -549,8 +550,9 @@ async def send_frog_manual(
             import traceback
 
             from utils.admins_repo import AdminsRepo
+            from utils.postgres_client import get_postgres_pool
 
-            admins_store = AdminsRepo()
+            admins_store = AdminsRepo(pool=get_postgres_pool())
             all_admins = await admins_store.list_all_admins()
             if all_admins:
                 full_error = traceback.format_exc()
@@ -658,8 +660,9 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
 
         # Очистка старых записей dispatch_registry
         from utils.dispatch_registry import DispatchRegistry
+        from utils.postgres_client import get_postgres_pool
 
-        registry = DispatchRegistry()
+        registry = DispatchRegistry(pool=get_postgres_pool())
         await registry.cleanup_old()
 
         logger.info("Daily cleanup task completed successfully")

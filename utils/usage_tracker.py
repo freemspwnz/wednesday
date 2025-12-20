@@ -13,7 +13,6 @@ from datetime import datetime
 import asyncpg
 
 from utils.logger import get_logger, log_all_methods
-from utils.postgres_client import get_postgres_pool
 
 
 @log_all_methods()
@@ -26,21 +25,20 @@ class UsageTracker:
 
     def __init__(
         self,
+        pool: asyncpg.Pool,
         storage_path: str | None = None,
         monthly_quota: int = 100,
         frog_threshold: int = 70,
-        pool: asyncpg.Pool | None = None,
     ) -> None:
         """Инициализирует трекер использования генераций.
 
         Args:
+            pool: Пул подключений PostgreSQL.
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
             monthly_quota: Месячная квота генераций (по умолчанию 100).
             frog_threshold: Порог для ручных генераций /frog (по умолчанию 70).
-            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
-                  (для обратной совместимости).
         """
-        self._pool = pool or get_postgres_pool()
+        self._pool = pool
         self.logger = get_logger(__name__)
         self.monthly_quota = int(monthly_quota)
         self.frog_threshold = int(frog_threshold)

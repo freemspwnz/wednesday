@@ -226,7 +226,8 @@ class BotRunner:
 
                 # Этап 2: запускаем основной бот
                 self.logger.info("[Supervisor] Создание экземпляра WednesdayBot")
-                self.bot = build_bot(config)
+                postgres_pool = get_postgres_pool()
+                self.bot = build_bot(config, db_pool=postgres_pool)
                 try:
                     if self.pending_startup_edit:
                         self.logger.info(

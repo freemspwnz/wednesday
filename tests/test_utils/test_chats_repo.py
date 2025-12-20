@@ -12,8 +12,8 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_chats_store_add_chat(postgres_transaction: Any) -> None:
-    store = ChatsRepo()
+async def test_chats_store_add_chat(postgres_transaction: Any, async_postgres_pool: Any) -> None:
+    store = ChatsRepo(pool=async_postgres_pool)
 
     await store.add_chat(12345, "Test Chat")
 
@@ -22,8 +22,8 @@ async def test_chats_store_add_chat(postgres_transaction: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chats_store_remove_chat(postgres_transaction: Any) -> None:
-    store = ChatsRepo()
+async def test_chats_store_remove_chat(postgres_transaction: Any, async_postgres_pool: Any) -> None:
+    store = ChatsRepo(pool=async_postgres_pool)
 
     await store.add_chat(12345, "Test Chat")
     await store.remove_chat(12345)
@@ -33,8 +33,8 @@ async def test_chats_store_remove_chat(postgres_transaction: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chats_store_list_chat_ids(postgres_transaction: Any) -> None:
-    store = ChatsRepo()
+async def test_chats_store_list_chat_ids(postgres_transaction: Any, async_postgres_pool: Any) -> None:
+    store = ChatsRepo(pool=async_postgres_pool)
 
     await store.add_chat(11111, "Chat 1")
     await store.add_chat(22222, "Chat 2")
@@ -48,8 +48,8 @@ async def test_chats_store_list_chat_ids(postgres_transaction: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chats_store_list_chat_ids_empty(cleanup_tables: Any) -> None:
-    store = ChatsRepo()
+async def test_chats_store_list_chat_ids_empty(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = ChatsRepo(pool=async_postgres_pool)
 
     chat_ids = await store.list_chat_ids()
     assert chat_ids == []

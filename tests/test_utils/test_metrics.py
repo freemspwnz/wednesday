@@ -12,8 +12,8 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_metrics_increment_generation_success(cleanup_tables: Any) -> None:
-    metrics = Metrics()
+async def test_metrics_increment_generation_success(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    metrics = Metrics(pool=async_postgres_pool)
 
     await metrics.increment_generation_success()
 
@@ -23,8 +23,8 @@ async def test_metrics_increment_generation_success(cleanup_tables: Any) -> None
 
 
 @pytest.mark.asyncio
-async def test_metrics_increment_generation_failed(cleanup_tables: Any) -> None:
-    metrics = Metrics()
+async def test_metrics_increment_generation_failed(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    metrics = Metrics(pool=async_postgres_pool)
 
     await metrics.increment_generation_failed()
 
@@ -34,8 +34,8 @@ async def test_metrics_increment_generation_failed(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_metrics_increment_dispatch_success(cleanup_tables: Any) -> None:
-    metrics = Metrics()
+async def test_metrics_increment_dispatch_success(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    metrics = Metrics(pool=async_postgres_pool)
 
     await metrics.increment_dispatch_success()
 
@@ -44,8 +44,8 @@ async def test_metrics_increment_dispatch_success(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_metrics_increment_dispatch_failed(cleanup_tables: Any) -> None:
-    metrics = Metrics()
+async def test_metrics_increment_dispatch_failed(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    metrics = Metrics(pool=async_postgres_pool)
 
     await metrics.increment_dispatch_failed()
 
@@ -54,8 +54,8 @@ async def test_metrics_increment_dispatch_failed(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_metrics_add_generation_time(cleanup_tables: Any) -> None:
-    metrics = Metrics()
+async def test_metrics_add_generation_time(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    metrics = Metrics(pool=async_postgres_pool)
 
     await metrics.increment_generation_success()
     await metrics.add_generation_time(1.5)
@@ -68,8 +68,8 @@ async def test_metrics_add_generation_time(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_metrics_increment_circuit_breaker_trip(cleanup_tables: Any) -> None:
-    metrics = Metrics()
+async def test_metrics_increment_circuit_breaker_trip(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    metrics = Metrics(pool=async_postgres_pool)
 
     await metrics.increment_circuit_breaker_trip()
 
@@ -78,8 +78,8 @@ async def test_metrics_increment_circuit_breaker_trip(cleanup_tables: Any) -> No
 
 
 @pytest.mark.asyncio
-async def test_metrics_get_summary_empty(cleanup_tables: Any) -> None:
-    metrics = Metrics()
+async def test_metrics_get_summary_empty(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    metrics = Metrics(pool=async_postgres_pool)
 
     summary = await metrics.get_summary()
 

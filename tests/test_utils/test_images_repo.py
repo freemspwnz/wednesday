@@ -19,7 +19,7 @@ pytestmark = [
 
 @pytest.mark.asyncio
 async def test_get_or_create_image_saves_file_and_metadata(
-    tmp_path: Path, monkeypatch: Any, cleanup_tables: Any
+    tmp_path: Path, monkeypatch: Any, cleanup_tables: Any, async_postgres_pool: Any
 ) -> None:
     """
     Базовый сценарий: изображение сохраняется на диск и в таблицу images,
@@ -29,8 +29,8 @@ async def test_get_or_create_image_saves_file_and_metadata(
     # Перенаправляем папку с изображениями в tmp_path, чтобы не трогать реальные данные.
     monkeypatch.setattr("services.infrastructure.repositories.images_repo.FROGS_DIR", tmp_path)
 
-    prompts_store = PromptsRepo()
-    images_store = ImagesRepo()
+    prompts_store = PromptsRepo(pool=async_postgres_pool)
+    images_store = ImagesRepo(pool=async_postgres_pool)
 
     prompt_record = await prompts_store.get_or_create_prompt("A simple frog")
     image_bytes = b"test-image-bytes"
@@ -54,7 +54,7 @@ async def test_get_or_create_image_saves_file_and_metadata(
 
 @pytest.mark.asyncio
 async def test_get_or_create_image_handles_concurrent_insert(
-    monkeypatch: Any, tmp_path: Path, cleanup_tables: Any
+    monkeypatch: Any, tmp_path: Path, cleanup_tables: Any, async_postgres_pool: Any
 ) -> None:
     """
     Имитируем гонку: первая корутина вставляет запись, вторая получает duplicate key
@@ -63,13 +63,13 @@ async def test_get_or_create_image_handles_concurrent_insert(
 
     monkeypatch.setattr("services.infrastructure.repositories.images_repo.FROGS_DIR", tmp_path)
 
-    prompts_store = PromptsRepo()
+    prompts_store = PromptsRepo(pool=async_postgres_pool)
     prompt_record = await prompts_store.get_or_create_prompt("Concurrent frog")
     prompt_hash = prompt_record.prompt_hash
     image_bytes = b"concurrent-image"
 
-    store1 = ImagesRepo()
-    store2 = ImagesRepo()
+    store1 = ImagesRepo(pool=async_postgres_pool)
+    store2 = ImagesRepo(pool=async_postgres_pool)
 
     async def _create_with_store1() -> None:
         await store1.get_or_create_image(prompt_hash, image_bytes)
@@ -84,6 +84,6 @@ async def test_get_or_create_image_handles_concurrent_insert(
     await asyncio.gather(_create_with_store1(), _create_with_store2())
 
     # В таблице должна быть одна запись для этого prompt_hash.
-    images_store = ImagesRepo()
+    images_store = ImagesRepo(pool=async_postgres_pool)
     record = await images_store.get_by_prompt_hash(prompt_hash)
     assert record is not None

@@ -49,7 +49,6 @@ from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, Kandi
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
 from utils.models_repo import ModelsRepo
-from utils.postgres_client import get_postgres_pool
 from utils.usage_tracker import UsageTracker
 
 
@@ -75,10 +74,10 @@ def _create_clients(config: Config, models_repo: IModelsRepo | None = None) -> t
 
 def build_image_stack(
     config: Config,
+    db_pool: asyncpg.Pool,
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
     models_repo: IModelsRepo | None = None,
-    db_pool: asyncpg.Pool | None = None,
 ) -> ImageService:
     """Собирает полный стек зависимостей для ImageService.
 
@@ -87,20 +86,16 @@ def build_image_stack(
 
     Args:
         config: Экземпляр Config для создания клиентов и чтения настроек.
+        db_pool: Пул подключений PostgreSQL.
         image_client: Опциональный клиент для генерации изображений.
             Если None, создаётся новый через create_image_client().
         text_client: Опциональный клиент для генерации текста.
             Если None, создаётся новый через create_text_client().
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
-        db_pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
-                 (для обратной совместимости).
 
     Returns:
         Настроенный экземпляр ImageService.
     """
-    # Получаем пул (DI или fallback на глобальный)
-    if db_pool is None:
-        db_pool = get_postgres_pool()
 
     # Инфраструктура и клиенты
     if image_client is None or text_client is None:
@@ -177,7 +172,9 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     Returns:
         Экземпляр AdminDashboardService с внедрёнными зависимостями.
     """
-    models_store = models_repo if models_repo is not None else ModelsRepo()
+    from utils.postgres_client import get_postgres_pool
+
+    models_store = models_repo if models_repo is not None else ModelsRepo(pool=get_postgres_pool())
     return AdminDashboardService(
         usage=usage,
         chats=chats,
@@ -188,7 +185,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     )
 
 
-def build_bot_services(config: Config, db_pool: asyncpg.Pool | None = None) -> BotServices:
+def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
     На этом этапе:
@@ -197,15 +194,11 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool | None = None) -> B
 
     Args:
         config: Экземпляр Config для создания сервисов и настроек.
-        db_pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
-                 (для обратной совместимости).
+        db_pool: Пул подключений PostgreSQL.
 
     Returns:
         Настроенный экземпляр BotServices.
     """
-    # Получаем пул (DI или fallback на глобальный)
-    if db_pool is None:
-        db_pool = get_postgres_pool()
 
     app_settings = AppSettings.from_config(config)
 
@@ -225,10 +218,10 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool | None = None) -> B
     )
 
     usage = UsageTracker(
+        pool=db_pool,
         storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
         monthly_quota=100,
         frog_threshold=70,
-        pool=db_pool,
     )
 
     chats = ChatsRepo(pool=db_pool)
@@ -296,7 +289,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool | None = None) -> B
     )
 
 
-def build_bot(config: Config, services: BotServices | None = None) -> WednesdayBot:
+def build_bot(config: Config, db_pool: asyncpg.Pool, services: BotServices | None = None) -> WednesdayBot:
     """Создаёт и настраивает экземпляр WednesdayBot.
 
     Единственная точка создания WednesdayBot в приложении. Использует
@@ -304,6 +297,7 @@ def build_bot(config: Config, services: BotServices | None = None) -> WednesdayB
 
     Args:
         config: Экземпляр Config для создания сервисов и зависимостей.
+        db_pool: Пул подключений PostgreSQL.
         services: Опциональный контейнер сервисов. Если None, создаётся
             новый через build_bot_services().
 
@@ -318,7 +312,7 @@ def build_bot(config: Config, services: BotServices | None = None) -> WednesdayB
     from bot.wednesday_bot import WednesdayBot
 
     if services is None:
-        services = build_bot_services(config)
+        services = build_bot_services(config, db_pool)
 
     # Создаём бот с внедрёнными зависимостями
     bot = WednesdayBot(services=services)

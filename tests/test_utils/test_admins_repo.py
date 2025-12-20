@@ -12,8 +12,8 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_admins_store_add_admin(postgres_transaction: Any) -> None:
-    store = AdminsRepo()
+async def test_admins_store_add_admin(postgres_transaction: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
 
     # Добавляем админа
     result = await store.add_admin(12345)
@@ -24,8 +24,8 @@ async def test_admins_store_add_admin(postgres_transaction: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
-    store = AdminsRepo()
+async def test_admins_store_add_admin_duplicate(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
 
     # Добавляем админа дважды
     result1 = await store.add_admin(12345)
@@ -36,8 +36,8 @@ async def test_admins_store_add_admin_duplicate(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
-    store = AdminsRepo()
+async def test_admins_store_remove_admin(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
 
     # Добавляем админа
     await store.add_admin(12345)
@@ -50,8 +50,8 @@ async def test_admins_store_remove_admin(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None:
-    store = AdminsRepo()
+async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
 
     # Пытаемся удалить несуществующего админа
     result = await store.remove_admin(99999)
@@ -59,8 +59,8 @@ async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any) -> None
 
 
 @pytest.mark.asyncio
-async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
-    store = AdminsRepo()
+async def test_admins_store_list_admins(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
 
     # Добавляем нескольких админов
     await store.add_admin(11111)
@@ -76,8 +76,8 @@ async def test_admins_store_list_admins(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_admins_store_list_all_admins(cleanup_tables: Any) -> None:
-    store = AdminsRepo()
+async def test_admins_store_list_all_admins(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
 
     # Добавляем админов
     await store.add_admin(11111)

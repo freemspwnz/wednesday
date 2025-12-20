@@ -403,7 +403,11 @@ class GigaChatTextClient(ITextToTextClient):
             available_models = await self.get_available_models(save_models=False)
             if model_name in available_models:
                 # Сохраняем модель в async-хранилище
-                models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
+                from utils.postgres_client import get_postgres_pool
+
+                models_store = (
+                    self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+                )
                 await models_store.set_gigachat_model(model_name)
                 self._model = model_name
 
@@ -567,7 +571,9 @@ class GigaChatTextClient(ITextToTextClient):
             Название текущей модели.
         """
         try:
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
+            from utils.postgres_client import get_postgres_pool
+
+            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
             stored_model = await models_store.get_gigachat_model()
             if stored_model:
                 return stored_model

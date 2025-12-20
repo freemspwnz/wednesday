@@ -38,9 +38,11 @@ class BaseHandlers:
         Args:
             services: Контейнер сервисов бота для доступа к зависимостям.
         """
+        from utils.postgres_client import get_postgres_pool
+
         self.logger = get_logger(__name__)
         self.services: BotServices = services
-        self.admins_store: AdminsRepo = AdminsRepo()
+        self.admins_store: AdminsRepo = AdminsRepo(pool=get_postgres_pool())
 
     async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.

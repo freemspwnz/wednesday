@@ -237,7 +237,9 @@ class KandinskyClient(ITextToImageClient):
             )
 
         try:
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
+            from utils.postgres_client import get_postgres_pool
+
+            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
             current_pipeline_id, current_pipeline_name = await models_store.get_kandinsky_model()
 
             bound.debug("Запрос списка pipelines для dry‑run статуса")
@@ -318,7 +320,9 @@ class KandinskyClient(ITextToImageClient):
 
         # Fallback: пытаемся получить из хранилища
         try:
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
+            from utils.postgres_client import get_postgres_pool
+
+            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
             stored_models = await models_store.get_kandinsky_available_models()
             if stored_models:
                 bound.debug("Получен список из {} моделей из хранилища", len(stored_models))
@@ -392,7 +396,11 @@ class KandinskyClient(ITextToImageClient):
                     if pipeline_item.get("id") == model_identifier:
                         matched_model_name = str(pipeline_item.get("name", "Unknown"))
                         matched_pipeline_id = str(pipeline_item.get("id", ""))
-                        models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
+                        from utils.postgres_client import get_postgres_pool
+
+                        models_store = (
+                            self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+                        )
                         await models_store.set_kandinsky_model(matched_pipeline_id, matched_model_name)
                         msg = f"Модель установлена: {matched_model_name} (ID: {matched_pipeline_id})"
                         bound.info(msg)
@@ -410,7 +418,11 @@ class KandinskyClient(ITextToImageClient):
                     matched_pipeline = matches[0]
                     selected_model_name = str(matched_pipeline.get("name", "Unknown"))
                     selected_pipeline_id = str(matched_pipeline.get("id", ""))
-                    models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
+                    from utils.postgres_client import get_postgres_pool
+
+                    models_store = (
+                        self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+                    )
                     await models_store.set_kandinsky_model(selected_pipeline_id, selected_model_name)
                     msg = f"Модель установлена: {selected_model_name} (ID: {selected_pipeline_id})"
                     bound.info(msg)
@@ -457,7 +469,9 @@ class KandinskyClient(ITextToImageClient):
     ) -> str | None:
         """Выбирает актуальный pipeline ID, используя сохранённую модель или первую доступную."""
         bound = logger.bind(event="kandinsky_get_pipeline", user_id=user_id)
-        models_store = self._models_repo if self._models_repo is not None else ModelsRepo()
+        from utils.postgres_client import get_postgres_pool
+
+        models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
         saved_pipeline_id, saved_pipeline_name = await models_store.get_kandinsky_model()
 
         @retry_standard(service_name="kandinsky", method_name="get_pipeline_id")

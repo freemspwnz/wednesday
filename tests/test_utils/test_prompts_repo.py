@@ -17,8 +17,8 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_prompt_inserts_and_deduplicates(cleanup_tables: Any) -> None:
-    store = PromptsRepo()
+async def test_get_or_create_prompt_inserts_and_deduplicates(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = PromptsRepo(pool=async_postgres_pool)
 
     text = "  A frog  "
     record1 = await store.get_or_create_prompt(text)
@@ -36,8 +36,8 @@ async def test_get_or_create_prompt_inserts_and_deduplicates(cleanup_tables: Any
 
 
 @pytest.mark.asyncio
-async def test_get_prompt_by_hash_returns_existing(cleanup_tables: Any) -> None:
-    store = PromptsRepo()
+async def test_get_prompt_by_hash_returns_existing(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = PromptsRepo(pool=async_postgres_pool)
 
     record = await store.get_or_create_prompt("Wednesday frog")
     loaded = await store.get_prompt_by_hash(record.prompt_hash)
@@ -49,16 +49,16 @@ async def test_get_prompt_by_hash_returns_existing(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_prompt_by_hash_missing_returns_none(cleanup_tables: Any) -> None:
-    store = PromptsRepo()
+async def test_get_prompt_by_hash_missing_returns_none(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = PromptsRepo(pool=async_postgres_pool)
 
     loaded = await store.get_prompt_by_hash("0" * 64)
     assert loaded is None
 
 
 @pytest.mark.asyncio
-async def test_get_random_prompt_returns_record(cleanup_tables: Any) -> None:
-    store = PromptsRepo()
+async def test_get_random_prompt_returns_record(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = PromptsRepo(pool=async_postgres_pool)
 
     await store.get_or_create_prompt("Prompt A")
     await store.get_or_create_prompt("Prompt B")
@@ -69,7 +69,7 @@ async def test_get_random_prompt_returns_record(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_prompt_concurrent_insert(cleanup_tables: Any) -> None:
+async def test_get_or_create_prompt_concurrent_insert(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """
     Проверяем, что при конкурентных вызовах get_or_create_prompt с одним
     и тем же текстом создаётся ровно одна запись в БД.
@@ -79,8 +79,8 @@ async def test_get_or_create_prompt_concurrent_insert(cleanup_tables: Any) -> No
     ON CONFLICT + повторным SELECT должна гарантировать отсутствие дубликатов.
     """
 
-    store1 = PromptsRepo()
-    store2 = PromptsRepo()
+    store1 = PromptsRepo(pool=async_postgres_pool)
+    store2 = PromptsRepo(pool=async_postgres_pool)
     text = "Concurrent prompt"
 
     async def _create_with_store1() -> None:
@@ -91,6 +91,6 @@ async def test_get_or_create_prompt_concurrent_insert(cleanup_tables: Any) -> No
 
     await asyncio.gather(_create_with_store1(), _create_with_store2())
 
-    store = PromptsRepo()
+    store = PromptsRepo(pool=async_postgres_pool)
     record = await store.get_or_create_prompt(text)
     assert record.id > 0

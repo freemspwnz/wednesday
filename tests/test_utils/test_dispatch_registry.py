@@ -13,8 +13,8 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_dispatch_registry_is_dispatched_false(cleanup_tables: Any) -> None:
-    registry = DispatchRegistry()
+async def test_dispatch_registry_is_dispatched_false(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    registry = DispatchRegistry(pool=async_postgres_pool)
 
     # Проверяем несуществующую запись
     result = await registry.is_dispatched("2025-01-01", "10:00", 12345)
@@ -22,8 +22,8 @@ async def test_dispatch_registry_is_dispatched_false(cleanup_tables: Any) -> Non
 
 
 @pytest.mark.asyncio
-async def test_dispatch_registry_mark_and_check(cleanup_tables: Any) -> None:
-    registry = DispatchRegistry()
+async def test_dispatch_registry_mark_and_check(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    registry = DispatchRegistry(pool=async_postgres_pool)
 
     # Помечаем как отправленное (используем текущую дату в формате строки, как в реальном коде)
     from datetime import datetime
@@ -38,8 +38,8 @@ async def test_dispatch_registry_mark_and_check(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_registry_mark_duplicate(cleanup_tables: Any) -> None:
-    registry = DispatchRegistry()
+async def test_dispatch_registry_mark_duplicate(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    registry = DispatchRegistry(pool=async_postgres_pool)
 
     # Помечаем дважды (используем текущую дату)
     today_str = date.today().strftime("%Y-%m-%d")
@@ -52,8 +52,8 @@ async def test_dispatch_registry_mark_duplicate(cleanup_tables: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_registry_cleanup_old(cleanup_tables: Any) -> None:
-    registry = DispatchRegistry(retention_days=1)
+async def test_dispatch_registry_cleanup_old(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    registry = DispatchRegistry(pool=async_postgres_pool, retention_days=1)
 
     # Помечаем как отправленное (используем текущую дату)
     today_str = date.today().strftime("%Y-%m-%d")

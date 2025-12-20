@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Удаление обратной совместимости для репозиториев**:
+  - Параметр `pool` теперь обязателен во всех репозиториях (`PromptsRepo`, `ImagesRepo`, `ChatsRepo`, `AdminsRepo`, `ModelsRepo`, `UsageTracker`, `DispatchRegistry`, `Metrics`)
+  - Обновлены функции `build_bot_services()` и `build_bot()` для обязательной передачи пула
+  - Обновлены все тесты для передачи тестового пула из фикстуры `async_postgres_pool`
+  - Обновлены fallback в клиентах (`KandinskyClient`, `GigaChatTextClient`) для использования `get_postgres_pool()` при создании `ModelsRepo`
+  - Удалены опциональные параметры и fallback логика из конструкторов репозиториев
+
 - **Dependency Injection для пула PostgreSQL и мониторинг соединений**:
   - Добавлен dataclass `PoolMetrics` и функция `get_pool_metrics()` в `utils/postgres_client.py`
   - Обновлены репозитории для поддержки DI: `PromptsRepo`, `ImagesRepo`, `ChatsRepo`, `AdminsRepo`, `ModelsRepo`

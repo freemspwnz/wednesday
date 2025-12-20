@@ -25,19 +25,18 @@ class DispatchRegistry:
 
     def __init__(
         self,
+        pool: asyncpg.Pool,
         storage_path: str | None = None,
         retention_days: int = 7,
-        pool: asyncpg.Pool | None = None,
     ) -> None:
         """Инициализирует реестр отправленных сообщений.
 
         Args:
+            pool: Пул подключений PostgreSQL.
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
             retention_days: Количество дней хранения записей в реестре (по умолчанию 7).
-            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
-                  (для обратной совместимости).
         """
-        self._pool = pool or get_postgres_pool()
+        self._pool = pool
         self.logger = get_logger(__name__)
         self.retention_days = retention_days
 

@@ -489,10 +489,10 @@ async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     def _mock_get_pool() -> MagicMock:
         return mock_pool
 
-    monkeypatch.setattr("utils.admins_store.get_postgres_pool", _mock_get_pool)
+    monkeypatch.setattr("utils.postgres_client.get_postgres_pool", _mock_get_pool)
     monkeypatch.setenv("ADMIN_CHAT_ID", "999999")
 
-    store = AdminsRepo()
+    store = AdminsRepo(pool=mock_pool)
     result = await store.is_admin(12345)
 
     assert isinstance(result, bool)
@@ -531,9 +531,9 @@ async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None
     def _mock_get_pool() -> MagicMock:
         return mock_pool
 
-    monkeypatch.setattr("utils.admins_store.get_postgres_pool", _mock_get_pool)
+    monkeypatch.setattr("utils.postgres_client.get_postgres_pool", _mock_get_pool)
 
-    store = AdminsRepo()
+    store = AdminsRepo(pool=mock_pool)
     result = await store.list_admins()
 
     assert isinstance(result, list)
@@ -570,9 +570,9 @@ async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -
     def _mock_get_pool() -> MagicMock:
         return mock_pool
 
-    monkeypatch.setattr("utils.models_store.get_postgres_pool", _mock_get_pool)
+    monkeypatch.setattr("utils.postgres_client.get_postgres_pool", _mock_get_pool)
 
-    store = ModelsRepo()
+    store = ModelsRepo(pool=mock_pool)
 
     # Тест set
     await store.set_kandinsky_model("pipeline_123", "Test Model")
@@ -614,9 +614,9 @@ async def test_models_store_gigachat_get_set(monkeypatch: pytest.MonkeyPatch) ->
     def _mock_get_pool() -> MagicMock:
         return mock_pool
 
-    monkeypatch.setattr("utils.models_store.get_postgres_pool", _mock_get_pool)
+    monkeypatch.setattr("utils.postgres_client.get_postgres_pool", _mock_get_pool)
 
-    store = ModelsRepo()
+    store = ModelsRepo(pool=mock_pool)
 
     # Тест set
     await store.set_gigachat_model("GigaChat-Pro")
@@ -658,7 +658,7 @@ async def test_dispatch_registry_is_dispatched(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr("utils.dispatch_registry.get_postgres_pool", _mock_get_pool)
 
-    registry = DispatchRegistry()
+    registry = DispatchRegistry(pool=mock_pool)
     result = await registry.is_dispatched("2024-01-01", "09:00", 12345)
 
     assert isinstance(result, bool)
@@ -692,7 +692,7 @@ async def test_dispatch_registry_mark_dispatched(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr("utils.dispatch_registry.get_postgres_pool", _mock_get_pool)
 
-    registry = DispatchRegistry()
+    registry = DispatchRegistry(pool=mock_pool)
     await registry.mark_dispatched("2024-01-01", "09:00", 12345)
 
     mock_conn.execute.assert_called_once()
@@ -726,9 +726,9 @@ async def test_usage_tracker_increment(monkeypatch: pytest.MonkeyPatch) -> None:
     def _mock_get_pool() -> MagicMock:
         return mock_pool
 
-    monkeypatch.setattr("utils.usage_tracker.get_postgres_pool", _mock_get_pool)
+    monkeypatch.setattr("utils.postgres_client.get_postgres_pool", _mock_get_pool)
 
-    tracker = UsageTracker(monthly_quota=100, frog_threshold=70)
+    tracker = UsageTracker(pool=mock_pool, monthly_quota=100, frog_threshold=70)
     result = await tracker.increment(count=1)
 
     assert isinstance(result, int)
@@ -764,7 +764,7 @@ async def test_usage_tracker_get_month_total(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr("utils.usage_tracker.get_postgres_pool", _mock_get_pool)
 
-    tracker = UsageTracker()
+    tracker = UsageTracker(pool=mock_pool)
     result = await tracker.get_month_total()
 
     assert isinstance(result, int)
@@ -798,7 +798,7 @@ async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("utils.chats_store.get_postgres_pool", _mock_get_pool)
 
-    store = ChatsRepo()
+    store = ChatsRepo(pool=mock_pool)
     await store.add_chat(12345, "Test Chat")
 
     mock_conn.execute.assert_called_once()
@@ -836,7 +836,7 @@ async def test_chats_store_list_chat_ids(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr("utils.chats_store.get_postgres_pool", _mock_get_pool)
 
-    store = ChatsRepo()
+    store = ChatsRepo(pool=mock_pool)
     result = await store.list_chat_ids()
 
     assert isinstance(result, list)
@@ -871,7 +871,7 @@ async def test_metrics_increment_generation_success(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr("utils.metrics.get_postgres_pool", _mock_get_pool)
 
-    metrics = Metrics()
+    metrics = Metrics(pool=mock_pool)
     await metrics.increment_generation_success()
 
     assert mock_conn.execute.await_count >= 1
@@ -914,7 +914,7 @@ async def test_metrics_get_summary(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("utils.metrics.get_postgres_pool", _mock_get_pool)
 
-    metrics = Metrics()
+    metrics = Metrics(pool=mock_pool)
     result = await metrics.get_summary()
 
     assert isinstance(result, dict)

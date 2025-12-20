@@ -26,7 +26,9 @@ class MetricsRecorder(BaseService, IMetrics):
             metrics: Экземпляр Metrics для записи метрик. Если None, создаётся новый.
         """
         super().__init__()
-        self._metrics = metrics or Metrics()
+        from utils.postgres_client import get_postgres_pool
+
+        self._metrics = metrics or Metrics(pool=get_postgres_pool())
 
     async def increment_generation_success(self) -> None:
         """Увеличивает счётчик успешных генераций изображений."""

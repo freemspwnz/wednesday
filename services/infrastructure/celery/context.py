@@ -87,9 +87,11 @@ async def get_services_context() -> dict[str, object]:
             if _services_context is None:
                 # Ленивый импорт для избежания циклических зависимостей
                 from services.container import build_bot
+                from utils.postgres_client import get_postgres_pool
 
                 # Создаём экземпляры сервисов
-                bot = build_bot(config)
+                postgres_pool = get_postgres_pool()
+                bot = build_bot(config, db_pool=postgres_pool)
 
                 _services_context = {
                     "bot": bot,
