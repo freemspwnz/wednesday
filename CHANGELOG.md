@@ -8,6 +8,8 @@
   - Обновлён `StatusData` для передачи сырых данных вместо отформатированных строк
   - Добавлены методы форматирования в `StatusMessageBuilder`: `_format_usage_info()`, `_format_chats_info()`, `_format_metrics_text()`, `_format_kandinsky_current()`, `_format_gigachat_current()`
   - Улучшено разделение ответственностей: сервис собирает данные, билдеры форматируют
+  - Удалена константа `PERCENT_MULTIPLIER` из AdminDashboardService (перенесена в StatusMessageBuilder)
+  - Обновлена документация для отражения новой структуры
 
 ### Добавлено
 
