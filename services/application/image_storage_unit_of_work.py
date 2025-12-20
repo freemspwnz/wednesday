@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections import deque
 from dataclasses import dataclass
 
 from services.base.base_service import BaseService
 from services.protocols import ICache, IImageStorage
+from utils.retry import retry_standard
 
 
 @dataclass
@@ -45,6 +48,9 @@ class ImageStorageUnitOfWork(BaseService):
         self._cache = cache
         self._storage = storage
         self._operations: list[ImageSaveOperation] = []
+        self._failed_cache_operations: deque[ImageSaveOperation] = deque()
+        self._rebuild_task: asyncio.Task | None = None
+        self._rebuild_running: bool = False
 
     async def save_image(
         self,
@@ -123,6 +129,15 @@ class ImageStorageUnitOfWork(BaseService):
                     self.logger.info(
                         "Изображение сохранено в хранилище, но не в кэш. Это приемлемо, кэш может быть пересоздан.",
                     )
+                    # Добавляем в очередь для пересоздания
+                    self._failed_cache_operations.append(operation)
+                    self.logger.info(
+                        f"Операция добавлена в очередь пересоздания кэша: "
+                        f"cache_key={operation.cache_key}, storage_path={operation.storage_path}",
+                    )
+                    # Запускаем фоновую задачу, если она ещё не запущена
+                    if not self._rebuild_running:
+                        self._start_background_rebuild_task()
 
         # Операция считается успешной, если сохранено хотя бы в одно хранилище
         return storage_success or cache_success
@@ -171,3 +186,97 @@ class ImageStorageUnitOfWork(BaseService):
     def clear(self) -> None:
         """Очищает список операций без выполнения компенсационных действий."""
         self._operations.clear()
+
+    @retry_standard(
+        service_name="cache_rebuild",
+        method_name="rebuild_cache_from_storage",
+    )
+    async def rebuild_cache_from_storage(
+        self,
+        cache_key: str,
+        storage_path: str,
+        caption: str,
+    ) -> bool:
+        """Пересоздаёт кэш из файла в хранилище.
+
+        Использует exponential retry для обработки временных ошибок.
+        Используется, когда сохранение в хранилище успешно,
+        но сохранение в кэш не удалось.
+
+        Args:
+            cache_key: Ключ для кэша (prompt).
+            storage_path: Путь к файлу в хранилище.
+            caption: Подпись к изображению.
+
+        Returns:
+            True если кэш успешно пересоздан, False иначе.
+
+        Raises:
+            CacheError: При ошибках доступа к кэшу.
+            StorageError: При ошибках чтения из хранилища.
+        """
+        if not self._cache or not self._storage:
+            return False
+
+        try:
+            # Загружаем изображение из хранилища
+            image_data = await self._storage.get_by_path(storage_path)
+
+            # Сохраняем в кэш
+            await self._cache.set(cache_key, (image_data, caption))
+
+            self.logger.info(
+                f"Кэш пересоздан из хранилища: cache_key={cache_key}, storage_path={storage_path}",
+            )
+            return True
+        except Exception as e:
+            self.logger.warning(
+                f"Не удалось пересоздать кэш из хранилища: {e}",
+            )
+            raise  # Пробрасываем для retry механизма
+
+    def _start_background_rebuild_task(self) -> None:
+        """Запускает фоновую задачу для пересоздания кэша."""
+        if self._rebuild_task is None or self._rebuild_task.done():
+            self._rebuild_running = True
+            self._rebuild_task = asyncio.create_task(
+                self._rebuild_failed_caches_loop(),
+            )
+            self.logger.info("Запущена фоновая задача пересоздания кэша")
+
+    async def _rebuild_failed_caches_loop(self) -> None:
+        """Цикл пересоздания кэша для неудачных операций."""
+        while self._failed_cache_operations:
+            operation = self._failed_cache_operations.popleft()
+            try:
+                if not operation.storage_path:
+                    self.logger.warning(
+                        f"Пропущена операция без storage_path: cache_key={operation.cache_key}",
+                    )
+                    continue
+
+                success = await self.rebuild_cache_from_storage(
+                    cache_key=operation.cache_key,
+                    storage_path=operation.storage_path,
+                    caption=operation.caption,
+                )
+                if success:
+                    self.logger.info(
+                        f"Кэш успешно пересоздан: cache_key={operation.cache_key}",
+                    )
+                else:
+                    # Если не удалось, добавляем обратно в очередь
+                    self._failed_cache_operations.append(operation)
+            except Exception as e:
+                self.logger.error(
+                    f"Ошибка при пересоздании кэша для {operation.cache_key}: {e}",
+                    exc_info=True,
+                )
+                # Добавляем обратно в очередь для повторной попытки
+                self._failed_cache_operations.append(operation)
+
+            # Небольшая задержка между операциями
+            await asyncio.sleep(1.0)
+
+        self._rebuild_running = False
+        self.logger.info("Фоновая задача пересоздания кэша завершена")

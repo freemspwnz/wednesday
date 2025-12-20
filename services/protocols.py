@@ -113,6 +113,21 @@ class IImageStorage(Protocol):
         """
         ...
 
+    async def get_by_path(self, path: str) -> bytes:
+        """Загружает изображение по пути к файлу.
+
+        Args:
+            path: Путь к файлу в хранилище.
+
+        Returns:
+            Байты изображения.
+
+        Raises:
+            FileNotFoundError: Если файл не найден.
+            StorageError: При ошибках чтения файла.
+        """
+        ...
+
     async def delete(self, path: str) -> None:
         """Удаляет файл из хранилища.
 

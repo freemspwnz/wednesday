@@ -4,6 +4,14 @@
 
 ### Добавлено
 
+- **Отложенное пересоздание кэша при ошибках сохранения**:
+  - Добавлен метод `get_by_path()` в протокол `IImageStorage` и реализацию `ImageStorageService`
+  - Реализован метод `rebuild_cache_from_storage()` в `ImageStorageUnitOfWork` с использованием `@retry_standard` для exponential retry
+  - Добавлена очередь неудачных операций кэширования `_failed_cache_operations` для отложенного пересоздания
+  - Реализована фоновая задача `_rebuild_failed_caches_loop()` через `asyncio.create_task` для неблокирующего пересоздания кэша
+  - Автоматическое добавление операций в очередь при ошибке сохранения в кэш (но успешном сохранении в хранилище)
+  - Улучшенная надёжность: кэш пересоздаётся даже при временных сбоях (пул исчерпан, таймауты)
+
 - **ImageStorageUnitOfWork для управления сохранением изображений**:
   - Создан сервис `ImageStorageUnitOfWork` в `services/application/image_storage_unit_of_work.py`
   - Реализован паттерн Unit of Work для группировки операций сохранения изображений

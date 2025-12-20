@@ -205,6 +205,38 @@ class ImageStorageService(BaseService):
         """
         return await self.get_random(folder=self.base_dir)
 
+    async def get_by_path(self, path: str) -> bytes:
+        """Загружает изображение по пути к файлу.
+
+        Args:
+            path: Путь к файлу в хранилище (может быть абсолютным или относительным).
+
+        Returns:
+            Байты изображения.
+
+        Raises:
+            FileNotFoundError: Если файл не найден.
+            StorageError: При ошибках чтения файла.
+        """
+        try:
+            file_path = Path(path)
+            # Если путь относительный, используем base_dir
+            if not file_path.is_absolute():
+                file_path = self.base_dir / file_path
+
+            if not await asyncio.to_thread(file_path.exists):
+                raise FileNotFoundError(f"Файл не найден: {file_path}")
+
+            image_data = await asyncio.to_thread(file_path.read_bytes)
+            self.logger.debug(f"Изображение загружено из хранилища: {file_path}")
+            return image_data
+        except FileNotFoundError:
+            raise
+        except OSError as e:
+            raise StorageError(f"Ошибка при чтении файла {path}: {e}") from e
+        except Exception as e:
+            raise StorageError(f"Неожиданная ошибка при чтении файла {path}: {e}") from e
+
     async def delete(self, path: str) -> None:
         """Удаляет файл из хранилища.
 
