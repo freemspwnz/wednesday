@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 from services.application.admin_dashboard_service import AdminDashboardService
 from services.application.api_status_service import APIStatusService
+from services.application.database_operations_service import DatabaseOperationsService
 from services.application.dispatch_execution_service import DispatchExecutionService
 from services.application.dispatch_service import DispatchService
 from services.application.fallback_service import FallbackService
@@ -305,17 +306,28 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         dispatch_registry=dispatch_registry,
     )
 
+    # Создаём MetricsRecorder для передачи в DatabaseOperationsService
+    metrics_recorder = MetricsRecorder(metrics=metrics)
+
+    # Создаём DatabaseOperationsService для атомарных операций БД
+    database_operations = DatabaseOperationsService(
+        dispatch_registry=dispatch_registry,
+        usage_tracker=usage,
+        metrics=metrics_recorder,
+    )
+
     dispatch_execution_service = DispatchExecutionService(
         dispatch_registry=dispatch_registry,
-        metrics=metrics,
+        metrics=metrics_recorder,
         usage_tracker=usage,
+        database_operations=database_operations,
     )
 
     fallback_service = FallbackService(
         image_service=image_service,
         dispatch_execution_service=dispatch_execution_service,
         dispatch_registry=dispatch_registry,
-        metrics=metrics,
+        metrics=metrics_recorder,
     )
 
     dispatch_service = DispatchService(
@@ -328,7 +340,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     admin_dashboard_service = build_admin_dashboard_service(
         usage=usage,
         chats=chats,
-        metrics=metrics,
+        metrics=metrics_recorder,
         image_client=image_client,
         text_client=text_client,
         models_repo=models_repo,
@@ -338,7 +350,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         usage=usage,
         chats=chats,
         dispatch_registry=dispatch_registry,
-        metrics=metrics,
+        metrics=metrics_recorder,
         prompt_cache=prompt_cache,
         user_state_store=user_state_store,
         settings=app_settings,

@@ -39,6 +39,11 @@
   - Заменены прямые вызовы репозиториев на использование транзакционного сервиса
   - Обеспечена атомарность операций: регистрация отправки, инкремент счётчика, обновление метрик
 
+- **Обновлен container.py для создания DatabaseOperationsService**:
+  - Добавлено создание `DatabaseOperationsService` в `build_bot_services()`
+  - `DatabaseOperationsService` передается в `DispatchExecutionService`
+  - Все сервисы используют `MetricsRecorder` для единообразной работы с метриками
+
 - **Отложенное пересоздание кэша при ошибках сохранения**:
   - Добавлен метод `get_by_path()` в протокол `IImageStorage` и реализацию `ImageStorageService`
   - Реализован метод `rebuild_cache_from_storage()` в `ImageStorageUnitOfWork` с использованием `@retry_standard` для exponential retry
