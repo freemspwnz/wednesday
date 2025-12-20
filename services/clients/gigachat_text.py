@@ -557,6 +557,50 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
     # ------------------------------------------------------------------ #
     # Приватные методы                                                   #
     # ------------------------------------------------------------------ #
+    #
+    # ШАБЛОНЫ ДЛЯ ДОБАВЛЕНИЯ НОВЫХ МЕТОДОВ:
+    #
+    # 1. Простой GET запрос с JSON:
+    #    async def method_name(self, param: str) -> dict[str, Any]:
+    #        return await self._get_json(
+    #            endpoint=f"api/v1/endpoint/{param}",
+    #            method_name="method_name",
+    #            headers={"Authorization": f"Bearer {await self._get_access_token()}"},
+    #        )
+    #
+    # 2. GET с кастомной обработкой (Pydantic валидация):
+    #    async def method_name(self, param: str) -> ModelType:
+    #        response = await self._get(
+    #            endpoint=f"api/v1/endpoint/{param}",
+    #            method_name="method_name",
+    #            headers={"Authorization": f"Bearer {await self._get_access_token()}"},
+    #        )
+    #        async with response:
+    #            data = await self._parse_json_response(response)
+    #            return ModelType.model_validate(data)
+    #
+    # 3. POST с JSON:
+    #    async def method_name(self, data: dict[str, Any]) -> dict[str, Any]:
+    #        return await self._post_json(
+    #            endpoint="api/v1/endpoint",
+    #            method_name="method_name",
+    #            headers={"Authorization": f"Bearer {await self._get_access_token()}"},
+    #            json=data,
+    #        )
+    #
+    # 4. POST с FormData:
+    #    async def method_name(self, file_data: bytes) -> dict[str, Any]:
+    #        form_data = aiohttp.FormData()
+    #        form_data.add_field("file", file_data, filename="file.png")
+    #        response = await self._post(
+    #            endpoint="api/v1/upload",
+    #            method_name="method_name",
+    #            headers={"Authorization": f"Bearer {await self._get_access_token()}"},
+    #            data=form_data,
+    #        )
+    #        async with response:
+    #            return await self._parse_json_response(response)
+    #
 
     async def aclose(self) -> None:
         """Явно закрывает внутренний aiohttp.ClientSession.

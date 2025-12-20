@@ -508,6 +508,50 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     # ------------------------------------------------------------------ #
     # Внутренние helpers                                                 #
     # ------------------------------------------------------------------ #
+    #
+    # ШАБЛОНЫ ДЛЯ ДОБАВЛЕНИЯ НОВЫХ МЕТОДОВ:
+    #
+    # 1. Простой GET запрос с JSON:
+    #    async def method_name(self, param: str) -> dict[str, Any]:
+    #        return await self._get_json(
+    #            endpoint=f"key/api/v1/endpoint/{param}",
+    #            method_name="method_name",
+    #            headers=self._get_auth_headers(),
+    #        )
+    #
+    # 2. GET с кастомной обработкой (Pydantic валидация):
+    #    async def method_name(self, param: str) -> ModelType:
+    #        response = await self._get(
+    #            endpoint=f"key/api/v1/endpoint/{param}",
+    #            method_name="method_name",
+    #            headers=self._get_auth_headers(),
+    #        )
+    #        async with response:
+    #            data = await self._parse_json_response(response)
+    #            return ModelType.model_validate(data)
+    #
+    # 3. POST с JSON:
+    #    async def method_name(self, data: dict[str, Any]) -> dict[str, Any]:
+    #        return await self._post_json(
+    #            endpoint="key/api/v1/endpoint",
+    #            method_name="method_name",
+    #            headers=self._get_auth_headers(),
+    #            json=data,
+    #        )
+    #
+    # 4. POST с FormData:
+    #    async def method_name(self, file_data: bytes) -> dict[str, Any]:
+    #        form_data = aiohttp.FormData()
+    #        form_data.add_field("file", file_data, filename="file.png")
+    #        response = await self._post(
+    #            endpoint="key/api/v1/upload",
+    #            method_name="method_name",
+    #            headers=self._get_auth_headers(),
+    #            data=form_data,
+    #        )
+    #        async with response:
+    #            return await self._parse_json_response(response)
+    #
 
     def _get_auth_headers(self) -> dict[str, str]:
         """Формирует заголовки авторизации и валидирует ключи."""
