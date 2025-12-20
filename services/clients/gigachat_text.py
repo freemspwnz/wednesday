@@ -34,7 +34,13 @@ from typing import Self
 
 import aiohttp
 from loguru import logger
+from pydantic import ValidationError
 
+from services.clients.models import (
+    GigaChatModelInfo,
+    GigaChatModelsListResponse,
+    GigaChatTokenResponse,
+)
 from services.infrastructure.repositories import ModelsRepo
 from services.protocols import IModelsRepo, ITextToTextClient
 from utils.config import GigaChatConfig
@@ -318,31 +324,48 @@ class GigaChatTextClient(ITextToTextClient):
             bound.debug("Отправка запроса к GigaChat API для получения списка моделей")
             async with await _get_models() as response:
                 if response.status == HTTP_STATUS_OK:
-                    data = await response.json()
-
-                    # API может вернуть данные в разных форматах
-                    if isinstance(data, dict):
-                        models_data = data.get("data", data.get("models", []))
-                    elif isinstance(data, list):
-                        models_data = data
-                    else:
-                        bound.warning(f"Неожиданный формат ответа от API моделей: {type(data)}")
-                        return FALLBACK_MODELS.copy()
+                    data_json = await response.json()
 
                     models_list: list[str] = []
-                    if models_data is None:
+
+                    # GigaChat может вернуть dict или list
+                    if isinstance(data_json, list):
+                        # Прямой список моделей (может быть list[dict] или list[str])
+                        try:
+                            models_parsed: list[GigaChatModelInfo] = []
+                            for item in data_json:
+                                if isinstance(item, dict):
+                                    models_parsed.append(GigaChatModelInfo.model_validate(item))
+                                elif isinstance(item, str):
+                                    models_parsed.append(GigaChatModelInfo(id=item, name=item))
+                            for model in models_parsed:
+                                model_name = model.get_model_name()
+                                if model_name:
+                                    models_list.append(model_name)
+                        except ValidationError as e:
+                            bound.bind(
+                                error=str(e),
+                                data_sample=str(data_json)[:200],
+                            ).warning("Ошибка валидации списка моделей, используем fallback")
+                            return FALLBACK_MODELS.copy()
+                    elif isinstance(data_json, dict):
+                        # Dict с data/models
+                        try:
+                            models_response = GigaChatModelsListResponse.model_validate(data_json)
+                            models_list_parsed = models_response.get_models_list()
+                            for model in models_list_parsed:
+                                model_name = model.get_model_name()
+                                if model_name:
+                                    models_list.append(model_name)
+                        except ValidationError as e:
+                            bound.bind(
+                                error=str(e),
+                                data_sample=str(data_json)[:200],
+                            ).warning("Ошибка валидации ответа моделей, используем fallback")
+                            return FALLBACK_MODELS.copy()
+                    else:
+                        bound.warning(f"Неожиданный формат ответа от API моделей: {type(data_json)}")
                         return FALLBACK_MODELS.copy()
-
-                    for model in models_data:
-                        if isinstance(model, dict):
-                            model_name = model.get("id") or model.get("name") or model.get("model")
-                        elif isinstance(model, str):
-                            model_name = model
-                        else:
-                            continue
-
-                        if model_name:
-                            models_list.append(model_name)
 
                     if models_list:
                         bound.info(f"Получен список из {len(models_list)} моделей GigaChat через API")
@@ -537,13 +560,21 @@ class GigaChatTextClient(ITextToTextClient):
             try:
                 async with await _fetch_token() as response:
                     if response.status == HTTP_STATUS_OK:
-                        token_data = await response.json()
-                        self._access_token = token_data["access_token"]
-                        expires_in = token_data.get("expires_in", DEFAULT_EXPIRES_IN_SECONDS)
-                        self._token_expiry_time = time.time() + expires_in - TOKEN_EXPIRY_BUFFER_SECONDS
+                        token_data_json = await response.json()
+                        try:
+                            token_response = GigaChatTokenResponse.model_validate(token_data_json)
+                            self._access_token = token_response.access_token
+                            expires_in = token_response.expires_in
+                            self._token_expiry_time = time.time() + expires_in - TOKEN_EXPIRY_BUFFER_SECONDS
 
-                        bound.info("Успешно получен access token для GigaChat")
-                        return self._access_token
+                            bound.info("Успешно получен access token для GigaChat")
+                            return self._access_token
+                        except ValidationError as e:
+                            bound.bind(
+                                error=str(e),
+                                data_sample=str(token_data_json)[:200],
+                            ).error("Ошибка валидации ответа GigaChat API при получении токена")
+                            return None
                     else:
                         error_text = (await response.text())[:MAX_ERROR_TEXT_LENGTH]
                         bound.error(

@@ -22,6 +22,15 @@
   - Удалены ручные проверки и валидации через `.get()` и `isinstance()`
   - Типобезопасный доступ к полям ответов API
 
+- **GigaChatTextClient: использование Pydantic моделей вместо dict[str, Any]**:
+  - Обновлен метод `_get_access_token()` для использования `GigaChatTokenResponse`
+  - Обновлен метод `generate_prompt()` для использования `GigaChatCompletionResponse`
+  - Обновлен метод `get_available_models()` для использования `GigaChatModelsListResponse` и `GigaChatModelInfo`
+  - Добавлена обработка ошибок валидации через `ValidationError`
+  - Поддержка различных форматов ответов API (dict с data/models или list)
+  - Удалены ручные проверки и валидации через `.get()` и `isinstance()`
+  - Типобезопасный доступ к полям ответов API
+
 - **Вынос захардкоженных таймаутов в конфигурацию через HttpTimeoutConfig**:
   - Создан универсальный `HttpTimeoutConfig` dataclass для всех HTTP-таймаутов (total, connect, sock_read)
   - Добавлен метод `create_http_timeout()` в класс `Config` для создания таймаутов из переменных окружения
