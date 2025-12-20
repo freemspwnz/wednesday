@@ -37,6 +37,7 @@ from loguru import logger
 from pydantic import ValidationError
 
 from services.clients.models import (
+    GigaChatCompletionResponse,
     GigaChatModelInfo,
     GigaChatModelsListResponse,
     GigaChatTokenResponse,
@@ -229,13 +230,25 @@ class GigaChatTextClient(ITextToTextClient):
             bound.debug("Отправка запроса к GigaChat API для генерации промпта")
             async with await _post_generate() as response:
                 if response.status == HTTP_STATUS_OK:
-                    result = await response.json()
-                    generated_prompt = result["choices"][0]["message"]["content"].strip()
-                    generated_prompt = self._clean_prompt(generated_prompt)
+                    result_json = await response.json()
+                    try:
+                        completion_response = GigaChatCompletionResponse.model_validate(result_json)
+                        if not completion_response.choices or not completion_response.choices[0]:
+                            bound.error("Ответ GigaChat API не содержит choices")
+                            return None
 
-                    bound.info(f"Промпт успешно сгенерирован ({len(generated_prompt)} символов)")
+                        generated_prompt = completion_response.choices[0].message.content.strip()
+                        generated_prompt = self._clean_prompt(generated_prompt)
 
-                    return generated_prompt
+                        bound.info(f"Промпт успешно сгенерирован ({len(generated_prompt)} символов)")
+
+                        return generated_prompt
+                    except ValidationError as e:
+                        bound.bind(
+                            error=str(e),
+                            data_sample=str(result_json)[:200],
+                        ).error("Ошибка валидации ответа GigaChat API при генерации промпта")
+                        return None
                 else:
                     error_text = (await response.text())[:MAX_ERROR_TEXT_LENGTH]
                     bound.error(
