@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- **Типизация Request/Response через Pydantic модели для HTTP-клиентов**:
+  - Создана структура `services/clients/models/` для хранения Pydantic моделей
+  - Добавлены модели для Kandinsky API (KandinskyPipelineResponse, KandinskyGenerationRequest, KandinskyGenerationParams, KandinskyGenerationStartResponse, KandinskyStatus, KandinskyStatusResponse, KandinskyResult)
+  - Добавлены модели для GigaChat API (GigaChatTokenResponse, GigaChatCompletionResponse, GigaChatMessage, GigaChatChoice, GigaChatModelsListResponse, GigaChatModelInfo)
+  - Все модели поддерживают валидацию структуры данных и типизацию
+  - Модели документированы через docstrings
+
 ### Изменено
 
 - **Вынос захардкоженных таймаутов в конфигурацию через HttpTimeoutConfig**:
