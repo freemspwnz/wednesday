@@ -13,6 +13,14 @@
 
 ### Изменено
 
+- **Устранение частичной типизации: проверка соответствия docstrings и type hints**:
+  - Обновлены docstrings для всех методов клиентов - они описывают поведение, а не дублируют информацию из type hints
+  - Добавлена типизация констант через `Final` для всех констант в клиентах (HTTP_STATUS_*, MAX_*, STATUS_*, TOKEN_*, DEFAULT_*, MAX_ERROR_*, AUTH_KEY_*)
+  - Добавлена опция `warn_no_return = true` в конфигурацию mypy для строгой проверки возвращаемых значений
+  - Все методы имеют полные type hints, mypy может статически проверять типы
+  - Docstrings синхронизированы с type hints через статическую проверку mypy
+  - Улучшено автодополнение в IDE за счет полной типизации
+
 - **KandinskyClient: использование Pydantic моделей вместо dict[str, Any]**:
   - Обновлен метод `_get_pipeline_id()` для использования `KandinskyPipelineResponse`
   - Обновлен метод `_start_generation()` для использования `KandinskyGenerationRequest` и `KandinskyGenerationStartResponse`

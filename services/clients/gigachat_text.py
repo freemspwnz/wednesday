@@ -30,7 +30,7 @@ import ssl
 import time
 import uuid
 from types import TracebackType
-from typing import Self
+from typing import Final, Self
 
 import aiohttp
 from loguru import logger
@@ -46,12 +46,12 @@ from services.protocols import IModelsRepo, ITextToTextClient
 from utils.config import GigaChatConfig
 from utils.retry import retry_critical, retry_standard
 
-HTTP_STATUS_OK = 200
-TOKEN_EXPIRY_BUFFER_SECONDS = 300
-DEFAULT_EXPIRES_IN_SECONDS = 1800
-MAX_TOKENS_DEFAULT = 300
-MAX_ERROR_TEXT_LENGTH = 100
-AUTH_KEY_PREVIEW_LENGTH = 10
+HTTP_STATUS_OK: Final[int] = 200
+TOKEN_EXPIRY_BUFFER_SECONDS: Final[int] = 300
+DEFAULT_EXPIRES_IN_SECONDS: Final[int] = 1800
+MAX_TOKENS_DEFAULT: Final[int] = 300
+MAX_ERROR_TEXT_LENGTH: Final[int] = 100
+AUTH_KEY_PREVIEW_LENGTH: Final[int] = 10
 
 # Системное сообщение для генерации промптов Wednesday Frog
 SYSTEM_MESSAGE = """Ты эксперт по созданию промптов для генерации изображений.
@@ -178,14 +178,14 @@ class GigaChatTextClient(ITextToTextClient):
 
         Выполняет запрос к GigaChat API для генерации промпта для генерации изображения
         Wednesday Frog. Использует системное сообщение и пользовательский запрос из
-        конфигурации.
+        конфигурации. При любой ошибке возвращает None и логирует детали ошибки.
 
         Args:
             prompt: Высокоуровневое описание задачи (для логов, не используется в запросе).
-            user_id: Идентификатор пользователя для логирования (опционально).
+            user_id: Идентификатор пользователя для логирования.
 
         Returns:
-            Сгенерированный промпт в виде строки или None при ошибке.
+            Сгенерированный промпт или None при ошибке.
 
         Raises:
             TimeoutError: При таймауте запроса к API.
@@ -262,9 +262,7 @@ class GigaChatTextClient(ITextToTextClient):
         попытку получения access token.
 
         Returns:
-            Кортеж, содержащий:
-            - успех_проверки: True если API доступен и ключ валиден.
-            - сообщение_о_статусе: Человекочитаемое сообщение о статусе.
+            Кортеж (успех_проверки, сообщение_о_статусе). Успех равен True, если API доступен и ключ валиден.
 
         Raises:
             Exception: При ошибке проверки статуса.
@@ -289,17 +287,16 @@ class GigaChatTextClient(ITextToTextClient):
         """Возвращает список доступных моделей GigaChat через API.
 
         Выполняет запрос к API для получения списка доступных моделей GigaChat.
+        При любой ошибке (таймаут, ошибка подключения и т.д.) возвращается
+        fallback-список стандартных моделей для обеспечения отказоустойчивости.
 
         Args:
-            save_models: Сохранять ли полученный список в хранилище (по умолчанию True).
+            save_models: Флаг, указывающий, нужно ли сохранять полученный список
+                в хранилище для последующего использования.
 
         Returns:
             Список доступных моделей. В случае ошибки возвращает fallback-список
             стандартных моделей GigaChat.
-
-        Note:
-            При любой ошибке (таймаут, ошибка подключения и т.д.) возвращается
-            fallback-список стандартных моделей для обеспечения отказоустойчивости.
         """
         bound = logger.bind(event="gigachat_get_models", save_models=save_models)
         bound.info("Запрос списка моделей GigaChat")
@@ -337,7 +334,7 @@ class GigaChatTextClient(ITextToTextClient):
                                 if isinstance(item, dict):
                                     models_parsed.append(GigaChatModelInfo.model_validate(item))
                                 elif isinstance(item, str):
-                                    models_parsed.append(GigaChatModelInfo(id=item, name=item))
+                                    models_parsed.append(GigaChatModelInfo(id=item, name=item, model=None))
                             for model in models_parsed:
                                 model_name = model.get_model_name()
                                 if model_name:
@@ -412,9 +409,7 @@ class GigaChatTextClient(ITextToTextClient):
             model_name: Название модели для установки.
 
         Returns:
-            Кортеж, содержащий:
-            - успех: True если модель установлена успешно.
-            - сообщение: Человекочитаемое сообщение о результате.
+            Кортеж (успех, сообщение). Успех равен True, если модель установлена успешно.
 
         Raises:
             Exception: При ошибке установки модели (например, ошибка доступа к хранилищу).

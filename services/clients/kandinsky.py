@@ -30,7 +30,7 @@ import asyncio
 import base64
 from io import BytesIO
 from types import TracebackType
-from typing import Self
+from typing import Final, Self
 
 import aiohttp
 from loguru import logger
@@ -50,12 +50,12 @@ from services.protocols import IModelsRepo, ITextToImageClient
 from utils.config import KandinskyConfig
 from utils.retry import retry_standard
 
-HTTP_STATUS_OK = 200
-HTTP_STATUS_UNAUTHORIZED = 401
-HTTP_STATUS_FORBIDDEN = 403
+HTTP_STATUS_OK: Final[int] = 200
+HTTP_STATUS_UNAUTHORIZED: Final[int] = 401
+HTTP_STATUS_FORBIDDEN: Final[int] = 403
 
-MAX_STATUS_ATTEMPTS = 10
-STATUS_POLL_DELAY_SECONDS = 10
+MAX_STATUS_ATTEMPTS: Final[int] = 10
+STATUS_POLL_DELAY_SECONDS: Final[int] = 10
 
 
 class KandinskyClient(ITextToImageClient):
@@ -195,14 +195,12 @@ class KandinskyClient(ITextToImageClient):
         списка доступных pipelines (моделей).
 
         Args:
-            save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
+            save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей
+                в хранилище для последующего использования.
 
         Returns:
-            Кортеж, содержащий:
-            - успех_проверки: True если API доступен и ключи валидны.
-            - сообщение_о_статусе: Человекочитаемое сообщение о статусе.
-            - список_моделей: Список доступных моделей в формате "Name (ID: xxx)".
-            - (текущий_pipeline_id, текущее_имя): ID и название текущей модели.
+            Кортеж (успех_проверки, сообщение_о_статусе, список_моделей, (текущий_id, текущее_имя)).
+            Список моделей возвращается в формате "Name (ID: xxx)".
 
         Raises:
             ValueError: Если API ключи не сконфигурированы.
@@ -297,17 +295,15 @@ class KandinskyClient(ITextToImageClient):
         """Возвращает список доступных моделей Kandinsky.
 
         Получает список доступных pipelines (моделей) через API или из хранилища.
+        Сначала пытается получить модели через check_api_status, затем из хранилища.
+        Если оба способа не сработали, возвращает пустой список.
 
         Args:
-            save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей.
+            save_models: Флаг, указывающий, нужно ли сохранять список доступных моделей
+                в хранилище для последующего использования.
 
         Returns:
-            Список доступных моделей в формате "Name (ID: xxx)" или пустой список
-            при ошибке или отсутствии моделей.
-
-        Note:
-            Сначала пытается получить модели через check_api_status, затем из хранилища.
-            Если оба способа не сработали, возвращает пустой список.
+            Список доступных моделей в формате "Name (ID: xxx)".
         """
         bound = logger.bind(event="kandinsky_get_available_models", save_models=save_models)
         bound.debug("Запрос списка доступных моделей Kandinsky")
@@ -342,22 +338,18 @@ class KandinskyClient(ITextToImageClient):
 
         Выполняет поиск модели по точному совпадению ID или частичному совпадению
         названия (регистронезависимо). Сохраняет выбранную модель в хранилище.
+        Если найдено несколько моделей, соответствующих частичному совпадению,
+        возвращается ошибка с предложением уточнить название или использовать ID.
 
         Args:
             model_identifier: ID модели или часть названия для поиска.
 
         Returns:
-            Кортеж, содержащий:
-            - успех: True если модель установлена успешно.
-            - сообщение: Человекочитаемое сообщение о результате.
+            Кортеж (успех, сообщение). Успех равен True, если модель установлена успешно.
 
         Raises:
             ValueError: Если API ключи не сконфигурированы.
             Exception: При ошибке установки модели (например, ошибка доступа к хранилищу).
-
-        Note:
-            Если найдено несколько моделей, соответствующих частичному совпадению,
-            возвращается ошибка с предложением уточнить название или использовать ID.
         """
         bound = logger.bind(event="kandinsky_set_model", model_identifier=model_identifier)
 
