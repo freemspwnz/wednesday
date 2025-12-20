@@ -22,7 +22,7 @@ class CircuitBreakerService(RedisBackendService):
 
     def __init__(  # noqa: PLR0913
         self,
-        redis_client: RedisBackend | None = None,
+        redis_client: RedisBackend,
         *,
         key: str = "cb:default",
         threshold: int = 5,
@@ -33,8 +33,7 @@ class CircuitBreakerService(RedisBackendService):
         """Инициализирует circuit breaker.
 
         Args:
-            redis_client: Экземпляр Redis или совместимого клиента. Если None,
-                используется глобальный клиент через get_redis().
+            redis_client: Экземпляр Redis или совместимого клиента.
             key: Логический ключ ресурса (например, 'kandinsky_api').
             threshold: Количество ошибок до открытия circuit-breaker (по умолчанию 5).
             window: Окно жизни счётчика ошибок в секундах через EXPIRE (по умолчанию 300).

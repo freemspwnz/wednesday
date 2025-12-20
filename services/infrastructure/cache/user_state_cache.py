@@ -33,7 +33,7 @@ class UserStateCache(RedisBackendService):
 
     def __init__(
         self,
-        redis_client: RedisBackend | None = None,
+        redis_client: RedisBackend,
         *,
         prefix: str = "user_state:",
     ) -> None:
@@ -41,7 +41,6 @@ class UserStateCache(RedisBackendService):
 
         Args:
             redis_client: Экземпляр redis.asyncio.Redis или совместимого клиента.
-                Если None — будет использован глобальный клиент через `get_redis()`.
             prefix: Префикс ключей для хранения состояний (по умолчанию "user_state:").
         """
         super().__init__(redis_client=redis_client, prefix=prefix)

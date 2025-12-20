@@ -45,7 +45,7 @@ class RateLimiter(RedisBackendService):
 
     def __init__(
         self,
-        redis_client: RedisBackend | None = None,
+        redis_client: RedisBackend,
         *,
         prefix: str = "rate:",
         window: int = 60,
@@ -54,8 +54,7 @@ class RateLimiter(RedisBackendService):
         """Инициализирует лимитер с фиксированным окном.
 
         Args:
-            redis_client: Экземпляр Redis или совместимого клиента. Если None,
-                используется глобальный клиент через get_redis().
+            redis_client: Экземпляр Redis или совместимого клиента.
             prefix: Префикс для всех ключей лимитера (по умолчанию "rate:").
             window: Размер временного окна в секундах (по умолчанию 60).
             limit: Максимальное количество запросов в окне (по умолчанию 100).

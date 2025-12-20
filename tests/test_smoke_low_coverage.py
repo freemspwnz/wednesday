@@ -159,9 +159,11 @@ async def test_command_handlers_start_help(
     from services.application.frog_requests import FrogRequestService
     from services.infrastructure.celery.celery_task_queue import CeleryTaskQueue
     from services.infrastructure.rate_limiting import RateLimiter
+    from utils.redis_client import get_redis
 
-    global_limiter = RateLimiter(prefix="frog:global:", window=60, limit=100)
-    user_limiter = RateLimiter(prefix="frog:user:", window=60, limit=1)
+    redis_client = get_redis()
+    global_limiter = RateLimiter(redis_client=redis_client, prefix="frog:global:", window=60, limit=100)
+    user_limiter = RateLimiter(redis_client=redis_client, prefix="frog:user:", window=60, limit=1)
     frog_rate_limiter = FrogRateLimiterService(
         settings=MagicMock(),
         global_limiter=global_limiter,

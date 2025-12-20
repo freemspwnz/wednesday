@@ -9,7 +9,7 @@ import redis.asyncio as redis
 from redis.exceptions import RedisError
 
 from services.base.base_service import BaseService
-from utils.redis_client import _InMemoryRedis, get_redis
+from utils.redis_client import _InMemoryRedis
 
 if TYPE_CHECKING:
     pass
@@ -29,19 +29,18 @@ class RedisBackendService(BaseService):
 
     def __init__(
         self,
-        redis_client: RedisBackend | None = None,
+        redis_client: RedisBackend,
         *,
         prefix: str = "",
     ) -> None:
         """Инициализирует Redis-сервис.
 
         Args:
-            redis_client: Экземпляр Redis или совместимого клиента. Если None,
-                используется глобальный клиент через get_redis().
+            redis_client: Экземпляр Redis или совместимого клиента.
             prefix: Префикс для всех ключей этого сервиса (по умолчанию "").
         """
         super().__init__()
-        self._redis: RedisBackend = redis_client or get_redis()
+        self._redis: RedisBackend = redis_client
         self._prefix = prefix
         self._fallback: _InMemoryRedis = _InMemoryRedis()
 

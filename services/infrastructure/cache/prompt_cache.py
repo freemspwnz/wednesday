@@ -35,7 +35,7 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
 
     def __init__(
         self,
-        redis_client: RedisBackend | None = None,
+        redis_client: RedisBackend,
         *,
         prefix: str = "prompt:",
         default_ttl: int = 3600,
@@ -44,7 +44,6 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
 
         Args:
             redis_client: Экземпляр redis.asyncio.Redis или совместимого клиента.
-                Если None — будет использован глобальный клиент через `get_redis()`.
             prefix: Префикс для всех ключей этого кэша (по умолчанию "prompt:").
             default_ttl: Время жизни записей по умолчанию в секундах (по умолчанию 3600).
         """

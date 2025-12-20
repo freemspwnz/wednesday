@@ -218,7 +218,7 @@ async def test_chats_store(cleanup_tables):
 @pytest.mark.redis
 def test_rate_limiter(redis_client):
     """Integration-тест с Redis."""
-    limiter = RateLimiter()
+    limiter = RateLimiter(redis_client=redis_client)
     # тест
 ```
 

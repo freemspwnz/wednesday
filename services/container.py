@@ -114,6 +114,11 @@ def build_image_stack(
         fallback_config=fallback_config,
     )
 
+    # Получаем Redis клиент явно
+    from utils.redis_client import get_redis
+
+    redis_client = get_redis()
+
     # Инфраструктура
     images_repo = ImagesRepo(pool=db_pool)
     prompts_repo = PromptsRepo(pool=db_pool)
@@ -122,8 +127,9 @@ def build_image_stack(
         prompts_repo=prompts_repo,
     )
     image_storage = ImageStorageService()
-    prompt_cache = PromptCache()
+    prompt_cache = PromptCache(redis_client=redis_client)
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(
+        redis_client=redis_client,
         key="cb:kandinsky_api",
         threshold=5,
         window=300,
@@ -223,17 +229,25 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     chats = ChatsRepo(pool=db_pool)
     dispatch_registry = DispatchRegistry(pool=db_pool)
     metrics = Metrics(pool=db_pool)
-    prompt_cache = PromptCache()
-    user_state_store = UserStateCache()
+
+    # Получаем Redis клиент явно
+    from utils.redis_client import get_redis
+
+    redis_client = get_redis()
+
+    prompt_cache = PromptCache(redis_client=redis_client)
+    user_state_store = UserStateCache(redis_client=redis_client)
 
     # Создаём rate limiters для команды /frog
     SECONDS_PER_MINUTE = 60
     global_limiter: IRateLimiter = RateLimiter(
+        redis_client=redis_client,
         prefix="frog:global:",
         window=app_settings.frog_rate_limit_window_seconds,
         limit=app_settings.frog_rate_limit_max_requests,
     )
     user_limiter: IRateLimiter = RateLimiter(
+        redis_client=redis_client,
         prefix="frog:user:",
         window=app_settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
         limit=1,

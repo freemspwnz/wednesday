@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Dependency Injection для Redis клиента**:
+  - Сделан параметр `redis_client` обязательным во всех сервисах Redis (`RedisBackendService`, `PromptCache`, `UserStateCache`, `RateLimiter`, `CircuitBreakerService`)
+  - Убран fallback на глобальный клиент через `get_redis()` в конструкторах сервисов
+  - Обновлен `services/container.py` для явной передачи Redis клиента при создании сервисов
+  - Обновлены `bot/support_bot.py` и тесты для передачи Redis клиента явно
+  - Улучшена тестируемость и изоляция тестов (нет зависимости от глобального состояния)
+
 - **Перенос оставшихся репозиториев в services/infrastructure/repositories/**:
   - Перенесены `AdminsRepo` из `utils/admins_repo.py` в `services/infrastructure/repositories/admins_repo.py`
   - Перенесены `ChatsRepo` из `utils/chats_repo.py` в `services/infrastructure/repositories/chats_repo.py`
