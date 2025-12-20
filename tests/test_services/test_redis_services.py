@@ -72,6 +72,8 @@ async def test_rate_limiter_allows_until_limit() -> None:
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_opens_after_threshold() -> None:
+    from services.base.exceptions import CircuitBreakerOpen
+
     backend = _InMemoryRedis()
     breaker = CircuitBreakerService(redis_client=backend, key="test:cb", threshold=2, window=60, cooldown=60)
 
@@ -80,8 +82,11 @@ async def test_circuit_breaker_opens_after_threshold() -> None:
     await breaker.record_failure()
     assert await breaker.is_open() is False
 
-    await breaker.record_failure()
-    # После двух ошибок подряд circuit должен открыться.
+    # После двух ошибок подряд circuit должен открыться и выбросить исключение.
+    with pytest.raises(CircuitBreakerOpen):
+        await breaker.record_failure()
+
+    # После исключения circuit должен быть открыт.
     assert await breaker.is_open() is True
 
     await breaker.reset()

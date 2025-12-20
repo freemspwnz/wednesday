@@ -448,8 +448,8 @@ def patch_models_repo(monkeypatch: Any, request: Any) -> Generator[None, None, N
     Исключает тесты из test_utils/test_models_store.py и интеграционные тесты,
     которые должны использовать реальный ModelsStore с Postgres.
     """
-    import utils.admins_repo as admins_repo_module
-    import utils.models_repo as models_repo_module
+    from services.infrastructure.repositories import admins_repo as admins_repo_module
+    from services.infrastructure.repositories import models_repo as models_repo_module
 
     # Не подменяем ModelsRepo для тестов, которые явно тестируют его или используют реальные хранилища
     test_file = request.node.fspath.strpath if hasattr(request.node, "fspath") else ""
