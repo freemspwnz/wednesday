@@ -6,7 +6,7 @@ from typing import Any
 
 import aiohttp
 
-from services.clients.exceptions import map_http_status_to_exception
+from services.clients.exceptions import APIError, NetworkError, map_http_status_to_exception
 from utils.retry import retry_standard
 
 
@@ -100,12 +100,28 @@ class BaseHTTPClient:
 
         @retry_standard(service_name=self._service_name, method_name=method_name)
         async def _make_request() -> aiohttp.ClientResponse:
-            return await self._session.get(
-                url,
-                headers=request_headers,
-                timeout=request_timeout,
-                **kwargs,
-            )
+            try:
+                return await self._session.get(
+                    url,
+                    headers=request_headers,
+                    timeout=request_timeout,
+                    **kwargs,
+                )
+            except aiohttp.ClientConnectorError as exc:
+                raise NetworkError(
+                    f"Ошибка подключения к {self._service_name}: {exc}",
+                    original_error=exc,
+                ) from exc
+            except aiohttp.ServerTimeoutError as exc:
+                raise NetworkError(
+                    f"Таймаут запроса к {self._service_name}: {exc}",
+                    original_error=exc,
+                ) from exc
+            except TimeoutError as exc:
+                raise NetworkError(
+                    f"Таймаут при запросе к {self._service_name}",
+                    original_error=exc,
+                ) from exc
 
         return await _make_request()
 
@@ -138,12 +154,28 @@ class BaseHTTPClient:
 
         @retry_standard(service_name=self._service_name, method_name=method_name)
         async def _make_request() -> aiohttp.ClientResponse:
-            return await self._session.post(
-                url,
-                headers=request_headers,
-                timeout=request_timeout,
-                **kwargs,
-            )
+            try:
+                return await self._session.post(
+                    url,
+                    headers=request_headers,
+                    timeout=request_timeout,
+                    **kwargs,
+                )
+            except aiohttp.ClientConnectorError as exc:
+                raise NetworkError(
+                    f"Ошибка подключения к {self._service_name}: {exc}",
+                    original_error=exc,
+                ) from exc
+            except aiohttp.ServerTimeoutError as exc:
+                raise NetworkError(
+                    f"Таймаут запроса к {self._service_name}: {exc}",
+                    original_error=exc,
+                ) from exc
+            except TimeoutError as exc:
+                raise NetworkError(
+                    f"Таймаут при запросе к {self._service_name}",
+                    original_error=exc,
+                ) from exc
 
         return await _make_request()
 
@@ -173,3 +205,157 @@ class BaseHTTPClient:
                 response=response,
             )
             raise exception
+
+    async def _parse_json_response(
+        self,
+        response: aiohttp.ClientResponse,
+        expected_status: int = 200,
+    ) -> dict[str, Any] | list[dict[str, Any]]:
+        """Парсит JSON ответ и проверяет статус.
+
+        Args:
+            response: Ответ от API.
+            expected_status: Ожидаемый HTTP статус (по умолчанию 200).
+
+        Returns:
+            Распарсенные данные JSON (dict или list).
+
+        Raises:
+            AuthenticationError: При ошибках аутентификации (401, 403).
+            RateLimitError: При превышении лимита запросов (429).
+            APIError: При других ошибках API (4xx, 5xx).
+            ValueError: При ошибках парсинга JSON.
+        """
+        if response.status != expected_status:
+            error_text = await response.text()
+            exception = map_http_status_to_exception(
+                status_code=response.status,
+                message=f"Ошибка API {self._service_name}: HTTP {response.status}",
+                response_body=error_text,
+                response=response,
+            )
+            raise exception
+
+        try:
+            return await response.json()  # type: ignore[no-any-return]
+        except aiohttp.ContentTypeError as exc:
+            error_text = await response.text()
+            raise APIError(
+                f"Ошибка парсинга JSON от {self._service_name}: ответ не является JSON",
+                status_code=response.status,
+                response_body=error_text,
+                original_error=exc,
+            ) from exc
+
+    async def _safe_parse_json(  # noqa: PLR6301
+        self,
+        response: aiohttp.ClientResponse,
+    ) -> dict[str, Any] | list[dict[str, Any]] | None:
+        """Безопасно парсит JSON ответ без проверки статуса.
+
+        Используется для случаев, когда нужно получить данные из ответа
+        независимо от статуса (например, для логирования).
+
+        Args:
+            response: Ответ от API.
+
+        Returns:
+            Распарсенные данные JSON или None при ошибке парсинга.
+        """
+        try:
+            return await response.json()  # type: ignore[no-any-return]
+        except (aiohttp.ContentTypeError, ValueError):
+            return None
+
+    async def _get_response_text(  # noqa: PLR6301
+        self,
+        response: aiohttp.ClientResponse,
+        max_length: int = 1000,
+    ) -> str:
+        """Получает текст ответа с ограничением длины.
+
+        Args:
+            response: Ответ от API.
+            max_length: Максимальная длина текста (по умолчанию 1000).
+
+        Returns:
+            Текст ответа (обрезанный до max_length символов).
+        """
+        text = await response.text()
+        if len(text) > max_length:
+            return text[:max_length] + "..."
+        return text
+
+    async def _get_json(
+        self,
+        endpoint: str,
+        method_name: str,
+        headers: dict[str, str] | None = None,
+        timeout: aiohttp.ClientTimeout | None = None,
+        expected_status: int = 200,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> dict[str, Any] | list[dict[str, Any]]:
+        """Выполняет GET запрос и парсит JSON ответ.
+
+        Удобный метод для частого паттерна "запрос + парсинг JSON".
+
+        Args:
+            endpoint: Эндпоинт API.
+            method_name: Имя метода для логирования и retry.
+            headers: Дополнительные заголовки (опционально).
+            timeout: Таймаут для запроса (опционально).
+            expected_status: Ожидаемый HTTP статус (по умолчанию 200).
+            **kwargs: Дополнительные параметры для aiohttp.ClientSession.get().
+
+        Returns:
+            Распарсенные данные JSON.
+
+        Raises:
+            ClientError: При ошибках запроса или парсинга.
+        """
+        response = await self._get(
+            endpoint=endpoint,
+            method_name=method_name,
+            headers=headers,
+            timeout=timeout,
+            **kwargs,
+        )
+        async with response:
+            return await self._parse_json_response(response, expected_status=expected_status)
+
+    async def _post_json(
+        self,
+        endpoint: str,
+        method_name: str,
+        headers: dict[str, str] | None = None,
+        timeout: aiohttp.ClientTimeout | None = None,
+        expected_status: int = 200,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> dict[str, Any] | list[dict[str, Any]]:
+        """Выполняет POST запрос и парсит JSON ответ.
+
+        Удобный метод для частого паттерна "запрос + парсинг JSON".
+
+        Args:
+            endpoint: Эндпоинт API.
+            method_name: Имя метода для логирования и retry.
+            headers: Дополнительные заголовки (опционально).
+            timeout: Таймаут для запроса (опционально).
+            expected_status: Ожидаемый HTTP статус (по умолчанию 200).
+            **kwargs: Дополнительные параметры для aiohttp.ClientSession.post().
+
+        Returns:
+            Распарсенные данные JSON.
+
+        Raises:
+            ClientError: При ошибках запроса или парсинга.
+        """
+        response = await self._post(
+            endpoint=endpoint,
+            method_name=method_name,
+            headers=headers,
+            timeout=timeout,
+            **kwargs,
+        )
+        async with response:
+            return await self._parse_json_response(response, expected_status=expected_status)

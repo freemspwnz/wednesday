@@ -540,7 +540,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             NetworkError: При сетевых ошибках.
             APIError: При других ошибках API.
         """
-        pipelines_data = await self._get_json(  # type: ignore[attr-defined]
+        pipelines_data = await self._get_json(
             endpoint=self.ENDPOINT_PIPELINES,
             method_name="get_pipelines",
             headers=headers,
@@ -687,7 +687,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             async with response:
                 # Принимаем как 200, так и 201 как успешные статусы
                 if response.status in {200, 201}:
-                    result_json = await self._parse_json_response(response, expected_status=response.status)  # type: ignore[attr-defined]
+                    result_json = await self._parse_json_response(response, expected_status=response.status)
                     try:
                         result = KandinskyGenerationStartResponse.model_validate(result_json)
                         uuid_str: str = str(result.uuid)
@@ -705,7 +705,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                         ) from e
                 else:
                     # Если статус не 200/201, _parse_json_response выбросит исключение
-                    await self._parse_json_response(response, expected_status=200)  # type: ignore[attr-defined]
+                    await self._parse_json_response(response, expected_status=200)
                     # Этот код не должен выполняться, но нужен для mypy
                     raise APIError(
                         "Неожиданный статус ответа при запуске генерации",
@@ -757,7 +757,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                 )
 
                 async with response:
-                    data_json = await self._parse_json_response(response)  # type: ignore[attr-defined]
+                    data_json = await self._parse_json_response(response)
                     try:
                         status_response = KandinskyStatusResponse.model_validate(data_json)
                     except ValidationError as e:
