@@ -4,6 +4,21 @@
 
 ### Изменено
 
+- **Вынос захардкоженных таймаутов в конфигурацию через HttpTimeoutConfig**:
+  - Создан универсальный `HttpTimeoutConfig` dataclass для всех HTTP-таймаутов (total, connect, sock_read)
+  - Добавлен метод `create_http_timeout()` в класс `Config` для создания таймаутов из переменных окружения
+  - Обновлен `KandinskyConfig` для использования `HttpTimeoutConfig` (generation_timeout, check_timeout)
+  - Обновлен `GigaChatConfig` для использования `HttpTimeoutConfig` (prompt_timeout, models_timeout, token_timeout)
+  - Удалены константы таймаутов из `KandinskyClient` (TIMEOUT_GENERATION_*, TIMEOUT_CHECK_*)
+  - Удалены константы таймаутов из `GigaChatTextClient` (TIMEOUT_TOKEN_SECONDS, TIMEOUT_PROMPT_SECONDS, TIMEOUT_MODELS_SECONDS)
+  - Обновлены клиенты для использования таймаутов из конфига через метод `to_client_timeout()`
+  - Удалены захардкоженные значения connect и sock_read из кода GigaChat
+  - Добавлены переменные окружения для настройки таймаутов (KANDINSKY_GENERATION_TIMEOUT_*, KANDINSKY_CHECK_TIMEOUT_*, GIGACHAT_PROMPT_TIMEOUT_*, GIGACHAT_MODELS_TIMEOUT_*, GIGACHAT_TOKEN_TIMEOUT_*)
+  - Единообразная структура таймаутов для всех HTTP-клиентов
+  - Упрощено тестирование (можно подменить таймауты в конфиге)
+  - Поддержка разных окружений с разными таймаутами без изменения кода
+  - **BREAKING CHANGE**: Таймауты теперь обязательные поля в `KandinskyConfig` и `GigaChatConfig`
+
 - **Вынос захардкоженных URL в конфигурацию клиентов**:
   - Добавлено поле `base_url` в `KandinskyConfig` для настройки базового URL через переменные окружения
   - Добавлено свойство `kandinsky_base_url` в класс `Config`

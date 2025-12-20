@@ -18,7 +18,7 @@ pytestmark = [pytest.mark.unit]
 
 
 def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
-    from utils.config import KandinskyConfig
+    from utils.config import HttpTimeoutConfig, KandinskyConfig
 
     dummy_client = MagicMock()
     dummy_container = MagicMock()
@@ -30,14 +30,21 @@ def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> 
         lambda: dummy_container,
     )
 
-    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
+    check_timeout = HttpTimeoutConfig(total=15, connect=5, sock_read=10)
+    config = KandinskyConfig(
+        api_key="test-key",
+        secret_key="test-secret",
+        generation_timeout=timeout,
+        check_timeout=check_timeout,
+    )
     clients_factory.create_image_client(kandinsky_config=config)
 
     dummy_container.set_initial_client.assert_called_once_with(dummy_client)
 
 
 def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
-    from utils.config import GigaChatConfig
+    from utils.config import GigaChatConfig, HttpTimeoutConfig
 
     dummy_container = MagicMock()
 
@@ -55,6 +62,7 @@ def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> N
     # Минимизируем зависимость от реальных env/config
     monkeypatch.setenv("TEXT_MODEL_BACKEND", "gigachat")
 
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
@@ -63,6 +71,9 @@ def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> N
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
         verify_ssl=False,
+        prompt_timeout=timeout,
+        models_timeout=timeout,
+        token_timeout=timeout,
     )
     clients_factory.create_text_client(gigachat_config=config)
 
@@ -206,13 +217,20 @@ async def test_command_handlers_start_help(
 def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента KandinskyClient."""
     from services.clients.kandinsky import KandinskyClient
-    from utils.config import KandinskyConfig
+    from utils.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
     monkeypatch.delenv("HTTP_PROXY", raising=False)
 
-    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
+    check_timeout = HttpTimeoutConfig(total=15, connect=5, sock_read=10)
+    config = KandinskyConfig(
+        api_key="test-key",
+        secret_key="test-secret",
+        generation_timeout=timeout,
+        check_timeout=check_timeout,
+    )
     client = KandinskyClient(config=config)
 
     assert client._api_key is not None
@@ -227,9 +245,16 @@ def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> Non
 async def test_kandinsky_client_auth_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Проверка формирования заголовков авторизации Kandinsky."""
     from services.clients.kandinsky import KandinskyClient
-    from utils.config import KandinskyConfig
+    from utils.config import HttpTimeoutConfig, KandinskyConfig
 
-    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
+    check_timeout = HttpTimeoutConfig(total=15, connect=5, sock_read=10)
+    config = KandinskyConfig(
+        api_key="test-key",
+        secret_key="test-secret",
+        generation_timeout=timeout,
+        check_timeout=check_timeout,
+    )
     client = KandinskyClient(config=config)
     headers = client._get_auth_headers()
 
@@ -245,13 +270,20 @@ async def test_kandinsky_client_aclose(monkeypatch: pytest.MonkeyPatch) -> None:
     from unittest.mock import AsyncMock, MagicMock
 
     from services.clients.kandinsky import KandinskyClient
-    from utils.config import KandinskyConfig
+    from utils.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
     monkeypatch.delenv("HTTP_PROXY", raising=False)
 
-    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
+    check_timeout = HttpTimeoutConfig(total=15, connect=5, sock_read=10)
+    config = KandinskyConfig(
+        api_key="test-key",
+        secret_key="test-secret",
+        generation_timeout=timeout,
+        check_timeout=check_timeout,
+    )
     client = KandinskyClient(config=config)
 
     # Проверяем, что сессия создана
@@ -282,13 +314,20 @@ async def test_kandinsky_client_context_manager(monkeypatch: pytest.MonkeyPatch)
     from unittest.mock import AsyncMock, MagicMock
 
     from services.clients.kandinsky import KandinskyClient
-    from utils.config import KandinskyConfig
+    from utils.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
     monkeypatch.delenv("HTTP_PROXY", raising=False)
 
-    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
+    check_timeout = HttpTimeoutConfig(total=15, connect=5, sock_read=10)
+    config = KandinskyConfig(
+        api_key="test-key",
+        secret_key="test-secret",
+        generation_timeout=timeout,
+        check_timeout=check_timeout,
+    )
     mock_session = MagicMock()
     mock_session.close = AsyncMock()
 
@@ -313,13 +352,20 @@ async def test_kandinsky_client_context_manager_exception(monkeypatch: pytest.Mo
     from unittest.mock import AsyncMock, MagicMock
 
     from services.clients.kandinsky import KandinskyClient
-    from utils.config import KandinskyConfig
+    from utils.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
     monkeypatch.delenv("HTTP_PROXY", raising=False)
 
-    config = KandinskyConfig(api_key="test-key", secret_key="test-secret")
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
+    check_timeout = HttpTimeoutConfig(total=15, connect=5, sock_read=10)
+    config = KandinskyConfig(
+        api_key="test-key",
+        secret_key="test-secret",
+        generation_timeout=timeout,
+        check_timeout=check_timeout,
+    )
     mock_session = MagicMock()
     mock_session.close = AsyncMock()
 
@@ -347,7 +393,7 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
     """Базовый тест создания клиента GigaChatTextClient."""
 
     from services.clients.gigachat_text import GigaChatTextClient
-    from utils.config import GigaChatConfig
+    from utils.config import GigaChatConfig, HttpTimeoutConfig
 
     # Мокируем aiohttp.ClientSession и TCPConnector, чтобы избежать реальных HTTP-запросов
     mock_session = MagicMock()
@@ -364,6 +410,7 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
     monkeypatch.setattr("aiohttp.TCPConnector", _mock_connector_init)
 
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
@@ -372,6 +419,9 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
         verify_ssl=False,
+        prompt_timeout=timeout,
+        models_timeout=timeout,
+        token_timeout=timeout,
     )
 
     async with GigaChatTextClient(config=config) as client:
@@ -388,7 +438,7 @@ async def test_gigachat_text_client_context_manager(monkeypatch: pytest.MonkeyPa
     from unittest.mock import AsyncMock, MagicMock
 
     from services.clients.gigachat_text import GigaChatTextClient
-    from utils.config import GigaChatConfig
+    from utils.config import GigaChatConfig, HttpTimeoutConfig
 
     # Мокируем aiohttp.ClientSession и TCPConnector
     mock_session = MagicMock()
@@ -405,6 +455,7 @@ async def test_gigachat_text_client_context_manager(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
     monkeypatch.setattr("aiohttp.TCPConnector", _mock_connector_init)
 
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
@@ -413,6 +464,9 @@ async def test_gigachat_text_client_context_manager(monkeypatch: pytest.MonkeyPa
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
         verify_ssl=False,
+        prompt_timeout=timeout,
+        models_timeout=timeout,
+        token_timeout=timeout,
     )
 
     async with GigaChatTextClient(config=config) as client:
@@ -429,7 +483,7 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
     from unittest.mock import AsyncMock, MagicMock
 
     from services.clients.gigachat_text import GigaChatTextClient
-    from utils.config import GigaChatConfig
+    from utils.config import GigaChatConfig, HttpTimeoutConfig
 
     # Мокируем aiohttp.ClientSession и TCPConnector
     mock_session = MagicMock()
@@ -446,6 +500,7 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
     monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
     monkeypatch.setattr("aiohttp.TCPConnector", _mock_connector_init)
 
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
@@ -454,6 +509,9 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
         verify_ssl=False,
+        prompt_timeout=timeout,
+        models_timeout=timeout,
+        token_timeout=timeout,
     )
 
     try:

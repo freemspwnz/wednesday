@@ -41,9 +41,6 @@ from utils.config import GigaChatConfig
 from utils.retry import retry_critical, retry_standard
 
 HTTP_STATUS_OK = 200
-TIMEOUT_TOKEN_SECONDS = 60
-TIMEOUT_PROMPT_SECONDS = 60
-TIMEOUT_MODELS_SECONDS = 30
 TOKEN_EXPIRY_BUFFER_SECONDS = 300
 DEFAULT_EXPIRES_IN_SECONDS = 1800
 MAX_TOKENS_DEFAULT = 300
@@ -129,6 +126,7 @@ class GigaChatTextClient(ITextToTextClient):
         self._verify_ssl: bool | str = config.verify_ssl
         self._model: str = config.model
         self._models_repo: IModelsRepo | None = models_repo
+        self._config: GigaChatConfig = config
 
         # Кэш токена
         self._access_token: str | None = None
@@ -143,7 +141,7 @@ class GigaChatTextClient(ITextToTextClient):
 
         # Общий aiohttp.ClientSession на жизненный цикл клиента.
         # Таймауты и SSL‑контекст задаются один раз.
-        self._timeout = aiohttp.ClientTimeout(total=TIMEOUT_PROMPT_SECONDS, connect=10, sock_read=30)
+        self._timeout = config.prompt_timeout.to_client_timeout()
         ssl_context = self._get_ssl_context()
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         self._session = aiohttp.ClientSession(timeout=self._timeout, connector=connector)
@@ -239,7 +237,7 @@ class GigaChatTextClient(ITextToTextClient):
                     )
                     return None
         except TimeoutError:
-            bound.error(f"Таймаут при генерации промпта через GigaChat ({TIMEOUT_PROMPT_SECONDS} секунд)")
+            bound.error(f"Таймаут при генерации промпта через GigaChat ({self._config.prompt_timeout.total} секунд)")
             return None
         except aiohttp.ClientConnectorError as e:
             bound.error(f"Ошибка подключения к GigaChat API при генерации промпта: {e}")
@@ -314,7 +312,7 @@ class GigaChatTextClient(ITextToTextClient):
 
             @retry_standard(service_name="gigachat", method_name="get_available_models")
             async def _get_models() -> aiohttp.ClientResponse:
-                timeout = aiohttp.ClientTimeout(total=TIMEOUT_MODELS_SECONDS, connect=10, sock_read=20)
+                timeout = self._config.models_timeout.to_client_timeout()
                 return await self._session.get(models_url, headers=headers, timeout=timeout)
 
             bound.debug("Отправка запроса к GigaChat API для получения списка моделей")
@@ -366,8 +364,9 @@ class GigaChatTextClient(ITextToTextClient):
                     return FALLBACK_MODELS.copy()
 
         except TimeoutError:
+            timeout_sec = self._config.models_timeout.total
             bound.warning(
-                f"Таймаут при запросе списка моделей GigaChat ({TIMEOUT_MODELS_SECONDS} секунд), используем fallback",
+                f"Таймаут при запросе списка моделей GigaChat ({timeout_sec} секунд), используем fallback",
             )
             return FALLBACK_MODELS.copy()
         except aiohttp.ClientConnectorError as e:
@@ -532,7 +531,7 @@ class GigaChatTextClient(ITextToTextClient):
 
                 payload = {"scope": self._scope}
 
-                timeout = aiohttp.ClientTimeout(total=TIMEOUT_TOKEN_SECONDS, connect=10, sock_read=30)
+                timeout = self._config.token_timeout.to_client_timeout()
                 return await self._session.post(self._auth_url, headers=headers, data=payload, timeout=timeout)
 
             try:
@@ -553,7 +552,7 @@ class GigaChatTextClient(ITextToTextClient):
                         )
                         return None
             except TimeoutError:
-                bound.error(f"Таймаут при получении токена GigaChat ({TIMEOUT_TOKEN_SECONDS} секунд)")
+                bound.error(f"Таймаут при получении токена GigaChat ({self._config.token_timeout.total} секунд)")
                 return None
             except aiohttp.ClientConnectorError as e:
                 bound.error(f"Ошибка подключения к GigaChat API при получении токена: {e}")

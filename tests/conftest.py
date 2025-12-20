@@ -605,9 +605,10 @@ async def gigachat_client() -> AsyncIterator[Any]:
             finally:
                 await client.aclose()
     """
-    from utils.config import GigaChatConfig
+    from utils.config import GigaChatConfig, HttpTimeoutConfig
     from services.clients.gigachat_text import GigaChatTextClient
 
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
@@ -616,6 +617,9 @@ async def gigachat_client() -> AsyncIterator[Any]:
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
         verify_ssl=False,
+        prompt_timeout=timeout,
+        models_timeout=timeout,
+        token_timeout=timeout,
     )
     client = GigaChatTextClient(config=config)
     try:

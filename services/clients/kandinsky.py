@@ -45,14 +45,6 @@ HTTP_STATUS_OK = 200
 HTTP_STATUS_UNAUTHORIZED = 401
 HTTP_STATUS_FORBIDDEN = 403
 
-TIMEOUT_GENERATION_TOTAL_SECONDS = 60  # Дефолтный таймаут генерации в секундах
-TIMEOUT_GENERATION_CONNECT_SECONDS = 10
-TIMEOUT_GENERATION_SOCK_READ_SECONDS = 30
-
-TIMEOUT_CHECK_TOTAL_SECONDS = 15
-TIMEOUT_CHECK_CONNECT_SECONDS = 5
-TIMEOUT_CHECK_SOCK_READ_SECONDS = 10
-
 MAX_STATUS_ATTEMPTS = 10
 STATUS_POLL_DELAY_SECONDS = 10
 
@@ -85,6 +77,7 @@ class KandinskyClient(ITextToImageClient):
         self._base_url: str = config.base_url
         self._proxy_url: str | None = None
         self._models_repo: IModelsRepo | None = models_repo
+        self._config: KandinskyConfig = config
 
         # Proxy берём из стандартных переменных окружения, как и в старой реализации.
         import os
@@ -92,11 +85,7 @@ class KandinskyClient(ITextToImageClient):
         self._proxy_url = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
 
         # Настройка timeout для сессии (используем таймауты генерации как основные)
-        self._timeout = aiohttp.ClientTimeout(
-            total=TIMEOUT_GENERATION_TOTAL_SECONDS,
-            connect=TIMEOUT_GENERATION_CONNECT_SECONDS,
-            sock_read=TIMEOUT_GENERATION_SOCK_READ_SECONDS,
-        )
+        self._timeout = config.generation_timeout.to_client_timeout()
 
         # Создаём connector (один раз для переиспользования)
         connector: aiohttp.BaseConnector | None = None
@@ -222,11 +211,7 @@ class KandinskyClient(ITextToImageClient):
             return False, msg, [], (None, None)
 
         # Используем меньший таймаут для проверки статуса
-        timeout = aiohttp.ClientTimeout(
-            total=TIMEOUT_CHECK_TOTAL_SECONDS,
-            connect=TIMEOUT_CHECK_CONNECT_SECONDS,
-            sock_read=TIMEOUT_CHECK_SOCK_READ_SECONDS,
-        )
+        timeout = self._config.check_timeout.to_client_timeout()
 
         @retry_standard(service_name="kandinsky", method_name="check_api_status")
         async def _fetch_pipelines_status() -> aiohttp.ClientResponse:
@@ -366,11 +351,7 @@ class KandinskyClient(ITextToImageClient):
             return False, msg
 
         # Используем меньший таймаут для установки модели
-        timeout = aiohttp.ClientTimeout(
-            total=TIMEOUT_CHECK_TOTAL_SECONDS,
-            connect=TIMEOUT_CHECK_CONNECT_SECONDS,
-            sock_read=TIMEOUT_CHECK_SOCK_READ_SECONDS,
-        )
+        timeout = self._config.check_timeout.to_client_timeout()
 
         @retry_standard(service_name="kandinsky", method_name="set_model")
         async def _fetch_pipelines_for_set_model() -> aiohttp.ClientResponse:

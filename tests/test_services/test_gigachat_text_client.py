@@ -7,7 +7,7 @@ import pytest
 from loguru import logger
 
 from services.clients.gigachat_text import GigaChatTextClient
-from utils.config import GigaChatConfig
+from utils.config import GigaChatConfig, HttpTimeoutConfig
 
 
 class _DummyResponse:
@@ -65,6 +65,7 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
     Проверяем, что при параллельных запросах токена фактически выполняется
     только один HTTP‑запрос и не возникает гонок.
     """
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
@@ -73,6 +74,9 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
         verify_ssl=False,
+        prompt_timeout=timeout,
+        models_timeout=timeout,
+        token_timeout=timeout,
     )
 
     async with GigaChatTextClient(config=config) as client:
@@ -104,6 +108,7 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
     """
     full_key = "A" * 40
 
+    timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
         auth_url="https://example.test/auth",
         api_url="https://example.test/api",
@@ -112,6 +117,9 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
         scope="GIGACHAT_API_PERS",
         model="GigaChat",
         verify_ssl=False,
+        prompt_timeout=timeout,
+        models_timeout=timeout,
+        token_timeout=timeout,
     )
 
     async with GigaChatTextClient(config=config) as client:

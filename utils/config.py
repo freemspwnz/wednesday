@@ -5,9 +5,13 @@
 
 import os
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
+import aiohttp
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    pass
 
 _DOTENV_STATE = {"loaded": False}
 
@@ -323,6 +327,34 @@ class Config:  # noqa: PLR0904
             Экземпляр CircuitBreakerConfig с настройками из переменных окружения.
         """
         return CircuitBreakerConfig.from_config(self)
+
+    @staticmethod
+    def create_http_timeout(
+        env_prefix: str,
+        default_total: int,
+        default_connect: int,
+        default_sock_read: int,
+    ) -> "HttpTimeoutConfig":
+        """Создает HttpTimeoutConfig из переменных окружения.
+
+        Args:
+            env_prefix: Префикс для переменных окружения (например, "KANDINSKY_GENERATION")
+            default_total: Значение по умолчанию для total
+            default_connect: Значение по умолчанию для connect
+            default_sock_read: Значение по умолчанию для sock_read
+
+        Returns:
+            HttpTimeoutConfig с настройками из переменных окружения или значениями по умолчанию
+
+        Пример переменных окружения:
+            KANDINSKY_GENERATION_TIMEOUT_TOTAL=60
+            KANDINSKY_GENERATION_TIMEOUT_CONNECT=10
+            KANDINSKY_GENERATION_TIMEOUT_SOCK_READ=30
+        """
+        total = int(Config._get_env_var(f"{env_prefix}_TIMEOUT_TOTAL") or str(default_total))
+        connect = int(Config._get_env_var(f"{env_prefix}_TIMEOUT_CONNECT") or str(default_connect))
+        sock_read = int(Config._get_env_var(f"{env_prefix}_TIMEOUT_SOCK_READ") or str(default_sock_read))
+        return HttpTimeoutConfig(total=total, connect=connect, sock_read=sock_read)
 
     # --- Sentry / observability ---
 
@@ -769,6 +801,36 @@ class SchedulerConfig:
 
 # Конфигурации для клиентов (аналогично ImageConfig и SchedulerConfig)
 @dataclass(frozen=True)
+class HttpTimeoutConfig:
+    """Конфигурация таймаутов для HTTP-запросов (aiohttp).
+
+    Используется для настройки ClientTimeout во всех HTTP-клиентах.
+    Предоставляет единообразную структуру для всех типов операций.
+
+    Attributes:
+        total: Общий таймаут запроса в секундах (максимальное время всего запроса)
+        connect: Таймаут установления соединения в секундах
+        sock_read: Таймаут чтения данных из сокета в секундах
+    """
+
+    total: int
+    connect: int
+    sock_read: int
+
+    def to_client_timeout(self) -> aiohttp.ClientTimeout:
+        """Преобразует в aiohttp.ClientTimeout для использования в клиентах.
+
+        Returns:
+            Экземпляр aiohttp.ClientTimeout с настроенными таймаутами
+        """
+        return aiohttp.ClientTimeout(
+            total=self.total,
+            connect=self.connect,
+            sock_read=self.sock_read,
+        )
+
+
+@dataclass(frozen=True)
 class GigaChatConfig:
     """Конфигурация для GigaChat клиента.
 
@@ -781,6 +843,9 @@ class GigaChatConfig:
     authorization_key: str
     scope: str
     model: str
+    prompt_timeout: HttpTimeoutConfig
+    models_timeout: HttpTimeoutConfig
+    token_timeout: HttpTimeoutConfig
     verify_ssl: bool | str = True
 
     @classmethod
@@ -801,6 +866,24 @@ class GigaChatConfig:
             scope=config.gigachat_scope,
             model=config.gigachat_model,
             verify_ssl=config.gigachat_verify_ssl,
+            prompt_timeout=config.create_http_timeout(
+                env_prefix="GIGACHAT_PROMPT",
+                default_total=60,
+                default_connect=10,
+                default_sock_read=30,
+            ),
+            models_timeout=config.create_http_timeout(
+                env_prefix="GIGACHAT_MODELS",
+                default_total=30,
+                default_connect=10,
+                default_sock_read=20,
+            ),
+            token_timeout=config.create_http_timeout(
+                env_prefix="GIGACHAT_TOKEN",
+                default_total=60,
+                default_connect=10,
+                default_sock_read=30,
+            ),
         )
 
 
@@ -813,6 +896,8 @@ class KandinskyConfig:
 
     api_key: str | None
     secret_key: str | None
+    generation_timeout: HttpTimeoutConfig
+    check_timeout: HttpTimeoutConfig
     base_url: str = "https://api-key.fusionbrain.ai"
 
     @classmethod
@@ -829,6 +914,18 @@ class KandinskyConfig:
             api_key=config.kandinsky_api_key,
             secret_key=config.kandinsky_secret_key,
             base_url=config.kandinsky_base_url,
+            generation_timeout=config.create_http_timeout(
+                env_prefix="KANDINSKY_GENERATION",
+                default_total=60,
+                default_connect=10,
+                default_sock_read=30,
+            ),
+            check_timeout=config.create_http_timeout(
+                env_prefix="KANDINSKY_CHECK",
+                default_total=15,
+                default_connect=5,
+                default_sock_read=10,
+            ),
         )
 
 
