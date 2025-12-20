@@ -21,6 +21,13 @@
 
 ### Изменено
 
+- **Упрощение обработки ошибок в методах клиентов**:
+  - Удалены избыточные обработчики сетевых ошибок (TimeoutError, ClientConnectorError, ClientError) из методов клиентов
+  - Сетевые ошибки теперь автоматически обрабатываются в базовом классе BaseHTTPClient и преобразуются в NetworkError
+  - Упрощены методы `generate()`, `check_api_status()`, `set_model()`, `_get_pipeline_id()`, `_start_generation()` в KandinskyClient
+  - Упрощены методы `generate()`, `get_available_models()`, `_get_access_token()` в GigaChatTextClient
+  - Устранено дублирование логики обработки сетевых ошибок
+
 - **Рефакторинг клиентов для использования helper-методов**:
   - `KandinskyClient._fetch_pipelines()` теперь использует `_get_json()` вместо ручного парсинга
   - `KandinskyClient._start_generation()` использует `_parse_json_response()` для парсинга JSON

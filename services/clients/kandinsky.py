@@ -178,28 +178,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             # Пробрасываем доменные исключения как есть
             raise
-        except TimeoutError as exc:
-            bound.error("Таймаут верхнего уровня при генерации изображения через Kandinsky")
-            raise NetworkError(
-                "Таймаут при генерации изображения через Kandinsky",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientConnectorError as exc:
-            bound.error(
-                "Ошибка подключения к Kandinsky API: {}. Возможные причины: проблемы с сетью, "
-                "недоступность сервера или прокси.",
-                str(exc),
-            )
-            raise NetworkError(
-                f"Ошибка подключения к Kandinsky API: {exc}",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientError as exc:
-            bound.error("Ошибка клиента aiohttp при запросе к Kandinsky API: {}", str(exc))
-            raise NetworkError(
-                f"Ошибка клиента aiohttp при запросе к Kandinsky API: {exc}",
-                original_error=exc,
-            ) from exc
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error(
                 "Неожиданная ошибка при генерации изображения через Kandinsky",
@@ -298,18 +276,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                     current_model_name=current_pipeline_name,
                 )
 
-        except TimeoutError as exc:
-            bound.error("Таймаут при проверке статуса Kandinsky")
-            raise NetworkError(
-                "Таймаут при подключении к Kandinsky API",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientConnectorError as exc:
-            bound.error("Ошибка подключения к Kandinsky API: {}", str(exc))
-            raise NetworkError(
-                f"Ошибка подключения к Kandinsky API: {exc}",
-                original_error=exc,
-            ) from exc
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             # Пробрасываем доменные исключения как есть
             raise
@@ -485,18 +451,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         except (ValueError, AuthenticationError, RateLimitError, NetworkError, APIError):
             # Пробрасываем доменные исключения как есть
             raise
-        except TimeoutError as exc:
-            bound.error("Таймаут при установке модели Kandinsky")
-            raise NetworkError(
-                "Таймаут при подключении к Kandinsky API",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientConnectorError as exc:
-            bound.error("Ошибка подключения к Kandinsky API: {}", str(exc))
-            raise NetworkError(
-                f"Ошибка подключения к Kandinsky API: {exc}",
-                original_error=exc,
-            ) from exc
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error("Неожиданная ошибка при установке модели Kandinsky")
             raise APIError(
@@ -663,27 +617,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             return pipeline_id
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             raise
-        except aiohttp.ClientConnectorError as exc:
-            bound.error(
-                "Ошибка подключения к Kandinsky API при получении pipeline ID: {}",
-                str(exc),
-            )
-            raise NetworkError(
-                f"Ошибка подключения к Kandinsky API при получении pipeline ID: {exc}",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientError as exc:
-            bound.error("Ошибка клиента при получении pipeline ID: {}", str(exc))
-            raise NetworkError(
-                f"Ошибка клиента при получении pipeline ID: {exc}",
-                original_error=exc,
-            ) from exc
-        except TimeoutError as exc:
-            bound.error("Таймаут при получении pipeline ID от Kandinsky")
-            raise NetworkError(
-                "Таймаут при получении pipeline ID от Kandinsky",
-                original_error=exc,
-            ) from exc
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error(
                 "Неожиданная ошибка при получении pipeline ID от Kandinsky",
@@ -757,21 +690,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                     )
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             raise
-        except aiohttp.ClientConnectorError as exc:
-            bound.error(
-                "Ошибка подключения к Kandinsky API при запуске генерации: {}",
-                str(exc),
-            )
-            raise NetworkError(
-                f"Ошибка подключения к Kandinsky API при запуске генерации: {exc}",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientError as exc:
-            bound.error("Ошибка клиента при запуске генерации на Kandinsky: {}", str(exc))
-            raise NetworkError(
-                f"Ошибка клиента при запуске генерации на Kandinsky: {exc}",
-                original_error=exc,
-            ) from exc
         except Exception as exc:  # pragma: no cover - защитный фоллбек
             bound.bind(error=str(exc)).error("Неожиданная ошибка при запуске генерации на Kandinsky")
             raise APIError(

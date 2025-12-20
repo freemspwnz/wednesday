@@ -279,24 +279,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                     ) from e
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             raise
-        except TimeoutError as exc:
-            bound.error(f"Таймаут при генерации промпта через GigaChat ({self._config.prompt_timeout.total} секунд)")
-            raise NetworkError(
-                f"Таймаут при генерации промпта через GigaChat ({self._config.prompt_timeout.total} секунд)",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientConnectorError as exc:
-            bound.error(f"Ошибка подключения к GigaChat API при генерации промпта: {exc}")
-            raise NetworkError(
-                f"Ошибка подключения к GigaChat API при генерации промпта: {exc}",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientError as exc:
-            bound.error(f"Ошибка клиента при генерации промпта: {exc}")
-            raise NetworkError(
-                f"Ошибка клиента при генерации промпта: {exc}",
-                original_error=exc,
-            ) from exc
         except Exception as exc:
             bound.error(f"Неожиданная ошибка при генерации промпта: {exc}", exc_info=True)
             raise APIError(
@@ -476,25 +458,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             # Пробрасываем доменные исключения как есть
             raise
-        except TimeoutError as exc:
-            timeout_sec = self._config.models_timeout.total
-            bound.error(f"Таймаут при запросе списка моделей GigaChat ({timeout_sec} секунд)")
-            raise NetworkError(
-                f"Таймаут при запросе списка моделей GigaChat ({timeout_sec} секунд)",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientConnectorError as exc:
-            bound.error(f"Ошибка подключения при запросе списка моделей GigaChat: {exc}")
-            raise NetworkError(
-                f"Ошибка подключения при запросе списка моделей GigaChat: {exc}",
-                original_error=exc,
-            ) from exc
-        except aiohttp.ClientError as exc:
-            bound.error(f"Ошибка запроса при получении списка моделей GigaChat: {exc}")
-            raise NetworkError(
-                f"Ошибка запроса при получении списка моделей GigaChat: {exc}",
-                original_error=exc,
-            ) from exc
         except Exception as exc:
             bound.error(f"Неожиданная ошибка при получении списка моделей: {exc}", exc_info=True)
             raise APIError(
@@ -746,24 +709,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                         ) from e
             except (AuthenticationError, RateLimitError, NetworkError, APIError):
                 raise
-            except TimeoutError as exc:
-                bound.error(f"Таймаут при получении токена GigaChat ({self._config.token_timeout.total} секунд)")
-                raise NetworkError(
-                    f"Таймаут при получении токена GigaChat ({self._config.token_timeout.total} секунд)",
-                    original_error=exc,
-                ) from exc
-            except aiohttp.ClientConnectorError as exc:
-                bound.error(f"Ошибка подключения к GigaChat API при получении токена: {exc}")
-                raise NetworkError(
-                    f"Ошибка подключения к GigaChat API при получении токена: {exc}",
-                    original_error=exc,
-                ) from exc
-            except aiohttp.ClientError as exc:
-                bound.error(f"Ошибка клиента при получении токена: {exc}")
-                raise NetworkError(
-                    f"Ошибка клиента при получении токена: {exc}",
-                    original_error=exc,
-                ) from exc
             except Exception as exc:
                 bound.error(f"Неожиданная ошибка при получении токена GigaChat: {exc}", exc_info=True)
                 raise APIError(
