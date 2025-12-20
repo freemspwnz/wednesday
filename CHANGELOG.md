@@ -10,6 +10,12 @@
   - Методы: `prepare_targets()`, `is_already_dispatched_for_all()`
   - Выделена ответственность за работу с чатами и dispatch registry
 
+- **DispatchExecutionService для выполнения отправки сообщений**:
+  - Создан сервис `DispatchExecutionService` в `services/application/dispatch_execution_service.py`
+  - Сервис инкапсулирует логику отправки сообщений в целевые чаты
+  - Методы: `send_single_photo()`, `send_to_targets()`
+  - Выделена ответственность за отправку, регистрацию и метрики
+
 ### Добавлено
 
 - **CaptionService для работы с подписями к изображениям**:
