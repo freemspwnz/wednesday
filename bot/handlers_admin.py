@@ -50,8 +50,7 @@ class AdminHandlers(BaseHandlers):
                 берутся из self.services.*.
 
         Side Effects:
-            - Вызывает image_generator.check_api_status() для проверки Kandinsky API.
-            - Вызывает image_generator.text_client.check_api_status() для проверки GigaChat API.
+            - Вызывает admin_dashboard_service.build_status_message() для получения статуса.
             - Получает информацию о лимитах через usage.get_limits_info().
             - Получает список чатов через chats.list_chat_ids().
             - Получает метрики через metrics.get_summary().

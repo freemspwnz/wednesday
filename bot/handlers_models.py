@@ -243,8 +243,7 @@ class ModelHandlers(BaseHandlers):
                 для совместимости с интерфейсом обработчиков команд).
 
         Side Effects:
-            - Вызывает image_generator.check_api_status() для получения моделей Kandinsky.
-            - Вызывает image_generator.text_client.get_available_models() для получения моделей GigaChat.
+            - Вызывает admin_dashboard_service.build_models_list_message() для получения списка моделей.
             - Отправляет форматированный список моделей пользователю.
             - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """
