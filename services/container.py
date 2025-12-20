@@ -103,7 +103,10 @@ def build_image_stack(
 
     # Доменные сервисы
     image_generation = ImageGenerationService(image_client)
-    fallback_config = PromptFallbackConfig.from_image_config()
+    fallback_config = PromptFallbackConfig(
+        frog_prompts=list(ImageConfig.FROG_PROMPTS),
+        styles=list(ImageConfig.STYLES),
+    )
     prompt_generation = PromptGenerationService(
         text_client=text_client,
         fallback_config=fallback_config,
