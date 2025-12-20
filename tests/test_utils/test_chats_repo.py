@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from utils.chats_repo import ChatsRepo
+from services.infrastructure.repositories import ChatsRepo
 
 pytestmark = [
     pytest.mark.integration,

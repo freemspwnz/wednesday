@@ -35,9 +35,9 @@ from typing import Self
 import aiohttp
 from loguru import logger
 
+from services.infrastructure.repositories import ModelsRepo
 from services.protocols import IModelsRepo, ITextToTextClient
 from utils.config import GigaChatConfig
-from utils.models_repo import ModelsRepo
 from utils.retry import retry_critical, retry_standard
 
 HTTP_STATUS_OK = 200

@@ -4,6 +4,15 @@
 
 ### Изменено
 
+- **Перенос оставшихся репозиториев в services/infrastructure/repositories/**:
+  - Перенесены `AdminsRepo` из `utils/admins_repo.py` в `services/infrastructure/repositories/admins_repo.py`
+  - Перенесены `ChatsRepo` из `utils/chats_repo.py` в `services/infrastructure/repositories/chats_repo.py`
+  - Перенесены `ModelsRepo` из `utils/models_repo.py` в `services/infrastructure/repositories/models_repo.py`
+  - Обновлен `services/infrastructure/repositories/__init__.py` для экспорта всех репозиториев
+  - Обновлены все импорты в коде и тестах для использования новых путей
+  - Удалены старые файлы из `utils/`
+  - Все репозитории теперь находятся в правильном архитектурном слое согласно принципам чистой архитектуры
+
 - **Удаление устаревшего параметра storage_path из репозиториев**:
   - Удален параметр `storage_path` из конструкторов всех репозиториев (`ChatsRepo`, `AdminsRepo`, `ModelsRepo`, `UsageTracker`, `DispatchRegistry`, `Metrics`)
   - Параметр был оставлен для обратной совместимости после миграции с JSON-файлов на PostgreSQL, но не использовался

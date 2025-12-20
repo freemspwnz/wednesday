@@ -365,7 +365,7 @@ class WednesdayBot:
             - Автоматически обрезает длинные сообщения до безопасного размера.
             - Логирует ошибки при отправке.
         """
-        from utils.admins_repo import AdminsRepo
+        from services.infrastructure.repositories import AdminsRepo
         from utils.postgres_client import get_postgres_pool
 
         admins_store = AdminsRepo(pool=get_postgres_pool())
@@ -619,7 +619,7 @@ class WednesdayBot:
                     else:
                         # Если ADMIN_CHAT_ID не задан, разошлем всем админам из хранилища (без дубля с CHAT_ID)
                         try:
-                            from utils.admins_repo import AdminsRepo
+                            from services.infrastructure.repositories import AdminsRepo
                             from utils.postgres_client import get_postgres_pool
 
                             admins = await AdminsRepo(pool=get_postgres_pool()).list_all_admins()
@@ -977,7 +977,7 @@ class WednesdayBot:
                 shutdown_message = (
                     "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
                 )
-                from utils.admins_repo import AdminsRepo
+                from services.infrastructure.repositories import AdminsRepo
                 from utils.config import config as _cfg
 
                 admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)

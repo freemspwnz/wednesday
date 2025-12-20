@@ -15,7 +15,7 @@ from telegram import Bot, Message, Update
 from telegram.ext import ContextTypes
 
 from services.bot_services import BotServices
-from utils.admins_repo import AdminsRepo
+from services.infrastructure.repositories import AdminsRepo
 from utils.logger import get_logger
 from utils.retry import (
     retry_on_connect_error as global_retry_on_connect_error,

@@ -451,7 +451,7 @@ async def send_frog_manual(
                 logger.warning("Нет сохраненных изображений для отправки как fallback")
 
             # Уведомляем администраторов
-            from utils.admins_repo import AdminsRepo
+            from services.infrastructure.repositories import AdminsRepo
             from utils.postgres_client import get_postgres_pool
 
             admins_store = AdminsRepo(pool=get_postgres_pool())
@@ -549,7 +549,7 @@ async def send_frog_manual(
             bot_instance = _get_wednesday_bot(context)
             import traceback
 
-            from utils.admins_repo import AdminsRepo
+            from services.infrastructure.repositories import AdminsRepo
             from utils.postgres_client import get_postgres_pool
 
             admins_store = AdminsRepo(pool=get_postgres_pool())

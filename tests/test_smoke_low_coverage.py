@@ -465,7 +465,7 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
 @pytest.mark.asyncio
 async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест метода is_admin в AdminsRepo с моком Postgres."""
-    from utils.admins_repo import AdminsRepo
+    from services.infrastructure.repositories import AdminsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -505,7 +505,7 @@ async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест метода list_admins в AdminsRepo с моком Postgres."""
-    from utils.admins_repo import AdminsRepo
+    from services.infrastructure.repositories import AdminsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -545,7 +545,7 @@ async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None
 @pytest.mark.asyncio
 async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовые тесты get/set моделей Kandinsky в ModelsRepo с моком Postgres."""
-    from utils.models_repo import ModelsRepo
+    from services.infrastructure.repositories import ModelsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -589,7 +589,7 @@ async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -
 @pytest.mark.asyncio
 async def test_models_store_gigachat_get_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовые тесты get/set моделей GigaChat в ModelsRepo с моком Postgres."""
-    from utils.models_repo import ModelsRepo
+    from services.infrastructure.repositories import ModelsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -774,7 +774,7 @@ async def test_usage_tracker_get_month_total(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест добавления чата в ChatsRepo с моком Postgres."""
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -807,7 +807,7 @@ async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_chats_store_list_chat_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест получения списка чатов в ChatsRepo с моком Postgres."""
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()

@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from utils.models_repo import ModelsRepo
+from services.infrastructure.repositories import ModelsRepo
 
 pytestmark = [
     pytest.mark.integration,

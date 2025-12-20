@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from utils.admins_repo import AdminsRepo
+from services.infrastructure.repositories import AdminsRepo
 
 pytestmark = [
     pytest.mark.integration,

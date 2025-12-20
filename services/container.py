@@ -31,7 +31,7 @@ from services.infrastructure.cache.user_state_cache import UserStateCache
 from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
-from services.infrastructure.repositories import ImagesRepo, PromptsRepo
+from services.infrastructure.repositories import ChatsRepo, ImagesRepo, ModelsRepo, PromptsRepo
 from services.infrastructure.storage.image_storage import ImageStorageService
 from services.protocols import (
     IChatsRepo,
@@ -43,11 +43,9 @@ from services.protocols import (
     ITextToTextClient,
     IUsageTracker,
 )
-from utils.chats_repo import ChatsRepo
 from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, KandinskyConfig
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
-from utils.models_repo import ModelsRepo
 from utils.usage_tracker import UsageTracker
 
 

@@ -36,9 +36,9 @@ import aiohttp
 from loguru import logger
 from PIL import Image
 
+from services.infrastructure.repositories import ModelsRepo
 from services.protocols import IModelsRepo, ITextToImageClient
 from utils.config import KandinskyConfig
-from utils.models_repo import ModelsRepo
 from utils.retry import retry_standard
 
 HTTP_STATUS_OK = 200

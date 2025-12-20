@@ -263,7 +263,7 @@ async def test_status_command_integration_with_postgres_stores(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
     from utils.metrics import Metrics
     from utils.usage_tracker import UsageTracker
 
@@ -314,7 +314,7 @@ async def test_force_send_command_integration_with_postgres_stores(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
     from utils.usage_tracker import UsageTracker
 
     class _DummyGenerator:
@@ -457,7 +457,7 @@ async def test_admin_add_chat_command_success(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
@@ -540,7 +540,7 @@ async def test_admin_remove_chat_command_success(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
@@ -603,7 +603,7 @@ async def test_list_chats_command_success(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
@@ -642,7 +642,7 @@ async def test_list_chats_command_no_chats(
     async_retry_stub: Any,
     cleanup_tables: Any,
 ) -> None:
-    from utils.chats_repo import ChatsRepo
+    from services.infrastructure.repositories import ChatsRepo
 
     services = MagicMock()
     services.image_generator = MagicMock()
