@@ -16,6 +16,12 @@
   - Методы: `send_single_photo()`, `send_to_targets()`
   - Выделена ответственность за отправку, регистрацию и метрики
 
+- **FallbackService для обработки fallback сценариев**:
+  - Создан сервис `FallbackService` в `services/application/fallback_service.py`
+  - Сервис инкапсулирует логику обработки ошибок и fallback сценариев
+  - Методы: `send_fallback_to_targets()`, `handle_generation_failure()`, `handle_unexpected_error()`
+  - Выделена ответственность за обработку ошибок и fallback логику
+
 ### Добавлено
 
 - **CaptionService для работы с подписями к изображениям**:
