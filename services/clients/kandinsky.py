@@ -66,7 +66,7 @@ MAX_STATUS_ATTEMPTS: Final[int] = 10
 STATUS_POLL_DELAY_SECONDS: Final[int] = 10
 
 
-class KandinskyClient(ITextToImageClient, BaseHTTPClient):
+class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     """HTTP‑клиент Kandinsky, реализующий интерфейс `ITextToImageClient`.
 
     Архитектурно клиент отвечает только за:
@@ -540,22 +540,18 @@ class KandinskyClient(ITextToImageClient, BaseHTTPClient):
             NetworkError: При сетевых ошибках.
             APIError: При других ошибках API.
         """
-        response = await self._get(
+        pipelines_data = await self._get_json(  # type: ignore[attr-defined]
             endpoint=self.ENDPOINT_PIPELINES,
             method_name="get_pipelines",
             headers=headers,
             timeout=timeout,
         )
-
-        async with response:
-            await self._validate_response(response)
-            data_json = await response.json()
-            if not isinstance(data_json, list):
-                raise APIError(
-                    "Ответ Kandinsky API не является списком pipelines",
-                    status_code=response.status,
-                )
-            return data_json
+        if not isinstance(pipelines_data, list):
+            raise APIError(
+                "Ответ Kandinsky API не является списком pipelines",
+                status_code=200,
+            )
+        return pipelines_data
 
     async def _get_pipeline_id(
         self,
@@ -691,7 +687,7 @@ class KandinskyClient(ITextToImageClient, BaseHTTPClient):
             async with response:
                 # Принимаем как 200, так и 201 как успешные статусы
                 if response.status in {200, 201}:
-                    result_json = await response.json()
+                    result_json = await self._parse_json_response(response, expected_status=response.status)  # type: ignore[attr-defined]
                     try:
                         result = KandinskyGenerationStartResponse.model_validate(result_json)
                         uuid_str: str = str(result.uuid)
@@ -708,8 +704,8 @@ class KandinskyClient(ITextToImageClient, BaseHTTPClient):
                             original_error=e,
                         ) from e
                 else:
-                    # Если статус не 200/201, _validate_response выбросит исключение
-                    await self._validate_response(response, expected_status=200)
+                    # Если статус не 200/201, _parse_json_response выбросит исключение
+                    await self._parse_json_response(response, expected_status=200)  # type: ignore[attr-defined]
                     # Этот код не должен выполняться, но нужен для mypy
                     raise APIError(
                         "Неожиданный статус ответа при запуске генерации",
@@ -761,9 +757,7 @@ class KandinskyClient(ITextToImageClient, BaseHTTPClient):
                 )
 
                 async with response:
-                    await self._validate_response(response)
-
-                    data_json = await response.json()
+                    data_json = await self._parse_json_response(response)  # type: ignore[attr-defined]
                     try:
                         status_response = KandinskyStatusResponse.model_validate(data_json)
                     except ValidationError as e:

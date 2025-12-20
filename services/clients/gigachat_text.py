@@ -107,7 +107,7 @@ FALLBACK_MODELS = [
 ]
 
 
-class GigaChatTextClient(ITextToTextClient, BaseHTTPClient):
+class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
     """HTTP‑клиент GigaChat, реализующий интерфейс `ITextToTextClient`.
 
     Архитектурно клиент отвечает только за:
@@ -251,8 +251,7 @@ class GigaChatTextClient(ITextToTextClient, BaseHTTPClient):
             )
 
             async with response:
-                await self._validate_response(response)
-                result_json = await response.json()
+                result_json = await self._parse_json_response(response)  # type: ignore[attr-defined]
                 try:
                     completion_response = GigaChatCompletionResponse.model_validate(result_json)
                     if not completion_response.choices or not completion_response.choices[0]:
@@ -405,8 +404,7 @@ class GigaChatTextClient(ITextToTextClient, BaseHTTPClient):
             )
 
             async with response:
-                await self._validate_response(response)
-                data_json = await response.json()
+                data_json = await self._parse_json_response(response)  # type: ignore[attr-defined]
                 models_list: list[str] = []
 
                 # GigaChat может вернуть dict или list
@@ -683,8 +681,7 @@ class GigaChatTextClient(ITextToTextClient, BaseHTTPClient):
                 )
 
                 async with response:
-                    await self._validate_response(response)
-                    token_data_json = await response.json()
+                    token_data_json = await self._parse_json_response(response)  # type: ignore[attr-defined]
                     try:
                         token_response = GigaChatTokenResponse.model_validate(token_data_json)
                         self._access_token = token_response.access_token

@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- **Helper-методы для парсинга ответов и обработки ошибок в BaseHTTPClient**:
+  - Метод `_parse_json_response()` для парсинга JSON с валидацией статуса
+  - Метод `_safe_parse_json()` для безопасного парсинга JSON без проверки статуса
+  - Метод `_get_response_text()` для получения текста ответа с ограничением длины
+  - Методы `_get_json()` и `_post_json()` для удобного паттерна "запрос + парсинг JSON"
+  - Улучшенная обработка сетевых ошибок в методах `_get()` и `_post()` с преобразованием в `NetworkError`
+
+### Изменено
+
+- **Рефакторинг клиентов для использования helper-методов**:
+  - `KandinskyClient._fetch_pipelines()` теперь использует `_get_json()` вместо ручного парсинга
+  - `KandinskyClient._start_generation()` использует `_parse_json_response()` для парсинга JSON
+  - `KandinskyClient._wait_for_generation()` использует `_parse_json_response()` вместо `_validate_response()` + `response.json()`
+  - `GigaChatTextClient.generate()` использует `_parse_json_response()` для парсинга JSON
+  - `GigaChatTextClient.get_available_models()` использует `_parse_json_response()` для парсинга JSON
+  - `GigaChatTextClient._get_access_token()` использует `_parse_json_response()` для парсинга JSON
+  - Устранено дублирование логики парсинга ответов во всех методах клиентов
+
 ### Изменено
 
 - **Устранение дублирования кода: выделение общей логики HTTP-запросов**:
