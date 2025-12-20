@@ -159,13 +159,11 @@ class ImageStorageUnitOfWork(BaseService):
                     self.logger.warning(f"Ошибка при откате кэша {operation.cache_key}: {e}")
 
             # Компенсация: удаляем из хранилища (если поддерживается)
-            # Примечание: файловое хранилище может не поддерживать удаление,
-            # поэтому это может быть неполным откатом
+            # Примечание: мы не удаляем файлы из хранилища при ошибках сохранения кэша,
+            # так как хранилище имеет приоритет над кэшем
             if operation.storage_saved and operation.storage_path and self._storage:
-                # Если хранилище поддерживает удаление, можно добавить здесь
-                # await self._storage.delete(operation.storage_path)
                 self.logger.debug(
-                    f"Откат: файл в хранилище не удалён (может быть не поддерживается): {operation.storage_path}",
+                    f"Откат: файл в хранилище не удалён (хранилище имеет приоритет): {operation.storage_path}",
                 )
 
         self._operations.clear()
