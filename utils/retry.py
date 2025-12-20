@@ -235,33 +235,44 @@ def _create_retry_decorator(  # noqa: PLR0913, PLR0917
     )
 
 
-def retry_critical(
+def retry_critical(  # noqa: PLR0913, PLR0917
     service_name: str,
     method_name: str | None = None,
     max_attempts: int | None = None,
+    multiplier: float | None = None,
+    min_wait: float | None = None,
+    max_wait: float | None = None,
 ) -> Callable[[F], F]:
     """
-    Декоратор retry для критичных операций (5 попыток по умолчанию).
+    Декоратор retry для критичных операций.
 
     Используется для критичных операций, таких как получение токена доступа.
 
     Args:
         service_name: Имя сервиса (например, "kandinsky", "gigachat")
         method_name: Имя метода для логирования (опционально)
-        max_attempts: Максимальное количество попыток (по умолчанию из конфига)
+        max_attempts: Максимальное количество попыток (по умолчанию из RetryConfig)
+        multiplier: Множитель для экспоненциального backoff (по умолчанию из RetryConfig)
+        min_wait: Минимальное время ожидания (по умолчанию из RetryConfig)
+        max_wait: Максимальное время ожидания (по умолчанию из RetryConfig)
 
     Returns:
         Декоратор retry
     """
-    attempts = max_attempts or config.retry_max_attempts
+    retry_cfg = config.get_retry_config()
+
+    attempts = max_attempts or retry_cfg.critical_max_attempts
+    mult = multiplier or retry_cfg.multiplier
+    min_w = min_wait or retry_cfg.min_wait
+    max_w = max_wait or retry_cfg.max_wait
 
     def decorator(func: F) -> F:
         method = method_name or func.__name__
         retry_decorator = _create_retry_decorator(
             max_attempts=attempts,
-            multiplier=config.retry_multiplier,
-            min_wait=config.retry_min_wait,
-            max_wait=config.retry_max_wait,
+            multiplier=mult,
+            min_wait=min_w,
+            max_wait=max_w,
             service_name=service_name,
             method_name=method,
         )
@@ -276,32 +287,44 @@ def retry_critical(
     return decorator
 
 
-def retry_standard(
+def retry_standard(  # noqa: PLR0913, PLR0917
     service_name: str,
     method_name: str | None = None,
-    max_attempts: int = 3,
+    max_attempts: int | None = None,
+    multiplier: float | None = None,
+    min_wait: float | None = None,
+    max_wait: float | None = None,
 ) -> Callable[[F], F]:
     """
-    Декоратор retry для стандартных операций (3 попытки).
+    Декоратор retry для стандартных операций.
 
     Используется для обычных HTTP-запросов.
 
     Args:
         service_name: Имя сервиса (например, "kandinsky", "gigachat")
         method_name: Имя метода для логирования (опционально)
-        max_attempts: Максимальное количество попыток (по умолчанию 3)
+        max_attempts: Максимальное количество попыток (по умолчанию из RetryConfig)
+        multiplier: Множитель для экспоненциального backoff (по умолчанию из RetryConfig)
+        min_wait: Минимальное время ожидания (по умолчанию из RetryConfig)
+        max_wait: Максимальное время ожидания (по умолчанию из RetryConfig)
 
     Returns:
         Декоратор retry
     """
+    retry_cfg = config.get_retry_config()
+
+    attempts = max_attempts or retry_cfg.standard_max_attempts
+    mult = multiplier or retry_cfg.multiplier
+    min_w = min_wait or retry_cfg.min_wait
+    max_w = max_wait or retry_cfg.max_wait
 
     def decorator(func: F) -> F:
         method = method_name or func.__name__
         retry_decorator = _create_retry_decorator(
-            max_attempts=max_attempts,
-            multiplier=config.retry_multiplier,
-            min_wait=config.retry_min_wait,
-            max_wait=config.retry_max_wait,
+            max_attempts=attempts,
+            multiplier=mult,
+            min_wait=min_w,
+            max_wait=max_w,
             service_name=service_name,
             method_name=method,
         )
@@ -316,32 +339,44 @@ def retry_standard(
     return decorator
 
 
-def retry_optional(
+def retry_optional(  # noqa: PLR0913, PLR0917
     service_name: str,
     method_name: str | None = None,
-    max_attempts: int = 2,
+    max_attempts: int | None = None,
+    multiplier: float | None = None,
+    min_wait: float | None = None,
+    max_wait: float | None = None,
 ) -> Callable[[F], F]:
     """
-    Декоратор retry для необязательных операций (2 попытки).
+    Декоратор retry для необязательных операций.
 
     Используется для операций, которые не критичны для работы системы.
 
     Args:
         service_name: Имя сервиса (например, "kandinsky", "gigachat")
         method_name: Имя метода для логирования (опционально)
-        max_attempts: Максимальное количество попыток (по умолчанию 2)
+        max_attempts: Максимальное количество попыток (по умолчанию из RetryConfig)
+        multiplier: Множитель для экспоненциального backoff (по умолчанию из RetryConfig)
+        min_wait: Минимальное время ожидания (по умолчанию из RetryConfig)
+        max_wait: Максимальное время ожидания (по умолчанию из RetryConfig)
 
     Returns:
         Декоратор retry
     """
+    retry_cfg = config.get_retry_config()
+
+    attempts = max_attempts or retry_cfg.optional_max_attempts
+    mult = multiplier or retry_cfg.multiplier
+    min_w = min_wait or retry_cfg.min_wait
+    max_w = max_wait or retry_cfg.max_wait
 
     def decorator(func: F) -> F:
         method = method_name or func.__name__
         retry_decorator = _create_retry_decorator(
-            max_attempts=max_attempts,
-            multiplier=config.retry_multiplier,
-            min_wait=config.retry_min_wait,
-            max_wait=config.retry_max_wait,
+            max_attempts=attempts,
+            multiplier=mult,
+            min_wait=min_w,
+            max_wait=max_w,
             service_name=service_name,
             method_name=method,
         )

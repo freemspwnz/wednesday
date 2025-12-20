@@ -338,6 +338,14 @@ class Config:  # noqa: PLR0904
         """
         return float(Config._get_env_var("RETRY_MAX_WAIT") or "30.0")
 
+    def get_retry_config(self) -> "RetryConfig":
+        """Возвращает конфигурацию retry механизмов.
+
+        Returns:
+            Экземпляр RetryConfig с настройками из переменных окружения.
+        """
+        return RetryConfig.from_config(self)
+
     # --- Sentry / observability ---
 
     @property
@@ -829,6 +837,51 @@ class KandinskyConfig:
         return cls(
             api_key=config.kandinsky_api_key,
             secret_key=config.kandinsky_secret_key,
+        )
+
+
+@dataclass(frozen=True)
+class RetryConfig:
+    """Конфигурация для retry механизмов.
+
+    Инкапсулирует настройки retry для разных типов операций:
+    - standard: обычные операции (3 попытки по умолчанию)
+    - critical: критичные операции (5 попыток по умолчанию)
+    - optional: необязательные операции (2 попытки по умолчанию)
+    """
+
+    # Настройки для стандартных операций
+    standard_max_attempts: int = 3
+    critical_max_attempts: int = 5
+    optional_max_attempts: int = 2
+
+    # Общие настройки экспоненциального backoff
+    multiplier: float = 1.0
+    min_wait: float = 2.0
+    max_wait: float = 30.0
+
+    @classmethod
+    def from_config(cls, config: Config) -> "RetryConfig":
+        """Создает RetryConfig из Config.
+
+        Args:
+            config: Экземпляр Config.
+
+        Returns:
+            Экземпляр RetryConfig с настройками из config и переменных окружения.
+        """
+        # Читаем настройки из переменных окружения с fallback на значения по умолчанию
+        standard_max = int(Config._get_env_var("RETRY_STANDARD_MAX_ATTEMPTS") or "3")
+        critical_max = int(Config._get_env_var("RETRY_CRITICAL_MAX_ATTEMPTS") or config.retry_max_attempts or "5")
+        optional_max = int(Config._get_env_var("RETRY_OPTIONAL_MAX_ATTEMPTS") or "2")
+
+        return cls(
+            standard_max_attempts=standard_max,
+            critical_max_attempts=critical_max,
+            optional_max_attempts=optional_max,
+            multiplier=config.retry_multiplier,
+            min_wait=config.retry_min_wait,
+            max_wait=config.retry_max_wait,
         )
 
 

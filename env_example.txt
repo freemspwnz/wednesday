@@ -62,6 +62,14 @@ MAX_RETRIES=3
 # По умолчанию: 5
 RETRY_MAX_ATTEMPTS=5
 
+# Настройки retry для разных типов операций
+# Количество попыток для стандартных операций (по умолчанию: 3)
+RETRY_STANDARD_MAX_ATTEMPTS=3
+# Количество попыток для критичных операций (по умолчанию: 5 или RETRY_MAX_ATTEMPTS)
+RETRY_CRITICAL_MAX_ATTEMPTS=5
+# Количество попыток для необязательных операций (по умолчанию: 2)
+RETRY_OPTIONAL_MAX_ATTEMPTS=2
+
 # Множитель для экспоненциального backoff
 # Время ожидания между попытками = min_wait * (multiplier ^ (attempt - 1))
 # По умолчанию: 1.0

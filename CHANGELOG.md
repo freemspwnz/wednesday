@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Вынос настроек retry в конфигурацию (RetryConfig)**:
+  - Создан dataclass `RetryConfig` для централизованного управления настройками retry
+  - Добавлен метод `get_retry_config()` в класс `Config`
+  - Обновлены декораторы `retry_standard`, `retry_critical`, `retry_optional` для использования `RetryConfig`
+  - Добавлена возможность переопределения параметров через аргументы декораторов
+  - Добавлены переменные окружения `RETRY_STANDARD_MAX_ATTEMPTS`, `RETRY_CRITICAL_MAX_ATTEMPTS`, `RETRY_OPTIONAL_MAX_ATTEMPTS`
+  - Сохранена обратная совместимость (существующий код работает без изменений)
+
 - **Dependency Injection для Redis клиента**:
   - Сделан параметр `redis_client` обязательным во всех сервисах Redis (`RedisBackendService`, `PromptCache`, `UserStateCache`, `RateLimiter`, `CircuitBreakerService`)
   - Убран fallback на глобальный клиент через `get_redis()` в конструкторах сервисов
