@@ -11,6 +11,11 @@
   - Обеспечена обратная совместимость для кода, использующего импорт через `services.clients`
   - Обновлены импорты в `services/domain/image_generation.py` для использования `services.protocols`
   - Обновлены импорты в `services/domain/prompt_generation.py` для использования `services.protocols`
+  - Обновлены импорты в клиентах (`gigachat_text.py`, `factory.py`, `kandinsky.py`) для использования `services.protocols`
+  - Обновлены импорты в `services/container.py` и `services/application/admin_dashboard_service.py` для использования `services.protocols`
+  - Обновлены импорты в контейнерах клиентов (`image_client_container.py`, `text_client_container.py`) для использования `services.protocols`
+  - Обновлены импорты в тестах для использования `services.protocols`
+  - Удалены все прямые импорты из `services.clients.interfaces`
   - Domain слой теперь зависит только от абстракций в `services.protocols`, а не от модуля `services.clients`
   - Улучшена изоляция domain слоя от инфраструктуры согласно принципу Dependency Inversion
 

@@ -37,7 +37,7 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 
-from services.clients.interfaces import ITextToTextClient
+from services.protocols import ITextToTextClient
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

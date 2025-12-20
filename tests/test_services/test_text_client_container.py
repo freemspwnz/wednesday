@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from services.clients.interfaces import ITextToTextClient
 from services.clients.text_client_container import TextClientContainer
+from services.protocols import ITextToTextClient
 
 
 class _ClosableMockTextClient(ITextToTextClient):

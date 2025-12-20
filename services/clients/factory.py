@@ -20,12 +20,11 @@ from __future__ import annotations
 import os
 from typing import Final
 
-from services.clients import ITextToImageClient, ITextToTextClient
 from services.clients.gigachat_text import GigaChatTextClient
 from services.clients.image_client_container import get_image_client_container
 from services.clients.kandinsky import KandinskyClient
 from services.clients.text_client_container import get_text_client_container
-from services.protocols import IModelsRepo
+from services.protocols import IModelsRepo, ITextToImageClient, ITextToTextClient
 from utils.config import GigaChatConfig, KandinskyConfig
 from utils.logger import get_logger
 

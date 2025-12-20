@@ -33,8 +33,7 @@ import uuid
 import aiohttp
 from loguru import logger
 
-from services.clients import ITextToTextClient
-from services.protocols import IModelsRepo
+from services.protocols import IModelsRepo, ITextToTextClient
 from utils.config import GigaChatConfig
 from utils.models_repo import ModelsRepo
 from utils.retry import retry_critical, retry_standard

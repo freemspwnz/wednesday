@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 
 from services.clients.image_client_container import ImageClientContainer
-from services.clients.interfaces import ITextToImageClient
+from services.protocols import ITextToImageClient
 
 
 class _ClosableMockImageClient(ITextToImageClient):

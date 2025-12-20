@@ -21,8 +21,7 @@ from services.application.admin_dashboard_builders import (
     StatusMessageBuilder,
 )
 from services.base.base_service import BaseService
-from services.clients.interfaces import ITextToImageClient, ITextToTextClient
-from services.protocols import IChatsRepo, IMetrics, IModelsRepo, IUsageTracker
+from services.protocols import IChatsRepo, IMetrics, IModelsRepo, ITextToImageClient, ITextToTextClient, IUsageTracker
 
 if TYPE_CHECKING:
     pass

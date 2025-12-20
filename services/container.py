@@ -21,7 +21,6 @@ from services.application.image_service import ImageService
 from services.application.prompt_service import PromptService
 from services.bot_services import BotServices
 from services.clients.factory import create_image_client, create_text_client
-from services.clients.interfaces import ITextToImageClient, ITextToTextClient
 from services.domain.image_generation import ImageGenerationService
 from services.domain.prompt_fallback_config import PromptFallbackConfig
 from services.domain.prompt_generation import PromptGenerationService
@@ -32,7 +31,16 @@ from services.infrastructure.metrics.metrics_recorder import MetricsRecorder
 from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
 from services.infrastructure.rate_limiting.rate_limiter import RateLimiter
 from services.infrastructure.storage.image_storage import ImageStorageService
-from services.protocols import IChatsRepo, ICircuitBreaker, IMetrics, IModelsRepo, IRateLimiter, IUsageTracker
+from services.protocols import (
+    IChatsRepo,
+    ICircuitBreaker,
+    IMetrics,
+    IModelsRepo,
+    IRateLimiter,
+    ITextToImageClient,
+    ITextToTextClient,
+    IUsageTracker,
+)
 from utils.chats_repo import ChatsRepo
 from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, KandinskyConfig
 from utils.dispatch_registry import DispatchRegistry
