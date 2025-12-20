@@ -22,6 +22,7 @@ from services.application.dispatch_service import DispatchService
 from services.application.fallback_service import FallbackService
 from services.application.frog_limit_service import FrogRateLimiterService
 from services.application.image_service import ImageService
+from services.application.image_storage_unit_of_work import ImageStorageUnitOfWork
 from services.application.prompt_service import PromptService
 from services.application.target_preparation_service import TargetPreparationService
 from services.bot_services import BotServices
@@ -162,6 +163,12 @@ def build_image_stack(
     # Создаём CaptionService из конфигурации
     caption_service = CaptionService(ImageConfig.CAPTIONS) if ImageConfig.CAPTIONS else None
 
+    # Создаём UnitOfWork для управления сохранением изображений
+    image_storage_uow = ImageStorageUnitOfWork(
+        cache=image_cache,
+        storage=image_storage,
+    )
+
     return ImageService(
         image_generation_service=image_generation,
         prompt_service=prompt_service,
@@ -170,6 +177,7 @@ def build_image_stack(
         image_storage=image_storage,
         circuit_breaker=circuit_breaker,
         metrics=metrics,
+        storage_unit_of_work=image_storage_uow,
     )
 
 

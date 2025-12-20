@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 
+from services.application.image_storage_unit_of_work import ImageStorageUnitOfWork
 from services.application.prompt_service import PromptService
 from services.base.base_service import BaseService
 from services.base.exceptions import CircuitBreakerOpen, ImageGenerationError
@@ -42,6 +43,7 @@ class ImageService(BaseService):
         image_storage: IImageStorage | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         metrics: IMetrics | None = None,
+        storage_unit_of_work: ImageStorageUnitOfWork | None = None,
     ) -> None:
         """Инициализирует сервис координации изображений.
 
@@ -49,19 +51,30 @@ class ImageService(BaseService):
             image_generation_service: Сервис генерации изображений (обязателен).
             prompt_service: Сервис генерации промптов (обязателен).
             caption_service: Сервис работы с подписями (опционально).
-            image_cache: Сервис кэширования изображений (опционально).
-            image_storage: Сервис хранения изображений (опционально).
+            image_cache: Сервис кэширования изображений (опционально, для обратной совместимости).
+            image_storage: Сервис хранения изображений (опционально, для обратной совместимости).
             circuit_breaker: Сервис circuit breaker (опционально).
             metrics: Сервис записи метрик (опционально).
+            storage_unit_of_work: Unit of Work для сохранения изображений (опционально).
         """
         super().__init__()
         self._generation_service = image_generation_service
         self._prompt_service = prompt_service
         self._caption_service = caption_service
-        self._cache = image_cache
-        self._storage = image_storage
         self._circuit_breaker = circuit_breaker
         self._metrics = metrics
+
+        # Создаём UnitOfWork, если не передан
+        if storage_unit_of_work is None:
+            storage_unit_of_work = ImageStorageUnitOfWork(
+                cache=image_cache,
+                storage=image_storage,
+            )
+        self._storage_uow = storage_unit_of_work
+
+        # Сохраняем для обратной совместимости (get_random_saved_image)
+        self._cache = image_cache
+        self._storage = image_storage
 
     async def get_random_saved_image(self) -> tuple[bytes, str] | None:
         """Возвращает случайное сохранённое изображение из файлового хранилища.
@@ -289,33 +302,32 @@ class ImageService(BaseService):
                     self.logger.warning(f"Ошибка при записи метрики failed: {e}")
             return None
 
-        # 5. Сохраняем в кэш и хранилище
+        # 5. Сохраняем в кэш и хранилище через UnitOfWork
         image_data = image_data_result
-        if self._cache is not None:
-            try:
-                await self._cache.set(prompt, (image_data, caption))
-                self.log_event(
-                    event="image_cached",
-                    user_id=user_id_str,
-                    status="cached",
-                    level="debug",
-                    message="Изображение сохранено в кэш",
-                )
-            except Exception as e:
-                self.logger.warning(f"Ошибка при сохранении в кэш: {e}")
-
-        if self._storage is not None:
-            try:
-                await self._storage.save(image_data, prefix="frog")
+        try:
+            success = await self._storage_uow.save_image(
+                image_data=image_data,
+                caption=caption,
+                cache_key=prompt,
+                storage_prefix="frog",
+            )
+            if success:
                 self.log_event(
                     event="image_saved",
                     user_id=user_id_str,
                     status="saved",
-                    level="debug",
-                    message="Изображение сохранено в файловое хранилище",
+                    level="info",
+                    message="Изображение сохранено в хранилища",
                 )
-            except Exception as e:
-                self.logger.warning(f"Ошибка при сохранении в хранилище: {e}")
+            else:
+                self.logger.warning("Не удалось сохранить изображение ни в одно хранилище")
+        except Exception as e:
+            self.logger.error(f"Критическая ошибка при сохранении изображения: {e}", exc_info=True)
+            # Пытаемся откатить
+            try:
+                await self._storage_uow.rollback()
+            except Exception as rollback_error:
+                self.logger.error(f"Ошибка при откате сохранения: {rollback_error}", exc_info=True)
 
         # 6. Записываем метрики успеха
         elapsed = time.time() - start_time
