@@ -27,7 +27,8 @@ from fastapi.responses import JSONResponse, Response
 from redis.exceptions import RedisError
 
 from utils.logger import get_logger, log_event, log_http
-from utils.postgres_client import get_postgres_pool
+from utils.postgres_client import get_pool_metrics, get_postgres_pool
+from utils.prometheus_metrics import update_pool_metrics
 from utils.redis_client import get_redis
 
 logger = get_logger(__name__)
@@ -38,6 +39,9 @@ app = FastAPI(title="Wednesday Frog Bot Healthcheck")
 
 # HTTP статус код для разделения успешных и ошибочных запросов
 _HTTP_STATUS_OK_MAX = 399
+
+# Порог использования пула для предупреждения (90%)
+_POOL_HIGH_USAGE_THRESHOLD = 0.9
 
 
 @app.middleware("http")
@@ -134,13 +138,15 @@ async def _check_postgres() -> dict[str, Any]:
     """Выполняет проверку доступности Postgres.
 
     Проверяет доступность Postgres через простой запрос SELECT 1. Измеряет
-    латентность запроса.
+    латентность запроса. Также обновляет метрики пула и логирует предупреждения
+    при высоком использовании пула.
 
     Returns:
         Словарь с результатами проверки, содержащий:
         - status: Статус Postgres ("up" или "down").
         - latency_ms: Латентность запроса в миллисекундах.
         - details: Детали ошибки (если есть) или None.
+        - pool_metrics: Метрики пула подключений (если доступны).
 
     Raises:
         asyncpg.PostgresError: При ошибке подключения или выполнения запроса.
@@ -161,6 +167,36 @@ async def _check_postgres() -> dict[str, Any]:
             await conn.execute("SELECT 1;")
 
         latency_ms = (time.monotonic() - started) * 1000.0
+
+        # Обновляем метрики пула и проверяем использование
+        try:
+            update_pool_metrics(pool)
+            metrics = get_pool_metrics(pool)
+            if metrics:
+                # Логируем предупреждение при высоком использовании пула (>90%)
+                usage_ratio = metrics.active_connections / metrics.max_size if metrics.max_size > 0 else 0.0
+                if usage_ratio > _POOL_HIGH_USAGE_THRESHOLD:
+                    logger.warning(
+                        f"Пул подключений PostgreSQL почти заполнен: "
+                        f"{metrics.active_connections}/{metrics.max_size} активных соединений "
+                        f"({usage_ratio * 100:.1f}% использования)",
+                    )
+
+                return {
+                    "status": "up",
+                    "latency_ms": latency_ms,
+                    "details": None,
+                    "pool_metrics": {
+                        "size": metrics.size,
+                        "idle_size": metrics.idle_size,
+                        "active_connections": metrics.active_connections,
+                        "max_size": metrics.max_size,
+                    },
+                }
+        except Exception as metrics_exc:
+            # Ошибка обновления метрик не должна влиять на статус healthcheck
+            logger.debug(f"Не удалось обновить метрики пула: {metrics_exc}")
+
         return {
             "status": "up",
             "latency_ms": latency_ms,

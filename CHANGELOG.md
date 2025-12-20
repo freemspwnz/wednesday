@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Dependency Injection для пула PostgreSQL и мониторинг соединений**:
+  - Добавлен dataclass `PoolMetrics` и функция `get_pool_metrics()` в `utils/postgres_client.py`
+  - Обновлены репозитории для поддержки DI: `PromptsRepo`, `ImagesRepo`, `ChatsRepo`, `AdminsRepo`, `ModelsRepo`
+  - Обновлены классы для поддержки DI: `UsageTracker`, `DispatchRegistry`, `Metrics`
+  - Обновлен `services/container.py` для передачи пула в репозитории через DI
+  - Добавлены Prometheus метрики для пула PostgreSQL: `postgres_pool_size`, `postgres_pool_idle`, `postgres_pool_active`, `postgres_pool_max`
+  - Добавлена функция `update_pool_metrics()` для обновления метрик пула
+  - Интегрировано обновление метрик в healthcheck с логированием предупреждений при высоком использовании пула (>90%)
+  - Сохранена обратная совместимость: все репозитории имеют параметр `pool: asyncpg.Pool | None = None` с fallback на глобальный пул
+  - Улучшена тестируемость: можно передавать тестовый пул в репозитории для изоляции тестов
+
 - **Добавление context manager для HTTP клиентов**:
   - Добавлены методы `__aenter__` и `__aexit__` в `KandinskyClient` для поддержки async context manager
   - Добавлены методы `__aenter__` и `__aexit__` в `GigaChatTextClient` для поддержки async context manager

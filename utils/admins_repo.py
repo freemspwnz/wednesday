@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import asyncpg
+
 from utils.config import config
 from utils.logger import get_logger, log_all_methods
 from utils.postgres_client import get_postgres_pool
@@ -21,13 +23,16 @@ class AdminsRepo:
     и всегда имеет права независимо от содержимого таблицы.
     """
 
-    def __init__(self, storage_path: str | None = None) -> None:
+    def __init__(self, storage_path: str | None = None, pool: asyncpg.Pool | None = None) -> None:
         """Инициализирует репозиторий администраторов.
 
         Args:
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
         """
         # storage_path оставлен для обратной совместимости и игнорируется.
+        self._pool = pool or get_postgres_pool()
         self.logger = get_logger(__name__)
 
     async def is_admin(self, user_id: int) -> bool:
@@ -50,8 +55,7 @@ class AdminsRepo:
         if main_admin and int(main_admin) == user_id:
             return True
 
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 row = await conn.fetchrow("SELECT 1 FROM admins WHERE user_id = $1;", int(user_id))
             except Exception as exc:
@@ -71,8 +75,7 @@ class AdminsRepo:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 result = await conn.execute(
                     """
@@ -105,8 +108,7 @@ class AdminsRepo:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 result = await conn.execute("DELETE FROM admins WHERE user_id = $1;", int(user_id))
                 deleted = str(result).endswith("1")
@@ -131,8 +133,7 @@ class AdminsRepo:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 rows = await conn.fetch("SELECT user_id FROM admins ORDER BY user_id;")
                 return [int(row["user_id"]) for row in rows]

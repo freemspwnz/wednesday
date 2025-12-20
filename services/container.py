@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+import asyncpg
+
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 
@@ -47,6 +49,7 @@ from utils.config import AppSettings, Config, GigaChatConfig, ImageConfig, Kandi
 from utils.dispatch_registry import DispatchRegistry
 from utils.metrics import Metrics
 from utils.models_repo import ModelsRepo
+from utils.postgres_client import get_postgres_pool
 from utils.usage_tracker import UsageTracker
 
 
@@ -75,6 +78,7 @@ def build_image_stack(
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
     models_repo: IModelsRepo | None = None,
+    db_pool: asyncpg.Pool | None = None,
 ) -> ImageService:
     """Собирает полный стек зависимостей для ImageService.
 
@@ -87,10 +91,17 @@ def build_image_stack(
             Если None, создаётся новый через create_image_client().
         text_client: Опциональный клиент для генерации текста.
             Если None, создаётся новый через create_text_client().
+        models_repo: Репозиторий моделей для передачи в клиенты через DI.
+        db_pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                 (для обратной совместимости).
 
     Returns:
         Настроенный экземпляр ImageService.
     """
+    # Получаем пул (DI или fallback на глобальный)
+    if db_pool is None:
+        db_pool = get_postgres_pool()
+
     # Инфраструктура и клиенты
     if image_client is None or text_client is None:
         # Используем _create_clients() вместо дублирования логики
@@ -112,8 +123,8 @@ def build_image_stack(
     )
 
     # Инфраструктура
-    images_repo = ImagesRepo()
-    prompts_repo = PromptsRepo()
+    images_repo = ImagesRepo(pool=db_pool)
+    prompts_repo = PromptsRepo(pool=db_pool)
     image_cache = ImageCacheService(
         images_repo=images_repo,
         prompts_repo=prompts_repo,
@@ -177,7 +188,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     )
 
 
-def build_bot_services(config: Config) -> BotServices:
+def build_bot_services(config: Config, db_pool: asyncpg.Pool | None = None) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
     На этом этапе:
@@ -186,14 +197,20 @@ def build_bot_services(config: Config) -> BotServices:
 
     Args:
         config: Экземпляр Config для создания сервисов и настроек.
+        db_pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                 (для обратной совместимости).
 
     Returns:
         Настроенный экземпляр BotServices.
     """
+    # Получаем пул (DI или fallback на глобальный)
+    if db_pool is None:
+        db_pool = get_postgres_pool()
+
     app_settings = AppSettings.from_config(config)
 
     # Создаём ModelsRepo один раз для переиспользования во всех сервисах
-    models_repo = ModelsRepo()
+    models_repo = ModelsRepo(pool=db_pool)
 
     # Создаём клиенты один раз для переиспользования во всех сервисах
     image_client, text_client = _create_clients(config, models_repo=models_repo)
@@ -204,17 +221,19 @@ def build_bot_services(config: Config) -> BotServices:
         image_client=image_client,
         text_client=text_client,
         models_repo=models_repo,
+        db_pool=db_pool,
     )
 
     usage = UsageTracker(
         storage_path=os.getenv("USAGE_STORAGE", "usage_stats.json"),
         monthly_quota=100,
         frog_threshold=70,
+        pool=db_pool,
     )
 
-    chats = ChatsRepo()
-    dispatch_registry = DispatchRegistry()
-    metrics = Metrics()
+    chats = ChatsRepo(pool=db_pool)
+    dispatch_registry = DispatchRegistry(pool=db_pool)
+    metrics = Metrics(pool=db_pool)
     prompt_cache = PromptCache()
     user_state_store = UserStateCache()
 

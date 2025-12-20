@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 
+import asyncpg
+
 from utils.logger import get_logger, log_all_methods
 from utils.postgres_client import get_postgres_pool
 
@@ -56,8 +58,14 @@ class PromptsRepo:
     для метаданных промптов (файловое хранилище — только как дополнительный backup/fallback).
     """
 
-    def __init__(self) -> None:
-        """Инициализирует репозиторий промптов."""
+    def __init__(self, pool: asyncpg.Pool | None = None) -> None:
+        """Инициализирует репозиторий промптов.
+
+        Args:
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
+        """
+        self._pool = pool or get_postgres_pool()
         self.logger = get_logger(__name__)
 
     @staticmethod
@@ -132,8 +140,7 @@ class PromptsRepo:
         normalized = self._normalize(prompt_text)
         prompt_hash = self._hash(normalized)
 
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             # 1. Пытаемся найти уже существующую запись.
             row = await conn.fetchrow(
                 """
@@ -190,8 +197,7 @@ class PromptsRepo:
             PromptRecord если промпт найден, None иначе.
         """
 
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 SELECT id, raw_text, normalized_text, prompt_hash, created_at, ab_group
@@ -217,8 +223,7 @@ class PromptsRepo:
             PromptRecord со случайным промптом или None, если таблица пуста.
         """
 
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 SELECT id, raw_text, normalized_text, prompt_hash, created_at, ab_group

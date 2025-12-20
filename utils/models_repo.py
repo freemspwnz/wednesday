@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import asyncpg
+
 from utils.logger import get_logger, log_all_methods
 from utils.postgres_client import get_postgres_pool
 
@@ -21,23 +23,24 @@ class ModelsRepo:
     Все методы асинхронные и используют Postgres в качестве единственного источника истины.
     """
 
-    def __init__(self, storage_path: str | None = None) -> None:
+    def __init__(self, storage_path: str | None = None, pool: asyncpg.Pool | None = None) -> None:
         """Инициализирует репозиторий моделей.
 
         Args:
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
         """
+        self._pool = pool or get_postgres_pool()
         self.logger = get_logger(__name__)
 
-    @staticmethod
-    async def _ensure_rows() -> None:
+    async def _ensure_rows(self) -> None:
         """Гарантирует наличие базовых строк (id=1) в таблицах моделей.
 
         Создаёт строки с id=1 в таблицах models_kandinsky и models_gigachat,
         если их ещё нет. Используется перед операциями обновления моделей.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO models_kandinsky (id) VALUES (1) ON CONFLICT (id) DO NOTHING;",
             )
@@ -56,8 +59,7 @@ class ModelsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 """
                 UPDATE models_kandinsky
@@ -80,8 +82,7 @@ class ModelsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 SELECT current_pipeline_id, current_pipeline_name
@@ -103,8 +104,7 @@ class ModelsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE models_gigachat SET current_model = $1 WHERE id = 1;",
                 model_name,
@@ -120,8 +120,7 @@ class ModelsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT current_model FROM models_gigachat WHERE id = 1;",
             )
@@ -152,8 +151,7 @@ class ModelsRepo:
             elif isinstance(model, str):
                 formatted_models.append(model)
 
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE models_kandinsky SET available_models = $1::text[] WHERE id = 1;",
                 formatted_models,
@@ -174,8 +172,7 @@ class ModelsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT available_models FROM models_kandinsky WHERE id = 1;",
             )
@@ -194,8 +191,7 @@ class ModelsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE models_gigachat SET available_models = $1::text[] WHERE id = 1;",
                 models,
@@ -216,8 +212,7 @@ class ModelsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_rows()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT available_models FROM models_gigachat WHERE id = 1;",
             )

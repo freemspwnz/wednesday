@@ -16,9 +16,12 @@
 
 from __future__ import annotations
 
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from prometheus_client import Counter, Gauge, Histogram
+
+if TYPE_CHECKING:
+    import asyncpg
 
 # Имена метрик и label'ы подобраны так, чтобы их можно было напрямую
 # сопоставлять с колонками таблицы `metrics_events`:
@@ -160,3 +163,40 @@ CELERY_ACTIVE_TASKS: Final[Gauge] = Gauge(
     documentation="Количество активных задач в Celery worker",
     labelnames=("worker_name",),
 )
+
+# Метрики пула подключений PostgreSQL
+POSTGRES_POOL_SIZE: Final[Gauge] = Gauge(
+    name="postgres_pool_size",
+    documentation="Текущий размер пула подключений PostgreSQL",
+)
+
+POSTGRES_POOL_IDLE: Final[Gauge] = Gauge(
+    name="postgres_pool_idle",
+    documentation="Количество свободных соединений в пуле PostgreSQL",
+)
+
+POSTGRES_POOL_ACTIVE: Final[Gauge] = Gauge(
+    name="postgres_pool_active",
+    documentation="Количество активных соединений в пуле PostgreSQL",
+)
+
+POSTGRES_POOL_MAX: Final[Gauge] = Gauge(
+    name="postgres_pool_max",
+    documentation="Максимальный размер пула подключений PostgreSQL",
+)
+
+
+def update_pool_metrics(pool: asyncpg.Pool | None = None) -> None:
+    """Обновляет метрики пула подключений PostgreSQL.
+
+    Args:
+        pool: Пул подключений PostgreSQL. Если None, используется глобальный пул.
+    """
+    from utils.postgres_client import get_pool_metrics
+
+    metrics = get_pool_metrics(pool)
+    if metrics:
+        POSTGRES_POOL_SIZE.set(float(metrics.size))
+        POSTGRES_POOL_IDLE.set(float(metrics.idle_size))
+        POSTGRES_POOL_ACTIVE.set(float(metrics.active_connections))
+        POSTGRES_POOL_MAX.set(float(metrics.max_size))

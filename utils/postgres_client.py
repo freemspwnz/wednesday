@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 
 import asyncpg
 
@@ -160,6 +161,41 @@ async def close_postgres_pool() -> None:
         finally:
             _pool = None
             _pool_loop = None
+
+
+@dataclass
+class PoolMetrics:
+    """Метрики пула подключений PostgreSQL."""
+
+    size: int  # Текущий размер пула
+    idle_size: int  # Количество свободных соединений
+    min_size: int  # Минимальный размер
+    max_size: int  # Максимальный размер
+    active_connections: int  # Активные соединения (size - idle_size)
+
+
+def get_pool_metrics(pool: asyncpg.Pool | None = None) -> PoolMetrics | None:
+    """Возвращает метрики пула подключений.
+
+    Args:
+        pool: Пул подключений. Если None, используется глобальный пул.
+
+    Returns:
+        PoolMetrics или None, если пул не инициализирован.
+    """
+    if pool is None:
+        try:
+            pool = get_postgres_pool()
+        except RuntimeError:
+            return None
+
+    return PoolMetrics(
+        size=pool.get_size(),
+        idle_size=pool.get_idle_size(),
+        min_size=pool.get_min_size(),
+        max_size=pool.get_max_size(),
+        active_connections=pool.get_size() - pool.get_idle_size(),
+    )
 
 
 async def ensure_database() -> None:

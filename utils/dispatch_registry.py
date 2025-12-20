@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import asyncpg
+
 from utils.logger import get_logger, log_all_methods
 from utils.postgres_client import get_postgres_pool
 
@@ -21,13 +23,21 @@ class DispatchRegistry:
     в определённые временные слоты и чаты для предотвращения дубликатов.
     """
 
-    def __init__(self, storage_path: str | None = None, retention_days: int = 7) -> None:
+    def __init__(
+        self,
+        storage_path: str | None = None,
+        retention_days: int = 7,
+        pool: asyncpg.Pool | None = None,
+    ) -> None:
         """Инициализирует реестр отправленных сообщений.
 
         Args:
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
             retention_days: Количество дней хранения записей в реестре (по умолчанию 7).
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
         """
+        self._pool = pool or get_postgres_pool()
         self.logger = get_logger(__name__)
         self.retention_days = retention_days
 
@@ -59,9 +69,8 @@ class DispatchRegistry:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        pool = get_postgres_pool()
         key = self._key(slot_date, slot_time, chat_id)
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 row = await conn.fetchrow(
                     "SELECT 1 FROM dispatch_registry WHERE key = $1;",
@@ -123,8 +132,7 @@ class DispatchRegistry:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         cutoff_dt = datetime.utcnow() - timedelta(days=self.retention_days)
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 await conn.execute(
                     "DELETE FROM dispatch_registry WHERE created_at < $1;",

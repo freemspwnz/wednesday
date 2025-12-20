@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import asyncpg
+
 from utils.logger import get_logger, log_all_methods
 from utils.postgres_client import get_postgres_pool
 
@@ -27,6 +29,7 @@ class UsageTracker:
         storage_path: str | None = None,
         monthly_quota: int = 100,
         frog_threshold: int = 70,
+        pool: asyncpg.Pool | None = None,
     ) -> None:
         """Инициализирует трекер использования генераций.
 
@@ -34,7 +37,10 @@ class UsageTracker:
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
             monthly_quota: Месячная квота генераций (по умолчанию 100).
             frog_threshold: Порог для ручных генераций /frog (по умолчанию 70).
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
         """
+        self._pool = pool or get_postgres_pool()
         self.logger = get_logger(__name__)
         self.monthly_quota = int(monthly_quota)
         self.frog_threshold = int(frog_threshold)
@@ -57,8 +63,7 @@ class UsageTracker:
         Создаёт или обновляет строку с id=1 в таблице usage_settings
         с текущими значениями monthly_quota и frog_threshold.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO usage_settings (id, monthly_quota, frog_threshold)
@@ -87,8 +92,7 @@ class UsageTracker:
         await self._ensure_settings_row()
         dt = when or datetime.utcnow()
         key = self._month_key(dt)
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT count FROM usage_stats WHERE month = $1;",
                 key,
@@ -122,8 +126,7 @@ class UsageTracker:
         await self._ensure_settings_row()
         dt = when or datetime.utcnow()
         key = self._month_key(dt)
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT count FROM usage_stats WHERE month = $1;",
                 key,
@@ -136,8 +139,7 @@ class UsageTracker:
         Загружает актуальные значения monthly_quota и frog_threshold
         из базы данных и обновляет соответствующие атрибуты объекта.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT monthly_quota, frog_threshold FROM usage_settings WHERE id = 1;",
             )
@@ -200,8 +202,7 @@ class UsageTracker:
         dt = when or datetime.utcnow()
         key = self._month_key(dt)
         value = int(total)
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO usage_stats (month, count)
@@ -233,8 +234,7 @@ class UsageTracker:
         threshold = min(threshold, self.monthly_quota)
         self.frog_threshold = threshold
 
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE usage_settings SET frog_threshold = $1 WHERE id = 1;",
                 int(self.frog_threshold),

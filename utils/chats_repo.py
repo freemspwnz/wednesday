@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import asyncpg
+
 from utils.logger import get_logger, log_all_methods
 from utils.postgres_client import get_postgres_pool
 
@@ -22,13 +24,16 @@ class ChatsRepo:
     через Postgres и являются асинхронными.
     """
 
-    def __init__(self, storage_path: str | None = None) -> None:
+    def __init__(self, storage_path: str | None = None, pool: asyncpg.Pool | None = None) -> None:
         """Инициализирует репозиторий чатов.
 
         Args:
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
         """
         # Параметр storage_path оставлен для обратной совместимости и игнорируется.
+        self._pool = pool or get_postgres_pool()
         self.logger = get_logger(__name__)
 
     async def add_chat(self, chat_id: int, title: str | None = None) -> None:
@@ -44,8 +49,7 @@ class ChatsRepo:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 await conn.execute(
                     """
@@ -71,8 +75,7 @@ class ChatsRepo:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 await conn.execute("DELETE FROM chats WHERE chat_id = $1;", int(chat_id))
                 self.logger.info(f"Удалён чат {chat_id} из Postgres")
@@ -89,8 +92,7 @@ class ChatsRepo:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 rows: list[tuple[Any]] = await conn.fetch("SELECT chat_id FROM chats ORDER BY chat_id;")
                 return [int(row[0]) for row in rows]

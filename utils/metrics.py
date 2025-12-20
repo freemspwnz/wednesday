@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+import asyncpg
+
 from utils.logger import get_logger, log_all_methods
 from utils.postgres_client import get_postgres_pool
 from utils.redis_client import safe_redis_call
@@ -153,23 +155,24 @@ class Metrics:
     текущих сценариев мониторинга.
     """
 
-    def __init__(self, storage_path: str | None = None) -> None:
+    def __init__(self, storage_path: str | None = None, pool: asyncpg.Pool | None = None) -> None:
         """Инициализирует репозиторий метрик.
 
         Args:
             storage_path: Параметр оставлен для обратной совместимости и игнорируется.
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
         """
+        self._pool = pool or get_postgres_pool()
         self.logger = get_logger(__name__)
 
-    @staticmethod
-    async def _ensure_row() -> None:
+    async def _ensure_row(self) -> None:
         """Гарантирует наличие базовой строки метрик (id=1).
 
         Создаёт строку с id=1 в таблице metrics, если её ещё нет.
         Используется перед операциями обновления метрик.
         """
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO metrics (id)
@@ -185,8 +188,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE metrics SET generations_success = generations_success + 1 WHERE id = 1;",
             )
@@ -198,8 +200,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE metrics SET generations_failed = generations_failed + 1 WHERE id = 1;",
             )
@@ -211,8 +212,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE metrics SET generations_retries = generations_retries + 1 WHERE id = 1;",
             )
@@ -227,8 +227,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE metrics SET generations_total_time = generations_total_time + $1 WHERE id = 1;",
                 float(seconds),
@@ -241,8 +240,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE metrics SET dispatch_success = dispatch_success + 1 WHERE id = 1;",
             )
@@ -254,8 +252,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE metrics SET dispatch_failed = dispatch_failed + 1 WHERE id = 1;",
             )
@@ -267,8 +264,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE metrics SET circuit_breaker_trips = circuit_breaker_trips + 1 WHERE id = 1;",
             )
@@ -314,8 +310,7 @@ class Metrics:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         await self._ensure_row()
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 SELECT

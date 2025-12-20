@@ -26,6 +26,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Final
 
+import asyncpg
 from asyncpg import UniqueViolationError
 
 from utils.logger import get_logger, log_all_methods
@@ -67,8 +68,14 @@ class ImagesRepo:
     - обработка гонок при параллельной генерации одного и того же промпта.
     """
 
-    def __init__(self) -> None:
-        """Инициализирует репозиторий изображений."""
+    def __init__(self, pool: asyncpg.Pool | None = None) -> None:
+        """Инициализирует репозиторий изображений.
+
+        Args:
+            pool: Пул подключений PostgreSQL. Если None, используется глобальный пул
+                  (для обратной совместимости).
+        """
+        self._pool = pool or get_postgres_pool()
         self._logger = get_logger(__name__)
 
     @staticmethod
@@ -154,8 +161,7 @@ class ImagesRepo:
             ImageRecord если изображение найдено, None иначе.
         """
 
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 SELECT id, image_hash, prompt_hash, path, created_at
@@ -259,8 +265,7 @@ class ImagesRepo:
         # но соединение остаётся пригодным для последующих запросов SELECT.
         # Это позволяет реализовать паттерн "insert-or-select" без состояния
         # "current transaction is aborted" для всей сессии.
-        pool = get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with self._pool.acquire() as conn:
             try:
                 row = await conn.fetchrow(
                     """
