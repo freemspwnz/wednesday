@@ -35,7 +35,6 @@ from typing import Any, Final, Self
 import aiohttp
 from loguru import logger
 from PIL import Image
-from pydantic import ValidationError
 
 from infra.clients.base import BaseHTTPClient
 from infra.clients.models import (
@@ -48,8 +47,9 @@ from infra.clients.models import (
     KandinskyStatusResponse,
     SetModelResult,
 )
+from infra.clients.sber_clients_exceptions import map_client_errors
 from infra.repos import ModelsRepo
-from shared.base.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
+from shared.base.exceptions import APIError, NetworkError
 from shared.config import KandinskyConfig
 from shared.protocols import IModelsRepo, ITextToImageClient
 
@@ -125,7 +125,8 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     # Публичный интерфейс ITextToImageClient                             #
     # ------------------------------------------------------------------ #
 
-    async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
+    @map_client_errors(event_name="kandinsky_generate", service_name="kandinsky")
+    async def generate(self, prompt: str, user_id: str | None = None) -> bytes:  # type: ignore[override]
         """Генерирует изображение по текстовому промпту через Kandinsky API.
 
         Выполняет полный цикл генерации: получение pipeline ID, запуск генерации,
@@ -157,30 +158,18 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         if self._proxy_url:
             bound.bind(proxy_url=self._proxy_url).info("Используется прокси для запроса к Kandinsky")
 
-        try:
-            # Используем переиспользуемую сессию
-            pipeline_id = await self._get_pipeline_id(headers, user_id=user_id)
+        # Используем переиспользуемую сессию
+        pipeline_id = await self._get_pipeline_id(headers, user_id=user_id)
 
-            uuid = await self._start_generation(headers, pipeline_id, prompt, user_id=user_id)
+        uuid = await self._start_generation(headers, pipeline_id, prompt, user_id=user_id)
 
-            image_data = await self._wait_for_generation(headers, uuid, user_id=user_id)
+        image_data = await self._wait_for_generation(headers, uuid, user_id=user_id)
 
-            # В логах не показываем бинарные данные, только размеры.
-            bound.bind(image_size_bytes=len(image_data)).info(
-                "Изображение успешно получено от Kandinsky",
-            )
-            return image_data
-        except (AuthenticationError, RateLimitError, NetworkError, APIError):
-            # Пробрасываем доменные исключения как есть
-            raise
-        except Exception as exc:  # pragma: no cover - защитный фоллбек
-            bound.bind(error=str(exc)).error(
-                "Неожиданная ошибка при генерации изображения через Kandinsky",
-            )
-            raise APIError(
-                f"Неожиданная ошибка при генерации изображения через Kandinsky: {exc}",
-                original_error=exc,
-            ) from exc
+        # В логах не показываем бинарные данные, только размеры.
+        bound.bind(image_size_bytes=len(image_data)).info(
+            "Изображение успешно получено от Kandinsky",
+        )
+        return image_data
 
     # ------------------------------------------------------------------ #
     # Дополнительные методы для healthcheck и админ‑команд               #
@@ -220,67 +209,46 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         # Используем меньший таймаут для проверки статуса
         timeout = self._config.check_timeout.to_client_timeout()
 
-        try:
-            from infra.database.postgres_client import get_postgres_pool
+        from infra.database.postgres_client import get_postgres_pool
 
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-            current_pipeline_id, current_pipeline_name = await models_store.get_kandinsky_model()
+        models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+        current_pipeline_id, current_pipeline_name = await models_store.get_kandinsky_model()
 
-            bound.debug("Запрос списка pipelines для dry‑run статуса")
-            pipelines_data_json = await self._fetch_pipelines(headers=headers, timeout=timeout)
-            if isinstance(pipelines_data_json, list) and pipelines_data_json:
-                try:
-                    pipelines = [KandinskyPipelineResponse.model_validate(p) for p in pipelines_data_json]
-                except ValidationError as e:
-                    bound.bind(
-                        error=str(e),
-                        data_sample=str(pipelines_data_json)[:200],
-                    ).error("Ошибка валидации ответа Kandinsky API при проверке статуса")
-                    raise APIError(
-                        f"Ошибка валидации ответа Kandinsky API при проверке статуса: {e}",
-                        original_error=e,
-                    ) from e
+        bound.debug("Запрос списка pipelines для dry‑run статуса")
+        pipelines_data_json = await self._fetch_pipelines(headers=headers, timeout=timeout)
+        if isinstance(pipelines_data_json, list) and pipelines_data_json:
+            pipelines = [KandinskyPipelineResponse.model_validate(p) for p in pipelines_data_json]
 
-                if save_models:
-                    await models_store.set_kandinsky_available_models(pipelines_data_json)
-                    bound.debug(
-                        "Сохранён список из {} моделей Kandinsky",
-                        len(pipelines),
-                    )
-
-                models_list: list[str] = []
-                for pipeline in pipelines:
-                    model_name = pipeline.name
-                    model_id = pipeline.id
-                    is_current = " ⭐" if (current_pipeline_id and model_id == current_pipeline_id) else ""
-                    models_list.append(f"{model_name} (ID: {model_id}){is_current}")
-
-                return APIStatusResult.success(
-                    message="✅ API доступен, ключ валиден",
-                    models=models_list,
-                    current_model_id=current_pipeline_id,
-                    current_model_name=current_pipeline_name,
-                )
-            else:
-                return APIStatusResult.success(
-                    message="✅ API доступен, ключ валиден (модели не найдены)",
-                    models=["Модели не найдены"],
-                    current_model_id=current_pipeline_id,
-                    current_model_name=current_pipeline_name,
+            if save_models:
+                await models_store.set_kandinsky_available_models(pipelines_data_json)
+                bound.debug(
+                    "Сохранён список из {} моделей Kandinsky",
+                    len(pipelines),
                 )
 
-        except (AuthenticationError, RateLimitError, NetworkError, APIError):
-            # Пробрасываем доменные исключения как есть
-            raise
-        except Exception as exc:  # pragma: no cover - защитный фоллбек
-            bound.bind(error=str(exc)).error("Неожиданная ошибка при проверке статуса Kandinsky")
-            raise APIError(
-                f"Неожиданная ошибка при проверке статуса: {exc}",
-                # Неизвестный статус
-                original_error=exc,
-            ) from exc
+            models_list: list[str] = []
+            for pipeline in pipelines:
+                model_name = pipeline.name
+                model_id = pipeline.id
+                is_current = " ⭐" if (current_pipeline_id and model_id == current_pipeline_id) else ""
+                models_list.append(f"{model_name} (ID: {model_id}){is_current}")
 
-    async def get_available_models(self, save_models: bool = True) -> list[str]:
+            return APIStatusResult.success(
+                message="✅ API доступен, ключ валиден",
+                models=models_list,
+                current_model_id=current_pipeline_id,
+                current_model_name=current_pipeline_name,
+            )
+        else:
+            return APIStatusResult.success(
+                message="✅ API доступен, ключ валиден (модели не найдены)",
+                models=["Модели не найдены"],
+                current_model_id=current_pipeline_id,
+                current_model_name=current_pipeline_name,
+            )
+
+    @map_client_errors(event_name="kandinsky_get_models", service_name="kandinsky")
+    async def get_available_models(self, save_models: bool = True) -> list[str]:  # type: ignore[override]
         """Возвращает список доступных моделей Kandinsky.
 
         Получает список доступных pipelines (моделей) через API или из хранилища.
@@ -313,9 +281,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             raise APIError(
                 "Не удалось получить список моделей Kandinsky: API вернул пустой список",
             )
-        except (AuthenticationError, RateLimitError, NetworkError, APIError):
-            # Пробрасываем доменные исключения как есть
-            raise
         except Exception as exc:
             # Fallback: пытаемся получить из хранилища
             bound.debug("Попытка получить модели из хранилища после ошибки API")
@@ -339,7 +304,8 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                 original_error=exc,
             ) from exc
 
-    async def set_model(self, model_identifier: str) -> SetModelResult:
+    @map_client_errors(event_name="kandinsky_set_model", service_name="kandinsky")
+    async def set_model(self, model_identifier: str) -> SetModelResult:  # type: ignore[override]
         """Устанавливает текущую модель (pipeline) по ID или части названия.
 
         Выполняет поиск модели по точному совпадению ID или частичному совпадению
@@ -367,85 +333,60 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             bound.bind(error=str(exc)).error("Ошибка конфигурации ключей")
             raise
 
-        try:
-            # Используем меньший таймаут для установки модели
-            timeout = self._config.check_timeout.to_client_timeout()
-            pipelines_data_json = await self._fetch_pipelines(headers=headers, timeout=timeout)
-            if not isinstance(pipelines_data_json, list):
-                bound.error("Ответ Kandinsky API не является списком моделей")
-                raise APIError(
-                    "Не удалось получить список моделей от Kandinsky API",
-                )
+        # Используем меньший таймаут для установки модели
+        timeout = self._config.check_timeout.to_client_timeout()
+        pipelines_data_json = await self._fetch_pipelines(headers=headers, timeout=timeout)
+        if not isinstance(pipelines_data_json, list):
+            bound.error("Ответ Kandinsky API не является списком моделей")
+            raise APIError(
+                "Не удалось получить список моделей от Kandinsky API",
+            )
 
-            try:
-                pipelines = [KandinskyPipelineResponse.model_validate(p) for p in pipelines_data_json]
-            except ValidationError as e:
-                bound.bind(
-                    error=str(e),
-                    data_sample=str(pipelines_data_json)[:200],
-                ).error("Ошибка валидации ответа Kandinsky API при установке модели")
-                raise APIError(
-                    f"Ошибка валидации данных от Kandinsky API: {e}",
-                    original_error=e,
-                ) from e
+        pipelines = [KandinskyPipelineResponse.model_validate(p) for p in pipelines_data_json]
 
-            # 1. Точное совпадение по ID.
-            for pipeline in pipelines:
-                if pipeline.id == model_identifier:
-                    matched_model_name = pipeline.name
-                    matched_pipeline_id = pipeline.id
-                    from infra.database.postgres_client import get_postgres_pool
-
-                    models_store = (
-                        self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-                    )
-                    await models_store.set_kandinsky_model(matched_pipeline_id, matched_model_name)
-                    msg = f"Модель установлена: {matched_model_name} (ID: {matched_pipeline_id})"
-                    bound.info(msg)
-                    return SetModelResult.ok(msg)
-
-            # 2. Частичное совпадение по названию (регистронезависимо).
-            model_identifier_lower = model_identifier.lower()
-            matches: list[KandinskyPipelineResponse] = []
-            for pipeline in pipelines:
-                if model_identifier_lower in pipeline.name.lower():
-                    matches.append(pipeline)
-
-            if len(matches) == 1:
-                matched_pipeline = matches[0]
-                selected_model_name = matched_pipeline.name
-                selected_pipeline_id = matched_pipeline.id
+        # 1. Точное совпадение по ID.
+        for pipeline in pipelines:
+            if pipeline.id == model_identifier:
+                matched_model_name = pipeline.name
+                matched_pipeline_id = pipeline.id
                 from infra.database.postgres_client import get_postgres_pool
 
                 models_store = (
                     self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
                 )
-                await models_store.set_kandinsky_model(selected_pipeline_id, selected_model_name)
-                msg = f"Модель установлена: {selected_model_name} (ID: {selected_pipeline_id})"
+                await models_store.set_kandinsky_model(matched_pipeline_id, matched_model_name)
+                msg = f"Модель установлена: {matched_model_name} (ID: {matched_pipeline_id})"
                 bound.info(msg)
                 return SetModelResult.ok(msg)
 
-            if len(matches) > 1:
-                models_list = [f"{p.name} (ID: {p.id})" for p in matches]
-                msg = (
-                    "Найдено несколько моделей:\n" + "\n".join(models_list) + "\n\nУточните название или используйте ID"
-                )
-                bound.warning("Несколько моделей соответствуют запросу: {}", models_list)
-                raise ValueError(msg)
+        # 2. Частичное совпадение по названию (регистронезависимо).
+        model_identifier_lower = model_identifier.lower()
+        matches: list[KandinskyPipelineResponse] = []
+        for pipeline in pipelines:
+            if model_identifier_lower in pipeline.name.lower():
+                matches.append(pipeline)
 
-            msg = f"Модель '{model_identifier}' не найдена. Используйте /status для просмотра доступных моделей."
-            bound.warning(msg)
+        if len(matches) == 1:
+            matched_pipeline = matches[0]
+            selected_model_name = matched_pipeline.name
+            selected_pipeline_id = matched_pipeline.id
+            from infra.database.postgres_client import get_postgres_pool
+
+            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+            await models_store.set_kandinsky_model(selected_pipeline_id, selected_model_name)
+            msg = f"Модель установлена: {selected_model_name} (ID: {selected_pipeline_id})"
+            bound.info(msg)
+            return SetModelResult.ok(msg)
+
+        if len(matches) > 1:
+            models_list = [f"{p.name} (ID: {p.id})" for p in matches]
+            msg = "Найдено несколько моделей:\n" + "\n".join(models_list) + "\n\nУточните название или используйте ID"
+            bound.warning("Несколько моделей соответствуют запросу: {}", models_list)
             raise ValueError(msg)
 
-        except (ValueError, AuthenticationError, RateLimitError, NetworkError, APIError):
-            # Пробрасываем доменные исключения как есть
-            raise
-        except Exception as exc:  # pragma: no cover - защитный фоллбек
-            bound.bind(error=str(exc)).error("Неожиданная ошибка при установке модели Kandinsky")
-            raise APIError(
-                f"Неожиданная ошибка при установке модели: {exc}",
-                original_error=exc,
-            ) from exc
+        msg = f"Модель '{model_identifier}' не найдена. Используйте /status для просмотра доступных моделей."
+        bound.warning(msg)
+        raise ValueError(msg)
 
     # ------------------------------------------------------------------ #
     # Внутренние helpers                                                 #
@@ -551,64 +492,43 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
         saved_pipeline_id, saved_pipeline_name = await models_store.get_kandinsky_model()
 
-        try:
-            data_json = await self._fetch_pipelines(headers=headers)
-            if not data_json or not isinstance(data_json, list):
-                bound.error("Пустой ответ при получении pipelines от Kandinsky")
-                raise APIError(
-                    "Пустой ответ при получении pipelines от Kandinsky",
-                )
-
-            try:
-                pipelines = [KandinskyPipelineResponse.model_validate(p) for p in data_json]
-            except ValidationError as e:
-                bound.bind(
-                    error=str(e),
-                    data_sample=str(data_json)[:200],
-                ).error("Ошибка валидации ответа Kandinsky API при получении pipelines")
-                raise APIError(
-                    f"Ошибка валидации ответа Kandinsky API при получении pipelines: {e}",
-                    original_error=e,
-                ) from e
-
-            if saved_pipeline_id:
-                for pipeline in pipelines:
-                    if pipeline.id == saved_pipeline_id:
-                        bound.bind(
-                            pipeline_id=saved_pipeline_id,
-                            pipeline_name=saved_pipeline_name,
-                        ).info("Используется сохранённая модель Kandinsky")
-                        return saved_pipeline_id
-
-                bound.warning(
-                    "Сохранённая модель {} не найдена среди доступных; используется первая доступная.",
-                    saved_pipeline_id,
-                )
-
-            if not pipelines:
-                bound.error("Список pipelines пуст")
-                raise APIError(
-                    "Список pipelines Kandinsky пуст",
-                )
-
-            first_pipeline = pipelines[0]
-            pipeline_id: str = str(first_pipeline.id)
-            pipeline_name: str = str(first_pipeline.name)
-            await models_store.set_kandinsky_model(pipeline_id, pipeline_name)
-            bound.bind(pipeline_id=pipeline_id, pipeline_name=pipeline_name).info(
-                "Выбран pipeline для генерации через Kandinsky",
-            )
-            return pipeline_id
-        except (AuthenticationError, RateLimitError, NetworkError, APIError):
-            raise
-        except Exception as exc:  # pragma: no cover - защитный фоллбек
-            bound.bind(error=str(exc)).error(
-                "Неожиданная ошибка при получении pipeline ID от Kandinsky",
-            )
+        data_json = await self._fetch_pipelines(headers=headers)
+        if not data_json or not isinstance(data_json, list):
+            bound.error("Пустой ответ при получении pipelines от Kandinsky")
             raise APIError(
-                f"Неожиданная ошибка при получении pipeline ID от Kandinsky: {exc}",
-                original_error=exc,
-            ) from exc
+                "Пустой ответ при получении pipelines от Kandinsky",
+            )
+
+        pipelines = [KandinskyPipelineResponse.model_validate(p) for p in data_json]
+
+        if saved_pipeline_id:
+            for pipeline in pipelines:
+                if pipeline.id == saved_pipeline_id:
+                    bound.bind(
+                        pipeline_id=saved_pipeline_id,
+                        pipeline_name=saved_pipeline_name,
+                    ).info("Используется сохранённая модель Kandinsky")
+                    return saved_pipeline_id
+
+            bound.warning(
+                "Сохранённая модель {} не найдена среди доступных; используется первая доступная.",
+                saved_pipeline_id,
+            )
+
+        if not pipelines:
+            bound.error("Список pipelines пуст")
+            raise APIError(
+                "Список pipelines Kandinsky пуст",
+            )
+
+        first_pipeline = pipelines[0]
+        pipeline_id: str = str(first_pipeline.id)
+        pipeline_name: str = str(first_pipeline.name)
+        await models_store.set_kandinsky_model(pipeline_id, pipeline_name)
+        bound.bind(pipeline_id=pipeline_id, pipeline_name=pipeline_name).info(
+            "Выбран pipeline для генерации через Kandinsky",
+        )
+        return pipeline_id
 
     async def _start_generation(
         self,
@@ -636,47 +556,28 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             "params", params.model_dump_json(by_alias=True, exclude_none=True), content_type="application/json"
         )
 
-        try:
-            response = await self._post(
-                endpoint=self.ENDPOINT_PIPELINE_RUN,
-                method_name="start_generation",
-                headers=headers,
-                data=form_data,
-            )
+        response = await self._post(
+            endpoint=self.ENDPOINT_PIPELINE_RUN,
+            method_name="start_generation",
+            headers=headers,
+            data=form_data,
+        )
 
-            async with response:
-                # Принимаем как 200, так и 201 как успешные статусы
-                if response.status in {200, 201}:
-                    result_json = await self._parse_json_response(response, expected_status=response.status)
-                    try:
-                        result = KandinskyGenerationStartResponse.model_validate(result_json)
-                        uuid_str: str = str(result.uuid)
-                        bound.bind(task_uuid=uuid_str).info("Задача генерации на Kandinsky успешно создана")
-                        return uuid_str
-                    except ValidationError as e:
-                        bound.bind(
-                            error=str(e),
-                            data_sample=str(result_json)[:200],
-                        ).error("Ошибка валидации ответа Kandinsky API при запуске генерации")
-                        raise APIError(
-                            f"Ошибка валидации ответа Kandinsky API при запуске генерации: {e}",
-                            original_error=e,
-                        ) from e
-                else:
-                    # Если статус не 200/201, _parse_json_response выбросит исключение
-                    await self._parse_json_response(response, expected_status=200)
-                    # Этот код не должен выполняться, но нужен для mypy
-                    raise APIError(
-                        "Неожиданный статус ответа при запуске генерации",
-                    )
-        except (AuthenticationError, RateLimitError, NetworkError, APIError):
-            raise
-        except Exception as exc:  # pragma: no cover - защитный фоллбек
-            bound.bind(error=str(exc)).error("Неожиданная ошибка при запуске генерации на Kandinsky")
-            raise APIError(
-                f"Неожиданная ошибка при запуске генерации на Kandinsky: {exc}",
-                original_error=exc,
-            ) from exc
+        async with response:
+            # Принимаем как 200, так и 201 как успешные статусы
+            if response.status in {200, 201}:
+                result_json = await self._parse_json_response(response, expected_status=response.status)
+                result = KandinskyGenerationStartResponse.model_validate(result_json)
+                uuid_str: str = str(result.uuid)
+                bound.bind(task_uuid=uuid_str).info("Задача генерации на Kandinsky успешно создана")
+                return uuid_str
+            else:
+                # Если статус не 200/201, _parse_json_response выбросит исключение
+                await self._parse_json_response(response, expected_status=200)
+                # Этот код не должен выполняться, но нужен для mypy
+                raise APIError(
+                    "Неожиданный статус ответа при запуске генерации",
+                )
 
     async def _wait_for_generation(
         self,
@@ -700,18 +601,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
 
                 async with response:
                     data_json = await self._parse_json_response(response)
-                    try:
-                        status_response = KandinskyStatusResponse.model_validate(data_json)
-                    except ValidationError as e:
-                        bound.bind(
-                            error=str(e),
-                            data_sample=str(data_json)[:200],
-                            attempt=attempt,
-                        ).error("Ошибка валидации ответа Kandinsky API при проверке статуса")
-                        raise APIError(
-                            f"Ошибка валидации ответа Kandinsky API при проверке статуса: {e}",
-                            original_error=e,
-                        ) from e
+                    status_response = KandinskyStatusResponse.model_validate(data_json)
 
                     status = status_response.status
 
@@ -781,9 +671,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                         f"Kandinsky вернул неизвестный статус генерации: {status}",
                     )
 
-            except (AuthenticationError, RateLimitError, APIError):
-                # Пробрасываем доменные исключения как есть
-                raise
             except aiohttp.ClientConnectorError as exc:
                 last_exception = exc
                 bound.bind(attempt=attempt, error=str(exc)).error(

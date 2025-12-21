@@ -1,14 +1,21 @@
 """Исключения и маппинг для клиентов Сбербанка (Kandinsky, GigaChat).
 
-Содержит функцию маппинга HTTP статусов в доменные исключения
-и константы для HTTP статусов.
+Содержит функцию маппинга HTTP статусов в доменные исключения,
+декоратор для автоматической обработки ошибок и константы для HTTP статусов.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import TYPE_CHECKING, Final, ParamSpec, TypeVar
 
-from shared.base.exceptions import APIError, AuthenticationError, ClientError, RateLimitError
+from loguru import logger
+from pydantic import ValidationError
+
+from shared.base.exceptions import APIError, AuthenticationError, ClientError, NetworkError, RateLimitError
+
+P = ParamSpec("P")
 
 if TYPE_CHECKING:
     from aiohttp import ClientResponse
@@ -16,6 +23,8 @@ if TYPE_CHECKING:
 HTTP_STATUS_UNAUTHORIZED: Final[int] = 401
 HTTP_STATUS_FORBIDDEN: Final[int] = 403
 HTTP_STATUS_TOO_MANY_REQUESTS: Final[int] = 429
+
+T = TypeVar("T")
 
 
 def map_http_status_to_domain_exception(
@@ -64,3 +73,70 @@ def map_http_status_to_domain_exception(
 
 # Обратная совместимость: экспортируем функцию под старым именем
 map_http_status_to_exception = map_http_status_to_domain_exception
+
+
+def map_client_errors(
+    event_name: str | None = None,
+    service_name: str | None = None,
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+    """Декоратор для автоматической обработки ошибок клиентов.
+
+    Автоматически:
+    - Пробрасывает доменные исключения (AuthenticationError, RateLimitError, NetworkError, APIError)
+    - Оборачивает ValidationError в APIError с логированием
+    - Оборачивает неожиданные исключения в APIError с логированием
+
+    Args:
+        event_name: Имя события для логирования (опционально, по умолчанию используется имя функции).
+        service_name: Имя сервиса для логирования (опционально).
+
+    Returns:
+        Декоратор для методов клиентов.
+
+    Example:
+        ```python
+        @map_client_errors(event_name="kandinsky_generate", service_name="kandinsky")
+        async def generate(self, prompt: str, user_id: str | None = None) -> bytes:
+            # основная логика без обработки ошибок
+            ...
+        ```
+    """
+
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+        @wraps(func)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            # Определяем имя события и сервиса
+            event = event_name or func.__name__
+            service = service_name or "client"
+
+            # Пытаемся получить user_id из kwargs для логирования
+            user_id = kwargs.get("user_id")
+            bound = logger.bind(event=event, user_id=user_id)
+
+            try:
+                return await func(*args, **kwargs)
+            except (AuthenticationError, RateLimitError, NetworkError, APIError):
+                # Пробрасываем доменные исключения как есть
+                raise
+            except ValidationError as e:
+                # Оборачиваем ValidationError в APIError
+                bound.bind(
+                    error=str(e),
+                ).error(f"Ошибка валидации ответа {service} API: {e}")
+                raise APIError(
+                    f"Ошибка валидации ответа {service} API: {e}",
+                    original_error=e,
+                ) from e
+            except Exception as exc:
+                # Оборачиваем неожиданные исключения в APIError
+                bound.bind(error=str(exc)).error(
+                    f"Неожиданная ошибка в {service}: {exc}",
+                )
+                raise APIError(
+                    f"Неожиданная ошибка в {service}: {exc}",
+                    original_error=exc,
+                ) from exc
+
+        return wrapper
+
+    return decorator

@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Добавление декоратора для обработки ошибок клиентов**:
+  - Создан декоратор `map_client_errors` в `sber_clients_exceptions.py`
+  - Декоратор автоматически обрабатывает доменные исключения, ValidationError и неожиданные исключения
+  - Внедрен декоратор во все публичные методы `KandinskyClient` и `GigaChatTextClient`
+  - Удалены повторяющиеся блоки обработки ошибок из клиентов (~100+ строк кода)
+  - Упрощена обработка ValidationError - теперь централизована в декораторе
+  - Улучшена читаемость кода клиентов за счет удаления boilerplate кода
+
 - **Устранение протечки абстракций: перенос исключений клиентов в доменный слой**:
   - Перенесены HTTP ошибки из `infra/clients/exceptions.py` в `shared/base/exceptions.py`
   - Доменные исключения (`ClientError`, `AuthenticationError`, `RateLimitError`, `NetworkError`, `APIError`) теперь без `status_code` и `response_body`, только `message` и `original_error`
