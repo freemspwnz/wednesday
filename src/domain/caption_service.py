@@ -4,27 +4,22 @@ from __future__ import annotations
 
 import random
 
-from shared.base.base_service import BaseService
-from shared.protocols import ILogger
 
-
-class CaptionService(BaseService):
+class CaptionService:
     """Сервис для выбора подписей к изображениям.
 
     Инкапсулирует бизнес-логику выбора подписей для сгенерированных изображений.
     """
 
-    def __init__(self, captions: list[str] | tuple[str, ...], *, logger: ILogger) -> None:
+    def __init__(self, captions: list[str] | tuple[str, ...]) -> None:
         """Инициализирует сервис подписей.
 
         Args:
             captions: Список доступных подписей.
-            logger: Экземпляр логгера для использования в сервисе.
 
         Raises:
             ValueError: Если список подписей пуст.
         """
-        super().__init__(logger)
         if not captions:
             raise ValueError("Список подписей не может быть пустым")
         self._captions = list(captions)

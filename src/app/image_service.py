@@ -161,15 +161,32 @@ class ImageService(BaseService):
 
         # Выбираем случайную подпись
         if self._caption_service:
-            caption = self._caption_service.get_random_caption()
+            try:
+                self.logger.debug(
+                    "Начинаю выбор подписи через CaptionService",
+                    event="caption_selection_started",
+                    user_id=user_id_str,
+                    status="started",
+                )
+                caption = self._caption_service.get_random_caption()
+                self.logger.debug(
+                    f"Выбрана подпись: {caption}",
+                    event="generation_caption_selected",
+                    user_id=user_id_str,
+                    status="ok",
+                )
+            except Exception as e:
+                self.logger.warning(
+                    f"Ошибка при выборе подписи через CaptionService: {e}",
+                    event="caption_selection_failed",
+                    user_id=user_id_str,
+                    status="warning",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
+                caption = ""
         else:
             caption = ""
-        self.logger.debug(
-            f"Выбрана подпись: {caption}",
-            event="generation_caption_selected",
-            user_id=user_id_str,
-            status="ok",
-        )
 
         # 2. Генерируем промпт
         prompt = await self._prompt_service.generate()
@@ -238,7 +255,19 @@ class ImageService(BaseService):
 
         # 4. Генерируем изображение (retry логика теперь в ImageGenerationService)
         try:
+            self.logger.info(
+                f"Начинаю генерацию изображения для промпта: {prompt[:100]}...",
+                event="image_generation_started",
+                user_id=user_id_str,
+                status="started",
+            )
             image_data_result = await self._generation_service.generate(prompt, user_id=user_id)
+            self.logger.info(
+                "Изображение успешно сгенерировано",
+                event="image_generation_success",
+                user_id=user_id_str,
+                status="success",
+            )
         except ImageGenerationError as e:
             self.logger.error(
                 f"Ошибка при генерации: {e}",

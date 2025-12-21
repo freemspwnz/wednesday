@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Удаление логирования из domain слоя**:
+  - Удалено наследование от `BaseService` в трех domain сервисах: `PromptGenerationService`, `ImageGenerationService`, `CaptionService`
+  - Убраны все вызовы `self.logger` из domain сервисов для обеспечения чистоты доменного слоя
+  - Удален параметр `logger` из `__init__` методов всех domain сервисов
+  - Обновлен `container.py` - убрана передача `logger=app_logger` при создании domain сервисов
+  - Обновлены тесты - убрана передача `logger=_create_mock_logger()` из вызовов конструкторов domain сервисов
+  - Добавлено логирование в app слой (`PromptService`, `ImageService`) вокруг вызовов domain сервисов для сохранения наблюдаемости
+
 - **Инъекция зависимостей для логирования в BaseService**:
   - `BaseService` теперь принимает `logger: ILogger` через конструктор (обязательный параметр)
   - Все сервисы, наследующиеся от `BaseService`, обновлены для принятия `logger` в конструкторе

@@ -81,16 +81,47 @@ class PromptService(BaseService):
             status="started",
         )
 
-        prompt = await self._generation_service.generate()
+        try:
+            prompt = await self._generation_service.generate()
+            if prompt is not None:
+                self.logger.info(
+                    f"Промпт успешно сгенерирован: {prompt[:100]}...",
+                    event="prompt_generation_success",
+                    status="success",
+                )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при генерации промпта через domain сервис: {e}",
+                event="prompt_generation_failed",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            prompt = None
 
         if prompt is None:
             # Используем статический fallback
-            prompt = self._generation_service.get_fallback_prompt()
-            self.logger.warning(
-                "Использован статический fallback-промпт",
-                event="prompt_fallback_used",
-                status="fallback",
+            self.logger.info(
+                "Начинаю получение fallback промпта",
+                event="prompt_fallback_started",
+                status="started",
             )
+            try:
+                prompt = self._generation_service.get_fallback_prompt()
+                self.logger.warning(
+                    "Использован статический fallback-промпт",
+                    event="prompt_fallback_used",
+                    status="fallback",
+                )
+            except Exception as e:
+                self.logger.error(
+                    f"Ошибка при получении fallback промпта: {e}",
+                    event="prompt_fallback_failed",
+                    status="error",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
+                return None
 
         # Сохраняем в кэш (если доступен)
         if prompt and self._cache is not None:

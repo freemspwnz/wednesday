@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from domain.image_generation import (
@@ -14,13 +12,6 @@ from domain.image_generation import (
 from infra.clients.models.status import APIStatusResult, SetModelResult
 from shared.base.exceptions import ImageGenerationError
 from shared.protocols import ITextToImageClient
-
-
-def _create_mock_logger() -> MagicMock:
-    """Создает mock-логгер для использования в тестах."""
-    mock_logger = MagicMock()
-    mock_logger.bind.return_value = mock_logger
-    return mock_logger
 
 
 class MockImageClient(ITextToImageClient):
@@ -124,7 +115,7 @@ class TestGenerate:
     async def test_uses_normalized_prompt_for_client_call(self) -> None:
         """Тест на использование нормализованного промпта при вызове клиента."""
         mock_client = MockImageClient()
-        service = ImageGenerationService(mock_client, logger=_create_mock_logger())
+        service = ImageGenerationService(mock_client)
 
         await service.generate("  test   prompt  ", user_id=42)
 
@@ -137,7 +128,7 @@ class TestGenerate:
     async def test_raises_image_generation_error_on_invalid_prompt(self) -> None:
         """Тест на выбрасывание ImageGenerationError при невалидном промпте."""
         mock_client = MockImageClient()
-        service = ImageGenerationService(mock_client, logger=_create_mock_logger())
+        service = ImageGenerationService(mock_client)
 
         with pytest.raises(ImageGenerationError, match="Невалидный промпт"):
             await service.generate("")
@@ -149,7 +140,7 @@ class TestGenerate:
     async def test_raises_on_too_long_prompt(self) -> None:
         """Тест на выбрасывание ImageGenerationError при слишком длинном промпте."""
         mock_client = MockImageClient()
-        service = ImageGenerationService(mock_client, logger=_create_mock_logger())
+        service = ImageGenerationService(mock_client)
 
         long_prompt = "a" * (MAX_PROMPT_LENGTH + 1)
         with pytest.raises(ImageGenerationError, match="Невалидный промпт"):
@@ -162,7 +153,7 @@ class TestGenerate:
     async def test_successful_generation_with_valid_prompt(self) -> None:
         """Тест на успешную генерацию с валидным промптом."""
         mock_client = MockImageClient(response=b"image-data")
-        service = ImageGenerationService(mock_client, logger=_create_mock_logger())
+        service = ImageGenerationService(mock_client)
 
         result = await service.generate("valid prompt", user_id=123)
 
@@ -195,7 +186,7 @@ class TestGenerate:
                 return SetModelResult.error("Error")
 
         mock_client = FailingMockClient()
-        service = ImageGenerationService(mock_client, logger=_create_mock_logger())
+        service = ImageGenerationService(mock_client)
 
         with pytest.raises(ImageGenerationError):
             await service.generate("valid prompt")
@@ -204,7 +195,7 @@ class TestGenerate:
     async def test_normalizes_prompt_before_validation(self) -> None:
         """Тест на нормализацию промпта перед валидацией (пустая строка после strip)."""
         mock_client = MockImageClient()
-        service = ImageGenerationService(mock_client, logger=_create_mock_logger())
+        service = ImageGenerationService(mock_client)
 
         with pytest.raises(ImageGenerationError, match="Невалидный промпт"):
             await service.generate("   ")

@@ -121,7 +121,7 @@ def build_image_stack(
     app_logger = get_logger("app")
 
     # Доменные сервисы
-    image_generation = ImageGenerationService(image_client, logger=app_logger)
+    image_generation = ImageGenerationService(image_client)
     fallback_config = PromptFallbackConfig(
         frog_prompts=list(ImageConfig.FROG_PROMPTS),
         styles=list(ImageConfig.STYLES),
@@ -129,7 +129,6 @@ def build_image_stack(
     prompt_generation = PromptGenerationService(
         text_client=text_client,
         fallback_config=fallback_config,
-        logger=app_logger,
     )
 
     # Получаем Redis клиент явно
@@ -171,7 +170,7 @@ def build_image_stack(
     # Создаём CaptionService из конфигурации
     caption_service = None
     if ImageConfig.CAPTIONS:
-        caption_service = CaptionService(ImageConfig.CAPTIONS, logger=app_logger)
+        caption_service = CaptionService(ImageConfig.CAPTIONS)
 
     # Создаём UnitOfWork для управления сохранением изображений
     image_storage_uow = ImageStorageUnitOfWork(
