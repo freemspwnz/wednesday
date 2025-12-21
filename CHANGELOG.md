@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Замена dict на TypedDict для DispatchResult**:
+  - Заменен класс `DispatchResult(dict)` на `TypedDict` в `app/dispatch_result.py`
+  - Добавлена явная типизация всех полей: `slot_date`, `slot_time`, `total_targets`, `success_count`, `failed_count`, `used_fallback`
+  - Улучшена типобезопасность и валидация полей на этапе разработки
+  - Все существующие использования остаются совместимыми
+
 - **Рефакторинг зависимостей от infra/ в app/ слое**:
   - Созданы протоколы `IDispatchRegistry` и `IDatabaseUnitOfWork` в `shared/protocols.py`
   - Заменены прямые зависимости от `DispatchRegistry` на `IDispatchRegistry` в сервисах app/
