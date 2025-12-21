@@ -47,3 +47,15 @@ class CircuitBreakerOpen(AppError):
     """Ошибка открытого circuit breaker."""
 
     pass
+
+
+class RepoError(AppError):
+    """Ошибки репозиториев (доступ к БД, операции с данными)."""
+
+    pass
+
+
+class ServiceError(AppError):
+    """Ошибки сервисов (бизнес-логика, координация)."""
+
+    pass

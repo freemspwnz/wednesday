@@ -13,7 +13,7 @@ from domain.caption_service import CaptionService
 from domain.image_generation import ImageGenerationService
 from infra.storage.image_storage_unit_of_work import ImageStorageUnitOfWork
 from shared.base.base_service import BaseService
-from shared.base.exceptions import CircuitBreakerOpen, ImageGenerationError
+from shared.base.exceptions import CacheError, CircuitBreakerOpen, ImageGenerationError, ServiceError, StorageError
 from shared.protocols import ICache, ICircuitBreaker, IImageStorage, IMetrics
 
 CACHE_VALUE_TUPLE_LENGTH = 2
@@ -88,9 +88,16 @@ class ImageService(BaseService):
 
         try:
             return await self._storage.get_random()
-        except Exception as e:  # pragma: no cover - защитный слой от неожиданных ошибок файловой системы
-            self.logger.warning(
-                f"Ошибка при получении случайного сохранённого изображения из файлового хранилища: {e}",
+        except StorageError as e:
+            self.log_event(
+                event="storage_error",
+                status="warning",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                },
+                level="warning",
+                message=f"Ошибка при получении случайного сохранённого изображения из файлового хранилища: {e}",
             )
             return None
 
@@ -136,11 +143,29 @@ class ImageService(BaseService):
                     if self._metrics:
                         try:
                             await self._metrics.record_circuit_breaker_trip()
-                        except Exception as e:
-                            self.logger.warning(f"Ошибка при записи метрики circuit breaker: {e}")
+                        except ServiceError as e:
+                            self.log_event(
+                                event="metrics_error",
+                                status="warning",
+                                extra={
+                                    "error_type": type(e).__name__,
+                                    "error_message": str(e),
+                                },
+                                level="warning",
+                                message=f"Ошибка при записи метрики circuit breaker: {e}",
+                            )
                     return None
-            except Exception as e:
-                self.logger.warning(f"Ошибка при проверке circuit breaker: {e}")
+            except ServiceError as e:
+                self.log_event(
+                    event="circuit_breaker_check_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Ошибка при проверке circuit breaker: {e}",
+                )
 
         self.log_event(
             event="generation_started",
@@ -213,11 +238,29 @@ class ImageService(BaseService):
                             try:
                                 await self._metrics.increment_cache_hit()
                                 await self._metrics.increment_generation_success()
-                            except Exception as e:
-                                self.logger.warning(f"Ошибка при записи метрик кэша: {e}")
+                            except ServiceError as e:
+                                self.log_event(
+                                    event="metrics_error",
+                                    status="warning",
+                                    extra={
+                                        "error_type": type(e).__name__,
+                                        "error_message": str(e),
+                                    },
+                                    level="warning",
+                                    message=f"Ошибка при записи метрик кэша: {e}",
+                                )
                         return image_data, result_caption
-            except Exception as e:
-                self.logger.warning(f"Ошибка при проверке кэша: {e}")
+            except CacheError as e:
+                self.log_event(
+                    event="cache_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Ошибка при проверке кэша: {e}",
+                )
 
         # 4. Генерируем изображение (retry логика теперь в ImageGenerationService)
         try:
@@ -246,11 +289,20 @@ class ImageService(BaseService):
                     if self._metrics:
                         try:
                             await self._metrics.record_circuit_breaker_trip()
-                        except Exception:
+                        except ServiceError:
                             pass
                     return None
-                except Exception as cb_err:
-                    self.logger.warning(f"Ошибка при записи failure в circuit breaker: {cb_err}")
+                except ServiceError as cb_err:
+                    self.log_event(
+                        event="circuit_breaker_error",
+                        status="warning",
+                        extra={
+                            "error_type": type(cb_err).__name__,
+                            "error_message": str(cb_err),
+                        },
+                        level="warning",
+                        message=f"Ошибка при записи failure в circuit breaker: {cb_err}",
+                    )
 
             elapsed = time.time() - start_time
             self.log_event(
@@ -264,25 +316,49 @@ class ImageService(BaseService):
             if self._metrics:
                 try:
                     await self._metrics.increment_generation_failed()
-                except Exception as e:
-                    self.logger.warning(f"Ошибка при записи метрики failed: {e}")
+                except ServiceError as e:
+                    self.log_event(
+                        event="metrics_error",
+                        status="warning",
+                        extra={
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                        },
+                        level="warning",
+                        message=f"Ошибка при записи метрики failed: {e}",
+                    )
             return None
         except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при генерации: {e}", exc_info=True)
+            import traceback
+
             elapsed = time.time() - start_time
             self.log_event(
-                event="generation_failed",
+                event="unexpected_generation_error",
                 user_id=user_id_str,
                 latency_ms=round(elapsed * 1000),
                 status="error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
                 level="error",
-                message="Неожиданная ошибка при генерации изображения",
+                message=f"Неожиданная ошибка при генерации изображения: {e}",
             )
             if self._metrics:
                 try:
                     await self._metrics.increment_generation_failed()
-                except Exception as e:
-                    self.logger.warning(f"Ошибка при записи метрики failed: {e}")
+                except ServiceError as e:
+                    self.log_event(
+                        event="metrics_error",
+                        status="warning",
+                        extra={
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                        },
+                        level="warning",
+                        message=f"Ошибка при записи метрики failed: {e}",
+                    )
             return None
 
         if not image_data_result:
@@ -298,8 +374,17 @@ class ImageService(BaseService):
             if self._metrics:
                 try:
                     await self._metrics.increment_generation_failed()
-                except Exception as e:
-                    self.logger.warning(f"Ошибка при записи метрики failed: {e}")
+                except ServiceError as e:
+                    self.log_event(
+                        event="metrics_error",
+                        status="warning",
+                        extra={
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                        },
+                        level="warning",
+                        message=f"Ошибка при записи метрики failed: {e}",
+                    )
             return None
 
         # 5. Сохраняем в кэш и хранилище через UnitOfWork
@@ -321,21 +406,52 @@ class ImageService(BaseService):
                 )
             else:
                 self.logger.warning("Не удалось сохранить изображение ни в одно хранилище")
-        except Exception as e:
-            self.logger.error(f"Критическая ошибка при сохранении изображения: {e}", exc_info=True)
+        except StorageError as e:
+            import traceback
+
+            self.log_event(
+                event="storage_error",
+                status="error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                },
+                level="error",
+                message=f"Критическая ошибка при сохранении изображения: {e}",
+            )
             # Пытаемся откатить
             try:
                 await self._storage_uow.rollback()
-            except Exception as rollback_error:
-                self.logger.error(f"Ошибка при откате сохранения: {rollback_error}", exc_info=True)
+            except StorageError as rollback_error:
+                self.log_event(
+                    event="storage_rollback_error",
+                    status="error",
+                    extra={
+                        "error_type": type(rollback_error).__name__,
+                        "error_message": str(rollback_error),
+                        "traceback": traceback.format_exc(),
+                    },
+                    level="error",
+                    message=f"Ошибка при откате сохранения: {rollback_error}",
+                )
 
         # 6. Записываем метрики успеха
         elapsed = time.time() - start_time
         if self._metrics:
             try:
                 await self._metrics.increment_generation_success()
-            except Exception as e:
-                self.logger.warning(f"Ошибка при записи метрики success: {e}")
+            except ServiceError as e:
+                self.log_event(
+                    event="metrics_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Ошибка при записи метрики success: {e}",
+                )
 
         self.log_event(
             event="generation_completed",

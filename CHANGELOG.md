@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Рефакторинг обработки исключений в app/ слое**:
+  - Добавлены доменные исключения `RepoError` и `ServiceError` в `shared/base/exceptions.py`
+  - Заменено избыточное использование `except Exception` на специфичные исключения во всех сервисах app/
+  - Добавлено структурированное логирование через `log_event` для всех типов ошибок
+  - Ошибки кэша обрабатываются через `CacheError` с логированием
+  - Ошибки хранилища обрабатываются через `StorageError` с логированием
+  - Ошибки репозиториев обрабатываются через `RepoError` с логированием
+  - Ошибки сервисов обрабатываются через `ServiceError` с логированием
+  - Неожиданные ошибки логируются с полным traceback через структурированное логирование
+  - Обновлены файлы: `dispatch_execution_service.py`, `fallback_service.py`, `image_service.py`, `api_status_service.py`, `database_operations_service.py`, `dispatch_service.py`, `prompt_service.py`, `admin_dashboard_service.py`
+
 - **Замена dict на TypedDict для DispatchResult**:
   - Заменен класс `DispatchResult(dict)` на `TypedDict` в `app/dispatch_result.py`
   - Добавлена явная типизация всех полей: `slot_date`, `slot_time`, `total_targets`, `success_count`, `failed_count`, `used_fallback`

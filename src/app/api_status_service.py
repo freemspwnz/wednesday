@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from shared.base.base_service import BaseService
+from shared.base.exceptions import RepoError
 from shared.protocols import IModelsRepo, ITextToImageClient, ITextToTextClient
 
 
@@ -99,8 +100,17 @@ class APIStatusService(BaseService):
             if self._models_store is not None and result.models:
                 try:
                     await self._models_store.set_kandinsky_available_models(result.models)
-                except Exception as store_error:
-                    self.logger.warning(f"Не удалось сохранить список моделей Kandinsky: {store_error}")
+                except RepoError as store_error:
+                    self.log_event(
+                        event="repo_error",
+                        status="warning",
+                        extra={
+                            "error_type": type(store_error).__name__,
+                            "error_message": str(store_error),
+                        },
+                        level="warning",
+                        message=f"Не удалось сохранить список моделей Kandinsky: {store_error}",
+                    )
 
             return ImageAPIStatus(
                 is_available=result.is_available,
@@ -110,8 +120,21 @@ class APIStatusService(BaseService):
                 current_model_name=result.current_model_name,
             )
         except Exception as e:
+            import traceback
+
             error_message = f"❌ Ошибка: {str(e)[: self.MAX_ERROR_DETAILS_LENGTH]}"
-            self.logger.error(f"Ошибка при проверке API Kandinsky: {e}", exc_info=True)
+            self.log_event(
+                event="unexpected_api_error",
+                status="error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                    "api": "kandinsky",
+                },
+                level="error",
+                message=f"Ошибка при проверке API Kandinsky: {e}",
+            )
             return ImageAPIStatus.unavailable(error_message)
 
     async def check_text_api_status(
@@ -139,15 +162,24 @@ class APIStatusService(BaseService):
             if self._models_store is not None and gigachat_models:
                 try:
                     await self._models_store.set_gigachat_available_models(gigachat_models)
-                except Exception as store_error:
-                    self.logger.warning(f"Не удалось сохранить список моделей GigaChat: {store_error}")
+                except RepoError as store_error:
+                    self.log_event(
+                        event="repo_error",
+                        status="warning",
+                        extra={
+                            "error_type": type(store_error).__name__,
+                            "error_message": str(store_error),
+                        },
+                        level="warning",
+                        message=f"Не удалось сохранить список моделей GigaChat: {store_error}",
+                    )
 
             # Получаем текущую модель
             current_model: str | None = None
             if self._models_store is not None:
                 try:
                     current_model = await self._models_store.get_gigachat_model() or "GigaChat"
-                except Exception:
+                except RepoError:
                     pass
 
             return TextAPIStatus(
@@ -157,8 +189,21 @@ class APIStatusService(BaseService):
                 current_model=current_model or result.current_model_name,
             )
         except Exception as e:
+            import traceback
+
             error_message = f"❌ Ошибка: {str(e)[: self.MAX_ERROR_DETAILS_LENGTH]}"
-            self.logger.error(f"Ошибка при проверке GigaChat API: {e}", exc_info=True)
+            self.log_event(
+                event="unexpected_api_error",
+                status="error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                    "api": "gigachat",
+                },
+                level="error",
+                message=f"Ошибка при проверке GigaChat API: {e}",
+            )
             return TextAPIStatus.unavailable(error_message)
 
     async def get_image_models(
@@ -179,7 +224,20 @@ class APIStatusService(BaseService):
         try:
             return await self._image_client.get_available_models(save_models=save_models)
         except Exception as e:
-            self.logger.error(f"Ошибка при получении моделей Kandinsky: {e}", exc_info=True)
+            import traceback
+
+            self.log_event(
+                event="unexpected_api_error",
+                status="error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                    "api": "kandinsky",
+                },
+                level="error",
+                message=f"Ошибка при получении моделей Kandinsky: {e}",
+            )
             return []
 
     async def get_text_models(
@@ -200,5 +258,18 @@ class APIStatusService(BaseService):
         try:
             return await self._text_client.get_available_models(save_models=save_models)
         except Exception as e:
-            self.logger.error(f"Ошибка при получении моделей GigaChat: {e}", exc_info=True)
+            import traceback
+
+            self.log_event(
+                event="unexpected_api_error",
+                status="error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                    "api": "gigachat",
+                },
+                level="error",
+                message=f"Ошибка при получении моделей GigaChat: {e}",
+            )
             return []

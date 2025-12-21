@@ -20,6 +20,7 @@ from app.fallback_service import FallbackService
 from app.image_service import ImageService
 from app.target_preparation_service import TargetPreparationService
 from shared.base.base_service import BaseService
+from shared.base.exceptions import ServiceError
 
 
 class DispatchService(BaseService):
@@ -156,6 +157,8 @@ class DispatchService(BaseService):
                 )
 
         except Exception as e:
+            import traceback
+
             # Получаем targets для fallback, если они еще не получены
             if "targets" not in locals():
                 targets = await self._target_preparation_service.prepare_targets(
@@ -163,6 +166,20 @@ class DispatchService(BaseService):
                     send_error_message=send_error_message,
                 )
                 result["total_targets"] = len(targets)
+
+            # Логируем неожиданную ошибку
+            if not isinstance(e, ServiceError):
+                self.log_event(
+                    event="unexpected_dispatch_error",
+                    status="error",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "traceback": traceback.format_exc(),
+                    },
+                    level="error",
+                    message=f"Неожиданная ошибка при выполнении рассылки: {e}",
+                )
 
             return await self._fallback_service.handle_unexpected_error(
                 error=e,

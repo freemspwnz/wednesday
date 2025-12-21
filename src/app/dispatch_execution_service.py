@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_result import DispatchResult
 from shared.base.base_service import BaseService
-from shared.base.exceptions import MessagingAPIError, MessagingNetworkError
+from shared.base.exceptions import MessagingAPIError, MessagingNetworkError, RepoError, ServiceError
 from shared.protocols import IDispatchRegistry, IMetrics, IUsageTracker
 from shared.retry import retry_on_connect_error
 
@@ -94,8 +94,20 @@ class DispatchExecutionService(BaseService):
                     slot_time=slot_time,
                     chat_id=target_chat,
                 )
-            except Exception as e:
-                self.logger.error(f"Ошибка при регистрации отправки: {e}")
+            except RepoError as e:
+                self.log_event(
+                    event="dispatch_registration_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "chat_id": target_chat,
+                        "slot_date": slot_date,
+                        "slot_time": slot_time,
+                    },
+                    level="warning",
+                    message=f"Ошибка при регистрации отправки: {e}",
+                )
                 # Отправка успешна, но регистрация не удалась
                 # Это менее критично, чем сама отправка
             result["success_count"] += 1
@@ -115,29 +127,39 @@ class DispatchExecutionService(BaseService):
                 await send_error_message(
                     f"Не удалось отправить изображение в чат {target_chat}",
                 )
-            except Exception:  # pragma: no cover - уведомление не критично
+            except ServiceError:  # pragma: no cover - уведомление не критично
                 pass
             try:
                 await self._metrics.increment_dispatch_failed()
-            except Exception:  # pragma: no cover
+            except ServiceError:  # pragma: no cover
                 pass
             result["failed_count"] += 1
             return False
         except Exception as send_error:
             # Неожиданные программные ошибки
-            self.logger.error(
-                f"Неожиданная программная ошибка при отправке изображения в чат {target_chat}: {send_error}",
-                exc_info=True,
+            import traceback
+
+            self.log_event(
+                event="unexpected_dispatch_error",
+                status="error",
+                extra={
+                    "error_type": type(send_error).__name__,
+                    "error_message": str(send_error),
+                    "traceback": traceback.format_exc(),
+                    "chat_id": target_chat,
+                },
+                level="error",
+                message=f"Неожиданная программная ошибка при отправке изображения в чат {target_chat}: {send_error}",
             )
             try:
                 await send_error_message(
                     f"Не удалось отправить изображение в чат {target_chat} из-за внутренней ошибки",
                 )
-            except Exception:  # pragma: no cover
+            except ServiceError:  # pragma: no cover
                 pass
             try:
                 await self._metrics.increment_dispatch_failed()
-            except Exception:  # pragma: no cover
+            except ServiceError:  # pragma: no cover
                 pass
             result["failed_count"] += 1
             return False

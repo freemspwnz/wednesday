@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from domain.prompt_generation import PromptGenerationService
 from shared.base.base_service import BaseService
+from shared.base.exceptions import CacheError
 from shared.protocols import ICache
 
 
@@ -62,8 +63,17 @@ class PromptService(BaseService):
                         message="Промпт получен из кэша",
                     )
                     return str(cached) if not isinstance(cached, dict) else cached.get("text", str(cached))
-            except Exception as e:
-                self.logger.warning(f"Ошибка при получении промпта из кэша: {e}")
+            except CacheError as e:
+                self.log_event(
+                    event="cache_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Ошибка при получении промпта из кэша: {e}",
+                )
 
         # Генерируем новый промпт
         self.log_event(
@@ -95,7 +105,16 @@ class PromptService(BaseService):
                     level="debug",
                     message="Промпт сохранён в кэш",
                 )
-            except Exception as e:
-                self.logger.warning(f"Ошибка при сохранении промпта в кэш: {e}")
+            except CacheError as e:
+                self.log_event(
+                    event="cache_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Ошибка при сохранении промпта в кэш: {e}",
+                )
 
         return prompt

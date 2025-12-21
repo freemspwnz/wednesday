@@ -9,6 +9,7 @@ from app.dispatch_execution_service import DispatchExecutionService
 from app.dispatch_result import DispatchResult
 from app.image_service import ImageService
 from shared.base.base_service import BaseService
+from shared.base.exceptions import RepoError, ServiceError
 from shared.protocols import IDispatchRegistry, IMetrics
 
 
@@ -95,8 +96,20 @@ class FallbackService(BaseService):
                                 slot_time=slot_time,
                                 chat_id=target_chat,
                             )
-                        except Exception as e:
-                            self.logger.error(f"Ошибка при регистрации fallback отправки: {e}")
+                        except RepoError as e:
+                            self.log_event(
+                                event="fallback_registration_error",
+                                status="warning",
+                                extra={
+                                    "error_type": type(e).__name__,
+                                    "error_message": str(e),
+                                    "chat_id": target_chat,
+                                    "slot_date": slot_date,
+                                    "slot_time": slot_time,
+                                },
+                                level="warning",
+                                message=f"Ошибка при регистрации fallback отправки: {e}",
+                            )
                             # Отправка успешна, но регистрация не удалась
                             # Это менее критично, чем сама отправка
                     else:
@@ -109,12 +122,25 @@ class FallbackService(BaseService):
                         if self._metrics:
                             try:
                                 await self._metrics.increment_dispatch_success()
-                            except Exception:  # pragma: no cover
+                            except ServiceError:  # pragma: no cover
                                 pass
                     result["success_count"] += 1
 
             except Exception as send_error:
-                self.logger.error(f"Ошибка при отправке fallback в чат {target_chat}: {send_error}")
+                import traceback
+
+                self.log_event(
+                    event="fallback_send_error",
+                    status="error",
+                    extra={
+                        "error_type": type(send_error).__name__,
+                        "error_message": str(send_error),
+                        "traceback": traceback.format_exc(),
+                        "chat_id": target_chat,
+                    },
+                    level="error",
+                    message=f"Ошибка при отправке fallback в чат {target_chat}: {send_error}",
+                )
                 result["failed_count"] += 1
 
     async def handle_generation_failure(  # noqa: PLR0913, PLR0917
@@ -221,7 +247,7 @@ class FallbackService(BaseService):
         if self._metrics:
             try:
                 await self._metrics.increment_dispatch_failed()
-            except Exception:  # pragma: no cover
+            except ServiceError:  # pragma: no cover
                 pass
 
         return result

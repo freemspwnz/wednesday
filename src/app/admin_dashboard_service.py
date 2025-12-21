@@ -24,6 +24,7 @@ from app.admin_dashboard_builders import (
 )
 from app.api_status_service import APIStatusService
 from shared.base.base_service import BaseService
+from shared.base.exceptions import RepoError, ServiceError
 from shared.protocols import IChatsRepo, IMetrics, IUsageTracker
 
 if TYPE_CHECKING:
@@ -93,8 +94,17 @@ class AdminDashboardService(BaseService):
         if self._usage:
             try:
                 usage_total, usage_threshold, usage_quota = await self._usage.get_limits_info()
-            except Exception as e:  # pragma: no cover - защита от нештатных ошибок
-                self.logger.warning(f"Не удалось получить информацию об использовании: {e}")
+            except (RepoError, ServiceError) as e:  # pragma: no cover - защита от нештатных ошибок
+                self.log_event(
+                    event="repo_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Не удалось получить информацию об использовании: {e}",
+                )
 
         # Собираем сырые данные для chats_info
         chats_count = None
@@ -102,16 +112,34 @@ class AdminDashboardService(BaseService):
             try:
                 chats_ids = await self._chats.list_chat_ids()
                 chats_count = len(chats_ids) if chats_ids else 0
-            except Exception as e:  # pragma: no cover
-                self.logger.warning(f"Не удалось получить список чатов: {e}")
+            except RepoError as e:  # pragma: no cover
+                self.log_event(
+                    event="repo_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Не удалось получить список чатов: {e}",
+                )
 
         # Собираем сырые данные для metrics_text
         metrics_summary = None
         if self._metrics:
             try:
                 metrics_summary = await self._metrics.get_summary()
-            except Exception as e:  # pragma: no cover
-                self.logger.warning(f"Не удалось получить метрики производительности: {e}")
+            except ServiceError as e:  # pragma: no cover
+                self.log_event(
+                    event="service_error",
+                    status="warning",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                    level="warning",
+                    message=f"Не удалось получить метрики производительности: {e}",
+                )
 
         # Формируем данные для билдера
         status_data = StatusData(
