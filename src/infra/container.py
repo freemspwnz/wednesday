@@ -173,12 +173,12 @@ def build_image_stack(
     return ImageService(
         image_generation_service=image_generation,
         prompt_service=prompt_service,
+        storage_unit_of_work=image_storage_uow,
         caption_service=caption_service,
         image_cache=image_cache,
         image_storage=image_storage,
         circuit_breaker=circuit_breaker,
         metrics=metrics,
-        storage_unit_of_work=image_storage_uow,
     )
 
 

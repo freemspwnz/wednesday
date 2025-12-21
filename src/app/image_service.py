@@ -38,24 +38,24 @@ class ImageService(BaseService):
         self,
         image_generation_service: ImageGenerationService,
         prompt_service: PromptService,
+        storage_unit_of_work: ImageStorageUnitOfWork,
         caption_service: CaptionService | None = None,
         image_cache: ICache[tuple[bytes, str]] | None = None,
         image_storage: IImageStorage | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         metrics: IMetrics | None = None,
-        storage_unit_of_work: ImageStorageUnitOfWork | None = None,
     ) -> None:
         """Инициализирует сервис координации изображений.
 
         Args:
             image_generation_service: Сервис генерации изображений (обязателен).
             prompt_service: Сервис генерации промптов (обязателен).
+            storage_unit_of_work: Unit of Work для сохранения изображений (обязательно).
             caption_service: Сервис работы с подписями (опционально).
             image_cache: Сервис кэширования изображений (опционально, для обратной совместимости).
             image_storage: Сервис хранения изображений (опционально, для обратной совместимости).
             circuit_breaker: Сервис circuit breaker (опционально).
             metrics: Сервис записи метрик (опционально).
-            storage_unit_of_work: Unit of Work для сохранения изображений (опционально).
         """
         super().__init__()
         self._generation_service = image_generation_service
@@ -63,13 +63,6 @@ class ImageService(BaseService):
         self._caption_service = caption_service
         self._circuit_breaker = circuit_breaker
         self._metrics = metrics
-
-        # Создаём UnitOfWork, если не передан
-        if storage_unit_of_work is None:
-            storage_unit_of_work = ImageStorageUnitOfWork(
-                cache=image_cache,
-                storage=image_storage,
-            )
         self._storage_uow = storage_unit_of_work
 
         # Сохраняем для обратной совместимости (get_random_saved_image)

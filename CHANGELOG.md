@@ -4,6 +4,15 @@
 
 ### Изменено
 
+- **Устранение создания зависимостей внутри конструкторов**:
+  - Убрано создание `DatabaseOperationsService` внутри конструктора `DispatchExecutionService`
+  - Убрано создание `ImageStorageUnitOfWork` внутри конструктора `ImageService`
+  - Все зависимости теперь передаются через конструктор (принцип Dependency Injection)
+  - `database_operations` теперь обязательный параметр в `DispatchExecutionService.__init__`
+  - `storage_unit_of_work` теперь обязательный параметр в `ImageService.__init__` (перемещен перед опциональными параметрами)
+  - Обновлен порядок параметров в `ImageService.__init__` для соответствия правилам Python
+  - Все зависимости создаются в DI-контейнере (`container.py`)
+
 - **Устранение дублирования логики регистрации отправок**:
   - Удален дублирующийся код регистрации отправок из `FallbackService`
   - `database_operations` теперь обязательный параметр в `FallbackService.__init__`

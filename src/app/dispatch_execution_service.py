@@ -27,7 +27,7 @@ class DispatchExecutionService(BaseService):
         dispatch_registry: IDispatchRegistry,
         metrics: IMetrics,
         usage_tracker: IUsageTracker,
-        database_operations: DatabaseOperationsService | None = None,
+        database_operations: DatabaseOperationsService,
     ) -> None:
         """Инициализирует сервис выполнения отправки.
 
@@ -35,20 +35,12 @@ class DispatchExecutionService(BaseService):
             dispatch_registry: Реестр отправок для регистрации.
             metrics: Сервис метрик.
             usage_tracker: Трекер использования.
-            database_operations: Сервис для групповых операций БД в транзакциях (опционально).
+            database_operations: Сервис для групповых операций БД в транзакциях (обязательно).
         """
         super().__init__()
         self._dispatch_registry = dispatch_registry
         self._metrics = metrics
         self._usage_tracker = usage_tracker
-
-        # Создаём DatabaseOperationsService, если не передан
-        if database_operations is None:
-            database_operations = DatabaseOperationsService(
-                dispatch_registry=dispatch_registry,
-                usage_tracker=usage_tracker,
-                metrics=metrics,
-            )
         self._database_operations = database_operations
 
     async def send_single_image(  # noqa: PLR0913, PLR0917
