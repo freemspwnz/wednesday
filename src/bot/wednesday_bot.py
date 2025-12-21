@@ -230,7 +230,7 @@ class WednesdayBot:
         Side Effects:
             - Вызывает image_generator.generate_frog_image() для генерации изображения.
             - Сохраняет изображение локально через image_generator.save_image_locally().
-            - Отправляет изображение во все активные чаты через bot.send_photo().
+            - Отправляет изображение во все активные чаты через bot.send_image().
             - Использует dispatch_registry для отслеживания отправленных слотов.
             - Вызывает usage.increment() для увеличения счетчика использования.
             - Вызывает metrics.increment_dispatch_success/failed() для метрик.
@@ -281,7 +281,11 @@ class WednesdayBot:
             send_admin_error=self._send_admin_error,
             send_user_friendly_error=self._send_user_friendly_error,
             send_fallback_image=self._send_fallback_image,
-            send_photo=self.application.bot.send_photo,
+            send_image=lambda chat_id, image, caption: self.application.bot.send_photo(
+                chat_id=chat_id,
+                photo=image,
+                caption=caption,
+            ),
         )
 
     async def _send_error_message(self, error_text: str) -> None:
@@ -448,7 +452,7 @@ class WednesdayBot:
 
         Side Effects:
             - Получает случайное изображение через image_generator.get_random_saved_image().
-            - Отправляет изображение в указанный чат через bot.send_photo().
+            - Отправляет изображение в указанный чат через bot.send_image().
             - Логирует результат операции.
         """
         try:

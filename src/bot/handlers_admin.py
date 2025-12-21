@@ -354,7 +354,7 @@ class AdminHandlers(BaseHandlers):
             - Вызывает image_generator.generate_frog_image() для генерации нового изображения
               (если лимит не исчерпан).
             - Использует image_generator.get_random_saved_image() как fallback при недоступности генерации.
-            - Отправляет изображение в указанные чаты через context.bot.send_photo().
+            - Отправляет изображение в указанные чаты через context.bot.send_image().
             - Вызывает usage.increment() для увеличения счетчика использования.
             - Использует _retry_on_connect_error() для обработки сетевых ошибок.
         """

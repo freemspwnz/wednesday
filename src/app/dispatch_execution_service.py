@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from telegram.error import NetworkError, TelegramError
-
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_result import DispatchResult
 from infra.repos.dispatch_registry import DispatchRegistry
 from shared.base.base_service import BaseService
+from shared.base.exceptions import MessagingAPIError, MessagingNetworkError
 from shared.protocols import IMetrics, IUsageTracker
 from shared.retry import retry_on_connect_error
 
@@ -53,7 +52,7 @@ class DispatchExecutionService(BaseService):
             )
         self._database_operations = database_operations
 
-    async def send_single_photo(  # noqa: PLR0913, PLR0917
+    async def send_single_image(  # noqa: PLR0913, PLR0917
         self,
         target_chat: int,
         slot_date: str,
@@ -61,10 +60,10 @@ class DispatchExecutionService(BaseService):
         image_data: bytes,
         caption: str,
         send_error_message: Callable[[str], Awaitable[None]],
-        send_photo: Callable[..., Awaitable[None]],
+        send_image: Callable[..., Awaitable[None]],
         result: DispatchResult,
     ) -> bool:
-        """Отправляет одно фото в целевой чат.
+        """Отправляет одно изображение в целевой чат.
 
         Args:
             target_chat: ID целевого чата.
@@ -73,7 +72,7 @@ class DispatchExecutionService(BaseService):
             image_data: Байты изображения.
             caption: Подпись к изображению.
             send_error_message: Коллбек для отправки сообщения об ошибке.
-            send_photo: Коллбек для отправки фото в Telegram (принимает именованные параметры).
+            send_image: Коллбек для отправки изображения в Telegram (принимает именованные параметры).
             result: Результат рассылки для обновления счетчиков.
 
         Returns:
@@ -81,9 +80,9 @@ class DispatchExecutionService(BaseService):
         """
         try:
             await retry_on_connect_error(
-                send_photo,
+                send_image,
                 chat_id=target_chat,
-                photo=image_data,
+                image=image_data,
                 caption=caption,
                 max_retries=3,
                 delay=2.0,
@@ -104,12 +103,9 @@ class DispatchExecutionService(BaseService):
             self.logger.info(f"Жаба отправлена в чат {target_chat}")
             return True
 
-        except (TelegramError, NetworkError) as send_error:
+        except (MessagingNetworkError, MessagingAPIError) as send_error:
             # Сетевые/Telegram-ошибки после всех попыток
-            error_str = str(send_error).lower()
-            is_network = isinstance(send_error, NetworkError) or any(
-                kw in error_str for kw in ("connection", "timeout", "network")
-            )
+            is_network = isinstance(send_error, MessagingNetworkError)
             log_msg = (
                 f"Сетевая/Telegram-ошибка отправки в чат {target_chat}: {send_error}"
                 if is_network
@@ -155,10 +151,10 @@ class DispatchExecutionService(BaseService):
         image_data: bytes,
         caption: str,
         send_error_message: Callable[[str], Awaitable[None]],
-        send_photo: Callable[..., Awaitable[None]],
+        send_image: Callable[..., Awaitable[None]],
         result: DispatchResult,
     ) -> DispatchResult:
-        """Отправляет фото во все целевые чаты.
+        """Отправляет изображение во все целевые чаты.
 
         Args:
             targets: Множество ID целевых чатов.
@@ -167,7 +163,7 @@ class DispatchExecutionService(BaseService):
             image_data: Байты изображения.
             caption: Подпись к изображению.
             send_error_message: Коллбек для отправки сообщения об ошибке.
-            send_photo: Коллбек для отправки фото в Telegram.
+            send_image: Коллбек для отправки изображения в Telegram.
             result: Результат рассылки для обновления счетчиков.
 
         Returns:
@@ -185,14 +181,14 @@ class DispatchExecutionService(BaseService):
                 )
                 continue
 
-            await self.send_single_photo(
+            await self.send_single_image(
                 target_chat=target_chat,
                 slot_date=slot_date,
                 slot_time=slot_time,
                 image_data=image_data,
                 caption=caption,
                 send_error_message=send_error_message,
-                send_photo=send_photo,
+                send_image=send_image,
                 result=result,
             )
 

@@ -84,7 +84,7 @@ class DispatchService(BaseService):
         send_admin_error: Callable[[str], Awaitable[None]],
         send_user_friendly_error: Callable[[int], Awaitable[None]],
         send_fallback_image: Callable[[int], Awaitable[bool]],
-        send_photo: Callable[..., Awaitable[None]],
+        send_image: Callable[..., Awaitable[None]],
     ) -> DispatchResult:
         """Выполняет рассылку жабы в указанный слот.
 
@@ -96,7 +96,7 @@ class DispatchService(BaseService):
             send_admin_error: Коллбек для отправки детального сообщения об ошибке администраторам.
             send_user_friendly_error: Коллбек для отправки дружелюбного сообщения об ошибке в чат.
             send_fallback_image: Коллбек для отправки fallback‑изображения в чат.
-            send_photo: Низкоуровневый коллбек Telegram‑бота для отправки фото (как в `bot.send_photo`).
+            send_image: Коллбек для отправки изображения в Telegram.
 
         Returns:
             DispatchResult с агрегированными счетчиками по рассылке.
@@ -140,7 +140,7 @@ class DispatchService(BaseService):
                     image_data=image_data,
                     caption=caption,
                     send_error_message=send_error_message,
-                    send_photo=send_photo,
+                    send_image=send_image,
                     result=result,
                 )
             else:

@@ -4,6 +4,36 @@
 
 ### Добавлено
 
+- **Доменные исключения для мессенджеров**:
+  - Создан модуль `shared/base/exceptions.py` с доменными исключениями
+  - Определены классы: `AppError` (базовый), `MessagingError`, `MessagingNetworkError`, `MessagingAPIError`
+  - Все ошибки мессенджера имеют общий корень `MessagingError`
+
+- **Протокол IMessagingService**:
+  - Добавлен протокол `IMessagingService` в `shared/protocols.py`
+  - Определены методы: `send_image()` и `send_message()`
+  - Абстрагирует детали реализации мессенджера от application-сервисов
+
+- **Реализация PTBMessagingService**:
+  - Создан модуль `infra/messaging/ptb.py` с реализацией `IMessagingService` через python-telegram-bot
+  - Создан декоратор `map_telegram_exceptions` в `infra/messaging/ptb_exceptions.py` для маппинга `telegram.error` → доменные исключения
+  - Декоратор автоматически преобразует `NetworkError`/`TimedOut` → `MessagingNetworkError`, `TelegramError` → `MessagingAPIError`
+
+### Изменено
+
+- **Рефакторинг зависимостей от telegram.error**:
+  - Обновлен `app/dispatch_execution_service.py` для использования доменных исключений вместо `telegram.error`
+  - Обновлен `shared/retry.py` для работы с доменными исключениями мессенджеров
+  - Удалены прямые зависимости от `telegram.error` в app-слое
+
+- **Переименование методов отправки изображений**:
+  - Переименован метод `send_single_photo()` → `send_single_image()` в `DispatchExecutionService`
+  - Переименован параметр `send_photo` → `send_image` в методах сервисов
+  - Переименован параметр `photo` → `image` в протоколе `IMessagingService`
+  - Обновлены все вызовы и комментарии для использования единообразной терминологии
+
+### Добавлено
+
 - **Классификация операций по критичности**:
   - Создан документ `docs/OPERATIONS_CRITICALITY.md` с классификацией операций
   - Определены критичные операции: регистрация отправок, обновление счётчиков, сохранение изображений, операции с пользовательскими данными

@@ -632,3 +632,48 @@ class ITextToTextClient(Protocol):
             APIError: При других ошибках API (4xx, 5xx).
             ValueError: Если модель не найдена.
         """
+
+
+@runtime_checkable
+class IMessagingService(Protocol):
+    """Протокол для сервиса отправки сообщений через мессенджеры.
+
+    Абстрагирует детали реализации мессенджера (Telegram, и т.д.)
+    от application-сервисов.
+    """
+
+    async def send_image(
+        self,
+        chat_id: int,
+        image: bytes,
+        caption: str,
+    ) -> None:
+        """Отправляет фото в указанный чат.
+
+        Args:
+            chat_id: ID чата для отправки.
+            image: Байты изображения.
+            caption: Подпись к изображению.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
+        """
+        ...
+
+    async def send_message(
+        self,
+        chat_id: int,
+        text: str,
+    ) -> None:
+        """Отправляет текстовое сообщение в указанный чат.
+
+        Args:
+            chat_id: ID чата для отправки.
+            text: Текст сообщения.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
+        """
+        ...

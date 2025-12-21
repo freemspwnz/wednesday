@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiohttp
 import httpx
-from telegram.error import NetworkError, TelegramError, TimedOut
 from tenacity import (
     retry,
     retry_base,
@@ -25,6 +24,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from shared.base.exceptions import MessagingAPIError, MessagingNetworkError
 
 if TYPE_CHECKING:
     from tenacity import RetryCallState
@@ -456,8 +457,9 @@ class WaitTelegramLinear(wait_base):
         is_429 = False
         retry_after: int | None = None
 
-        if isinstance(exception, TelegramError):
-            # Проверяем code == 429
+        # Проверяем доменные исключения мессенджера
+        if isinstance(exception, MessagingAPIError):
+            # Проверяем code == 429 (если есть)
             if hasattr(exception, "code") and exception.code == HTTP_STATUS_RATE_LIMIT:
                 is_429 = True
             # Fallback: проверка строки ошибки
@@ -466,14 +468,14 @@ class WaitTelegramLinear(wait_base):
                 is_429 = "429" in error_str or "rate limit" in error_str or "too many requests" in error_str
 
             if is_429:
-                # Приоритет 1: exception.retry_after
+                # Приоритет 1: exception.retry_after (если есть)
                 if hasattr(exception, "retry_after") and exception.retry_after:
                     try:
                         retry_after = int(exception.retry_after)
                     except (ValueError, TypeError):
                         pass
 
-                # Приоритет 2: заголовки ответа
+                # Приоритет 2: заголовки ответа (если есть)
                 if retry_after is None and hasattr(exception, "response") and exception.response:
                     retry_after_header = exception.response.headers.get("retry-after")
                     if retry_after_header:
@@ -494,12 +496,12 @@ class WaitTelegramLinear(wait_base):
 
 def _should_retry_telegram_error(retry_state: RetryCallState) -> bool:
     """
-    Предикат для определения, нужно ли делать retry для Telegram-ошибки.
+    Предикат для определения, нужно ли делать retry для ошибок мессенджера.
 
     Retry для:
-    - NetworkError, TimedOut (всегда True)
+    - MessagingNetworkError (всегда True)
     - httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout (всегда True)
-    - TelegramError только если exception.code == 429
+    - MessagingAPIError только если exception.code == 429
 
     Args:
         retry_state: Состояние retry от tenacity с информацией о попытке и исключении.
@@ -514,16 +516,16 @@ def _should_retry_telegram_error(retry_state: RetryCallState) -> bool:
     if not exception:
         return False
 
-    # NetworkError, TimedOut - всегда retry
-    if isinstance(exception, NetworkError | TimedOut):
+    # MessagingNetworkError - всегда retry
+    if isinstance(exception, MessagingNetworkError):
         return True
 
     # httpx исключения - всегда retry
     if isinstance(exception, httpx.ConnectError | httpx.ConnectTimeout | httpx.ReadTimeout):
         return True
 
-    # TelegramError - только если code == 429
-    if isinstance(exception, TelegramError):
+    # MessagingAPIError - только если code == 429
+    if isinstance(exception, MessagingAPIError):
         if hasattr(exception, "code") and exception.code == HTTP_STATUS_RATE_LIMIT:
             return True
         # Fallback: проверка строки ошибки
@@ -678,7 +680,7 @@ def retry_telegram(
     Декоратор для типичных retry-паттернов вокруг Telegram-хелперов.
 
     Используется для обёртки методов, которые делают один или несколько вызовов
-    Telegram API (send_message, send_photo и т.п.).
+    Telegram API (send_message, send_image и т.п.).
 
     Args:
         max_retries: Максимальное количество попыток.
