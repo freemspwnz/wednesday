@@ -119,7 +119,7 @@ class ImageService(BaseService):
             При ошибках на любом этапе логирование выполняется, но генерация
             продолжается (graceful degradation).
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
         user_id_str = str(user_id) if user_id is not None else None
 
         # 1. Проверяем circuit breaker
@@ -218,7 +218,7 @@ class ImageService(BaseService):
                         image_data = None
 
                     if image_data is not None:
-                        elapsed = time.time() - start_time
+                        elapsed = time.perf_counter() - start_time
                         self.log_event(
                             event="image_cache_hit",
                             user_id=user_id_str,
@@ -297,7 +297,7 @@ class ImageService(BaseService):
                         message=f"Ошибка при записи failure в circuit breaker: {cb_err}",
                     )
 
-            elapsed = time.time() - start_time
+            elapsed = time.perf_counter() - start_time
             self.log_event(
                 event="generation_failed",
                 user_id=user_id_str,
@@ -324,7 +324,7 @@ class ImageService(BaseService):
         except Exception as e:
             import traceback
 
-            elapsed = time.time() - start_time
+            elapsed = time.perf_counter() - start_time
             self.log_event(
                 event="unexpected_generation_error",
                 user_id=user_id_str,
@@ -355,7 +355,7 @@ class ImageService(BaseService):
             return None
 
         if not image_data_result:
-            elapsed = time.time() - start_time
+            elapsed = time.perf_counter() - start_time
             self.log_event(
                 event="generation_failed",
                 user_id=user_id_str,
@@ -430,7 +430,7 @@ class ImageService(BaseService):
                 )
 
         # 6. Записываем метрики успеха
-        elapsed = time.time() - start_time
+        elapsed = time.perf_counter() - start_time
         if self._metrics:
             try:
                 await self._metrics.increment_generation_success()
