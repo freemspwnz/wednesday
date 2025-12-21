@@ -8,9 +8,8 @@ from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_execution_service import DispatchExecutionService
 from app.dispatch_result import DispatchResult
 from app.image_service import ImageService
-from infra.repos.dispatch_registry import DispatchRegistry
 from shared.base.base_service import BaseService
-from shared.protocols import IMetrics
+from shared.protocols import IDispatchRegistry, IMetrics
 
 
 class FallbackService(BaseService):
@@ -27,7 +26,7 @@ class FallbackService(BaseService):
         self,
         image_service: ImageService | None,
         dispatch_execution_service: DispatchExecutionService,
-        dispatch_registry: DispatchRegistry,
+        dispatch_registry: IDispatchRegistry,
         metrics: IMetrics | None = None,
         database_operations: DatabaseOperationsService | None = None,
     ) -> None:

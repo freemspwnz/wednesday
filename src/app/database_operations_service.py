@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from infra.database.database_unit_of_work import DatabaseUnitOfWork
-from infra.repos.dispatch_registry import DispatchRegistry
+from collections.abc import Callable
+
 from shared.base.base_service import BaseService
-from shared.protocols import IMetrics, IUsageTracker
+from shared.protocols import IDatabaseUnitOfWork, IDispatchRegistry, IMetrics, IUsageTracker
 
 
 class DatabaseOperationsService(BaseService):
@@ -17,9 +17,10 @@ class DatabaseOperationsService(BaseService):
 
     def __init__(
         self,
-        dispatch_registry: DispatchRegistry,
+        dispatch_registry: IDispatchRegistry,
         usage_tracker: IUsageTracker,
         metrics: IMetrics | None = None,
+        unit_of_work_factory: Callable[[], IDatabaseUnitOfWork] | None = None,
     ) -> None:
         """Инициализирует сервис операций БД.
 
@@ -27,11 +28,13 @@ class DatabaseOperationsService(BaseService):
             dispatch_registry: Реестр отправок.
             usage_tracker: Трекер использования.
             metrics: Сервис метрик (опционально).
+            unit_of_work_factory: Фабрика для создания экземпляров Unit of Work.
         """
         super().__init__()
         self._dispatch_registry = dispatch_registry
         self._usage_tracker = usage_tracker
         self._metrics = metrics
+        self._unit_of_work_factory = unit_of_work_factory
 
     async def record_dispatch_success(
         self,
@@ -54,7 +57,19 @@ class DatabaseOperationsService(BaseService):
         Raises:
             Exception: При ошибке выполнения операций (транзакция откатывается).
         """
-        async with DatabaseUnitOfWork() as uow:
+        if self._unit_of_work_factory is None:
+            # Fallback для обратной совместимости (breaking change - будет удалено)
+            from infra.database.database_unit_of_work import DatabaseUnitOfWork
+            from infra.database.postgres_client import get_postgres_pool
+
+            def create_uow() -> IDatabaseUnitOfWork:
+                return DatabaseUnitOfWork(pool=get_postgres_pool())
+
+            uow: IDatabaseUnitOfWork = create_uow()
+        else:
+            uow = self._unit_of_work_factory()
+
+        async with uow:
             connection = uow.connection
 
             try:

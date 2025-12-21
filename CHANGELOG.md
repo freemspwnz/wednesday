@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Рефакторинг зависимостей от infra/ в app/ слое**:
+  - Созданы протоколы `IDispatchRegistry` и `IDatabaseUnitOfWork` в `shared/protocols.py`
+  - Заменены прямые зависимости от `DispatchRegistry` на `IDispatchRegistry` в сервисах app/
+  - Заменено использование `DatabaseUnitOfWork` на `IDatabaseUnitOfWork` через фабрику
+  - Обновлены сервисы: `DispatchExecutionService`, `FallbackService`, `TargetPreparationService`, `DatabaseOperationsService`
+  - Обновлен `container.py` для передачи фабрики Unit of Work
+  - Устранено нарушение границ слоёв и улучшена тестируемость
+
 ### Добавлено
 
 - **Доменные исключения для мессенджеров**:

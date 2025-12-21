@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from infra.repos.dispatch_registry import DispatchRegistry
 from shared.base.base_service import BaseService
-from shared.protocols import IChatsRepo
+from shared.protocols import IChatsRepo, IDispatchRegistry
 
 
 class TargetPreparationService(BaseService):
@@ -21,7 +20,7 @@ class TargetPreparationService(BaseService):
     def __init__(
         self,
         chats_repo: IChatsRepo,
-        dispatch_registry: DispatchRegistry,
+        dispatch_registry: IDispatchRegistry,
     ) -> None:
         """Инициализирует сервис подготовки целей.
 

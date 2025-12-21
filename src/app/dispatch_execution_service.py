@@ -6,10 +6,9 @@ from collections.abc import Awaitable, Callable
 
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_result import DispatchResult
-from infra.repos.dispatch_registry import DispatchRegistry
 from shared.base.base_service import BaseService
 from shared.base.exceptions import MessagingAPIError, MessagingNetworkError
-from shared.protocols import IMetrics, IUsageTracker
+from shared.protocols import IDispatchRegistry, IMetrics, IUsageTracker
 from shared.retry import retry_on_connect_error
 
 
@@ -25,7 +24,7 @@ class DispatchExecutionService(BaseService):
 
     def __init__(
         self,
-        dispatch_registry: DispatchRegistry,
+        dispatch_registry: IDispatchRegistry,
         metrics: IMetrics,
         usage_tracker: IUsageTracker,
         database_operations: DatabaseOperationsService | None = None,

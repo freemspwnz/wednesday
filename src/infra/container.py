@@ -309,11 +309,18 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     # Создаём MetricsRecorder для передачи в DatabaseOperationsService
     metrics_recorder = MetricsRecorder(metrics=metrics)
 
+    # Создаём фабрику для Unit of Work
+    from infra.database.database_unit_of_work import DatabaseUnitOfWork
+
+    def create_unit_of_work() -> DatabaseUnitOfWork:
+        return DatabaseUnitOfWork(pool=db_pool)
+
     # Создаём DatabaseOperationsService для атомарных операций БД
     database_operations = DatabaseOperationsService(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage,
         metrics=metrics_recorder,
+        unit_of_work_factory=create_unit_of_work,
     )
 
     dispatch_execution_service = DispatchExecutionService(

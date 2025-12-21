@@ -677,3 +677,68 @@ class IMessagingService(Protocol):
             MessagingAPIError: При ошибках API (токен, права, chat_not_found).
         """
         ...
+
+
+@runtime_checkable
+class IDispatchRegistry(Protocol):
+    """Протокол для реестра отправленных сообщений по тайм-слотам и чатам."""
+
+    async def is_dispatched(self, slot_date: str, slot_time: str, chat_id: int) -> bool:
+        """Проверяет, было ли уже отправлено сообщение в указанный слот и чат.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: Идентификатор чата для проверки.
+
+        Returns:
+            True если сообщение уже было отправлено, False иначе.
+        """
+        ...
+
+    async def mark_dispatched(
+        self,
+        slot_date: str,
+        slot_time: str,
+        chat_id: int,
+        connection: asyncpg.Connection | None = None,
+    ) -> None:
+        """Помечает сочетание (дата, время, чат) как уже отправленное.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: Идентификатор чата для пометки.
+            connection: Соединение БД для использования в транзакции (опционально).
+        """
+        ...
+
+
+@runtime_checkable
+class IDatabaseUnitOfWork(Protocol):
+    """Протокол для Unit of Work управления транзакциями БД."""
+
+    async def __aenter__(self) -> IDatabaseUnitOfWork:
+        """Вход в контекстный менеджер. Начинает транзакцию."""
+        ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        """Выход из контекстного менеджера. Коммитит или откатывает транзакцию."""
+        ...
+
+    @property
+    def connection(self) -> asyncpg.Connection:
+        """Возвращает соединение БД для использования в репозиториях.
+
+        Returns:
+            Соединение БД, используемое в текущей транзакции.
+
+        Raises:
+            RuntimeError: Если транзакция не начата.
+        """
+        ...
