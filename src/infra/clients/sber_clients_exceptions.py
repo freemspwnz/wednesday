@@ -1,7 +1,10 @@
 """Исключения и маппинг для клиентов Сбербанка (Kandinsky, GigaChat).
 
-Содержит функцию маппинга HTTP статусов в доменные исключения,
-декоратор для автоматической обработки ошибок и константы для HTTP статусов.
+Содержит:
+- функцию маппинга HTTP статусов в доменные исключения;
+- декоратор для автоматической обработки ошибок;
+- функцию для определения необходимости retry;
+- константы для HTTP статусов.
 """
 
 from __future__ import annotations
@@ -140,3 +143,24 @@ def map_client_errors(
         return wrapper
 
     return decorator
+
+
+def should_retry(exc: ClientError) -> bool:
+    """Определяет, можно ли повторить запрос при данной ошибке.
+
+    Args:
+        exc: Исключение клиента.
+
+    Returns:
+        True если можно retry, False иначе.
+    """
+    # Сетевые ошибки можно retry
+    if isinstance(exc, NetworkError):
+        return True
+
+    # Rate limit можно retry после задержки
+    if isinstance(exc, RateLimitError):
+        return True
+
+    # Ошибки аутентификации и другие API ошибки не стоит retry
+    return False

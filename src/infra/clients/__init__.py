@@ -15,11 +15,11 @@
 - централизовать политику ретраев и обработку сетевых ошибок.
 """
 
-from infra.clients.error_handling import log_client_error, should_retry
 from infra.clients.image_client_container import (
     ImageClientContainer,
     get_image_client_container,
 )
+from infra.clients.sber_clients_exceptions import should_retry
 from infra.clients.text_client_container import (
     TextClientContainer,
     get_text_client_container,
@@ -45,6 +45,5 @@ __all__ = [
     "TextClientContainer",
     "get_image_client_container",
     "get_text_client_container",
-    "log_client_error",
     "should_retry",
 ]
