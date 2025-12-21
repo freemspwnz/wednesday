@@ -11,10 +11,9 @@ import time
 from app.prompt_service import PromptService
 from domain.caption_service import CaptionService
 from domain.image_generation import ImageGenerationService
-from infra.storage.image_storage_unit_of_work import ImageStorageUnitOfWork
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CacheError, CircuitBreakerOpen, ImageGenerationError, ServiceError, StorageError
-from shared.protocols import ICache, ICircuitBreaker, IImageStorage, IMetrics
+from shared.protocols import ICache, ICircuitBreaker, IImageStorage, IImageStorageUnitOfWork, IMetrics
 
 CACHE_VALUE_TUPLE_LENGTH = 2
 
@@ -38,7 +37,7 @@ class ImageService(BaseService):
         self,
         image_generation_service: ImageGenerationService,
         prompt_service: PromptService,
-        storage_unit_of_work: ImageStorageUnitOfWork,
+        storage_unit_of_work: IImageStorageUnitOfWork,
         caption_service: CaptionService | None = None,
         image_cache: ICache[tuple[bytes, str]] | None = None,
         image_storage: IImageStorage | None = None,

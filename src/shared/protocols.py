@@ -742,3 +742,35 @@ class IDatabaseUnitOfWork(Protocol):
             RuntimeError: Если транзакция не начата.
         """
         ...
+
+
+@runtime_checkable
+class IImageStorageUnitOfWork(Protocol):
+    """Протокол для Unit of Work управления сохранением изображений."""
+
+    async def save_image(
+        self,
+        image_data: bytes,
+        caption: str,
+        cache_key: str,
+        storage_prefix: str = "frog",
+    ) -> bool:
+        """Сохраняет изображение в кэш и хранилище.
+
+        Args:
+            image_data: Байты изображения.
+            caption: Подпись к изображению.
+            cache_key: Ключ для кэша.
+            storage_prefix: Префикс для файлового хранилища.
+
+        Returns:
+            True если сохранение успешно (хотя бы в одно хранилище), False иначе.
+        """
+        ...
+
+    async def rollback(self) -> None:
+        """Откатывает операции Unit of Work.
+
+        Выполняет компенсационные действия для отката операций.
+        """
+        ...

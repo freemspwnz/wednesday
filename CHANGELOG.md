@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Добавление протокола IImageStorageUnitOfWork**:
+  - Создан протокол `IImageStorageUnitOfWork` в `shared/protocols.py`
+  - Заменено прямое использование `ImageStorageUnitOfWork` на протокол `IImageStorageUnitOfWork` в `ImageService`
+  - Улучшена тестируемость и возможность замены реализации
+  - Протокол определяет методы: `save_image()` и `rollback()`
+
 - **Замена time.time() на time.perf_counter() для измерения производительности**:
   - Заменены все использования `time.time()` на `time.perf_counter()` в `image_service.py`
   - Улучшена точность измерения производительности генерации изображений
