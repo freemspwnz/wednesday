@@ -1,0 +1,90 @@
+from typing import Any
+
+import pytest
+
+from infra.repos import AdminsRepo
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.db,
+    pytest.mark.usefixtures("_setup_test_postgres"),
+]
+
+
+@pytest.mark.asyncio
+async def test_admins_store_add_admin(postgres_transaction: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
+
+    # Добавляем админа
+    result = await store.add_admin(12345)
+    assert result is True
+
+    # Проверяем, что админ добавлен
+    assert await store.is_admin(12345) is True
+
+
+@pytest.mark.asyncio
+async def test_admins_store_add_admin_duplicate(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
+
+    # Добавляем админа дважды
+    result1 = await store.add_admin(12345)
+    result2 = await store.add_admin(12345)
+
+    assert result1 is True
+    assert result2 is False  # Уже был админом
+
+
+@pytest.mark.asyncio
+async def test_admins_store_remove_admin(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
+
+    # Добавляем админа
+    await store.add_admin(12345)
+    assert await store.is_admin(12345) is True
+
+    # Удаляем админа
+    result = await store.remove_admin(12345)
+    assert result is True
+    assert await store.is_admin(12345) is False
+
+
+@pytest.mark.asyncio
+async def test_admins_store_remove_admin_not_exists(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
+
+    # Пытаемся удалить несуществующего админа
+    result = await store.remove_admin(99999)
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_admins_store_list_admins(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
+
+    # Добавляем нескольких админов
+    await store.add_admin(11111)
+    await store.add_admin(22222)
+    await store.add_admin(33333)
+
+    # Получаем список
+    admins = await store.list_admins()
+    assert 11111 in admins
+    assert 22222 in admins
+    assert 33333 in admins
+    assert len(admins) == 3
+
+
+@pytest.mark.asyncio
+async def test_admins_store_list_all_admins(cleanup_tables: Any, async_postgres_pool: Any) -> None:
+    store = AdminsRepo(pool=async_postgres_pool)
+
+    # Добавляем админов
+    await store.add_admin(11111)
+    await store.add_admin(22222)
+
+    # Получаем полный список (включая главного из config)
+    all_admins = await store.list_all_admins()
+    assert len(all_admins) >= 2
+    assert 11111 in all_admins
+    assert 22222 in all_admins

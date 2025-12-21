@@ -106,7 +106,7 @@ repos:
       - id: mypy
         name: Mypy type checker
         pass_filenames: false   # не подставлять изменённые файлы
-        args: ["."]
+        args: ["--explicit-package-bases", "."]
         additional_dependencies:
           - types-requests
           - types-python-dateutil

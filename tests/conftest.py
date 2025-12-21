@@ -207,14 +207,14 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
     или упадут с ошибкой (в CI) с понятным сообщением.
     """
     import asyncpg
-    from utils.postgres_client import close_postgres_pool, init_postgres_pool
-    from utils.config import config
+    from infra.database.postgres_client import close_postgres_pool, init_postgres_pool
+    from shared.config import config
 
     try:
         # Создаём пул с минимальными параметрами для тестов
         pool = await init_postgres_pool(min_size=1, max_size=2)
         # Убеждаемся в наличии схемы, используя созданный пул напрямую
-        from utils.postgres_schema import _DDL_STATEMENTS
+        from infra.database.postgres_schema import _DDL_STATEMENTS
         async with pool.acquire() as conn:
             for stmt in _DDL_STATEMENTS:
                 try:
@@ -287,7 +287,7 @@ async def cleanup_tables() -> AsyncIterator[None]:
     """
     # Используем session-пул напрямую, не вызывая _ensure_postgres_schema,
     # чтобы избежать проблем с event loops. Схема уже инициализирована в async_postgres_pool.
-    from utils.postgres_client import get_postgres_pool
+    from infra.database.postgres_client import get_postgres_pool
 
     try:
         pool = get_postgres_pool()
@@ -324,7 +324,7 @@ async def cleanup_tables() -> AsyncIterator[None]:
         # Если таблицы не существуют, это может означать, что схема не инициализирована
         # В этом случае пробуем инициализировать схему
         try:
-            from utils.postgres_schema import _DDL_STATEMENTS
+            from infra.database.postgres_schema import _DDL_STATEMENTS
             async with pool.acquire() as conn:
                 for stmt in _DDL_STATEMENTS:
                     try:
@@ -376,7 +376,7 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
     """
     import asyncpg
     from contextlib import asynccontextmanager
-    from utils.postgres_client import get_postgres_pool
+    from infra.database.postgres_client import get_postgres_pool
 
     # Используем session-пул напрямую, не вызывая _ensure_postgres_schema,
     # чтобы избежать проблем с event loops. Схема уже инициализирована в async_postgres_pool.
@@ -398,7 +398,7 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
 
         # Патчим get_postgres_pool() чтобы возвращал патченный пул
         # Это позволяет использовать транзакцию во всех местах, где используется get_postgres_pool()
-        from utils.postgres_client import get_postgres_pool
+        from infra.database.postgres_client import get_postgres_pool
 
         class PatchedPool:
             """Обёртка над пулом, которая всегда возвращает транзакционное соединение."""
@@ -448,8 +448,8 @@ def patch_models_repo(monkeypatch: Any, request: Any) -> Generator[None, None, N
     Исключает тесты из test_utils/test_models_store.py и интеграционные тесты,
     которые должны использовать реальный ModelsStore с Postgres.
     """
-    from services.infrastructure.repositories import admins_repo as admins_repo_module
-    from services.infrastructure.repositories import models_repo as models_repo_module
+    from infra.repos import admins_repo as admins_repo_module
+    from infra.repos import models_repo as models_repo_module
 
     # Не подменяем ModelsRepo для тестов, которые явно тестируют его или используют реальные хранилища
     test_file = request.node.fspath.strpath if hasattr(request.node, "fspath") else ""
@@ -571,7 +571,7 @@ def reset_singletons() -> Generator[None, None, None]:
         async def test_something(reset_singletons):
             # тест использует синглтоны
     """
-    import services.infrastructure.celery.context as celery_context_module
+    import infra.celery.context as celery_context_module
 
     # Сохраняем исходное состояние
     original_context = celery_context_module._services_context
@@ -605,8 +605,8 @@ async def gigachat_client() -> AsyncIterator[Any]:
             finally:
                 await client.aclose()
     """
-    from utils.config import GigaChatConfig, HttpTimeoutConfig
-    from services.clients.gigachat_text import GigaChatTextClient
+    from shared.config import GigaChatConfig, HttpTimeoutConfig
+    from infra.clients.gigachat_text import GigaChatTextClient
 
     timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(

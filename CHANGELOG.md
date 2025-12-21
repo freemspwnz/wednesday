@@ -34,6 +34,46 @@
 
 ### Изменено
 
+- **Массовый рефакторинг архитектуры проекта (структура файлов и директорий)**:
+  - Перемещен `services/bot_services.py` → `shared/bot_services.py` (DI-контейнер в общий слой)
+  - Перемещен `utils/config.py` → `shared/config.py` (конфигурация в общий слой)
+  - Перемещен `utils/redis_client.py` → `infra/redis/redis_client.py` (инфраструктурный компонент)
+  - Перемещен `utils/retry.py` → `shared/retry.py` (общий механизм retry)
+  - Перемещен `utils/paths.py` → `shared/paths.py` (общие константы путей)
+  - Добавлена константа `PROMPTS_DIR` в `shared/paths.py` для консистентности
+  - Обновлены все импорты во всех модулях проекта (более 50 файлов)
+  - Обновлены импорты в тестах
+  - Обновлен `pyproject.toml`: удалены `"services"` и `"utils"` из `known-first-party`
+  - Удалены пустые директории `services/` и `utils/`
+  - Рефакторинг улучшает структуру проекта в соответствии с принципами Clean Architecture:
+    * Общие компоненты (config, retry, paths, bot_services) находятся в `shared/`
+    * Инфраструктурные компоненты (redis_client) находятся в `infra/`
+    * Четкое разделение ответственности между слоями
+
+- **Перемещена директория application в корень проекта**:
+  - Директория `services/application` перемещена в `application/` в корне проекта
+  - Обновлены все импорты с `services.application.*` на `application.*`
+  - Это изменение улучшает структуру проекта, делая application-слой более явным и независимым от services
+
+- **Перемещена директория domain в корень проекта**:
+  - Директория `services/domain` перемещена в `domain/` в корне проекта
+  - Обновлены все импорты с `services.domain.*` на `domain.*`
+  - Это изменение улучшает структуру проекта, делая domain-слой более явным и независимым от services
+
+- **Перемещена директория infrastructure в корень проекта**:
+  - Директория `services/infrastructure` перемещена в `infrastructure/` в корне проекта
+  - Обновлены все импорты с `services.infrastructure.*` на `infrastructure.*`
+  - Обновлены внутренние импорты в `infrastructure/*/__init__.py` файлах
+  - Это изменение улучшает структуру проекта, делая infrastructure-слой более явным и независимым от services
+
+- **Перемещены директории base и clients в соответствии с архитектурой**:
+  - Директория `services/base` перемещена в `shared/base/` в корне проекта
+  - Директория `services/clients` перемещена в `infrastructure/clients/` в корне проекта
+  - Обновлены все импорты с `services.base.*` на `shared.base.*`
+  - Обновлены все импорты с `services.clients.*` на `infrastructure.clients.*`
+  - Обновлены внутренние импорты в `infrastructure/clients/` и `shared/base/`
+  - Это изменение улучшает структуру проекта: base классы находятся в shared (общий код), клиенты в infrastructure (внешние зависимости)
+
 - **Обновлены протоколы для поддержки транзакций**:
   - Добавлен опциональный параметр `connection` в методы `IMetrics.increment_*()`
   - Добавлен опциональный параметр `connection` в метод `IUsageTracker.increment()`

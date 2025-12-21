@@ -2,6 +2,12 @@
 requires = ["setuptools>=67", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [project]
 name = "wednesday-tg-bot"
 version = "5.0.0"
@@ -134,7 +140,7 @@ unfixable = ["B", "RUF"]  # запрет на refactor фиксы
 preview = true
 
 [tool.ruff.lint.isort]
-known-first-party = ["bot", "services", "utils", "tests"]
+known-first-party = ["bot", "app", "infra", "domain", "shared", "tests"]
 combine-as-imports = true
 
 [tool.ruff.format]
@@ -156,13 +162,13 @@ warn_return_any = true
 warn_no_return = true
 no_implicit_optional = true
 strict_equality = true
-exclude = "(?x)(^tests/_doubles/|^tests/utils/|^tests/common/|^tests/fixtures/|^services/celery_app_test\\.py|^services/celery_tasks_test\\.py)"
+mypy_path = "src"
+exclude = "(?x)(^tests/_doubles/|^tests/helpers/|^tests/common/|^tests/fixtures/|^services/celery_app_test\\.py|^services/celery_tasks_test\\.py)"
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
 check_untyped_defs = false
-ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = "tests.conftest"
@@ -199,4 +205,3 @@ asyncio_mode = "strict"
 asyncio_default_test_loop_scope = "session"
 asyncio_default_fixture_loop_scope = "session"
 filterwarnings = ["ignore::DeprecationWarning"]
-pythonpath = ["."]

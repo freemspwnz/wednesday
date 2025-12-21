@@ -5,20 +5,20 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from infrastructure import rate_limiting as rate_limiter_module
 from redis.exceptions import RedisError
 
 from bot.handlers_user import UserHandlers
-from services.bot_services import BotServices
-from services.clients import factory as clients_factory
-from services.infrastructure import rate_limiting as rate_limiter_module
-from services.infrastructure.cache import prompt_cache as prompt_cache_module
-from utils.redis_client import _InMemoryRedis
+from infra.cache import prompt_cache as prompt_cache_module
+from infra.clients import factory as clients_factory
+from infra.redis.redis_client import _InMemoryRedis
+from shared.bot_services import BotServices
 
 pytestmark = [pytest.mark.unit]
 
 
 def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
-    from utils.config import HttpTimeoutConfig, KandinskyConfig
+    from shared.config import HttpTimeoutConfig, KandinskyConfig
 
     dummy_client = MagicMock()
     dummy_container = MagicMock()
@@ -44,7 +44,7 @@ def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
-    from utils.config import GigaChatConfig, HttpTimeoutConfig
+    from shared.config import GigaChatConfig, HttpTimeoutConfig
 
     dummy_container = MagicMock()
 
@@ -101,7 +101,7 @@ async def test_prompt_cache_inmemory_roundtrip() -> None:
 
 @pytest.mark.asyncio
 async def test_rate_limiter_and_circuit_breaker_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.infrastructure.rate_limiting.circuit_breaker import CircuitBreakerService
+    from infra.rate_limiting.circuit_breaker import CircuitBreakerService
 
     backend = _InMemoryRedis()
     rate = rate_limiter_module.RateLimiter(redis_client=backend, limit=1, window=1)
@@ -131,7 +131,7 @@ async def test_rate_limiter_and_circuit_breaker_fallback(monkeypatch: pytest.Mon
         async def delete(self, *_: object, **__: object) -> None:  # pragma: no cover - исключения
             return None
 
-    fallback_rate = rate_limiter_module.RateLimiter(redis_client=_FailRedis(), limit=1, window=1)  # type: ignore[arg-type]
+    fallback_rate = rate_limiter_module.RateLimiter(redis_client=_FailRedis(), limit=1, window=1)
     assert await fallback_rate.is_allowed("u2") is True
     assert await fallback_rate.is_allowed("u2") is False
 
@@ -166,12 +166,12 @@ async def test_command_handlers_start_help(
         async def list_all_admins(self) -> list[int]:
             return []
 
-    monkeypatch.setattr("utils.admins_repo.AdminsRepo", _AdminNo)
-    from services.application.frog_limit_service import FrogRateLimiterService
-    from services.application.frog_requests import FrogRequestService
-    from services.infrastructure.celery.celery_task_queue import CeleryTaskQueue
-    from services.infrastructure.rate_limiting import RateLimiter
-    from utils.redis_client import get_redis
+    monkeypatch.setattr("infra.repos.admins_repo.AdminsRepo", _AdminNo)
+    from app.frog_limit_service import FrogRateLimiterService
+    from app.frog_requests import FrogRequestService
+    from infra.celery.celery_task_queue import CeleryTaskQueue
+    from infra.rate_limiting import RateLimiter
+    from infra.redis.redis_client import get_redis
 
     redis_client = get_redis()
     global_limiter = RateLimiter(redis_client=redis_client, prefix="frog:global:", window=60, limit=100)
@@ -216,8 +216,8 @@ async def test_command_handlers_start_help(
 
 def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента KandinskyClient."""
-    from services.clients.kandinsky import KandinskyClient
-    from utils.config import HttpTimeoutConfig, KandinskyConfig
+    from infra.clients.kandinsky import KandinskyClient
+    from shared.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
@@ -244,8 +244,8 @@ def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> Non
 @pytest.mark.asyncio
 async def test_kandinsky_client_auth_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Проверка формирования заголовков авторизации Kandinsky."""
-    from services.clients.kandinsky import KandinskyClient
-    from utils.config import HttpTimeoutConfig, KandinskyConfig
+    from infra.clients.kandinsky import KandinskyClient
+    from shared.config import HttpTimeoutConfig, KandinskyConfig
 
     timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     check_timeout = HttpTimeoutConfig(total=15, connect=5, sock_read=10)
@@ -269,8 +269,8 @@ async def test_kandinsky_client_aclose(monkeypatch: pytest.MonkeyPatch) -> None:
     """Проверка закрытия сессии через метод aclose()."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from services.clients.kandinsky import KandinskyClient
-    from utils.config import HttpTimeoutConfig, KandinskyConfig
+    from infra.clients.kandinsky import KandinskyClient
+    from shared.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
@@ -313,8 +313,8 @@ async def test_kandinsky_client_context_manager(monkeypatch: pytest.MonkeyPatch)
     """Проверка работы context manager для KandinskyClient."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from services.clients.kandinsky import KandinskyClient
-    from utils.config import HttpTimeoutConfig, KandinskyConfig
+    from infra.clients.kandinsky import KandinskyClient
+    from shared.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
@@ -351,8 +351,8 @@ async def test_kandinsky_client_context_manager_exception(monkeypatch: pytest.Mo
     """Проверка автоматического закрытия при исключении в context manager."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from services.clients.kandinsky import KandinskyClient
-    from utils.config import HttpTimeoutConfig, KandinskyConfig
+    from infra.clients.kandinsky import KandinskyClient
+    from shared.config import HttpTimeoutConfig, KandinskyConfig
 
     # Мокируем переменные окружения для прокси
     monkeypatch.delenv("HTTPS_PROXY", raising=False)
@@ -392,8 +392,8 @@ async def test_kandinsky_client_context_manager_exception(monkeypatch: pytest.Mo
 async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовый тест создания клиента GigaChatTextClient."""
 
-    from services.clients.gigachat_text import GigaChatTextClient
-    from utils.config import GigaChatConfig, HttpTimeoutConfig
+    from infra.clients.gigachat_text import GigaChatTextClient
+    from shared.config import GigaChatConfig, HttpTimeoutConfig
 
     # Мокируем aiohttp.ClientSession и TCPConnector, чтобы избежать реальных HTTP-запросов
     mock_session = MagicMock()
@@ -437,8 +437,8 @@ async def test_gigachat_text_client_context_manager(monkeypatch: pytest.MonkeyPa
     """Проверка работы context manager для GigaChatTextClient."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from services.clients.gigachat_text import GigaChatTextClient
-    from utils.config import GigaChatConfig, HttpTimeoutConfig
+    from infra.clients.gigachat_text import GigaChatTextClient
+    from shared.config import GigaChatConfig, HttpTimeoutConfig
 
     # Мокируем aiohttp.ClientSession и TCPConnector
     mock_session = MagicMock()
@@ -482,8 +482,8 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
     """Проверка автоматического закрытия при исключении в context manager."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from services.clients.gigachat_text import GigaChatTextClient
-    from utils.config import GigaChatConfig, HttpTimeoutConfig
+    from infra.clients.gigachat_text import GigaChatTextClient
+    from shared.config import GigaChatConfig, HttpTimeoutConfig
 
     # Мокируем aiohttp.ClientSession и TCPConnector
     mock_session = MagicMock()
@@ -529,7 +529,7 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
 @pytest.mark.asyncio
 async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест метода is_admin в AdminsRepo с моком Postgres."""
-    from services.infrastructure.repositories import AdminsRepo
+    from infra.repos import AdminsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -569,7 +569,7 @@ async def test_admins_store_is_admin(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест метода list_admins в AdminsRepo с моком Postgres."""
-    from services.infrastructure.repositories import AdminsRepo
+    from infra.repos import AdminsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -609,7 +609,7 @@ async def test_admins_store_list_admins(monkeypatch: pytest.MonkeyPatch) -> None
 @pytest.mark.asyncio
 async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовые тесты get/set моделей Kandinsky в ModelsRepo с моком Postgres."""
-    from services.infrastructure.repositories import ModelsRepo
+    from infra.repos import ModelsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -653,7 +653,7 @@ async def test_models_store_kandinsky_get_set(monkeypatch: pytest.MonkeyPatch) -
 @pytest.mark.asyncio
 async def test_models_store_gigachat_get_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Базовые тесты get/set моделей GigaChat в ModelsRepo с моком Postgres."""
-    from services.infrastructure.repositories import ModelsRepo
+    from infra.repos import ModelsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -697,7 +697,7 @@ async def test_models_store_gigachat_get_set(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_dispatch_registry_is_dispatched(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест проверки отправки в DispatchRegistry с моком Postgres."""
-    from utils.dispatch_registry import DispatchRegistry
+    from infra.repos.dispatch_registry import DispatchRegistry
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -732,7 +732,7 @@ async def test_dispatch_registry_is_dispatched(monkeypatch: pytest.MonkeyPatch) 
 @pytest.mark.asyncio
 async def test_dispatch_registry_mark_dispatched(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест пометки отправки в DispatchRegistry с моком Postgres."""
-    from utils.dispatch_registry import DispatchRegistry
+    from infra.repos.dispatch_registry import DispatchRegistry
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -765,7 +765,7 @@ async def test_dispatch_registry_mark_dispatched(monkeypatch: pytest.MonkeyPatch
 @pytest.mark.asyncio
 async def test_usage_tracker_increment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест инкремента использования в UsageTracker с моком Postgres."""
-    from utils.usage_tracker import UsageTracker
+    from infra.repos.usage_tracker import UsageTracker
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -802,7 +802,7 @@ async def test_usage_tracker_increment(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_usage_tracker_get_month_total(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест получения месячного тотала в UsageTracker с моком Postgres."""
-    from utils.usage_tracker import UsageTracker
+    from infra.repos.usage_tracker import UsageTracker
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -838,7 +838,7 @@ async def test_usage_tracker_get_month_total(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест добавления чата в ChatsRepo с моком Postgres."""
-    from services.infrastructure.repositories import ChatsRepo
+    from infra.repos import ChatsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -871,7 +871,7 @@ async def test_chats_store_add_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_chats_store_list_chat_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест получения списка чатов в ChatsRepo с моком Postgres."""
-    from services.infrastructure.repositories import ChatsRepo
+    from infra.repos import ChatsRepo
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -911,7 +911,7 @@ async def test_chats_store_list_chat_ids(monkeypatch: pytest.MonkeyPatch) -> Non
 @pytest.mark.asyncio
 async def test_metrics_increment_generation_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест инкремента успешных генераций в Metrics с моком Postgres."""
-    from utils.metrics import Metrics
+    from infra.metrics.metrics import Metrics
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()
@@ -944,7 +944,7 @@ async def test_metrics_increment_generation_success(monkeypatch: pytest.MonkeyPa
 @pytest.mark.asyncio
 async def test_metrics_get_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест получения сводки метрик в Metrics с моком Postgres."""
-    from utils.metrics import Metrics
+    from infra.metrics.metrics import Metrics
 
     # Мокируем Postgres pool
     mock_conn = AsyncMock()

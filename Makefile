@@ -222,7 +222,7 @@ clean: ## Очистить временные файлы
 migrate: ## Прогнать миграции для тестов (в контейнере tests)
 	@echo "=== Прогон миграций (инициализация схемы Postgres) ==="
 	@$(COMPOSE_TEST) run --rm \
-		tests $(PYTHON) -m tests.utils.postgres_schema
+		tests $(PYTHON) -m tests.helpers.postgres_schema
 	@echo "✓ Миграции выполнены"
 
 # ============================================================================

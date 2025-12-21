@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+
 import pytest
 
 from tests.common.celery_app_test import (
@@ -10,7 +14,7 @@ from tests.common.wait_for_celery import wait_for_celery_worker
 
 
 @pytest.fixture(scope="function")
-def celery_test_queues() -> CeleryTestQueues:
+def celery_test_queues() -> Iterator[CeleryTestQueues]:
     """Создаёт уникальный набор очередей и подписывает worker на них."""
     queues = generate_celery_test_queues()
     ensure_queues_consumed(queues)

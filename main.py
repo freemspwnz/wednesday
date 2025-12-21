@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING, Any
 from prometheus_client import start_http_server
 
 from bot.support_bot import SupportBot
-from services.container import build_bot
-from utils.config import config
-from utils.logger import get_logger, log_event
-from utils.postgres_client import get_postgres_pool, init_postgres_pool
-from utils.postgres_schema import ensure_schema
-from utils.redis_client import get_redis, init_redis_pool, redis_available
+from infra.container import build_bot
+from infra.database.postgres_client import get_postgres_pool, init_postgres_pool
+from infra.database.postgres_schema import ensure_schema
+from infra.logging.logger import get_logger, log_event
+from infra.redis.redis_client import get_redis, init_redis_pool, redis_available
+from shared.config import config
 
 if TYPE_CHECKING:
     from loguru import Logger as LoggerType
@@ -618,7 +618,7 @@ def _start_health_server(logger: "LoggerType") -> None:
     try:
         import uvicorn
 
-        from services.healthcheck import app as health_app
+        from infra.healthcheck import app as health_app
 
         # Прокидываем реальные клиенты в FastAPI‑приложение healthcheck.
         # Если инициализация не удалась — оставляем None, а сам healthcheck
