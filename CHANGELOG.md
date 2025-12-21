@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Устранение дублирования логики регистрации отправок**:
+  - Удален дублирующийся код регистрации отправок из `FallbackService`
+  - `database_operations` теперь обязательный параметр в `FallbackService.__init__`
+  - Все сервисы используют единый метод `DatabaseOperationsService.record_dispatch_success()` для регистрации
+  - Упрощена логика в `FallbackService.send_fallback_to_targets()` - удалена fallback логика с прямыми вызовами
+  - Обновлен порядок параметров в `FallbackService.__init__` для соответствия правилам Python
+
 - **Рефакторинг обработки исключений в app/ слое**:
   - Добавлены доменные исключения `RepoError` и `ServiceError` в `shared/base/exceptions.py`
   - Заменено избыточное использование `except Exception` на специфичные исключения во всех сервисах app/

@@ -28,8 +28,8 @@ class FallbackService(BaseService):
         image_service: ImageService | None,
         dispatch_execution_service: DispatchExecutionService,
         dispatch_registry: IDispatchRegistry,
+        database_operations: DatabaseOperationsService,
         metrics: IMetrics | None = None,
-        database_operations: DatabaseOperationsService | None = None,
     ) -> None:
         """Инициализирует сервис fallback.
 
@@ -37,18 +37,14 @@ class FallbackService(BaseService):
             image_service: Сервис генерации изображений для получения fallback.
             dispatch_execution_service: Сервис выполнения отправки.
             dispatch_registry: Реестр отправок для проверки.
+            database_operations: Сервис для групповых операций БД в транзакциях (обязательно).
             metrics: Сервис метрик.
-            database_operations: Сервис для групповых операций БД в транзакциях (опционально).
         """
         super().__init__()
         self._image_service = image_service
         self._dispatch_execution_service = dispatch_execution_service
         self._dispatch_registry = dispatch_registry
         self._metrics = metrics
-
-        # Используем DatabaseOperationsService из dispatch_execution_service, если доступен
-        if database_operations is None and hasattr(dispatch_execution_service, "_database_operations"):
-            database_operations = dispatch_execution_service._database_operations
         self._database_operations = database_operations
 
     async def send_fallback_to_targets(  # noqa: PLR0913, PLR0917
@@ -89,41 +85,28 @@ class FallbackService(BaseService):
                 # Отправляем случайное изображение
                 if await send_fallback_image(target_chat):
                     # Используем DatabaseOperationsService для атомарной регистрации
-                    if self._database_operations:
-                        try:
-                            await self._database_operations.record_dispatch_success(
-                                slot_date=slot_date,
-                                slot_time=slot_time,
-                                chat_id=target_chat,
-                            )
-                        except RepoError as e:
-                            self.log_event(
-                                event="fallback_registration_error",
-                                status="warning",
-                                extra={
-                                    "error_type": type(e).__name__,
-                                    "error_message": str(e),
-                                    "chat_id": target_chat,
-                                    "slot_date": slot_date,
-                                    "slot_time": slot_time,
-                                },
-                                level="warning",
-                                message=f"Ошибка при регистрации fallback отправки: {e}",
-                            )
-                            # Отправка успешна, но регистрация не удалась
-                            # Это менее критично, чем сама отправка
-                    else:
-                        # Fallback: используем прямые вызовы, если DatabaseOperationsService недоступен
-                        await self._dispatch_registry.mark_dispatched(
-                            slot_date,
-                            slot_time,
-                            target_chat,
+                    try:
+                        await self._database_operations.record_dispatch_success(
+                            slot_date=slot_date,
+                            slot_time=slot_time,
+                            chat_id=target_chat,
                         )
-                        if self._metrics:
-                            try:
-                                await self._metrics.increment_dispatch_success()
-                            except ServiceError:  # pragma: no cover
-                                pass
+                    except RepoError as e:
+                        self.log_event(
+                            event="fallback_registration_error",
+                            status="warning",
+                            extra={
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                                "chat_id": target_chat,
+                                "slot_date": slot_date,
+                                "slot_time": slot_time,
+                            },
+                            level="warning",
+                            message=f"Ошибка при регистрации fallback отправки: {e}",
+                        )
+                        # Отправка успешна, но регистрация не удалась
+                        # Это менее критично, чем сама отправка
                     result["success_count"] += 1
 
             except Exception as send_error:

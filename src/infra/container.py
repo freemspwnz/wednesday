@@ -334,8 +334,8 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         image_service=image_service,
         dispatch_execution_service=dispatch_execution_service,
         dispatch_registry=dispatch_registry,
-        metrics=metrics_recorder,
         database_operations=database_operations,
+        metrics=metrics_recorder,
     )
 
     dispatch_service = DispatchService(
