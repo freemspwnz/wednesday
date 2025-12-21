@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,6 +12,14 @@ from app.database_operations_service import DatabaseOperationsService
 from infra.metrics.metrics import Metrics
 from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
+
+
+def _create_mock_logger() -> MagicMock:
+    """Создает mock-логгер для использования в тестах."""
+    mock_logger = MagicMock()
+    mock_logger.bind.return_value = mock_logger
+    return mock_logger
+
 
 pytestmark = [
     pytest.mark.integration,
@@ -33,6 +42,7 @@ async def test_database_operations_record_dispatch_success(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage_tracker,
         metrics=metrics,
+        logger=_create_mock_logger(),
     )
 
     slot_date = datetime.now().strftime("%Y-%m-%d")
@@ -81,6 +91,7 @@ async def test_database_operations_record_dispatch_success_rollback_on_error(
         dispatch_registry=dispatch_registry,
         usage_tracker=failing_usage_tracker,
         metrics=metrics,
+        logger=_create_mock_logger(),
     )
 
     slot_date = datetime.now().strftime("%Y-%m-%d")
@@ -122,6 +133,7 @@ async def test_database_operations_record_dispatch_failure(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage_tracker,
         metrics=metrics,
+        logger=_create_mock_logger(),
     )
 
     slot_date = datetime.now().strftime("%Y-%m-%d")
@@ -161,6 +173,7 @@ async def test_database_operations_record_dispatch_failure_no_metrics(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage_tracker,
         metrics=None,
+        logger=_create_mock_logger(),
     )
 
     slot_date = datetime.now().strftime("%Y-%m-%d")

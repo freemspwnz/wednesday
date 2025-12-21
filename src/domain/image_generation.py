@@ -17,7 +17,7 @@ from shared.base.exceptions import (
     ImageGenerationError,
     NetworkError,
 )
-from shared.protocols import ITextToImageClient
+from shared.protocols import ILogger, ITextToImageClient
 from shared.retry import retry_standard
 
 MIN_PROMPT_LENGTH = 1
@@ -39,13 +39,14 @@ class ImageGenerationService(BaseService):
     - Нормализация промпта (удаление пробелов по краям и лишних пробелов внутри)
     """
 
-    def __init__(self, image_client: ITextToImageClient) -> None:
+    def __init__(self, image_client: ITextToImageClient, *, logger: ILogger) -> None:
         """Инициализирует сервис генерации изображений.
 
         Args:
             image_client: Клиент для генерации изображений по текстовому промпту.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._image_client = image_client
 
     @staticmethod
@@ -122,63 +123,57 @@ class ImageGenerationService(BaseService):
             raise ImageGenerationError(f"Невалидный промпт: {e}") from e
 
         try:
-            self.log_event(
+            self.logger.info(
+                f"Начинаю генерацию изображения для промпта: {normalized_prompt[:100]}...",
                 event="image_generation_started",
                 user_id=user_id_str,
                 status="started",
-                level="info",
-                message=f"Начинаю генерацию изображения для промпта: {normalized_prompt[:100]}...",
             )
 
             image_data = await self._image_client.generate(normalized_prompt, user_id=user_id_str)
 
-            self.log_event(
+            self.logger.info(
+                "Изображение успешно сгенерировано",
                 event="image_generation_success",
                 user_id=user_id_str,
                 status="success",
-                level="info",
-                message="Изображение успешно сгенерировано",
             )
             return image_data
 
         except AuthenticationError as exc:
             # Специфичная обработка ошибок аутентификации
-            self.log_event(
+            self.logger.error(
+                f"Ошибка аутентификации при генерации изображения: {exc}",
                 event="image_generation_failed",
                 user_id=user_id_str,
                 status="auth_error",
-                level="error",
-                message=f"Ошибка аутентификации при генерации изображения: {exc}",
             )
             raise ImageGenerationError("Ошибка аутентификации при генерации изображения") from exc
         except NetworkError as exc:
             # Специфичная обработка сетевых ошибок (можно retry)
-            self.log_event(
+            self.logger.warning(
+                f"Сетевая ошибка при генерации изображения: {exc}",
                 event="image_generation_failed",
                 user_id=user_id_str,
                 status="network_error",
-                level="warning",
-                message=f"Сетевая ошибка при генерации изображения: {exc}",
             )
             raise ImageGenerationError("Сетевая ошибка при генерации изображения") from exc
         except APIError as exc:
             # Обработка других ошибок API
-            self.log_event(
+            self.logger.error(
+                f"Ошибка API при генерации изображения: {exc}",
                 event="image_generation_failed",
                 user_id=user_id_str,
                 status="api_error",
-                level="error",
-                message=f"Ошибка API при генерации изображения: {exc}",
             )
             raise ImageGenerationError(f"Ошибка API при генерации изображения: {exc}") from exc
         except ClientError as exc:
             # Общая обработка ошибок клиента
-            self.log_event(
+            self.logger.error(
+                f"Ошибка клиента при генерации изображения: {exc}",
                 event="image_generation_failed",
                 user_id=user_id_str,
                 status="client_error",
-                level="error",
-                message=f"Ошибка клиента при генерации изображения: {exc}",
             )
             raise ImageGenerationError("Ошибка клиента при генерации изображения") from exc
         except Exception as e:

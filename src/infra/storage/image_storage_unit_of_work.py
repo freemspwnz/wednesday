@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from shared.base.base_service import BaseService
-from shared.protocols import ICache, IImageStorage
+from shared.protocols import ICache, IImageStorage, ILogger
 from shared.retry import retry_standard
 
 
@@ -44,14 +44,17 @@ class ImageStorageUnitOfWork(BaseService):
         self,
         cache: ICache[tuple[bytes, str]] | None = None,
         storage: IImageStorage | None = None,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует Unit of Work.
 
         Args:
             cache: Сервис кэширования (опционально).
             storage: Сервис файлового хранилища (опционально).
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._cache = cache
         self._storage = storage
         self._operations: list[ImageSaveOperation] = []
@@ -109,11 +112,10 @@ class ImageStorageUnitOfWork(BaseService):
                 operation.storage_path = storage_path
                 operation.storage_saved = True
                 storage_success = True
-                self.log_event(
+                self.logger.debug(
+                    f"Изображение сохранено в хранилище: {storage_path}",
                     event="image_storage_saved",
                     status="saved",
-                    level="debug",
-                    message=f"Изображение сохранено в хранилище: {storage_path}",
                 )
             except Exception as e:
                 self.logger.warning(f"Ошибка при сохранении в хранилище: {e}")
@@ -126,11 +128,10 @@ class ImageStorageUnitOfWork(BaseService):
                 await self._cache.set(cache_key, (image_data, caption))
                 operation.cache_saved = True
                 cache_success = True
-                self.log_event(
+                self.logger.debug(
+                    f"Изображение сохранено в кэш: {cache_key}",
                     event="image_cache_saved",
                     status="cached",
-                    level="debug",
-                    message=f"Изображение сохранено в кэш: {cache_key}",
                 )
             except Exception as e:
                 self.logger.warning(f"Ошибка при сохранении в кэш: {e}")

@@ -11,7 +11,7 @@ import asyncpg
 
 from infra.metrics.metrics import Metrics
 from shared.base.base_service import BaseService
-from shared.protocols import IMetrics
+from shared.protocols import ILogger, IMetrics
 
 
 class MetricsRecorder(BaseService, IMetrics):
@@ -21,26 +21,26 @@ class MetricsRecorder(BaseService, IMetrics):
     Добавляет логирование всех записей метрик.
     """
 
-    def __init__(self, metrics: Metrics | None = None) -> None:
+    def __init__(self, metrics: Metrics | None = None, *, logger: ILogger) -> None:
         """Инициализирует сервис записи метрик.
 
         Args:
             metrics: Экземпляр Metrics для записи метрик. Если None, создаётся новый.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
         from infra.database.postgres_client import get_postgres_pool
 
+        super().__init__(logger)
         self._metrics = metrics or Metrics(pool=get_postgres_pool())
 
     async def increment_generation_success(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик успешных генераций изображений."""
         try:
             await self._metrics.increment_generation_success(connection=connection)
-            self.log_event(
+            self.logger.debug(
+                "Записана метрика: increment_generation_success",
                 event="metric_recorded",
                 status="success",
-                level="debug",
-                message="Записана метрика: increment_generation_success",
             )
         except Exception as e:
             self.logger.warning(f"Ошибка при записи метрики increment_generation_success: {e}")
@@ -49,11 +49,10 @@ class MetricsRecorder(BaseService, IMetrics):
         """Увеличивает счётчик неудачных генераций изображений."""
         try:
             await self._metrics.increment_generation_failed(connection=connection)
-            self.log_event(
+            self.logger.debug(
+                "Записана метрика: increment_generation_failed",
                 event="metric_recorded",
                 status="failed",
-                level="debug",
-                message="Записана метрика: increment_generation_failed",
             )
         except Exception as e:
             self.logger.warning(f"Ошибка при записи метрики increment_generation_failed: {e}")
@@ -66,11 +65,10 @@ class MetricsRecorder(BaseService, IMetrics):
             from infra.metrics.metrics import record_metric
 
             await record_metric(event_type="cache_hit", status="hit")
-            self.log_event(
+            self.logger.debug(
+                "Записана метрика: increment_cache_hit",
                 event="metric_recorded",
                 status="cache_hit",
-                level="debug",
-                message="Записана метрика: increment_cache_hit",
             )
         except Exception as e:
             self.logger.warning(f"Ошибка при записи метрики increment_cache_hit: {e}")
@@ -79,11 +77,10 @@ class MetricsRecorder(BaseService, IMetrics):
         """Увеличивает счётчик успешных отправок сообщений."""
         try:
             await self._metrics.increment_dispatch_success(connection=connection)
-            self.log_event(
+            self.logger.debug(
+                "Записана метрика: increment_dispatch_success",
                 event="metric_recorded",
                 status="success",
-                level="debug",
-                message="Записана метрика: increment_dispatch_success",
             )
         except Exception as e:
             self.logger.warning(f"Ошибка при записи метрики increment_dispatch_success: {e}")
@@ -92,11 +89,10 @@ class MetricsRecorder(BaseService, IMetrics):
         """Увеличивает счётчик неудачных отправок сообщений."""
         try:
             await self._metrics.increment_dispatch_failed(connection=connection)
-            self.log_event(
+            self.logger.debug(
+                "Записана метрика: increment_dispatch_failed",
                 event="metric_recorded",
                 status="failed",
-                level="debug",
-                message="Записана метрика: increment_dispatch_failed",
             )
         except Exception as e:
             self.logger.warning(f"Ошибка при записи метрики increment_dispatch_failed: {e}")
@@ -105,11 +101,10 @@ class MetricsRecorder(BaseService, IMetrics):
         """Увеличивает счётчик срабатываний circuit breaker."""
         try:
             await self._metrics.increment_circuit_breaker_trip()
-            self.log_event(
+            self.logger.debug(
+                "Записана метрика: record_circuit_breaker_trip",
                 event="metric_recorded",
                 status="circuit_breaker_trip",
-                level="debug",
-                message="Записана метрика: record_circuit_breaker_trip",
             )
         except Exception as e:
             self.logger.warning(f"Ошибка при записи метрики record_circuit_breaker_trip: {e}")

@@ -10,6 +10,7 @@ from pathlib import Path
 from shared.base.base_service import BaseService
 from shared.base.exceptions import StorageError
 from shared.paths import FROGS_DIR
+from shared.protocols import ILogger
 
 MAX_FILES_DEFAULT = 30
 
@@ -17,14 +18,15 @@ MAX_FILES_DEFAULT = 30
 class ImageStorageService(BaseService):
     """Сервис для сохранения и получения изображений из файлового хранилища."""
 
-    def __init__(self, base_dir: Path | str | None = None) -> None:
+    def __init__(self, base_dir: Path | str | None = None, *, logger: ILogger) -> None:
         """Инициализирует сервис хранилища изображений.
 
         Args:
             base_dir: Базовая директория для хранения изображений. Если None,
                 используется FROGS_DIR по умолчанию.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         if base_dir is None:
             self.base_dir = FROGS_DIR
         elif isinstance(base_dir, str):

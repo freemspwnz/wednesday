@@ -21,7 +21,7 @@ from bot.wednesday_bot import (
     POOL_TIMEOUT_SECONDS,
     READ_TIMEOUT_SECONDS,
 )
-from infra.logging.logger import log_all_methods
+from infra.logging.logger import get_logger, log_all_methods
 from infra.rate_limiting import RateLimiter
 from shared.config import config
 from shared.protocols import IRateLimiter
@@ -104,6 +104,9 @@ class SupportBot(BaseHandlers):
         from app.frog_requests import FrogRequestService
         from shared.bot_services import BotServices
 
+        # Создаём общий логгер для всех сервисов
+        app_logger = get_logger("app")
+
         # Создаём rate limiters для команды /frog
         SECONDS_PER_MINUTE = 60
         global_limiter: IRateLimiter = RateLimiter(
@@ -123,11 +126,12 @@ class SupportBot(BaseHandlers):
             settings=self.settings,
             global_limiter=global_limiter,
             user_limiter=user_limiter,
+            logger=app_logger,
         )
         from infra.celery.celery_task_queue import CeleryTaskQueue
 
         task_queue = CeleryTaskQueue()
-        frog_request_service = FrogRequestService(task_queue=task_queue)
+        frog_request_service = FrogRequestService(task_queue=task_queue, logger=app_logger)
         services: BotServices = BotServices(
             usage=None,  # type: ignore[arg-type]
             chats=None,  # type: ignore[arg-type]

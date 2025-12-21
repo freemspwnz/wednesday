@@ -79,7 +79,11 @@ async def test_dispatch_registry_mark_dispatched_with_connection(
     today_str = date.today().strftime("%Y-%m-%d")
 
     # Используем DatabaseUnitOfWork для транзакции
-    async with DatabaseUnitOfWork(pool=async_postgres_pool) as uow:
+    from unittest.mock import MagicMock
+
+    mock_logger = MagicMock()
+    mock_logger.bind.return_value = mock_logger
+    async with DatabaseUnitOfWork(pool=async_postgres_pool, logger=mock_logger) as uow:
         connection = uow.connection
         await registry.mark_dispatched(today_str, "10:00", 12345, connection=connection)
 

@@ -10,6 +10,7 @@ from redis.exceptions import RedisError
 
 from infra.redis.redis_client import _InMemoryRedis
 from shared.base.base_service import BaseService
+from shared.protocols import ILogger
 
 if TYPE_CHECKING:
     pass
@@ -32,14 +33,20 @@ class RedisBackendService(BaseService):
         redis_client: RedisBackend,
         *,
         prefix: str = "",
+        logger: ILogger | None = None,
     ) -> None:
         """Инициализирует Redis-сервис.
 
         Args:
             redis_client: Экземпляр Redis или совместимого клиента.
             prefix: Префикс для всех ключей этого сервиса (по умолчанию "").
+            logger: Экземпляр логгера для использования в сервисе. Если None, создается новый.
         """
-        super().__init__()
+        from infra.logging.logger import get_logger
+
+        if logger is None:
+            logger = get_logger(self.__class__.__name__)
+        super().__init__(logger)
         self._redis: RedisBackend = redis_client
         self._prefix = prefix
         self._fallback: _InMemoryRedis = _InMemoryRedis()

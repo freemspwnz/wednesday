@@ -6,7 +6,7 @@ from hashlib import sha256
 
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CacheError
-from shared.protocols import ICache, IImageRepo, IPromptRepo
+from shared.protocols import ICache, IImageRepo, ILogger, IPromptRepo
 
 IMAGE_CACHE_VALUE_TUPLE_LENGTH = 2
 
@@ -22,14 +22,17 @@ class ImageCacheService(BaseService, ICache[tuple[bytes, str]]):
         self,
         images_repo: IImageRepo,
         prompts_repo: IPromptRepo,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис кэширования изображений.
 
         Args:
             images_repo: Экземпляр репозитория изображений (IImageRepo).
             prompts_repo: Экземпляр репозитория промптов (IPromptRepo).
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._images_repo = images_repo
         self._prompts_repo = prompts_repo
 

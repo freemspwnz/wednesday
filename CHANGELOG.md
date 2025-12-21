@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Инъекция зависимостей для логирования в BaseService**:
+  - `BaseService` теперь принимает `logger: ILogger` через конструктор (обязательный параметр)
+  - Все сервисы, наследующиеся от `BaseService`, обновлены для принятия `logger` в конструкторе
+  - `BaseService.__init__` использует `logger.bind(service=self.__class__.__name__)` для автоматической привязки контекста сервиса
+  - Удалены все прямые импорты `get_logger` из сервисов - создание логгеров перенесено в Composition Root
+  - В `container.py` и `support_bot.py` создается один общий `app_logger = get_logger("app")`, который передается всем сервисам
+  - Все вызовы `self.log_event()` заменены на `self.logger.info/warning/error/debug()` с передачей структурированных данных (`event`, `status`, `user_id`, `extra`) через `**kwargs`
+  - Метод `LoguruLogger._log()` автоматически извлекает структурированные параметры из `kwargs` и передает их в функцию `log_event()`, сохраняя структурированность логирования
+  - `RedisBackendService` (базовый класс для Redis-сервисов) принимает опциональный `logger` с fallback на `get_logger()` для обратной совместимости
+  - Модули больше не зависят от библиотеки loguru напрямую, работают только с интерфейсом `ILogger`
+  - В тестах добавлены mock-логгеры (через helper-функции `_create_mock_logger()`) для всех сервисов, создаваемых в тестах
+
 - **Рефакторинг логирования для обеспечения чистой инъекции зависимостей**:
   - Создан протокол `ILogger` в `shared/protocols.py` с методами trace, debug, info, success, warning, error, critical (с поддержкой *args и **kwargs) и методом bind(**kwargs) -> ILogger
   - Создан класс `LoguruLogger` в `infra/logging/logger.py`, реализующий протокол `ILogger`

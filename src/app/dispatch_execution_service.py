@@ -8,7 +8,7 @@ from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_result import DispatchResult
 from shared.base.base_service import BaseService
 from shared.base.exceptions import MessagingAPIError, MessagingNetworkError, RepoError, ServiceError
-from shared.protocols import IDispatchRegistry, IMetrics, IUsageTracker
+from shared.protocols import IDispatchRegistry, ILogger, IMetrics, IUsageTracker
 from shared.retry import retry_on_connect_error
 
 
@@ -28,6 +28,8 @@ class DispatchExecutionService(BaseService):
         metrics: IMetrics,
         usage_tracker: IUsageTracker,
         database_operations: DatabaseOperationsService,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис выполнения отправки.
 
@@ -36,8 +38,9 @@ class DispatchExecutionService(BaseService):
             metrics: Сервис метрик.
             usage_tracker: Трекер использования.
             database_operations: Сервис для групповых операций БД в транзакциях (обязательно).
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._dispatch_registry = dispatch_registry
         self._metrics = metrics
         self._usage_tracker = usage_tracker
@@ -87,18 +90,15 @@ class DispatchExecutionService(BaseService):
                     chat_id=target_chat,
                 )
             except RepoError as e:
-                self.log_event(
+                self.logger.warning(
+                    f"Ошибка при регистрации отправки: {e}",
                     event="dispatch_registration_error",
                     status="warning",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "chat_id": target_chat,
-                        "slot_date": slot_date,
-                        "slot_time": slot_time,
-                    },
-                    level="warning",
-                    message=f"Ошибка при регистрации отправки: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    chat_id=target_chat,
+                    slot_date=slot_date,
+                    slot_time=slot_time,
                 )
                 # Отправка успешна, но регистрация не удалась
                 # Это менее критично, чем сама отправка
@@ -131,17 +131,14 @@ class DispatchExecutionService(BaseService):
             # Неожиданные программные ошибки
             import traceback
 
-            self.log_event(
+            self.logger.error(
+                f"Неожиданная программная ошибка при отправке изображения в чат {target_chat}: {send_error}",
                 event="unexpected_dispatch_error",
                 status="error",
-                extra={
-                    "error_type": type(send_error).__name__,
-                    "error_message": str(send_error),
-                    "traceback": traceback.format_exc(),
-                    "chat_id": target_chat,
-                },
-                level="error",
-                message=f"Неожиданная программная ошибка при отправке изображения в чат {target_chat}: {send_error}",
+                error_type=type(send_error).__name__,
+                error_message=str(send_error),
+                traceback=traceback.format_exc(),
+                chat_id=target_chat,
             )
             try:
                 await send_error_message(

@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError
-from shared.protocols import IDatabaseUnitOfWork, IDispatchRegistry, IMetrics, IUsageTracker
+from shared.protocols import IDatabaseUnitOfWork, IDispatchRegistry, ILogger, IMetrics, IUsageTracker
 
 
 class DatabaseOperationsService(BaseService):
@@ -22,6 +22,8 @@ class DatabaseOperationsService(BaseService):
         usage_tracker: IUsageTracker,
         metrics: IMetrics | None = None,
         unit_of_work_factory: Callable[[], IDatabaseUnitOfWork] | None = None,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис операций БД.
 
@@ -30,8 +32,9 @@ class DatabaseOperationsService(BaseService):
             usage_tracker: Трекер использования.
             metrics: Сервис метрик (опционально).
             unit_of_work_factory: Фабрика для создания экземпляров Unit of Work.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._dispatch_registry = dispatch_registry
         self._usage_tracker = usage_tracker
         self._metrics = metrics
@@ -62,9 +65,11 @@ class DatabaseOperationsService(BaseService):
             # Fallback для обратной совместимости (breaking change - будет удалено)
             from infra.database.database_unit_of_work import DatabaseUnitOfWork
             from infra.database.postgres_client import get_postgres_pool
+            from infra.logging.logger import get_logger
 
             def create_uow() -> IDatabaseUnitOfWork:
-                return DatabaseUnitOfWork(pool=get_postgres_pool())
+                logger = get_logger(DatabaseUnitOfWork.__name__)
+                return DatabaseUnitOfWork(pool=get_postgres_pool(), logger=logger)
 
             uow: IDatabaseUnitOfWork = create_uow()
         else:
@@ -95,16 +100,13 @@ class DatabaseOperationsService(BaseService):
                 # Откат происходит автоматически при исключении
                 import traceback
 
-                self.log_event(
+                self.logger.error(
+                    f"Ошибка при регистрации успешной отправки: {e}",
                     event="repo_error",
                     status="error",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "traceback": traceback.format_exc(),
-                    },
-                    level="error",
-                    message=f"Ошибка при регистрации успешной отправки: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    traceback=traceback.format_exc(),
                 )
                 raise
 
@@ -132,28 +134,22 @@ class DatabaseOperationsService(BaseService):
             await self._metrics.increment_dispatch_failed()
         except ServiceError as e:
             # Метрики не критичны, только логируем
-            self.log_event(
+            self.logger.warning(
+                f"Ошибка при обновлении метрик неуспешной отправки: {e}",
                 event="metrics_error",
                 status="warning",
-                extra={
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                },
-                level="warning",
-                message=f"Ошибка при обновлении метрик неуспешной отправки: {e}",
+                error_type=type(e).__name__,
+                error_message=str(e),
             )
         except Exception as e:
             # Неожиданные ошибки
             import traceback
 
-            self.log_event(
+            self.logger.error(
+                f"Неожиданная ошибка при обновлении метрик неуспешной отправки: {e}",
                 event="unexpected_error",
                 status="error",
-                extra={
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "traceback": traceback.format_exc(),
-                },
-                level="error",
-                message=f"Неожиданная ошибка при обновлении метрик неуспешной отправки: {e}",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=traceback.format_exc(),
             )

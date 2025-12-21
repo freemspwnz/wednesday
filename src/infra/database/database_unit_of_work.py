@@ -6,6 +6,7 @@ import asyncpg
 
 from infra.database.postgres_client import get_postgres_pool
 from shared.base.base_service import BaseService
+from shared.protocols import ILogger
 
 
 class DatabaseUnitOfWork(BaseService):
@@ -21,13 +22,14 @@ class DatabaseUnitOfWork(BaseService):
     - Защита от повторного коммита/отката
     """
 
-    def __init__(self, pool: asyncpg.Pool | None = None) -> None:
+    def __init__(self, pool: asyncpg.Pool | None = None, *, logger: ILogger) -> None:
         """Инициализирует Unit of Work.
 
         Args:
             pool: Пул подключений PostgreSQL. Если не указан, используется глобальный пул.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._pool = pool or get_postgres_pool()
         self._connection: asyncpg.Connection | None = None
         self._transaction: asyncpg.Transaction | None = None

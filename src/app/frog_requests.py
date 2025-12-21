@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from shared.base.base_service import BaseService
-from shared.protocols import ITaskQueue
+from shared.protocols import ILogger, ITaskQueue
 
 
 class FrogRequestService(BaseService):
@@ -17,13 +17,14 @@ class FrogRequestService(BaseService):
     скрывая детали работы с очередью задач от handlers.
     """
 
-    def __init__(self, task_queue: ITaskQueue) -> None:
+    def __init__(self, task_queue: ITaskQueue, *, logger: ILogger) -> None:
         """Инициализирует FrogRequestService.
 
         Args:
             task_queue: Реализация ITaskQueue для отправки задач.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self.task_queue = task_queue
 
     async def request_manual_frog(

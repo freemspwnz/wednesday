@@ -124,11 +124,10 @@ class CircuitBreakerService(RedisBackendService):
 
         try:
             await self._execute_with_fallback(_reset_failures, log_on_fallback=True)
-            self.log_event(
+            self.logger.info(
+                f"Circuit breaker {self.key}: успешный запрос зарегистрирован",
                 event="circuit_breaker_success",
                 status="success",
-                level="info",
-                message=f"Circuit breaker {self.key}: успешный запрос зарегистрирован",
             )
             # Обновляем метрики Prometheus
             try:
@@ -165,11 +164,10 @@ class CircuitBreakerService(RedisBackendService):
 
         try:
             failures = await self._execute_with_fallback(_record_failure, log_on_fallback=True)
-            self.log_event(
+            self.logger.warning(
+                f"Circuit breaker {self.key}: ошибка зарегистрирована (failures={failures})",
                 event="circuit_breaker_failure",
                 status="failure",
-                level="warning",
-                message=f"Circuit breaker {self.key}: ошибка зарегистрирована (failures={failures})",
             )
 
             # Обновляем метрики Prometheus

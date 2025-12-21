@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from shared.base.base_service import BaseService
-from shared.protocols import IChatsRepo, IDispatchRegistry
+from shared.protocols import IChatsRepo, IDispatchRegistry, ILogger
 
 
 class TargetPreparationService(BaseService):
@@ -21,14 +21,17 @@ class TargetPreparationService(BaseService):
         self,
         chats_repo: IChatsRepo,
         dispatch_registry: IDispatchRegistry,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис подготовки целей.
 
         Args:
             chats_repo: Репозиторий чатов.
             dispatch_registry: Реестр отправок для проверки.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._chats_repo = chats_repo
         self._dispatch_registry = dispatch_registry
 

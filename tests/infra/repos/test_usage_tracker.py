@@ -88,7 +88,11 @@ async def test_usage_tracker_increment_with_connection(
     when = datetime(2025, 1, 1)
 
     # Используем DatabaseUnitOfWork для транзакции
-    async with DatabaseUnitOfWork(pool=async_postgres_pool) as uow:
+    from unittest.mock import MagicMock
+
+    mock_logger = MagicMock()
+    mock_logger.bind.return_value = mock_logger
+    async with DatabaseUnitOfWork(pool=async_postgres_pool, logger=mock_logger) as uow:
         connection = uow.connection
         result = await tracker.increment(TEST_INCREMENT_2, when=when, connection=connection)
 

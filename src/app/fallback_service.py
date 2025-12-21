@@ -10,7 +10,7 @@ from app.dispatch_result import DispatchResult
 from app.image_service import ImageService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError
-from shared.protocols import IDispatchRegistry, IMetrics
+from shared.protocols import IDispatchRegistry, ILogger, IMetrics
 
 
 class FallbackService(BaseService):
@@ -23,13 +23,15 @@ class FallbackService(BaseService):
     - Логирование и метрики ошибок
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         image_service: ImageService | None,
         dispatch_execution_service: DispatchExecutionService,
         dispatch_registry: IDispatchRegistry,
         database_operations: DatabaseOperationsService,
         metrics: IMetrics | None = None,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис fallback.
 
@@ -39,8 +41,9 @@ class FallbackService(BaseService):
             dispatch_registry: Реестр отправок для проверки.
             database_operations: Сервис для групповых операций БД в транзакциях (обязательно).
             metrics: Сервис метрик.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._image_service = image_service
         self._dispatch_execution_service = dispatch_execution_service
         self._dispatch_registry = dispatch_registry
@@ -92,18 +95,15 @@ class FallbackService(BaseService):
                             chat_id=target_chat,
                         )
                     except RepoError as e:
-                        self.log_event(
+                        self.logger.warning(
+                            f"Ошибка при регистрации fallback отправки: {e}",
                             event="fallback_registration_error",
                             status="warning",
-                            extra={
-                                "error_type": type(e).__name__,
-                                "error_message": str(e),
-                                "chat_id": target_chat,
-                                "slot_date": slot_date,
-                                "slot_time": slot_time,
-                            },
-                            level="warning",
-                            message=f"Ошибка при регистрации fallback отправки: {e}",
+                            error_type=type(e).__name__,
+                            error_message=str(e),
+                            chat_id=target_chat,
+                            slot_date=slot_date,
+                            slot_time=slot_time,
                         )
                         # Отправка успешна, но регистрация не удалась
                         # Это менее критично, чем сама отправка
@@ -112,17 +112,14 @@ class FallbackService(BaseService):
             except Exception as send_error:
                 import traceback
 
-                self.log_event(
+                self.logger.error(
+                    f"Ошибка при отправке fallback в чат {target_chat}: {send_error}",
                     event="fallback_send_error",
                     status="error",
-                    extra={
-                        "error_type": type(send_error).__name__,
-                        "error_message": str(send_error),
-                        "traceback": traceback.format_exc(),
-                        "chat_id": target_chat,
-                    },
-                    level="error",
-                    message=f"Ошибка при отправке fallback в чат {target_chat}: {send_error}",
+                    error_type=type(send_error).__name__,
+                    error_message=str(send_error),
+                    traceback=traceback.format_exc(),
+                    chat_id=target_chat,
                 )
                 result["failed_count"] += 1
 

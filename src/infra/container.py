@@ -33,6 +33,7 @@ from infra.cache.image_cache import ImageCacheService
 from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.clients.factory import create_image_client, create_text_client
+from infra.logging.logger import get_logger
 from infra.metrics.metrics import Metrics
 from infra.metrics.metrics_recorder import MetricsRecorder
 from infra.rate_limiting.circuit_breaker import CircuitBreakerService
@@ -116,8 +117,11 @@ def build_image_stack(
         if text_client is None:
             text_client = created_text_client
 
+    # Создаём общий логгер для всех сервисов
+    app_logger = get_logger("app")
+
     # Доменные сервисы
-    image_generation = ImageGenerationService(image_client)
+    image_generation = ImageGenerationService(image_client, logger=app_logger)
     fallback_config = PromptFallbackConfig(
         frog_prompts=list(ImageConfig.FROG_PROMPTS),
         styles=list(ImageConfig.STYLES),
@@ -125,6 +129,7 @@ def build_image_stack(
     prompt_generation = PromptGenerationService(
         text_client=text_client,
         fallback_config=fallback_config,
+        logger=app_logger,
     )
 
     # Получаем Redis клиент явно
@@ -138,8 +143,9 @@ def build_image_stack(
     image_cache = ImageCacheService(
         images_repo=images_repo,
         prompts_repo=prompts_repo,
+        logger=app_logger,
     )
-    image_storage = ImageStorageService()
+    image_storage = ImageStorageService(logger=app_logger)
     prompt_cache = PromptCache(redis_client=redis_client)
 
     # Получаем конфигурацию circuit breaker
@@ -153,21 +159,25 @@ def build_image_stack(
         window=cb_config.window,
         cooldown=cb_config.cooldown,
     )
-    metrics = MetricsRecorder()
+    metrics = MetricsRecorder(logger=app_logger)
 
     # Application‑сервисы
     prompt_service = PromptService(
         prompt_generation_service=prompt_generation,
         prompt_cache=prompt_cache,
+        logger=app_logger,
     )
 
     # Создаём CaptionService из конфигурации
-    caption_service = CaptionService(ImageConfig.CAPTIONS) if ImageConfig.CAPTIONS else None
+    caption_service = None
+    if ImageConfig.CAPTIONS:
+        caption_service = CaptionService(ImageConfig.CAPTIONS, logger=app_logger)
 
     # Создаём UnitOfWork для управления сохранением изображений
     image_storage_uow = ImageStorageUnitOfWork(
         cache=image_cache,
         storage=image_storage,
+        logger=app_logger,
     )
 
     return ImageService(
@@ -179,6 +189,7 @@ def build_image_stack(
         image_storage=image_storage,
         circuit_breaker=circuit_breaker,
         metrics=metrics,
+        logger=app_logger,
     )
 
 
@@ -207,11 +218,15 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
 
     models_store = models_repo if models_repo is not None else ModelsRepo(pool=get_postgres_pool())
 
+    # Создаём общий логгер для всех сервисов
+    app_logger = get_logger("app")
+
     # Создаём APIStatusService для инкапсуляции проверки статуса API
     api_status_service = APIStatusService(
         image_client=image_client,
         text_client=text_client,
         models_store=models_store,
+        logger=app_logger,
     )
 
     return AdminDashboardService(
@@ -219,6 +234,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
         chats=chats,
         metrics=metrics,
         api_status_service=api_status_service,
+        logger=app_logger,
     )
 
 
@@ -238,6 +254,9 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     """
 
     app_settings = AppSettings.from_config(config)
+
+    # Создаём общий логгер для всех сервисов
+    app_logger = get_logger("app")
 
     # Создаём ModelsRepo один раз для переиспользования во всех сервисах
     models_repo = ModelsRepo(pool=db_pool)
@@ -291,6 +310,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         settings=app_settings,
         global_limiter=global_limiter,
         user_limiter=user_limiter,
+        logger=app_logger,
     )
     # Ленивые импорты для избежания циклических зависимостей
     from app.frog_requests import FrogRequestService
@@ -298,22 +318,23 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
 
     # Создаём task queue и передаём в FrogRequestService
     task_queue = CeleryTaskQueue()
-    frog_request_service = FrogRequestService(task_queue=task_queue)
+    frog_request_service = FrogRequestService(task_queue=task_queue, logger=app_logger)
 
     # Создаём сервисы для DispatchService
     target_preparation_service = TargetPreparationService(
         chats_repo=chats,
         dispatch_registry=dispatch_registry,
+        logger=app_logger,
     )
 
     # Создаём MetricsRecorder для передачи в DatabaseOperationsService
-    metrics_recorder = MetricsRecorder(metrics=metrics)
+    metrics_recorder = MetricsRecorder(metrics=metrics, logger=app_logger)
 
     # Создаём фабрику для Unit of Work
     from infra.database.database_unit_of_work import DatabaseUnitOfWork
 
     def create_unit_of_work() -> DatabaseUnitOfWork:
-        return DatabaseUnitOfWork(pool=db_pool)
+        return DatabaseUnitOfWork(pool=db_pool, logger=app_logger)
 
     # Создаём DatabaseOperationsService для атомарных операций БД
     database_operations = DatabaseOperationsService(
@@ -321,6 +342,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         usage_tracker=usage,
         metrics=metrics_recorder,
         unit_of_work_factory=create_unit_of_work,
+        logger=app_logger,
     )
 
     dispatch_execution_service = DispatchExecutionService(
@@ -328,6 +350,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         metrics=metrics_recorder,
         usage_tracker=usage,
         database_operations=database_operations,
+        logger=app_logger,
     )
 
     fallback_service = FallbackService(
@@ -336,6 +359,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         dispatch_registry=dispatch_registry,
         database_operations=database_operations,
         metrics=metrics_recorder,
+        logger=app_logger,
     )
 
     dispatch_service = DispatchService(
@@ -343,6 +367,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         dispatch_execution_service=dispatch_execution_service,
         fallback_service=fallback_service,
         image_service=image_service,
+        logger=app_logger,
     )
 
     admin_dashboard_service = build_admin_dashboard_service(

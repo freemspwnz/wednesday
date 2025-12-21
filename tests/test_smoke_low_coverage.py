@@ -176,13 +176,16 @@ async def test_command_handlers_start_help(
     redis_client = get_redis()
     global_limiter = RateLimiter(redis_client=redis_client, prefix="frog:global:", window=60, limit=100)
     user_limiter = RateLimiter(redis_client=redis_client, prefix="frog:user:", window=60, limit=1)
+    mock_logger = MagicMock()
+    mock_logger.bind.return_value = mock_logger
     frog_rate_limiter = FrogRateLimiterService(
         settings=MagicMock(),
         global_limiter=global_limiter,
         user_limiter=user_limiter,
+        logger=mock_logger,
     )
     task_queue = CeleryTaskQueue()
-    frog_request_service = FrogRequestService(task_queue=task_queue)
+    frog_request_service = FrogRequestService(task_queue=task_queue, logger=mock_logger)
     services = BotServices(
         usage=MagicMock(),
         chats=MagicMock(),

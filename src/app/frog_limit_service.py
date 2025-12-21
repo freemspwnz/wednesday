@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from shared.base.base_service import BaseService
 from shared.config import AppSettings
-from shared.protocols import IRateLimiter
+from shared.protocols import ILogger, IRateLimiter
 
 # Константы
 SECONDS_PER_MINUTE = 60  # секунд в минуте
@@ -30,6 +30,7 @@ class FrogRateLimiterService(BaseService):
         settings: AppSettings,
         global_limiter: IRateLimiter,
         user_limiter: IRateLimiter,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис rate limiting для команды /frog.
 
@@ -37,8 +38,9 @@ class FrogRateLimiterService(BaseService):
             settings: Настройки приложения с параметрами rate limit.
             global_limiter: Лимитер для глобального лимита запросов.
             user_limiter: Лимитер для per-user лимита запросов.
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._settings = settings
         self._global_limiter = global_limiter
         self._user_limiter = user_limiter

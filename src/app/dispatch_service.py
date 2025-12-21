@@ -21,6 +21,7 @@ from app.image_service import ImageService
 from app.target_preparation_service import TargetPreparationService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import ServiceError
+from shared.protocols import ILogger
 
 
 class DispatchService(BaseService):
@@ -40,6 +41,7 @@ class DispatchService(BaseService):
         dispatch_execution_service: DispatchExecutionService,
         fallback_service: FallbackService,
         image_service: ImageService | None,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис рассылки.
 
@@ -48,8 +50,9 @@ class DispatchService(BaseService):
             dispatch_execution_service: Сервис выполнения отправки.
             fallback_service: Сервис обработки fallback.
             image_service: Сервис генерации изображений (опционально).
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._target_preparation_service = target_preparation_service
         self._dispatch_execution_service = dispatch_execution_service
         self._fallback_service = fallback_service
@@ -169,16 +172,13 @@ class DispatchService(BaseService):
 
             # Логируем неожиданную ошибку
             if not isinstance(e, ServiceError):
-                self.log_event(
+                self.logger.error(
+                    f"Неожиданная ошибка при выполнении рассылки: {e}",
                     event="unexpected_dispatch_error",
                     status="error",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "traceback": traceback.format_exc(),
-                    },
-                    level="error",
-                    message=f"Неожиданная ошибка при выполнении рассылки: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    traceback=traceback.format_exc(),
                 )
 
             return await self._fallback_service.handle_unexpected_error(

@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from infra.database.database_unit_of_work import DatabaseUnitOfWork
+
+
+def _create_mock_logger() -> MagicMock:
+    """Создает mock-логгер для использования в тестах."""
+    mock_logger = MagicMock()
+    mock_logger.bind.return_value = mock_logger
+    return mock_logger
+
 
 pytestmark = [
     pytest.mark.integration,
@@ -18,7 +27,7 @@ pytestmark = [
 @pytest.mark.asyncio
 async def test_database_unit_of_work_context_manager_success(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """Тест успешного коммита транзакции через context manager."""
-    uow = DatabaseUnitOfWork(pool=async_postgres_pool)
+    uow = DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
 
     async with uow:
         connection = uow.connection
@@ -37,7 +46,7 @@ async def test_database_unit_of_work_context_manager_success(cleanup_tables: Any
 @pytest.mark.asyncio
 async def test_database_unit_of_work_context_manager_rollback(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """Тест отката транзакции при ошибке через context manager."""
-    uow = DatabaseUnitOfWork(pool=async_postgres_pool)
+    uow = DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
 
     try:
         async with uow:
@@ -59,7 +68,7 @@ async def test_database_unit_of_work_context_manager_rollback(cleanup_tables: An
 @pytest.mark.asyncio
 async def test_database_unit_of_work_manual_commit(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """Тест ручного управления транзакцией."""
-    uow = DatabaseUnitOfWork(pool=async_postgres_pool)
+    uow = DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
 
     await uow.begin()
     connection = uow.connection
@@ -77,7 +86,7 @@ async def test_database_unit_of_work_manual_commit(cleanup_tables: Any, async_po
 @pytest.mark.asyncio
 async def test_database_unit_of_work_manual_rollback(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """Тест ручного отката транзакции."""
-    uow = DatabaseUnitOfWork(pool=async_postgres_pool)
+    uow = DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
 
     await uow.begin()
     connection = uow.connection
@@ -94,7 +103,7 @@ async def test_database_unit_of_work_manual_rollback(cleanup_tables: Any, async_
 @pytest.mark.asyncio
 async def test_database_unit_of_work_double_begin_error(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """Тест ошибки при попытке начать транзакцию дважды."""
-    uow = DatabaseUnitOfWork(pool=async_postgres_pool)
+    uow = DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
 
     await uow.begin()
     # Попытка начать транзакцию второй раз должна вызвать ошибку
@@ -107,7 +116,7 @@ async def test_database_unit_of_work_double_begin_error(cleanup_tables: Any, asy
 @pytest.mark.asyncio
 async def test_database_unit_of_work_connection_property(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """Тест получения соединения через property."""
-    uow = DatabaseUnitOfWork(pool=async_postgres_pool)
+    uow = DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
 
     # До начала транзакции property должна вызывать ошибку
     with pytest.raises(RuntimeError, match="Транзакция не начата"):
@@ -124,7 +133,7 @@ async def test_database_unit_of_work_connection_property(cleanup_tables: Any, as
 @pytest.mark.asyncio
 async def test_database_unit_of_work_get_connection(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     """Тест получения соединения через get_connection()."""
-    uow = DatabaseUnitOfWork(pool=async_postgres_pool)
+    uow = DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
 
     # До начала транзакции должно возвращать None
     assert uow.get_connection() is None

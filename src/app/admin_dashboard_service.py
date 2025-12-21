@@ -25,7 +25,7 @@ from app.admin_dashboard_builders import (
 from app.api_status_service import APIStatusService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError
-from shared.protocols import IChatsRepo, IMetrics, IUsageTracker
+from shared.protocols import IChatsRepo, ILogger, IMetrics, IUsageTracker
 
 if TYPE_CHECKING:
     pass
@@ -50,6 +50,7 @@ class AdminDashboardService(BaseService):
         api_status_service: APIStatusService,
         status_builder: StatusMessageBuilder | None = None,
         models_list_builder: ModelsListMessageBuilder | None = None,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис админского дашборда.
 
@@ -60,8 +61,9 @@ class AdminDashboardService(BaseService):
             api_status_service: Сервис проверки статуса API (обязателен).
             status_builder: Билдер сообщений статуса (опционально).
             models_list_builder: Билдер сообщений списка моделей (опционально).
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._usage = usage
         self._chats = chats
         self._metrics = metrics
@@ -95,15 +97,12 @@ class AdminDashboardService(BaseService):
             try:
                 usage_total, usage_threshold, usage_quota = await self._usage.get_limits_info()
             except (RepoError, ServiceError) as e:  # pragma: no cover - защита от нештатных ошибок
-                self.log_event(
+                self.logger.warning(
+                    f"Не удалось получить информацию об использовании: {e}",
                     event="repo_error",
                     status="warning",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                    },
-                    level="warning",
-                    message=f"Не удалось получить информацию об использовании: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
                 )
 
         # Собираем сырые данные для chats_info
@@ -113,15 +112,12 @@ class AdminDashboardService(BaseService):
                 chats_ids = await self._chats.list_chat_ids()
                 chats_count = len(chats_ids) if chats_ids else 0
             except RepoError as e:  # pragma: no cover
-                self.log_event(
+                self.logger.warning(
+                    f"Не удалось получить список чатов: {e}",
                     event="repo_error",
                     status="warning",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                    },
-                    level="warning",
-                    message=f"Не удалось получить список чатов: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
                 )
 
         # Собираем сырые данные для metrics_text
@@ -130,15 +126,12 @@ class AdminDashboardService(BaseService):
             try:
                 metrics_summary = await self._metrics.get_summary()
             except ServiceError as e:  # pragma: no cover
-                self.log_event(
+                self.logger.warning(
+                    f"Не удалось получить метрики производительности: {e}",
                     event="service_error",
                     status="warning",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                    },
-                    level="warning",
-                    message=f"Не удалось получить метрики производительности: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
                 )
 
         # Формируем данные для билдера

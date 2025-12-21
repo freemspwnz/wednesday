@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError
-from shared.protocols import IModelsRepo, ITextToImageClient, ITextToTextClient
+from shared.protocols import ILogger, IModelsRepo, ITextToImageClient, ITextToTextClient
 
 
 @dataclass
@@ -65,6 +65,8 @@ class APIStatusService(BaseService):
         image_client: ITextToImageClient | None = None,
         text_client: ITextToTextClient | None = None,
         models_store: IModelsRepo | None = None,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис проверки статуса API.
 
@@ -72,8 +74,9 @@ class APIStatusService(BaseService):
             image_client: Клиент для генерации изображений (опционально).
             text_client: Клиент для генерации текста (опционально).
             models_store: Хранилище моделей для сохранения списков (опционально).
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._image_client = image_client
         self._text_client = text_client
         self._models_store = models_store
@@ -101,15 +104,12 @@ class APIStatusService(BaseService):
                 try:
                     await self._models_store.set_kandinsky_available_models(result.models)
                 except RepoError as store_error:
-                    self.log_event(
+                    self.logger.warning(
+                        f"Не удалось сохранить список моделей Kandinsky: {store_error}",
                         event="repo_error",
                         status="warning",
-                        extra={
-                            "error_type": type(store_error).__name__,
-                            "error_message": str(store_error),
-                        },
-                        level="warning",
-                        message=f"Не удалось сохранить список моделей Kandinsky: {store_error}",
+                        error_type=type(store_error).__name__,
+                        error_message=str(store_error),
                     )
 
             return ImageAPIStatus(
@@ -123,17 +123,14 @@ class APIStatusService(BaseService):
             import traceback
 
             error_message = f"❌ Ошибка: {str(e)[: self.MAX_ERROR_DETAILS_LENGTH]}"
-            self.log_event(
+            self.logger.error(
+                f"Ошибка при проверке API Kandinsky: {e}",
                 event="unexpected_api_error",
                 status="error",
-                extra={
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "traceback": traceback.format_exc(),
-                    "api": "kandinsky",
-                },
-                level="error",
-                message=f"Ошибка при проверке API Kandinsky: {e}",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=traceback.format_exc(),
+                api="kandinsky",
             )
             return ImageAPIStatus.unavailable(error_message)
 
@@ -163,15 +160,12 @@ class APIStatusService(BaseService):
                 try:
                     await self._models_store.set_gigachat_available_models(gigachat_models)
                 except RepoError as store_error:
-                    self.log_event(
+                    self.logger.warning(
+                        f"Не удалось сохранить список моделей GigaChat: {store_error}",
                         event="repo_error",
                         status="warning",
-                        extra={
-                            "error_type": type(store_error).__name__,
-                            "error_message": str(store_error),
-                        },
-                        level="warning",
-                        message=f"Не удалось сохранить список моделей GigaChat: {store_error}",
+                        error_type=type(store_error).__name__,
+                        error_message=str(store_error),
                     )
 
             # Получаем текущую модель
@@ -192,17 +186,14 @@ class APIStatusService(BaseService):
             import traceback
 
             error_message = f"❌ Ошибка: {str(e)[: self.MAX_ERROR_DETAILS_LENGTH]}"
-            self.log_event(
+            self.logger.error(
+                f"Ошибка при проверке GigaChat API: {e}",
                 event="unexpected_api_error",
                 status="error",
-                extra={
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "traceback": traceback.format_exc(),
-                    "api": "gigachat",
-                },
-                level="error",
-                message=f"Ошибка при проверке GigaChat API: {e}",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=traceback.format_exc(),
+                api="gigachat",
             )
             return TextAPIStatus.unavailable(error_message)
 
@@ -226,17 +217,14 @@ class APIStatusService(BaseService):
         except Exception as e:
             import traceback
 
-            self.log_event(
+            self.logger.error(
+                f"Ошибка при получении моделей Kandinsky: {e}",
                 event="unexpected_api_error",
                 status="error",
-                extra={
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "traceback": traceback.format_exc(),
-                    "api": "kandinsky",
-                },
-                level="error",
-                message=f"Ошибка при получении моделей Kandinsky: {e}",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=traceback.format_exc(),
+                api="kandinsky",
             )
             return []
 
@@ -260,16 +248,13 @@ class APIStatusService(BaseService):
         except Exception as e:
             import traceback
 
-            self.log_event(
+            self.logger.error(
+                f"Ошибка при получении моделей GigaChat: {e}",
                 event="unexpected_api_error",
                 status="error",
-                extra={
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "traceback": traceback.format_exc(),
-                    "api": "gigachat",
-                },
-                level="error",
-                message=f"Ошибка при получении моделей GigaChat: {e}",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                traceback=traceback.format_exc(),
+                api="gigachat",
             )
             return []

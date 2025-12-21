@@ -9,7 +9,7 @@ from __future__ import annotations
 from domain.prompt_generation import PromptGenerationService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CacheError
-from shared.protocols import ICache
+from shared.protocols import ICache, ILogger
 
 
 class PromptService(BaseService):
@@ -24,14 +24,17 @@ class PromptService(BaseService):
         self,
         prompt_generation_service: PromptGenerationService,
         prompt_cache: ICache[dict | str] | None = None,
+        *,
+        logger: ILogger,
     ) -> None:
         """Инициализирует сервис координации промптов.
 
         Args:
             prompt_generation_service: Сервис генерации промптов (обязателен).
             prompt_cache: Кэш промптов, реализующий ``ICache[dict | str]`` (опционально).
+            logger: Экземпляр логгера для использования в сервисе.
         """
-        super().__init__()
+        super().__init__(logger)
         self._generation_service = prompt_generation_service
         self._cache = prompt_cache
 
@@ -56,31 +59,26 @@ class PromptService(BaseService):
             try:
                 cached = await self._cache.get("latest")
                 if cached:
-                    self.log_event(
+                    self.logger.info(
+                        "Промпт получен из кэша",
                         event="prompt_cache_hit",
                         status="cached",
-                        level="info",
-                        message="Промпт получен из кэша",
                     )
                     return str(cached) if not isinstance(cached, dict) else cached.get("text", str(cached))
             except CacheError as e:
-                self.log_event(
+                self.logger.warning(
+                    f"Ошибка при получении промпта из кэша: {e}",
                     event="cache_error",
                     status="warning",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                    },
-                    level="warning",
-                    message=f"Ошибка при получении промпта из кэша: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
                 )
 
         # Генерируем новый промпт
-        self.log_event(
+        self.logger.info(
+            "Начинаю генерацию нового промпта",
             event="prompt_generation_started",
             status="started",
-            level="info",
-            message="Начинаю генерацию нового промпта",
         )
 
         prompt = await self._generation_service.generate()
@@ -88,33 +86,28 @@ class PromptService(BaseService):
         if prompt is None:
             # Используем статический fallback
             prompt = self._generation_service.get_fallback_prompt()
-            self.log_event(
+            self.logger.warning(
+                "Использован статический fallback-промпт",
                 event="prompt_fallback_used",
                 status="fallback",
-                level="warning",
-                message="Использован статический fallback-промпт",
             )
 
         # Сохраняем в кэш (если доступен)
         if prompt and self._cache is not None:
             try:
                 await self._cache.set("latest", prompt)
-                self.log_event(
+                self.logger.debug(
+                    "Промпт сохранён в кэш",
                     event="prompt_cached",
                     status="cached",
-                    level="debug",
-                    message="Промпт сохранён в кэш",
                 )
             except CacheError as e:
-                self.log_event(
+                self.logger.warning(
+                    f"Ошибка при сохранении промпта в кэш: {e}",
                     event="cache_error",
                     status="warning",
-                    extra={
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                    },
-                    level="warning",
-                    message=f"Ошибка при сохранении промпта в кэш: {e}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
                 )
 
         return prompt
