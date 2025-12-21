@@ -16,13 +16,6 @@
 """
 
 from infra.clients.error_handling import log_client_error, should_retry
-from infra.clients.exceptions import (
-    APIError,
-    AuthenticationError,
-    ClientError,
-    NetworkError,
-    RateLimitError,
-)
 from infra.clients.image_client_container import (
     ImageClientContainer,
     get_image_client_container,
@@ -30,6 +23,13 @@ from infra.clients.image_client_container import (
 from infra.clients.text_client_container import (
     TextClientContainer,
     get_text_client_container,
+)
+from shared.base.exceptions import (
+    APIError,
+    AuthenticationError,
+    ClientError,
+    NetworkError,
+    RateLimitError,
 )
 from shared.protocols import ITextToImageClient, ITextToTextClient
 

@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from infra.clients import get_image_client_container, get_text_client_container
-from infra.clients.exceptions import APIError, AuthenticationError, NetworkError
+from shared.base.exceptions import APIError, AuthenticationError, NetworkError
 from shared.bot_services import BotServices
 
 # Константы

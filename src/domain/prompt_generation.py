@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import random
 
-from infra.clients.exceptions import (
+from shared.base.base_service import BaseService
+from shared.base.exceptions import (
     APIError,
     AuthenticationError,
     ClientError,
     NetworkError,
 )
-from shared.base.base_service import BaseService
 from shared.config import PromptFallbackConfig
 from shared.protocols import ITextToTextClient
 
@@ -106,7 +106,7 @@ class PromptGenerationService(BaseService):
                 event="prompt_generation_failed",
                 status="api_error",
                 level="warning",
-                message=f"Ошибка API при генерации промпта: HTTP {exc.status_code}",
+                message=f"Ошибка API при генерации промпта: {exc}",
             )
             # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
             return None

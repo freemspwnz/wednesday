@@ -507,10 +507,10 @@ class ITextToImageClient(Protocol):
 
         Raises:
             ValueError: Если API ключи не сконфигурированы.
-            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
-            RateLimitError: Если превышен лимит запросов (429).
-            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
-            APIError: При других ошибках API (4xx, 5xx).
+            shared.base.exceptions.AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            shared.base.exceptions.RateLimitError: Если превышен лимит запросов (429).
+            shared.base.exceptions.NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            shared.base.exceptions.APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def check_api_status(self, save_models: bool = True) -> APIStatusResult:
@@ -582,10 +582,10 @@ class ITextToTextClient(Protocol):
 
         Raises:
             ValueError: Если API ключи не сконфигурированы.
-            AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
-            RateLimitError: Если превышен лимит запросов (429).
-            NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
-            APIError: При других ошибках API (4xx, 5xx).
+            shared.base.exceptions.AuthenticationError: Если API ключи неверны или доступ запрещён (401, 403).
+            shared.base.exceptions.RateLimitError: Если превышен лимит запросов (429).
+            shared.base.exceptions.NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            shared.base.exceptions.APIError: При других ошибках API (4xx, 5xx).
         """
 
     async def check_api_status(self) -> APIStatusResult:

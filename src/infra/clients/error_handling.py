@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from loguru import logger
 
-from infra.clients.exceptions import ClientError, NetworkError, RateLimitError
+from shared.base.exceptions import ClientError, NetworkError, RateLimitError
 
 
 def log_client_error(exc: ClientError, context: str = "") -> None:

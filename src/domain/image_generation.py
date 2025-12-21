@@ -9,14 +9,14 @@
 
 from __future__ import annotations
 
-from infra.clients.exceptions import (
+from shared.base.base_service import BaseService
+from shared.base.exceptions import (
     APIError,
     AuthenticationError,
     ClientError,
+    ImageGenerationError,
     NetworkError,
 )
-from shared.base.base_service import BaseService
-from shared.base.exceptions import ImageGenerationError
 from shared.protocols import ITextToImageClient
 from shared.retry import retry_standard
 
@@ -168,9 +168,9 @@ class ImageGenerationService(BaseService):
                 user_id=user_id_str,
                 status="api_error",
                 level="error",
-                message=f"Ошибка API при генерации изображения: HTTP {exc.status_code}",
+                message=f"Ошибка API при генерации изображения: {exc}",
             )
-            raise ImageGenerationError(f"Ошибка API при генерации изображения: {exc.status_code}") from exc
+            raise ImageGenerationError(f"Ошибка API при генерации изображения: {exc}") from exc
         except ClientError as exc:
             # Общая обработка ошибок клиента
             self.log_event(

@@ -6,7 +6,8 @@ from typing import Any
 
 import aiohttp
 
-from infra.clients.exceptions import APIError, NetworkError, map_http_status_to_exception
+from infra.clients.sber_clients_exceptions import map_http_status_to_exception
+from shared.base.exceptions import APIError, NetworkError
 from shared.retry import retry_standard
 
 
@@ -280,8 +281,6 @@ class BaseHTTPClient:
             error_text = await response.text()
             raise APIError(
                 f"Ошибка парсинга JSON от {self._service_name}: ответ не является JSON",
-                status_code=response.status,
-                response_body=error_text,
                 original_error=exc,
             ) from exc
 

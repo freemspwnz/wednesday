@@ -38,12 +38,6 @@ from PIL import Image
 from pydantic import ValidationError
 
 from infra.clients.base import BaseHTTPClient
-from infra.clients.exceptions import (
-    APIError,
-    AuthenticationError,
-    NetworkError,
-    RateLimitError,
-)
 from infra.clients.models import (
     APIStatusResult,
     KandinskyGenerationParams,
@@ -55,6 +49,7 @@ from infra.clients.models import (
     SetModelResult,
 )
 from infra.repos import ModelsRepo
+from shared.base.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from shared.config import KandinskyConfig
 from shared.protocols import IModelsRepo, ITextToImageClient
 
@@ -184,7 +179,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             )
             raise APIError(
                 f"Неожиданная ошибка при генерации изображения через Kandinsky: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -244,7 +238,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                     ).error("Ошибка валидации ответа Kandinsky API при проверке статуса")
                     raise APIError(
                         f"Ошибка валидации ответа Kandinsky API при проверке статуса: {e}",
-                        status_code=0,
                         original_error=e,
                     ) from e
 
@@ -283,7 +276,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             bound.bind(error=str(exc)).error("Неожиданная ошибка при проверке статуса Kandinsky")
             raise APIError(
                 f"Неожиданная ошибка при проверке статуса: {exc}",
-                status_code=0,  # Неизвестный статус
+                # Неизвестный статус
                 original_error=exc,
             ) from exc
 
@@ -319,7 +312,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             bound.warning("check_api_status вернул пустой список моделей")
             raise APIError(
                 "Не удалось получить список моделей Kandinsky: API вернул пустой список",
-                status_code=0,
             )
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             # Пробрасываем доменные исключения как есть
@@ -344,7 +336,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             bound.error("Не удалось получить список моделей ни через API, ни из хранилища")
             raise APIError(
                 f"Не удалось получить список моделей Kandinsky: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -384,7 +375,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                 bound.error("Ответ Kandinsky API не является списком моделей")
                 raise APIError(
                     "Не удалось получить список моделей от Kandinsky API",
-                    status_code=0,
                 )
 
             try:
@@ -396,7 +386,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                 ).error("Ошибка валидации ответа Kandinsky API при установке модели")
                 raise APIError(
                     f"Ошибка валидации данных от Kandinsky API: {e}",
-                    status_code=0,
                     original_error=e,
                 ) from e
 
@@ -455,7 +444,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             bound.bind(error=str(exc)).error("Неожиданная ошибка при установке модели Kandinsky")
             raise APIError(
                 f"Неожиданная ошибка при установке модели: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -547,7 +535,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         if not isinstance(pipelines_data, list):
             raise APIError(
                 "Ответ Kandinsky API не является списком pipelines",
-                status_code=200,
             )
         return pipelines_data
 
@@ -570,7 +557,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                 bound.error("Пустой ответ при получении pipelines от Kandinsky")
                 raise APIError(
                     "Пустой ответ при получении pipelines от Kandinsky",
-                    status_code=0,
                 )
 
             try:
@@ -582,7 +568,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                 ).error("Ошибка валидации ответа Kandinsky API при получении pipelines")
                 raise APIError(
                     f"Ошибка валидации ответа Kandinsky API при получении pipelines: {e}",
-                    status_code=0,
                     original_error=e,
                 ) from e
 
@@ -604,7 +589,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                 bound.error("Список pipelines пуст")
                 raise APIError(
                     "Список pipelines Kandinsky пуст",
-                    status_code=0,
                 )
 
             first_pipeline = pipelines[0]
@@ -623,7 +607,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             )
             raise APIError(
                 f"Неожиданная ошибка при получении pipeline ID от Kandinsky: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -677,7 +660,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                         ).error("Ошибка валидации ответа Kandinsky API при запуске генерации")
                         raise APIError(
                             f"Ошибка валидации ответа Kandinsky API при запуске генерации: {e}",
-                            status_code=response.status,
                             original_error=e,
                         ) from e
                 else:
@@ -686,7 +668,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                     # Этот код не должен выполняться, но нужен для mypy
                     raise APIError(
                         "Неожиданный статус ответа при запуске генерации",
-                        status_code=response.status,
                     )
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             raise
@@ -694,7 +675,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             bound.bind(error=str(exc)).error("Неожиданная ошибка при запуске генерации на Kandinsky")
             raise APIError(
                 f"Неожиданная ошибка при запуске генерации на Kandinsky: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -730,7 +710,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                         ).error("Ошибка валидации ответа Kandinsky API при проверке статуса")
                         raise APIError(
                             f"Ошибка валидации ответа Kandinsky API при проверке статуса: {e}",
-                            status_code=response.status,
                             original_error=e,
                         ) from e
 
@@ -741,7 +720,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                             bound.error("Ответ Kandinsky со статусом DONE без результата")
                             raise APIError(
                                 "Ответ Kandinsky со статусом DONE без результата",
-                                status_code=response.status,
                             )
 
                         files = status_response.result.files
@@ -749,7 +727,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                             bound.error("Ответ Kandinsky со статусом DONE без файлов результата")
                             raise APIError(
                                 "Ответ Kandinsky со статусом DONE без файлов результата",
-                                status_code=response.status,
                             )
 
                         image_base64 = files[0]
@@ -761,7 +738,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                             )
                             raise APIError(
                                 f"Не удалось декодировать base64‑изображение от Kandinsky: {exc}",
-                                status_code=response.status,
                                 original_error=exc,
                             ) from exc
 
@@ -774,7 +750,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                             )
                             raise APIError(
                                 f"Полученные данные от Kandinsky не являются валидным изображением: {exc}",
-                                status_code=response.status,
                                 original_error=exc,
                             ) from exc
 
@@ -790,7 +765,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                         )
                         raise APIError(
                             f"Генерация на Kandinsky завершилась с ошибкой: {error_desc}",
-                            status_code=response.status,
                         )
 
                     if status in {KandinskyStatus.INITIAL, KandinskyStatus.PROCESSING}:
@@ -805,7 +779,6 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
                     )
                     raise APIError(
                         f"Kandinsky вернул неизвестный статус генерации: {status}",
-                        status_code=response.status,
                     )
 
             except (AuthenticationError, RateLimitError, APIError):
@@ -851,13 +824,11 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             else:
                 raise APIError(
                     f"Превышено максимальное количество попыток проверки статуса генерации Kandinsky: {last_exception}",
-                    status_code=0,
                     original_error=last_exception,
                 ) from last_exception
         else:
             raise APIError(
                 "Превышено максимальное количество попыток проверки статуса генерации Kandinsky",
-                status_code=0,
             )
 
     async def aclose(self) -> None:

@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Устранение протечки абстракций: перенос исключений клиентов в доменный слой**:
+  - Перенесены HTTP ошибки из `infra/clients/exceptions.py` в `shared/base/exceptions.py`
+  - Доменные исключения (`ClientError`, `AuthenticationError`, `RateLimitError`, `NetworkError`, `APIError`) теперь без `status_code` и `response_body`, только `message` и `original_error`
+  - Переименован `infra/clients/exceptions.py` в `sber_clients_exceptions.py`
+  - Функция `map_http_status_to_exception` переименована в `map_http_status_to_domain_exception` (с алиасом для обратной совместимости)
+  - Обновлены протоколы `ITextToTextClient` и `ITextToImageClient` - теперь указывают доменные исключения в docstrings
+  - Заменены импорты в domain слое (`image_generation.py`, `prompt_generation.py`) на доменные исключения
+  - Обновлены все использования клиентских исключений в infra/clients
+  - Удалено использование `status_code` и `response_body` из всех мест создания исключений
+  - Domain слой больше не зависит от infra слоя
+
 - **Добавление протокола IImageStorageUnitOfWork**:
   - Создан протокол `IImageStorageUnitOfWork` в `shared/protocols.py`
   - Заменено прямое использование `ImageStorageUnitOfWork` на протокол `IImageStorageUnitOfWork` в `ImageService`

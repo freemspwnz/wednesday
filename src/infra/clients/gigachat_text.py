@@ -37,12 +37,6 @@ from loguru import logger
 from pydantic import ValidationError
 
 from infra.clients.base import BaseHTTPClient
-from infra.clients.exceptions import (
-    APIError,
-    AuthenticationError,
-    NetworkError,
-    RateLimitError,
-)
 from infra.clients.models import (
     APIStatusResult,
     GigaChatCompletionResponse,
@@ -52,6 +46,7 @@ from infra.clients.models import (
     SetModelResult,
 )
 from infra.repos import ModelsRepo
+from shared.base.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from shared.config import GigaChatConfig
 from shared.protocols import IModelsRepo, ITextToTextClient
 
@@ -258,7 +253,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                         bound.error("Ответ GigaChat API не содержит choices")
                         raise APIError(
                             "Ответ GigaChat API не содержит choices",
-                            status_code=response.status,
                         )
 
                     generated_prompt = completion_response.choices[0].message.content.strip()
@@ -274,7 +268,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                     ).error("Ошибка валидации ответа GigaChat API при генерации промпта")
                     raise APIError(
                         f"Ошибка валидации ответа GigaChat API при генерации промпта: {e}",
-                        status_code=response.status,
                         original_error=e,
                     ) from e
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
@@ -283,7 +276,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             bound.error(f"Неожиданная ошибка при генерации промпта: {exc}", exc_info=True)
             raise APIError(
                 f"Неожиданная ошибка при генерации промпта: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -322,7 +314,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                 bound.warning("❌ Не удалось получить токен доступа")
                 raise AuthenticationError(
                     "Не удалось получить токен доступа GigaChat",
-                    status_code=401,
                 )
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
             # Пробрасываем доменные исключения как есть
@@ -331,7 +322,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             bound.error(f"Неожиданная ошибка при проверке статуса: {exc}", exc_info=True)
             raise APIError(
                 f"Неожиданная ошибка при проверке статуса GigaChat: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -365,7 +355,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             bound.error(f"Неожиданная ошибка при получении токена: {exc}", exc_info=True)
             raise APIError(
                 f"Неожиданная ошибка при получении токена GigaChat: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -410,7 +399,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                         ).error("Ошибка валидации списка моделей GigaChat")
                         raise APIError(
                             f"Ошибка валидации списка моделей GigaChat: {e}",
-                            status_code=response.status,
                             original_error=e,
                         ) from e
                 elif isinstance(data_json, dict):
@@ -429,14 +417,12 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                         ).error("Ошибка валидации ответа моделей GigaChat")
                         raise APIError(
                             f"Ошибка валидации ответа моделей GigaChat: {e}",
-                            status_code=response.status,
                             original_error=e,
                         ) from e
                 else:
                     bound.error(f"Неожиданный формат ответа от API моделей: {type(data_json)}")
                     raise APIError(
                         f"Неожиданный формат ответа от GigaChat API: {type(data_json)}",
-                        status_code=response.status,
                     )
 
                 if models_list:
@@ -452,7 +438,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                     bound.warning("API вернул пустой список моделей")
                     raise APIError(
                         "GigaChat API вернул пустой список моделей",
-                        status_code=response.status,
                     )
 
         except (AuthenticationError, RateLimitError, NetworkError, APIError):
@@ -462,7 +447,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             bound.error(f"Неожиданная ошибка при получении списка моделей: {exc}", exc_info=True)
             raise APIError(
                 f"Неожиданная ошибка при получении списка моделей GigaChat: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -513,7 +497,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             bound.error(f"Неожиданная ошибка при установке модели: {exc}", exc_info=True)
             raise APIError(
                 f"Неожиданная ошибка при установке модели GigaChat: {exc}",
-                status_code=0,
                 original_error=exc,
             ) from exc
 
@@ -704,7 +687,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                         ).error("Ошибка валидации ответа GigaChat API при получении токена")
                         raise APIError(
                             f"Ошибка валидации ответа GigaChat API при получении токена: {e}",
-                            status_code=response.status,
                             original_error=e,
                         ) from e
             except (AuthenticationError, RateLimitError, NetworkError, APIError):
@@ -713,7 +695,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                 bound.error(f"Неожиданная ошибка при получении токена GigaChat: {exc}", exc_info=True)
                 raise APIError(
                     f"Неожиданная ошибка при получении токена GigaChat: {exc}",
-                    status_code=0,
                     original_error=exc,
                 ) from exc
 
