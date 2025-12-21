@@ -265,7 +265,7 @@ async def init_redis_pool(
             return client
         except Exception as exc:
             # ВАЖНО: не обнуляем `_redis`, чтобы сохранить in‑memory fallback.
-            logger.exception(f"Не удалось инициализировать Redis‑клиент: {exc!s}")
+            logger.error(f"Не удалось инициализировать Redis‑клиент: {exc!s}", exc_info=True)
             _redis_is_real = False
             raise
 
@@ -297,7 +297,7 @@ async def close_redis() -> None:
             await _redis.close()
             logger.info("Соединение с Redis закрыто")
         except Exception:
-            logger.exception("Ошибка при закрытии соединения с Redis")
+            logger.error("Ошибка при закрытии соединения с Redis", exc_info=True)
     _redis_is_real = False
     # Не обнуляем `_redis`: оставляем in‑memory fallback.
 

@@ -39,7 +39,7 @@ def test_log_format_is_valid_json() -> None:
 
     # Настраиваем logger с buffer sink
     logger = get_logger("test")
-    logger.add(buffer, serialize=True, level="INFO")
+    logger.add(buffer, serialize=True, level="INFO")  # type: ignore[attr-defined]
 
     # Логируем тестовое сообщение
     logger.info("test message", extra={"test": "value"})
@@ -62,7 +62,7 @@ def test_required_fields_in_extra() -> None:
     """Проверяет наличие обязательных полей в extra."""
     buffer = io.StringIO()
     logger = get_logger("test")
-    logger.add(buffer, serialize=True, level="INFO")
+    logger.add(buffer, serialize=True, level="INFO")  # type: ignore[attr-defined]
 
     logger.info("test", extra={"service": "test-service", "env": "test"})
 
@@ -81,7 +81,7 @@ def test_high_cardinality_in_extra() -> None:
     """Проверяет, что high-cardinality поля в extra, не в top-level."""
     buffer = io.StringIO()
     logger = get_logger("test")
-    logger.add(buffer, serialize=True, level="INFO")
+    logger.add(buffer, serialize=True, level="INFO")  # type: ignore[attr-defined]
 
     logger.info("test", extra={"user_id": "u-123", "prompt_hash": "hash"})
 

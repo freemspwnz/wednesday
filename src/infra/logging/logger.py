@@ -17,6 +17,8 @@ from loguru import logger
 if TYPE_CHECKING:
     from loguru import Logger as LoggerType
 
+    from shared.protocols import ILogger
+
 from shared.config import config
 from shared.paths import LOGS_DIR
 
@@ -224,7 +226,133 @@ def setup_logger() -> None:
         logger.info("Система логирования настроена, логи пишутся только в stdout (JSON)")
 
 
-def get_logger(name: str | None = None) -> "LoggerType":
+class LoguruLogger:
+    """Адаптер loguru логгера, реализующий протокол ILogger.
+
+    Все методы логирования вызывают log_event для гарантии очистки данных.
+    """
+
+    def __init__(self, loguru_logger: "LoggerType", module_name: str | None = None) -> None:
+        """Инициализирует LoguruLogger.
+
+        Args:
+            loguru_logger: Экземпляр loguru.logger.
+            module_name: Имя модуля для логирования.
+        """
+        self._logger = loguru_logger
+        self._module_name = module_name
+        self._bound_context: dict[str, Any] = {}
+
+    def trace(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Логирует сообщение на уровне TRACE."""
+        self._log("trace", message, *args, **kwargs)
+
+    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Логирует сообщение на уровне DEBUG."""
+        self._log("debug", message, *args, **kwargs)
+
+    def info(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Логирует сообщение на уровне INFO."""
+        self._log("info", message, *args, **kwargs)
+
+    def success(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Логирует сообщение на уровне SUCCESS."""
+        self._log("success", message, *args, **kwargs)
+
+    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Логирует сообщение на уровне WARNING."""
+        self._log("warning", message, *args, **kwargs)
+
+    def error(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Логирует сообщение на уровне ERROR."""
+        self._log("error", message, *args, **kwargs)
+
+    def critical(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Логирует сообщение на уровне CRITICAL."""
+        self._log("critical", message, *args, **kwargs)
+
+    def bind(self, **kwargs: Any) -> "ILogger":  # noqa: ANN401
+        """Создает новый экземпляр логгера с привязанным контекстом.
+
+        Args:
+            **kwargs: Контекстные данные для привязки ко всем последующим логам.
+
+        Returns:
+            Новый экземпляр LoguruLogger с обновленным контекстом.
+        """
+        new_context = {**self._bound_context, **kwargs}
+        new_logger = LoguruLogger(self._logger, self._module_name)
+        new_logger._bound_context = new_context
+        return new_logger
+
+    def add(self, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        """Добавляет sink к внутреннему loguru.logger.
+
+        Этот метод доступен только в LoguruLogger и не является частью протокола ILogger.
+        Используется для настройки логгера (например, в тестах).
+
+        Args:
+            *args: Аргументы для loguru.logger.add().
+            **kwargs: Именованные аргументы для loguru.logger.add().
+
+        Returns:
+            ID добавленного sink.
+        """
+        return self._logger.add(*args, **kwargs)
+
+    def _log(self, level: EventLogLevel, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        """Внутренний метод для логирования через log_event.
+
+        Args:
+            level: Уровень логирования.
+            message: Сообщение для логирования (может содержать {} для форматирования).
+            *args: Аргументы для форматирования сообщения.
+            **kwargs: Дополнительный контекст для логирования, может включать exc_info.
+        """
+        # Если есть args для форматирования, форматируем сообщение
+        # log_event ожидает уже отформатированное сообщение
+        if args:
+            try:
+                # Пытаемся отформатировать сообщение через стандартный format()
+                formatted_message = message.format(*args)
+            except (ValueError, IndexError, KeyError):
+                # Если форматирование не удалось (нет {} в сообщении или неправильные аргументы),
+                # используем исходное сообщение (loguru в таком случае игнорирует лишние args)
+                formatted_message = message
+        else:
+            formatted_message = message
+
+        # Объединяем привязанный контекст с переданными kwargs
+        all_kwargs = {**self._bound_context, **kwargs}
+
+        # Извлекаем специфические параметры log_event из kwargs
+        user_id = all_kwargs.pop("user_id", None)
+        prompt_hash = all_kwargs.pop("prompt_hash", None)
+        image_id = all_kwargs.pop("image_id", None)
+        latency_ms = all_kwargs.pop("latency_ms", None)
+        status = all_kwargs.pop("status", None)
+        event = all_kwargs.pop("event", formatted_message)
+        exc_info = all_kwargs.pop("exc_info", None)
+
+        # Остальные kwargs идут в extra
+        extra = all_kwargs if all_kwargs else None
+
+        # Вызываем log_event для гарантии очистки данных
+        log_event(
+            event=event,
+            user_id=user_id,
+            prompt_hash=prompt_hash,
+            image_id=image_id,
+            latency_ms=latency_ms,
+            status=status,
+            extra=extra,
+            level=level,
+            message=formatted_message,
+            exc_info=exc_info,
+        )
+
+
+def get_logger(name: str | None = None) -> "ILogger":
     """
     Получает настроенный логгер для указанного модуля.
 
@@ -232,11 +360,9 @@ def get_logger(name: str | None = None) -> "LoggerType":
         name: Имя модуля (обычно __name__)
 
     Returns:
-        Настроенный экземпляр логгера
+        Настроенный экземпляр логгера, реализующий протокол ILogger
     """
-    if name:
-        return logger.bind(name=name)
-    return logger
+    return LoguruLogger(logger, module_name=name)
 
 
 def _get_caller_module_name() -> str | None:
@@ -339,6 +465,7 @@ def log_event(  # noqa: PLR0913
     extra: dict[str, Any] | None = None,
     level: EventLogLevel = "info",
     message: str | None = None,
+    exc_info: bool | BaseException | tuple[type[BaseException], BaseException, Any] | None = None,
 ) -> None:
     """
     Высокоуровневая обёртка для структурированного логирования событий.
@@ -378,16 +505,25 @@ def log_event(  # noqa: PLR0913
     else:
         scrubbed_payload = scrubbed_payload_obj
 
-    # Получаем логгер с именем модуля вызывающего кода
+    # Получаем имя модуля вызывающего кода
     caller_module = _get_caller_module_name()
-    base_logger = get_logger(caller_module) if caller_module else get_logger(__name__)
+    module_name = caller_module if caller_module else __name__
+
+    # Используем внутренний loguru.logger напрямую для избежания циклической зависимости
+    # (get_logger теперь возвращает LoguruLogger, который вызывает log_event)
+    base_logger = logger.bind(name=module_name)
 
     # Привязываем payload к логгеру
     bound_logger = base_logger.bind(**scrubbed_payload)
 
     # Выбираем метод логирования
     log_method = getattr(bound_logger, level, bound_logger.info)
-    log_method(masked_message)
+
+    # Передаем exc_info, если он указан
+    if exc_info is not None:
+        log_method(masked_message, exc_info=exc_info)
+    else:
+        log_method(masked_message)
 
 
 # HTTP статус код для разделения успешных и ошибочных запросов
