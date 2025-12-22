@@ -16,10 +16,10 @@ from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
 from infra.logging.logger import get_logger, log_all_methods, log_event
 from shared.bot_services import BotServices
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-config: ConfigV2 = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+config: Config = Config()
 
 # Константы для магических чисел
 CONNECTION_POOL_SIZE = 20
@@ -79,7 +79,7 @@ class WednesdayBot:
             read_timeout=READ_TIMEOUT_SECONDS,
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
-        # config.telegram.bot_token проверяется при инициализации ConfigV2
+        # config.telegram.bot_token проверяется при инициализации Config
         telegram_token: str = config.telegram.bot_token or ""
         assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
         self.logger.info("Создание Application с токеном")
@@ -545,10 +545,10 @@ class WednesdayBot:
         settings = self.services.settings
         configured_times = settings.scheduler_send_times
         # День недели и таймзона берутся из глобальной конфигурации, но не протекают через протокол планировщика
-        from shared.config_v2 import ConfigV2
+        from shared.config import Config
 
         # Используем глобальный config из модуля
-        if isinstance(config, ConfigV2):
+        if isinstance(config, Config):
             wednesday_day = config.scheduler.wednesday_day
             timezone = config.scheduler.tz or "Europe/Moscow"
         else:
@@ -614,10 +614,10 @@ class WednesdayBot:
                 )
                 # Дублируем в админ-чат, если задан, избегая повтора, если CHAT_ID совпадает
                 try:
-                    from shared.config_v2 import ConfigV2
+                    from shared.config import Config
 
                     # Используем глобальный config из модуля
-                    if isinstance(config, ConfigV2):
+                    if isinstance(config, Config):
                         admin_chat_id_env = config.telegram.admin_chat_id
                     else:
                         admin_chat_id_env = getattr(config, "admin_chat_id", None)
@@ -1002,10 +1002,10 @@ class WednesdayBot:
                     "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
                 )
                 from infra.repos import AdminsRepo
-                from shared.config_v2 import ConfigV2
+                from shared.config import Config
 
                 # Используем глобальный config из модуля
-                if isinstance(config, ConfigV2):
+                if isinstance(config, Config):
                     admin_chat_id_env = config.telegram.admin_chat_id
                 else:
                     admin_chat_id_env = getattr(config, "admin_chat_id", None)

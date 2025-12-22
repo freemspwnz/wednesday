@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Рефакторинг конфигурации: переименование и обновление импортов**:
+  - Переименован класс `ConfigV2` → `Config` в новом `config.py`
+  - Переименован файл `config_v2.py` → `config.py`
+  - Обновлены все импорты: `from shared.config_v2 import ConfigV2` → `from shared.config import Config`
+  - Обновлены все импорты классов конфигурации: `from shared.config_v2 import ...` → `from shared.config import ...`
+  - Обновлены глобальные экземпляры: `config: ConfigV2 = ConfigV2()` → `config: Config = Config()`
+  - Обновлены все типизации: `ConfigV2` → `Config`
+  - Удален старый файл `config.py` (dataclass версия)
+  - Удален файл `config_v2.py` после переноса содержимого в `config.py`
+  - Обновлены тесты для использования нового `Config` класса
+
 - **Рефакторинг конфигурации: обновление остальных модулей**:
   - Обновлен `src/shared/bot_services.py`: заменен импорт `AppSettings` на Pydantic-версию из `config_v2`
   - Обновлен `src/app/frog_limit_service.py`: заменен импорт `AppSettings` на Pydantic-версию из `config_v2`

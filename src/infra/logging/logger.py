@@ -19,11 +19,11 @@ if TYPE_CHECKING:
 
     from shared.protocols import ILogger
 
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 from shared.paths import LOGS_DIR
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-config: ConfigV2 = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+config: Config = Config()
 
 # Типы для уровней логирования декораторов
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -95,8 +95,8 @@ def _get_known_secret_values() -> list[str]:
     secrets: list[str] = []
 
     try:
-        # Поддержка как старого Config, так и нового ConfigV2
-        if isinstance(config, ConfigV2):
+        # Используем Config
+        if isinstance(config, Config):
             gigachat_key = config.gigachat.authorization_key
             redis_password = config.redis.password
             postgres_password = config.postgres.password
@@ -170,7 +170,7 @@ def setup_logger() -> None:
     # Удаляем стандартный обработчик loguru
     logger.remove()
 
-    # Поддержка как старого Config, так и нового ConfigV2
+    # Используем Config
     log_level = config.log_level
 
     # Основной sink: JSON в stdout (единственный обязательный sink)

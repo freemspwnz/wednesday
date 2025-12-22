@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import asyncpg
 
 from infra.logging.logger import get_logger
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
 logger = get_logger(__name__)
 
@@ -31,7 +31,7 @@ async def init_postgres_pool(
     *,
     min_size: int = 1,
     max_size: int = 10,
-    config: ConfigV2 | None = None,
+    config: Config | None = None,
     **connect_kwargs: object,
 ) -> asyncpg.Pool:
     """
@@ -72,13 +72,13 @@ async def init_postgres_pool(
     if _pool is not None:
         return _pool
 
-    # Используем ConfigV2 по умолчанию
+    # Используем Config по умолчанию
     if config is None:
-        from shared.config_v2 import ConfigV2
+        from shared.config import Config
 
-        config = ConfigV2()
+        config = Config()
 
-    if isinstance(config, ConfigV2):
+    if isinstance(config, Config):
         user = config.postgres.user
         password = config.postgres.password
         database = config.postgres.db
@@ -212,14 +212,14 @@ def get_pool_metrics(pool: asyncpg.Pool | None = None) -> PoolMetrics | None:
     )
 
 
-async def ensure_database(config: ConfigV2 | None = None) -> None:
+async def ensure_database(config: Config | None = None) -> None:
     """Создаёт базу данных, если она не существует.
 
     Подключается к системной базе 'postgres' для проверки и создания
     целевой базы данных перед инициализацией пула подключений.
 
     Args:
-        config: Экземпляр Config или ConfigV2. Если None, используется глобальный config.
+        config: Экземпляр Config. Если None, используется глобальный config.
 
     Raises:
         asyncpg.InvalidPasswordError: При неверном пароле для подключения.
@@ -227,11 +227,11 @@ async def ensure_database(config: ConfigV2 | None = None) -> None:
         Exception: При неожиданной ошибке при проверке/создании базы данных.
     """
     if config is None:
-        from shared.config_v2 import ConfigV2
+        from shared.config import Config
 
-        config = ConfigV2()
+        config = Config()
 
-    if isinstance(config, ConfigV2):
+    if isinstance(config, Config):
         user = config.postgres.user
         password = config.postgres.password
         database = config.postgres.db

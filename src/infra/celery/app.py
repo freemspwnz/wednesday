@@ -15,10 +15,10 @@ from celery.schedules import crontab
 
 from infra.logging.logger import LoguruHandler, get_logger
 from infra.redis.redis_client import get_redis_url
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-config: ConfigV2 = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+config: Config = Config()
 
 logger = get_logger(__name__)
 
@@ -65,8 +65,8 @@ celery_app.conf.broker_write_url = redis_url_initial
 
 # Настройка таймзон
 celery_app.conf.enable_utc = False
-# Поддержка как старого Config, так и нового ConfigV2
-if isinstance(config, ConfigV2):
+# Используем Config
+if isinstance(config, Config):
     celery_app.conf.timezone = config.scheduler.tz or "Europe/Amsterdam"
 else:
     celery_app.conf.timezone = config.scheduler_tz or "Europe/Amsterdam"
@@ -82,8 +82,8 @@ celery_app.conf.accept_content = ["json"]
 celery_app.conf.result_serializer = "json"
 
 # Настройки производительности
-# Поддержка как старого Config, так и нового ConfigV2
-if isinstance(config, ConfigV2):
+# Используем Config
+if isinstance(config, Config):
     import os
 
     worker_prefetch = int(os.getenv("WORKER_PREFETCH_MULTIPLIER", "1"))
@@ -105,7 +105,7 @@ celery_app.conf.task_routes = {
 }
 
 # ⚠️ ВАЖНО: Dead Letter Queue для задач, которые упали после всех retry
-if isinstance(config, ConfigV2):
+if isinstance(config, Config):
     dlq_enabled = os.getenv("CELERY_DLQ_ENABLED") == "1"
 else:
     dlq_enabled = config._get_env_var("CELERY_DLQ_ENABLED") == "1"
@@ -123,7 +123,7 @@ if dlq_enabled:
     celery_app.conf.task_acks_late = True
 
 # Настройка Beat
-if isinstance(config, ConfigV2):
+if isinstance(config, Config):
     beat_max_loop = int(os.getenv("BEAT_MAX_LOOP_INTERVAL", "10"))
     send_times = config.scheduler.send_times  # ["09:00", "12:00", "18:00"]
     wednesday_day = config.scheduler.wednesday_day  # 2 (среда)

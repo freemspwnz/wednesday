@@ -1,11 +1,11 @@
-"""Тесты для новой структуры конфигурации ConfigV2."""
+"""Тесты для структуры конфигурации Config."""
 
 from typing import Any
 
 import pytest
 
-from shared.config_v2 import (
-    ConfigV2,
+from shared.config import (
+    Config,
     HttpTimeoutConfig,
     PostgresConfig,
     RedisConfig,
@@ -14,7 +14,7 @@ from shared.config_v2 import (
 
 
 def test_config_v2_creation_from_env(monkeypatch: Any) -> None:
-    """Тест создания ConfigV2 из переменных окружения."""
+    """Тест создания Config из переменных окружения."""
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
     monkeypatch.setenv("KANDINSKY_API_KEY", "test-api-key")
     monkeypatch.setenv("KANDINSKY_SECRET_KEY", "test-secret-key")
@@ -27,7 +27,7 @@ def test_config_v2_creation_from_env(monkeypatch: Any) -> None:
     monkeypatch.setenv("SCHEDULER_SEND_TIMES", "09:00,12:00,18:00")
     monkeypatch.setenv("SCHEDULER_TZ", "Europe/Moscow")
 
-    config = ConfigV2()
+    config = Config()
 
     assert config.telegram.bot_token == "test-token"
     assert config.kandinsky.api_key == "test-api-key"
@@ -43,7 +43,7 @@ def test_config_v2_creation_from_env(monkeypatch: Any) -> None:
 
 
 def test_config_v2_model_validate(monkeypatch: Any) -> None:
-    """Тест создания ConfigV2 через model_validate."""
+    """Тест создания Config через model_validate."""
     # Устанавливаем минимальные обязательные переменные
     monkeypatch.setenv("POSTGRES_USER", "test_user")
     monkeypatch.setenv("POSTGRES_PASSWORD", "test_password")
@@ -66,7 +66,7 @@ def test_config_v2_model_validate(monkeypatch: Any) -> None:
         },
     }
 
-    config = ConfigV2.model_validate(config_data)
+    config = Config.model_validate(config_data)
 
     assert config.telegram.bot_token == "test-token"
     assert config.telegram.chat_id == "12345"
@@ -86,13 +86,13 @@ def test_config_v2_secret_file_support(monkeypatch: Any, tmp_path: Any) -> None:
     monkeypatch.setenv("POSTGRES_PASSWORD", "test_password")
     monkeypatch.setenv("POSTGRES_DB", "test_db")
 
-    config = ConfigV2()
+    config = Config()
 
     assert config.telegram.bot_token == "secret-from-file"
 
 
-def test_config_v2_conversion_to_old_dataclasses(monkeypatch: Any) -> None:
-    """Тест преобразования ConfigV2 в старые dataclass'ы."""
+def test_config_direct_access(monkeypatch: Any) -> None:
+    """Тест прямого доступа к конфигурации через Config."""
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
     monkeypatch.setenv("KANDINSKY_API_KEY", "test-api")
     monkeypatch.setenv("KANDINSKY_SECRET_KEY", "test-secret")
@@ -104,7 +104,7 @@ def test_config_v2_conversion_to_old_dataclasses(monkeypatch: Any) -> None:
     monkeypatch.setenv("GIGACHAT_AUTHORIZATION_KEY", "test-key")
     monkeypatch.setenv("SCHEDULER_SEND_TIMES", "09:00,12:00,18:00")
 
-    config = ConfigV2()
+    config = Config()
 
     # Тестируем преобразование в старые dataclass'ы
     gigachat_config = config.to_gigachat_config()

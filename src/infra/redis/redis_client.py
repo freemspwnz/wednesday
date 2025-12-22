@@ -23,7 +23,7 @@ import redis.asyncio as redis
 from redis.exceptions import RedisError
 
 from infra.logging.logger import get_logger
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
 logger = get_logger(__name__)
 
@@ -349,25 +349,25 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
         return await fallback_method(*args, **kwargs)
 
 
-def get_redis_url(config: ConfigV2 | None = None) -> str | None:
+def get_redis_url(config: Config | None = None) -> str | None:
     """Возвращает URL Redis для использования в Celery.
 
     Используется для настройки Celery broker и backend.
     Формирует URL из переменных окружения или конфигурации.
 
     Args:
-        config: Экземпляр Config или ConfigV2. Если None, используется глобальный config.
+        config: Экземпляр Config. Если None, используется глобальный config.
 
     Returns:
         URL Redis в формате redis://host:port/db или redis://password@host:port/db.
         Если Redis не настроен, возвращает None.
     """
-    from shared.config_v2 import ConfigV2
+    from shared.config import Config
 
     if config is None:
-        config = ConfigV2()
+        config = Config()
 
-    if isinstance(config, ConfigV2):
+    if isinstance(config, Config):
         redis_url = config.redis.url
         redis_host = config.redis.host
         redis_port = config.redis.port

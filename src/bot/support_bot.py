@@ -23,11 +23,11 @@ from bot.wednesday_bot import (
 )
 from infra.logging.logger import get_logger, log_all_methods
 from infra.rate_limiting import RateLimiter
-from shared.config_v2 import AppSettings, ConfigV2
+from shared.config import AppSettings, Config
 from shared.protocols import IRateLimiter
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-config: ConfigV2 = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+config: Config = Config()
 
 # Константы для SupportBot
 MAX_POLLING_ATTEMPTS = 4  # максимальное количество попыток запуска polling

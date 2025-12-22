@@ -19,10 +19,10 @@ from infra.database.postgres_client import get_postgres_pool, init_postgres_pool
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger, log_event
 from infra.redis.redis_client import get_redis, init_redis_pool, redis_available
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-config = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+config = Config()
 
 if TYPE_CHECKING:
     from loguru import Logger as LoggerType
@@ -353,7 +353,7 @@ class BotRunner:
         """
         self.logger.info("Начало проверки требований для запуска")
 
-        # На этом этапе переменные окружения уже загружены через ConfigV2:
+        # На этом этапе переменные окружения уже загружены через Config:
         # сначала из окружения контейнера, затем при необходимости fallback из .env.
         # Здесь мы только логируем наличие ключевых обязательных переменных.
         self.logger.info("Проверка конфигурации: логирование обязательных переменных окружения")

@@ -10,10 +10,10 @@ from __future__ import annotations
 import asyncpg
 
 from infra.logging.logger import get_logger, log_all_methods
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-config: ConfigV2 = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+config: Config = Config()
 
 
 @log_all_methods()
@@ -29,14 +29,14 @@ class AdminsRepo:
         self,
         pool: asyncpg.Pool,
         admin_chat_id: str | None = None,
-        config_obj: ConfigV2 | None = None,
+        config_obj: Config | None = None,
     ) -> None:
         """Инициализирует репозиторий администраторов.
 
         Args:
             pool: Пул подключений PostgreSQL.
             admin_chat_id: ID главного администратора. Если None, читается из config.
-            config_obj: Экземпляр Config или ConfigV2. Если None, используется глобальный config.
+            config_obj: Экземпляр Config. Если None, используется глобальный config.
         """
         self._pool = pool
         self.logger = get_logger(__name__)
@@ -47,7 +47,7 @@ class AdminsRepo:
         """Получает ID главного администратора из конфигурации."""
         if self._admin_chat_id is not None:
             return self._admin_chat_id
-        if isinstance(self._config, ConfigV2):
+        if isinstance(self._config, Config):
             return self._config.telegram.admin_chat_id
         return self._config.admin_chat_id
 

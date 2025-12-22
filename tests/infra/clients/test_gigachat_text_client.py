@@ -7,7 +7,7 @@ import pytest
 from loguru import logger
 
 from infra.clients.gigachat_text import GigaChatTextClient
-from shared.config_v2 import GigaChatConfig, HttpTimeoutConfig
+from shared.config import GigaChatConfig, HttpTimeoutConfig
 
 
 class _DummyResponse:

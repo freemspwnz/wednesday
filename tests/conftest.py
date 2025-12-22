@@ -209,7 +209,7 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
     import asyncpg
     from infra.database.postgres_client import close_postgres_pool, init_postgres_pool
     from shared.config import Config, config
-    from shared.config_v2 import ConfigV2
+    from shared.config import Config
 
     try:
         # Создаём пул с минимальными параметрами для тестов
@@ -226,8 +226,8 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
         yield pool
     except (OSError, asyncpg.InvalidPasswordError, asyncpg.PostgresConnectionError) as exc:
         # Улучшенное сообщение об ошибке подключения
-        # Поддержка как старого Config, так и нового ConfigV2
-        if isinstance(config, ConfigV2):
+        # Используем Config
+        if isinstance(config, Config):
             postgres_host = config.postgres.host
             postgres_port = config.postgres.port
         else:

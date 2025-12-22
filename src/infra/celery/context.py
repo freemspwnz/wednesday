@@ -17,10 +17,10 @@ from infra.database.postgres_client import close_postgres_pool, init_postgres_po
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger
 from infra.redis.redis_client import close_redis, init_redis_pool
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-config: ConfigV2 = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+config: Config = Config()
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
@@ -33,7 +33,7 @@ _services_context: dict[str, object] | None = None
 _init_lock = asyncio.Lock()
 
 
-async def _ensure_pools_initialized(config_obj: ConfigV2 | None = None) -> None:
+async def _ensure_pools_initialized(config_obj: Config | None = None) -> None:
     """Инициализирует пулы подключений Redis и Postgres.
 
     Инициализация происходит внутри задач, после fork worker процесса, что гарантирует:
@@ -41,7 +41,7 @@ async def _ensure_pools_initialized(config_obj: ConfigV2 | None = None) -> None:
     - Отсутствие race conditions.
 
     Args:
-        config_obj: Экземпляр ConfigV2. Если None, используется глобальный config.
+        config_obj: Экземпляр Config. Если None, используется глобальный config.
 
     Raises:
         RuntimeError: Если не удалось инициализировать пулы подключений.
@@ -59,7 +59,7 @@ async def _ensure_pools_initialized(config_obj: ConfigV2 | None = None) -> None:
 
         # Инициализируем Redis и Postgres (async)
         # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
-        if isinstance(config_obj, ConfigV2):
+        if isinstance(config_obj, Config):
             if config_obj.redis.url:
                 await init_redis_pool(url=config_obj.redis.url)
             else:
@@ -84,14 +84,14 @@ async def _ensure_pools_initialized(config_obj: ConfigV2 | None = None) -> None:
         logger.info("Celery pools initialized in worker process")
 
 
-async def get_services_context(config_obj: ConfigV2 | None = None) -> dict[str, object]:
+async def get_services_context(config_obj: Config | None = None) -> dict[str, object]:
     """Получает контекст сервисов для использования в Celery задачах.
 
     Инициализирует пулы подключений и создаёт экземпляры сервисов при первом вызове.
     Использует dependency injection вместо глобального состояния.
 
     Args:
-        config_obj: Экземпляр ConfigV2. Если None, используется глобальный config.
+        config_obj: Экземпляр Config. Если None, используется глобальный config.
 
     Returns:
         Словарь с сервисами:
@@ -116,9 +116,9 @@ async def get_services_context(config_obj: ConfigV2 | None = None) -> dict[str, 
 
                 # Создаём экземпляры сервисов
                 postgres_pool = get_postgres_pool()
-                # Convert to ConfigV2 if needed
-                if not isinstance(config_obj, ConfigV2):
-                    config_obj = ConfigV2()
+                # Convert to Config if needed
+                if not isinstance(config_obj, Config):
+                    config_obj = Config()
                 bot = build_bot(config=config_obj, db_pool=postgres_pool)
 
                 _services_context = {

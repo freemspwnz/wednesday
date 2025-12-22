@@ -44,10 +44,10 @@ from infra.repos.usage_tracker import UsageTracker
 from infra.storage.image_storage import ImageStorageService
 from shared.bot_services import BotServices
 from shared.config import (
+    Config,
     ImageConfig,
     PromptFallbackConfig,
 )
-from shared.config_v2 import ConfigV2
 from shared.protocols import (
     IChatsRepo,
     ICircuitBreaker,
@@ -61,13 +61,13 @@ from shared.protocols import (
 
 
 def _create_clients(
-    config: ConfigV2,
+    config: Config,
     models_repo: IModelsRepo | None = None,
 ) -> tuple:
     """Создаёт клиенты для внешних ML‑сервисов.
 
     Args:
-        config: Экземпляр ConfigV2 для создания конфигураций клиентов.
+        config: Экземпляр Config для создания конфигураций клиентов.
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
 
     Returns:
@@ -83,7 +83,7 @@ def _create_clients(
 
 
 def build_image_stack(
-    config: ConfigV2,
+    config: Config,
     db_pool: asyncpg.Pool,
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
@@ -95,7 +95,7 @@ def build_image_stack(
     чтобы упростить дальнейшее сопровождение и тестирование.
 
     Args:
-        config: Экземпляр ConfigV2 для создания клиентов и чтения настроек.
+        config: Экземпляр Config для создания клиентов и чтения настроек.
         db_pool: Пул подключений PostgreSQL.
         image_client: Опциональный клиент для генерации изображений.
             Если None, создаётся новый через create_image_client().
@@ -234,7 +234,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     )
 
 
-def build_bot_services(config: ConfigV2, db_pool: asyncpg.Pool) -> BotServices:
+def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
     На этом этапе:
@@ -242,15 +242,15 @@ def build_bot_services(config: ConfigV2, db_pool: asyncpg.Pool) -> BotServices:
     - остальные сервисы повторяют существующую инициализацию из WednesdayBot.
 
     Args:
-        config: Экземпляр ConfigV2 для создания сервисов и настроек.
+        config: Экземпляр Config для создания сервисов и настроек.
         db_pool: Пул подключений PostgreSQL.
 
     Returns:
         Настроенный экземпляр BotServices.
     """
 
-    # Создаём AppSettings из ConfigV2
-    from shared.config_v2 import AppSettings
+    # Создаём AppSettings из Config
+    from shared.config import AppSettings
 
     app_settings = AppSettings()
 
@@ -396,7 +396,7 @@ def build_bot_services(config: ConfigV2, db_pool: asyncpg.Pool) -> BotServices:
 
 
 def build_bot(
-    config: ConfigV2,
+    config: Config,
     db_pool: asyncpg.Pool,
     services: BotServices | None = None,
 ) -> WednesdayBot:
@@ -406,7 +406,7 @@ def build_bot(
     Dependency Injection для передачи зависимостей в бот.
 
     Args:
-        config: Экземпляр ConfigV2 для создания сервисов и зависимостей.
+        config: Экземпляр Config для создания сервисов и зависимостей.
         db_pool: Пул подключений PostgreSQL.
         services: Опциональный контейнер сервисов. Если None, создаётся
             новый через build_bot_services().

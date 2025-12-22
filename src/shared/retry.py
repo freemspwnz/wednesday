@@ -34,10 +34,10 @@ else:
     from tenacity.wait import wait_base
 
 from infra.logging.logger import get_logger, log_event
-from shared.config_v2 import ConfigV2
+from shared.config import Config
 
-# Создаём экземпляр ConfigV2 при импорте модуля
-_config: ConfigV2 = ConfigV2()
+# Создаём экземпляр Config при импорте модуля
+_config: Config = Config()
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
