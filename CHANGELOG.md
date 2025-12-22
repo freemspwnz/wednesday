@@ -12,6 +12,13 @@
 
 ### Изменено
 
+- **Упрощение обработки рассылок и fallback-отправок в app-слое**:
+  - Добавлен общий helper `process_targets_with_registry_check()` в модуль `app/dispatch_targets_helper.py`
+  - `DispatchExecutionService.send_to_targets()` переведён на использование общего helper-а вместо собственного цикла по таргетам
+  - `FallbackService.send_fallback_to_targets()` переведён на использование общего helper-а с сохранением текущей семантики обработки ошибок
+  - Убрано дублирование логики проверки `IDispatchRegistry.is_dispatched()` и логирования пропусков в сервисах рассылок
+  - Упростилась дальнейшая эволюция логики обхода таргетов и регистрации отправок
+
 - **Обновлены контейнеры клиентов для работы с ClientManagementService**:
   - Метод `replace_client()` в `ImageClientContainer` теперь принимает `config` и `client_manager` вместо готового клиента
   - Метод `replace_client()` в `TextClientContainer` теперь принимает `config` и `client_manager` вместо готового клиента

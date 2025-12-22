@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_execution_service import DispatchExecutionService
 from app.dispatch_result import DispatchResult
+from app.dispatch_targets_helper import process_targets_with_registry_check
 from app.image_service import ImageService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import AppError, RepoError, ServiceError, UnexpectedDispatchError
@@ -69,19 +70,12 @@ class FallbackService(BaseService):
             send_fallback_image: Коллбек для отправки fallback‑изображения в чат.
             result: Результат рассылки для обновления.
         """
-        for target_chat in targets:
-            try:
-                # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-                if await self._dispatch_registry.is_dispatched(
-                    slot_date,
-                    slot_time,
-                    target_chat,
-                ):
-                    self.logger.info(
-                        f"Пропускаем fallback отправку в {target_chat} - уже отправлено в слот {slot_date}_{slot_time}",
-                    )
-                    continue
 
+        async def _send_fallback_for_single_target(
+            target_chat: int,
+            current_result: DispatchResult,
+        ) -> None:
+            try:
                 # Отправляем дружелюбное сообщение
                 await send_user_friendly_error(target_chat)
 
@@ -107,7 +101,7 @@ class FallbackService(BaseService):
                         )
                         # Отправка успешна, но регистрация не удалась
                         # Это менее критично, чем сама отправка
-                    result["success_count"] += 1
+                    current_result["success_count"] += 1
 
             except AppError as send_error:
                 # Ожидаемые ошибки приложения при отправке fallback‑сообщений
@@ -119,7 +113,7 @@ class FallbackService(BaseService):
                     error_message=str(send_error),
                     chat_id=target_chat,
                 )
-                result["failed_count"] += 1
+                current_result["failed_count"] += 1
             except Exception as send_error:
                 # Действительно неожиданные ошибки при отправке fallback
                 import traceback
@@ -141,6 +135,17 @@ class FallbackService(BaseService):
                 # Не продолжаем немедленно рассылку при неожиданных ошибках,
                 # пусть верхний уровень решит стратегию обработки
                 raise unexpected_error from send_error
+
+        await process_targets_with_registry_check(
+            dispatch_registry=self._dispatch_registry,
+            logger=self.logger,
+            slot_date=slot_date,
+            slot_time=slot_time,
+            targets=targets,
+            result=result,
+            per_target_sender=_send_fallback_for_single_target,
+            skip_log_event="fallback_already_sent",
+        )
 
     async def handle_generation_failure(  # noqa: PLR0913, PLR0917
         self,

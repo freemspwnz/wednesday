@@ -30,9 +30,6 @@ from shared.protocols import IChatsRepo, ILogger, IMetrics, IUsageTracker
 if TYPE_CHECKING:
     pass
 
-if TYPE_CHECKING:  # pragma: no cover - используется только для типизации
-    pass
-
 
 class AdminDashboardService(BaseService):
     """Application‑сервис для построения админских сводок.

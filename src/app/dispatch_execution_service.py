@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_result import DispatchResult
+from app.dispatch_targets_helper import process_targets_with_registry_check
 from shared.base.base_service import BaseService
 from shared.base.exceptions import (
     AppError,
@@ -202,18 +203,11 @@ class DispatchExecutionService(BaseService):
         Returns:
             DispatchResult с обновленными счетчиками.
         """
-        for target_chat in targets:
-            # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-            if await self._dispatch_registry.is_dispatched(
-                slot_date,
-                slot_time,
-                target_chat,
-            ):
-                self.logger.info(
-                    f"Пропускаем отправку в {target_chat} - уже отправлено в слот {slot_date}_{slot_time}",
-                )
-                continue
 
+        async def _send_for_single_target(
+            target_chat: int,
+            current_result: DispatchResult,
+        ) -> None:
             await self.send_single_image(
                 target_chat=target_chat,
                 slot_date=slot_date,
@@ -222,7 +216,18 @@ class DispatchExecutionService(BaseService):
                 caption=caption,
                 send_error_message=send_error_message,
                 send_image=send_image,
-                result=result,
+                result=current_result,
             )
+
+        await process_targets_with_registry_check(
+            dispatch_registry=self._dispatch_registry,
+            logger=self.logger,
+            slot_date=slot_date,
+            slot_time=slot_time,
+            targets=targets,
+            result=result,
+            per_target_sender=_send_for_single_target,
+            skip_log_event="dispatch_already_sent",
+        )
 
         return result
