@@ -4,6 +4,13 @@
 
 ### Добавлено
 
+- **FailedCacheQueue для управления очередью непересозданных кэшей в Redis**:
+  - Создан новый сервис `src/infra/storage/failed_cache_queue.py` для персистентного хранения операций пересоздания кэша
+  - Реализован dataclass `FailedCacheOperation` для сериализации операций пересоздания кэша
+  - Реализованы методы `enqueue()`, `dequeue()`, `peek_all()`, `size()`, `clear()` для управления очередью
+  - Добавлена поддержка автоматического fallback на in-memory при недоступности Redis через `RedisBackendService`
+  - Добавлена поддержка операций со списками в `_InMemoryRedis` (rpush, lpop, lrange, llen) для работы очереди
+
 - **ModelManagementService для управления моделями ML-клиентов**:
   - Создан новый сервис `src/app/model_management_service.py` для инкапсуляции логики выбора и сохранения моделей
   - Реализованы методы `set_kandinsky_model()` и `set_gigachat_model()` для установки моделей через клиенты с сохранением в репозиторий

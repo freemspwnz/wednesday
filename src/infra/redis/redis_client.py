@@ -41,6 +41,7 @@ class _InMemoryRedis:
     - expire
     - incr / hincrby
     - hset / hgetall
+    - rpush / lpop / lrange / llen (для списков)
 
     Все методы асинхронные для совместимости с `redis.asyncio`.
     TTL реализован лениво: ключи очищаются при доступе.
@@ -49,13 +50,15 @@ class _InMemoryRedis:
     def __init__(self) -> None:
         """Инициализирует in-memory Redis-подобное хранилище.
 
-        Создаёт внутренние структуры данных для хранения строк и хэшей
+        Создаёт внутренние структуры данных для хранения строк, хэшей и списков
         с поддержкой TTL (time-to-live).
         """
         # string -> (value, expire_ts | None)
         self._data: dict[str, tuple[str, float | None]] = {}
         # string -> (field_map, expire_ts | None)
         self._hashes: dict[str, tuple[dict[str, str], float | None]] = {}
+        # string -> (list, expire_ts | None)
+        self._lists: dict[str, tuple[list[str], float | None]] = {}
         self._lock = asyncio.Lock()
 
     @staticmethod
@@ -73,6 +76,11 @@ class _InMemoryRedis:
             _, exp = self._hashes[key]
             if self._is_expired(exp):
                 self._hashes.pop(key, None)
+        # списки
+        if key in self._lists:
+            _, exp = self._lists[key]
+            if self._is_expired(exp):
+                self._lists.pop(key, None)
 
     async def get(self, name: str) -> str | None:
         async with self._lock:
@@ -91,15 +99,16 @@ class _InMemoryRedis:
     async def delete(self, name: str) -> int:
         async with self._lock:
             await self._purge_if_expired(name)
-            existed = name in self._data or name in self._hashes
+            existed = name in self._data or name in self._hashes or name in self._lists
             self._data.pop(name, None)
             self._hashes.pop(name, None)
+            self._lists.pop(name, None)
         return int(existed)
 
     async def exists(self, name: str) -> int:
         async with self._lock:
             await self._purge_if_expired(name)
-            return int(name in self._data or name in self._hashes)
+            return int(name in self._data or name in self._hashes or name in self._lists)
 
     async def keys(self, pattern: str = "*") -> list[str]:
         # Для простоты игнорируем сложные шаблоны и возвращаем все ключи.
@@ -109,7 +118,9 @@ class _InMemoryRedis:
                 await self._purge_if_expired(k)
             for k in list(self._hashes.keys()):
                 await self._purge_if_expired(k)
-            return list(set(self._data.keys()) | set(self._hashes.keys()))
+            for k in list(self._lists.keys()):
+                await self._purge_if_expired(k)
+            return list(set(self._data.keys()) | set(self._hashes.keys()) | set(self._lists.keys()))
 
     async def expire(self, name: str, time_seconds: int) -> bool:
         expire_at = time.time() + time_seconds
@@ -121,6 +132,10 @@ class _InMemoryRedis:
             if name in self._hashes:
                 fields, _ = self._hashes[name]
                 self._hashes[name] = (fields, expire_at)
+                return True
+            if name in self._lists:
+                items, _ = self._lists[name]
+                self._lists[name] = (items, expire_at)
                 return True
         return False
 
@@ -181,6 +196,87 @@ class _InMemoryRedis:
             fields[key] = str(current)
             self._hashes[name] = (fields, exp)
             return current
+
+    async def rpush(self, name: str, *values: str) -> int:
+        """Добавляет значения в конец списка (справа).
+
+        Args:
+            name: Ключ списка.
+            *values: Значения для добавления.
+
+        Returns:
+            Длина списка после добавления значений.
+        """
+        async with self._lock:
+            await self._purge_if_expired(name)
+            if name in self._lists:
+                items, exp = self._lists[name]
+            else:
+                items, exp = [], None
+            items.extend(str(v) for v in values)
+            self._lists[name] = (items, exp)
+            return len(items)
+
+    async def lpop(self, name: str) -> str | None:
+        """Извлекает и возвращает первый элемент списка (слева).
+
+        Args:
+            name: Ключ списка.
+
+        Returns:
+            Первый элемент списка или None, если список пуст.
+        """
+        async with self._lock:
+            await self._purge_if_expired(name)
+            if name not in self._lists:
+                return None
+            items, exp = self._lists[name]
+            if not items:
+                return None
+            value = items.pop(0)
+            self._lists[name] = (items, exp)
+            return value
+
+    async def lrange(self, name: str, start: int, end: int) -> list[str]:
+        """Возвращает элементы списка в указанном диапазоне.
+
+        Args:
+            name: Ключ списка.
+            start: Начальный индекс (включительно). Может быть отрицательным.
+            end: Конечный индекс (включительно). Может быть отрицательным, -1 означает последний элемент.
+
+        Returns:
+            Список элементов в указанном диапазоне.
+        """
+        async with self._lock:
+            await self._purge_if_expired(name)
+            if name not in self._lists:
+                return []
+            items, _ = self._lists[name]
+            # Обрабатываем отрицательные индексы как в Redis
+            length = len(items)
+            if start < 0:
+                start = max(0, length + start)
+            if end < 0:
+                end = length + end
+            # В Redis end включительно, поэтому добавляем 1 для Python среза
+            return items[start : end + 1] if start < length else []
+
+    async def llen(self, name: str) -> int:
+        """Возвращает длину списка.
+
+        Args:
+            name: Ключ списка.
+
+        Returns:
+            Длина списка или 0, если ключ не существует.
+        """
+        async with self._lock:
+            await self._purge_if_expired(name)
+            if name not in self._lists:
+                return 0
+            items, _ = self._lists[name]
+            return len(items)
 
     @staticmethod
     async def xadd(name: str, fields: dict[str, Any], *args: object, **kwargs: object) -> str:
