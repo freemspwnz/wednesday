@@ -6,6 +6,7 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass
 
+from infra.storage.failed_cache_queue import FailedCacheOperation, FailedCacheQueue
 from shared.base.base_service import BaseService
 from shared.protocols import ICache, IImageStorage, ILogger
 from shared.retry import retry_standard
@@ -44,6 +45,7 @@ class ImageStorageUnitOfWork(BaseService):
         self,
         cache: ICache[tuple[bytes, str]] | None = None,
         storage: IImageStorage | None = None,
+        failed_cache_queue: FailedCacheQueue | None = None,
         *,
         logger: ILogger,
     ) -> None:
@@ -52,13 +54,18 @@ class ImageStorageUnitOfWork(BaseService):
         Args:
             cache: Сервис кэширования (опционально).
             storage: Сервис файлового хранилища (опционально).
+            failed_cache_queue: Очередь для персистентного хранения операций
+                пересоздания кэша (опционально). Если None, используется только
+                локальная очередь.
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
         self._cache = cache
         self._storage = storage
         self._operations: list[ImageSaveOperation] = []
+        # Локальная очередь для обратной совместимости и fallback
         self._failed_cache_operations: deque[ImageSaveOperation] = deque()
+        self._failed_cache_queue = failed_cache_queue  # Redis очередь
         self._rebuild_task: asyncio.Task | None = None
         self._rebuild_running: bool = False
 
@@ -140,13 +147,51 @@ class ImageStorageUnitOfWork(BaseService):
                 if storage_success:
                     self.logger.info(
                         "Изображение сохранено в хранилище, но не в кэш. Это приемлемо, кэш может быть пересоздан.",
+                        event="cache_save_failed_storage_ok",
+                        status="warning",
+                        cache_key=operation.cache_key,
+                        storage_path=operation.storage_path,
                     )
-                    # Добавляем в очередь для пересоздания
-                    self._failed_cache_operations.append(operation)
-                    self.logger.info(
-                        f"Операция добавлена в очередь пересоздания кэша: "
-                        f"cache_key={operation.cache_key}, storage_path={operation.storage_path}",
-                    )
+
+                    # Пытаемся добавить в Redis очередь
+                    if self._failed_cache_queue and operation.storage_path:
+                        try:
+                            await self._failed_cache_queue.enqueue(
+                                FailedCacheOperation(
+                                    cache_key=operation.cache_key,
+                                    storage_path=operation.storage_path,
+                                    caption=operation.caption,
+                                )
+                            )
+                            self.logger.info(
+                                "Операция добавлена в Redis очередь пересоздания кэша",
+                                event="failed_cache_enqueued_persistent",
+                                status="success",
+                                cache_key=operation.cache_key,
+                            )
+                        except Exception as enqueue_error:
+                            # Fallback на локальную очередь при ошибке Redis
+                            self.logger.warning(
+                                (
+                                    f"Не удалось добавить операцию в Redis очередь, "
+                                    f"используется локальная очередь: {enqueue_error}"
+                                ),
+                                event="failed_cache_enqueue_fallback",
+                                status="warning",
+                                cache_key=operation.cache_key,
+                                exc_info=True,
+                            )
+                            self._failed_cache_operations.append(operation)
+                    else:
+                        # Если Redis очередь не настроена, используем локальную
+                        self._failed_cache_operations.append(operation)
+                        self.logger.debug(
+                            "Операция добавлена в локальную очередь пересоздания кэша",
+                            event="failed_cache_enqueued_local",
+                            status="success",
+                            cache_key=operation.cache_key,
+                        )
+
                     # Запускаем фоновую задачу, если она ещё не запущена
                     if not self._rebuild_running:
                         self._start_background_rebuild_task()
@@ -257,13 +302,21 @@ class ImageStorageUnitOfWork(BaseService):
             self.logger.info("Запущена фоновая задача пересоздания кэша")
 
     async def _rebuild_failed_caches_loop(self) -> None:
-        """Цикл пересоздания кэша для неудачных операций."""
+        """Цикл пересоздания кэша для неудачных операций.
+
+        Обрабатывает сначала локальную очередь (для обратной совместимости),
+        затем Redis очередь (если настроена).
+        """
+        # Этап 1: Обрабатываем локальную очередь
         while self._failed_cache_operations:
             operation = self._failed_cache_operations.popleft()
             try:
                 if not operation.storage_path:
                     self.logger.warning(
                         f"Пропущена операция без storage_path: cache_key={operation.cache_key}",
+                        event="rebuild_cache_skipped",
+                        status="warning",
+                        cache_key=operation.cache_key,
                     )
                     continue
 
@@ -274,21 +327,200 @@ class ImageStorageUnitOfWork(BaseService):
                 )
                 if success:
                     self.logger.info(
-                        f"Кэш успешно пересоздан: cache_key={operation.cache_key}",
+                        "Кэш успешно пересоздан из локальной очереди",
+                        event="cache_rebuild_success",
+                        status="success",
+                        cache_key=operation.cache_key,
+                        source="local_queue",
                     )
+                # Если не удалось, возвращаем в очередь
+                # Если Redis очередь доступна, пробуем её, иначе в локальную
+                elif self._failed_cache_queue and operation.storage_path:
+                    try:
+                        await self._failed_cache_queue.enqueue(
+                            FailedCacheOperation(
+                                cache_key=operation.cache_key,
+                                storage_path=operation.storage_path,
+                                caption=operation.caption,
+                            )
+                        )
+                        self.logger.debug(
+                            "Операция возвращена в Redis очередь после неудачи",
+                            event="cache_rebuild_requeue_persistent",
+                            status="warning",
+                            cache_key=operation.cache_key,
+                        )
+                    except Exception:
+                        # Fallback на локальную очередь
+                        self._failed_cache_operations.append(operation)
                 else:
-                    # Если не удалось, добавляем обратно в очередь
                     self._failed_cache_operations.append(operation)
             except Exception as e:
                 self.logger.error(
                     f"Ошибка при пересоздании кэша для {operation.cache_key}: {e}",
+                    event="cache_rebuild_error",
+                    status="error",
+                    cache_key=operation.cache_key,
+                    source="local_queue",
                     exc_info=True,
                 )
-                # Добавляем обратно в очередь для повторной попытки
-                self._failed_cache_operations.append(operation)
+                # Возвращаем в очередь для повторной попытки
+                if self._failed_cache_queue and operation.storage_path:
+                    try:
+                        await self._failed_cache_queue.enqueue(
+                            FailedCacheOperation(
+                                cache_key=operation.cache_key,
+                                storage_path=operation.storage_path,
+                                caption=operation.caption,
+                            )
+                        )
+                    except Exception:
+                        self._failed_cache_operations.append(operation)
+                else:
+                    self._failed_cache_operations.append(operation)
 
-            # Небольшая задержка между операциями
             await asyncio.sleep(1.0)
 
+        # Этап 2: Обрабатываем Redis очередь (если настроена)
+        if self._failed_cache_queue:
+            consecutive_empty = 0
+            max_consecutive_empty = 5  # Останавливаемся после 5 пустых проверок
+
+            while consecutive_empty < max_consecutive_empty:
+                failed_op = await self._failed_cache_queue.dequeue()
+                if failed_op is None:
+                    consecutive_empty += 1
+                    if consecutive_empty < max_consecutive_empty:
+                        await asyncio.sleep(1.0)
+                    continue
+
+                consecutive_empty = 0  # Сброс счётчика при успешном извлечении
+
+                try:
+                    if not failed_op.storage_path:
+                        self.logger.warning(
+                            "Пропущена операция без storage_path из Redis очереди",
+                            event="rebuild_cache_skipped",
+                            status="warning",
+                            cache_key=failed_op.cache_key,
+                            source="redis_queue",
+                        )
+                        continue
+
+                    success = await self.rebuild_cache_from_storage(
+                        cache_key=failed_op.cache_key,
+                        storage_path=failed_op.storage_path,
+                        caption=failed_op.caption,
+                    )
+                    if success:
+                        self.logger.info(
+                            "Кэш успешно пересоздан из Redis очереди",
+                            event="cache_rebuild_success",
+                            status="success",
+                            cache_key=failed_op.cache_key,
+                            source="redis_queue",
+                        )
+                    else:
+                        # Возвращаем обратно в очередь для повторной попытки
+                        await self._failed_cache_queue.enqueue(failed_op)
+                        self.logger.warning(
+                            "Операция возвращена в Redis очередь после неудачи",
+                            event="cache_rebuild_requeue_persistent",
+                            status="warning",
+                            cache_key=failed_op.cache_key,
+                        )
+                except Exception as e:
+                    self.logger.error(
+                        f"Ошибка при пересоздании кэша для {failed_op.cache_key}: {e}",
+                        event="cache_rebuild_error",
+                        status="error",
+                        cache_key=failed_op.cache_key,
+                        source="redis_queue",
+                        exc_info=True,
+                    )
+                    # Возвращаем обратно в очередь для повторной попытки
+                    try:
+                        await self._failed_cache_queue.enqueue(failed_op)
+                    except Exception as enqueue_error:
+                        self.logger.error(
+                            f"Критическая ошибка: не удалось вернуть операцию в очередь: {enqueue_error}",
+                            event="cache_rebuild_requeue_error",
+                            status="critical",
+                            cache_key=failed_op.cache_key,
+                            exc_info=True,
+                        )
+
+                await asyncio.sleep(1.0)
+
         self._rebuild_running = False
-        self.logger.info("Фоновая задача пересоздания кэша завершена")
+        self.logger.info(
+            "Фоновая задача пересоздания кэша завершена",
+            event="cache_rebuild_loop_finished",
+            status="success",
+        )
+
+    async def restore_from_persistent_queue(self) -> None:
+        """Восстанавливает очередь из Redis при старте приложения.
+
+        Загружает все операции из Redis очереди и запускает фоновую задачу
+        пересоздания, если есть операции для обработки.
+
+        Этот метод должен быть вызван после создания ImageStorageUnitOfWork
+        и инициализации Redis, но до начала работы с изображениями.
+
+        Note:
+            Метод безопасен к повторным вызовам - проверяет состояние перед запуском.
+        """
+        if not self._failed_cache_queue:
+            self.logger.debug(
+                "Redis очередь не настроена, пропуск восстановления",
+                event="cache_rebuild_restore_skipped",
+                status="info",
+            )
+            return
+
+        if self._rebuild_running:
+            self.logger.debug(
+                "Фоновая задача пересоздания уже запущена, пропуск восстановления",
+                event="cache_rebuild_restore_skipped",
+                status="info",
+            )
+            return
+
+        try:
+            operations = await self._failed_cache_queue.peek_all()
+
+            if not operations:
+                self.logger.debug(
+                    "Очередь пересоздания кэша пуста при восстановлении",
+                    event="cache_rebuild_restore_empty",
+                    status="info",
+                )
+                return
+
+            self.logger.info(
+                f"Восстановлено {len(operations)} операций из Redis очереди пересоздания кэша",
+                event="cache_rebuild_restored",
+                status="success",
+                count=len(operations),
+            )
+
+            # Запускаем фоновую задачу для обработки восстановленных операций
+            if not self._rebuild_running:
+                self._start_background_rebuild_task()
+            else:
+                self.logger.warning(
+                    "Фоновая задача уже запущена при восстановлении очереди",
+                    event="cache_rebuild_restore_warning",
+                    status="warning",
+                )
+
+        except Exception as e:
+            self.logger.error(
+                f"Ошибка при восстановлении очереди из Redis: {e}",
+                event="cache_rebuild_restore_error",
+                status="error",
+                exc_info=True,
+            )
+            # Не пробрасываем исключение - приложение должно продолжать работу
+            # даже если восстановление очереди не удалось

@@ -11,6 +11,13 @@
   - Добавлена поддержка автоматического fallback на in-memory при недоступности Redis через `RedisBackendService`
   - Добавлена поддержка операций со списками в `_InMemoryRedis` (rpush, lpop, lrange, llen) для работы очереди
 
+- **Интеграция Redis очереди в ImageStorageUnitOfWork**:
+  - Добавлен параметр `failed_cache_queue` в конструктор `ImageStorageUnitOfWork` для поддержки персистентной очереди
+  - Обновлен метод `save_image` для добавления операций в Redis очередь при ошибках сохранения в кэш
+  - Обновлен метод `_rebuild_failed_caches_loop` для обработки как локальной, так и Redis очереди
+  - Добавлен метод `restore_from_persistent_queue` для восстановления очереди при старте приложения
+  - Сохранена обратная совместимость с локальной очередью через fallback механизм
+
 - **ModelManagementService для управления моделями ML-клиентов**:
   - Создан новый сервис `src/app/model_management_service.py` для инкапсуляции логики выбора и сохранения моделей
   - Реализованы методы `set_kandinsky_model()` и `set_gigachat_model()` для установки моделей через клиенты с сохранением в репозиторий
