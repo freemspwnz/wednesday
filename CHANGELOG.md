@@ -172,6 +172,12 @@
   - Модули больше не зависят от библиотеки loguru напрямую, работают только с интерфейсом `ILogger`
   - В тестах добавлены mock-логгеры (через helper-функции `_create_mock_logger()`) для всех сервисов, создаваемых в тестах
 
+- **Рефакторинг DatabaseOperationsService для явной инъекции UnitOfWork**:
+  - Аргумент `unit_of_work_factory: Callable[[], IDatabaseUnitOfWork]` сделан обязательным в конструкторе `DatabaseOperationsService`
+  - Удалён fallback-код, создающий `DatabaseUnitOfWork` и логгер внутри `DatabaseOperationsService` через импорты из `infra.*`
+  - Сборка `DatabaseUnitOfWork` и логгера перенесена в composition root (`container.py`), где теперь передаётся фабрика UoW
+  - Интеграционные тесты `tests/app/test_database_operations_service.py` обновлены для передачи собственной фабрики UnitOfWork
+
 - **Рефакторинг логирования для обеспечения чистой инъекции зависимостей**:
   - Создан протокол `ILogger` в `shared/protocols.py` с методами trace, debug, info, success, warning, error, critical (с поддержкой *args и **kwargs) и методом bind(**kwargs) -> ILogger
   - Создан класс `LoguruLogger` в `infra/logging/logger.py`, реализующий протокол `ILogger`

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.database_operations_service import DatabaseOperationsService
+from infra.database.database_unit_of_work import DatabaseUnitOfWork
 from infra.metrics.metrics import Metrics
 from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
@@ -38,10 +39,14 @@ async def test_database_operations_record_dispatch_success(
     usage_tracker = UsageTracker(pool=async_postgres_pool)
     metrics = Metrics(pool=async_postgres_pool)
 
+    def create_unit_of_work() -> DatabaseUnitOfWork:
+        return DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
+
     database_operations = DatabaseOperationsService(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage_tracker,
         metrics=metrics,
+        unit_of_work_factory=create_unit_of_work,
         logger=_create_mock_logger(),
     )
 
@@ -87,10 +92,14 @@ async def test_database_operations_record_dispatch_success_rollback_on_error(
 
     failing_usage_tracker = FailingUsageTracker(pool=async_postgres_pool)
 
+    def create_unit_of_work() -> DatabaseUnitOfWork:
+        return DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
+
     database_operations = DatabaseOperationsService(
         dispatch_registry=dispatch_registry,
         usage_tracker=failing_usage_tracker,
         metrics=metrics,
+        unit_of_work_factory=create_unit_of_work,
         logger=_create_mock_logger(),
     )
 
@@ -129,10 +138,14 @@ async def test_database_operations_record_dispatch_failure(
     usage_tracker = UsageTracker(pool=async_postgres_pool)
     metrics = Metrics(pool=async_postgres_pool)
 
+    def create_unit_of_work() -> DatabaseUnitOfWork:
+        return DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
+
     database_operations = DatabaseOperationsService(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage_tracker,
         metrics=metrics,
+        unit_of_work_factory=create_unit_of_work,
         logger=_create_mock_logger(),
     )
 
@@ -169,10 +182,14 @@ async def test_database_operations_record_dispatch_failure_no_metrics(
     dispatch_registry = DispatchRegistry(pool=async_postgres_pool)
     usage_tracker = UsageTracker(pool=async_postgres_pool)
 
+    def create_unit_of_work() -> DatabaseUnitOfWork:
+        return DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
+
     database_operations = DatabaseOperationsService(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage_tracker,
         metrics=None,
+        unit_of_work_factory=create_unit_of_work,
         logger=_create_mock_logger(),
     )
 

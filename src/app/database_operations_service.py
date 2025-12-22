@@ -20,8 +20,8 @@ class DatabaseOperationsService(BaseService):
         self,
         dispatch_registry: IDispatchRegistry,
         usage_tracker: IUsageTracker,
+        unit_of_work_factory: Callable[[], IDatabaseUnitOfWork],
         metrics: IMetrics | None = None,
-        unit_of_work_factory: Callable[[], IDatabaseUnitOfWork] | None = None,
         *,
         logger: ILogger,
     ) -> None:
@@ -31,7 +31,7 @@ class DatabaseOperationsService(BaseService):
             dispatch_registry: Реестр отправок.
             usage_tracker: Трекер использования.
             metrics: Сервис метрик (опционально).
-            unit_of_work_factory: Фабрика для создания экземпляров Unit of Work.
+            unit_of_work_factory: Фабрика для создания экземпляров Unit of Work (обязательная зависимость).
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
@@ -61,19 +61,7 @@ class DatabaseOperationsService(BaseService):
         Raises:
             Exception: При ошибке выполнения операций (транзакция откатывается).
         """
-        if self._unit_of_work_factory is None:
-            # Fallback для обратной совместимости (breaking change - будет удалено)
-            from infra.database.database_unit_of_work import DatabaseUnitOfWork
-            from infra.database.postgres_client import get_postgres_pool
-            from infra.logging.logger import get_logger
-
-            def create_uow() -> IDatabaseUnitOfWork:
-                logger = get_logger(DatabaseUnitOfWork.__name__)
-                return DatabaseUnitOfWork(pool=get_postgres_pool(), logger=logger)
-
-            uow: IDatabaseUnitOfWork = create_uow()
-        else:
-            uow = self._unit_of_work_factory()
+        uow = self._unit_of_work_factory()
 
         async with uow:
             connection = uow.connection
