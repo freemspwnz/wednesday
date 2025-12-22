@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- **Поддержка pydantic-settings для новой структуры конфигурации**:
+  - Добавлена зависимость `pydantic-settings>=2.0.0` в `requirements.txt` и `pyproject.toml`
+  - Подготовка к миграции на Pydantic BaseSettings для управления конфигурацией
+
 ### Изменено
 
 - **Перенос retry логики с domain слоя на уровень клиента**:
