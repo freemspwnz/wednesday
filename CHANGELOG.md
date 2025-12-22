@@ -25,6 +25,13 @@
   - Обновлены комментарии в `build_image_stack()` для отражения нового подхода через DI
   - Клиенты теперь регистрируются в контейнерах для поддержки runtime-замены и корректного cleanup
 
+- **Удаление устаревшего factory.py и обновление экспортов**:
+  - Удален файл `src/infra/clients/factory.py` (заменен на `ClientManagementService`)
+  - Обновлен `src/infra/clients/__init__.py`: удалены экспорты `create_image_client` и `create_text_client`
+  - Добавлен экспорт `ClientManagementService` в `__init__.py`
+  - Обновлен docstring модуля для отражения нового подхода через DI и контейнеры
+  - Обновлены тесты в `tests/test_smoke_low_coverage.py` для использования `ClientManagementService` вместо factory
+
 - **Рефакторинг конфигурации: завершен переход на Pydantic Config**:
   - Полностью завершен переход с dataclass на Pydantic BaseSettings для всех моделей конфигурации
   - Все модули используют единый `Config` класс из `shared.config`

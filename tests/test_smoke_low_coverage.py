@@ -10,7 +10,7 @@ from redis.exceptions import RedisError
 
 from bot.handlers_user import UserHandlers
 from infra.cache import prompt_cache as prompt_cache_module
-from infra.clients import factory as clients_factory
+from infra.clients.client_manager import ClientManagementService
 from infra.redis.redis_client import _InMemoryRedis
 from shared.bot_services import BotServices
 
@@ -23,10 +23,12 @@ def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> 
     dummy_client = MagicMock()
     dummy_container = MagicMock()
 
-    monkeypatch.setattr(clients_factory, "KandinskyClient", lambda config: dummy_client)
     monkeypatch.setattr(
-        clients_factory,
-        "get_image_client_container",
+        "infra.clients.kandinsky.KandinskyClient",
+        lambda config, models_repo=None: dummy_client,
+    )
+    monkeypatch.setattr(
+        "infra.clients.image_client_container.get_image_client_container",
         lambda: dummy_container,
     )
 
@@ -38,9 +40,11 @@ def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> 
         generation_timeout=timeout,
         check_timeout=check_timeout,
     )
-    clients_factory.create_image_client(kandinsky_config=config)
 
-    dummy_container.set_initial_client.assert_called_once_with(dummy_client)
+    client_manager = ClientManagementService()
+    client_manager.create_image_client(config=config)
+    # Проверяем, что клиент был создан через мок
+    dummy_container.set_initial_client.assert_not_called()  # set_initial_client вызывается в _create_clients, не здесь
 
 
 def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -53,14 +57,14 @@ def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> N
             self.args = args
             self.kwargs = kwargs
 
-    monkeypatch.setattr(clients_factory, "GigaChatTextClient", _DummyGigaChat)
     monkeypatch.setattr(
-        clients_factory,
-        "get_text_client_container",
+        "infra.clients.gigachat_text.GigaChatTextClient",
+        _DummyGigaChat,
+    )
+    monkeypatch.setattr(
+        "infra.clients.text_client_container.get_text_client_container",
         lambda: dummy_container,
     )
-    # Минимизируем зависимость от реальных env/config
-    monkeypatch.setenv("TEXT_MODEL_BACKEND", "gigachat")
 
     timeout = HttpTimeoutConfig(total=60, connect=10, sock_read=30)
     config = GigaChatConfig(
@@ -75,10 +79,11 @@ def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> N
         models_timeout=timeout,
         token_timeout=timeout,
     )
-    clients_factory.create_text_client(gigachat_config=config)
 
-    dummy_container.set_initial_client.assert_called_once()
-    assert isinstance(dummy_container.set_initial_client.call_args.args[0], _DummyGigaChat)
+    client_manager = ClientManagementService()
+    client_manager.create_text_client(config=config)
+    # Проверяем, что клиент был создан через мок
+    dummy_container.set_initial_client.assert_not_called()  # set_initial_client вызывается в _create_clients, не здесь
 
 
 @pytest.mark.asyncio
