@@ -6,16 +6,12 @@
 
 from __future__ import annotations
 
-from domain.prompt_generation import PromptGenerationService
-from shared.base.base_service import BaseService
-from shared.base.exceptions import (
-    APIError,
-    AuthenticationError,
-    CacheError,
-    ClientError,
-    NetworkError,
-    UnexpectedPromptError,
+from domain.prompt_generation import (
+    PromptGenerationService,
+    PromptSource,
 )
+from shared.base.base_service import BaseService
+from shared.base.exceptions import CacheError, UnexpectedPromptError
 from shared.protocols import ICache, ILogger
 
 
@@ -89,25 +85,32 @@ class PromptService(BaseService):
         )
 
         try:
-            prompt = await self._generation_service.generate()
-            if prompt is not None:
+            result = await self._generation_service.generate()
+            if result.source == PromptSource.AI and result.prompt is not None:
                 self.logger.info(
-                    f"Промпт успешно сгенерирован: {prompt[:100]}...",
+                    f"Промпт успешно сгенерирован: {result.prompt[:100]}...",
                     event="prompt_generation_success",
                     status="success",
                 )
-        except (AuthenticationError, NetworkError, APIError, ClientError) as e:
-            # Ожидаемые ошибки клиентов/сетевые сбои — логируем и используем fallback
-            self.logger.warning(
-                f"Ошибка клиента при генерации промпта: {e}",
-                event="prompt_generation_client_error",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-            prompt = None
+                prompt = result.prompt
+            elif result.source == PromptSource.FALLBACK_REQUIRED:
+                self.logger.warning(
+                    "Ошибка клиента при генерации промпта, требуется fallback",
+                    event="prompt_generation_client_error",
+                    status="error",
+                )
+                prompt = None
+            elif result.source == PromptSource.UNAVAILABLE:
+                self.logger.warning(
+                    "Текстовый клиент недоступен, требуется fallback",
+                    event="prompt_generation_unavailable",
+                    status="warning",
+                )
+                prompt = None
+            else:
+                prompt = None
         except Exception as e:
-            # Действительно неожиданная ошибка доменного сервиса генерации промптов
+            # Неожиданная ошибка доменного сервиса генерации промптов
             unexpected_error = UnexpectedPromptError(
                 f"Unexpected error while generating prompt: {e}",
                 original_error=e,

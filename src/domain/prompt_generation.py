@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
+from enum import Enum, auto
 
 from shared.base.exceptions import (
     APIError,
@@ -16,6 +18,22 @@ from shared.base.exceptions import (
 )
 from shared.config import PromptFallbackConfig
 from shared.protocols import ITextToTextClient
+
+
+class PromptSource(Enum):
+    """Источник промпта для генерации изображения."""
+
+    AI = auto()
+    FALLBACK_REQUIRED = auto()
+    UNAVAILABLE = auto()
+
+
+@dataclass
+class PromptGenerationResult:
+    """Результат генерации промпта с указанием источника."""
+
+    prompt: str | None
+    source: PromptSource
 
 
 class PromptGenerationService:
@@ -40,33 +58,40 @@ class PromptGenerationService:
         self._text_client = text_client
         self._fallback_config = fallback_config
 
-    async def generate(self) -> str | None:
+    async def generate(self) -> PromptGenerationResult:
         """Генерирует промпт для генерации изображения.
 
-        Выполняет генерацию через ITextToTextClient. При ошибке возвращает None,
-        что сигнализирует о необходимости использовать статический fallback
-        в вызывающем коде.
+        Выполняет генерацию через ITextToTextClient. При ожидаемых ошибках клиента
+        возвращает результат с источником FALLBACK_REQUIRED, сигнализируя о необходимости
+        использовать статический fallback в вызывающем коде.
 
         Returns:
-            Сгенерированный промпт или None, если генерация не удалась.
+            Результат генерации промпта с указанием источника.
+
+        Raises:
+            Exception: Неожиданные ошибки пробрасываются дальше для обработки в app-слое.
 
         Note:
-            Метод не пробрасывает исключения клиента, а возвращает None,
-            чтобы вызывающий код мог использовать fallback промпт.
+            Ожидаемые ошибки клиента (AuthenticationError, NetworkError, APIError, ClientError)
+            обрабатываются и возвращают результат с источником FALLBACK_REQUIRED.
+            Неожиданные ошибки пробрасываются для корректной обработки в app-слое.
         """
         if self._text_client is None:
-            return None
+            return PromptGenerationResult(
+                prompt=None,
+                source=PromptSource.UNAVAILABLE,
+            )
 
         try:
             prompt = await self._text_client.generate("prompt_for_kandinsky")
-            return prompt
+            return PromptGenerationResult(prompt=prompt, source=PromptSource.AI)
 
         except (AuthenticationError, NetworkError, APIError, ClientError):
-            # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
-            return None
-        except Exception:
-            # Не пробрасываем исключение, чтобы вызывающий код мог использовать fallback
-            return None
+            # Ожидаемые ошибки клиента → используем fallback
+            return PromptGenerationResult(
+                prompt=None,
+                source=PromptSource.FALLBACK_REQUIRED,
+            )
 
     def get_fallback_prompt(self) -> str:
         """Возвращает статический промпт из конфигурации (fallback).

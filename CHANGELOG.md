@@ -10,6 +10,12 @@
   - Поддержка runtime-замены клиентов без рестарта приложения
   - Интеграция с репозиторием моделей через dependency injection
 
+- **Улучшение контракта PromptGenerationService.generate**:
+  - Добавлен enum `PromptSource` с тремя значениями: `AI`, `FALLBACK_REQUIRED`, `UNAVAILABLE`
+  - Добавлен dataclass `PromptGenerationResult` с полями `prompt` и `source` для явного указания источника промпта
+  - Метод `generate()` теперь возвращает `PromptGenerationResult` вместо `str | None`
+  - Неожиданные ошибки теперь пробрасываются дальше для обработки в app-слое
+
 ### Изменено
 
 - **Упрощение обработки рассылок и fallback-отправок в app-слое**:
@@ -95,6 +101,12 @@
   - Преобразован `ImageConfig` в Pydantic BaseModel с ClassVar полями для констант
   - Преобразован `PromptFallbackConfig` в Pydantic BaseModel с полями `frog_prompts` и `styles`
   - Обновлены ссылки на переименованные классы в `ConfigV2` (поля `kandinsky`, `gigachat`, `retry`, `circuit_breaker`)
+
+- **Обновление PromptService для работы с новым контрактом PromptGenerationService**:
+  - Метод `generate()` обновлен для работы с `PromptGenerationResult` вместо `str | None`
+  - Убрана обработка ожидаемых исключений клиентов (AuthenticationError, NetworkError, APIError, ClientError), так как они теперь обрабатываются в domain-слое
+  - Добавлена обработка разных источников промпта через `PromptSource` enum
+  - Улучшено логирование различных сценариев генерации промпта
 
 ### Добавлено
 
