@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
+from infra.clients.client_manager import ClientManagementService
 from infra.clients.models.status import APIStatusResult, SetModelResult
 from infra.clients.text_client_container import TextClientContainer
+from shared.config import GigaChatConfig
 from shared.protocols import ITextToTextClient
 
 
@@ -73,8 +76,11 @@ async def test_replace_client_closes_old_and_uses_new() -> None:
     assert result_old == "old:prompt"
     assert old_client.closed is False
 
-    # Меняем клиента.
-    await container.replace_client(new_client)
+    # Меняем клиента через ClientManagementService
+    mock_client_manager = MagicMock(spec=ClientManagementService)
+    mock_client_manager.create_text_client.return_value = new_client
+    config = GigaChatConfig(authorization_key="test")
+    await container.replace_client(config=config, client_manager=mock_client_manager)
 
     # Старый клиент должен быть закрыт, новый — использоваться для новых вызовов.
     assert old_client.closed is True
@@ -115,7 +121,10 @@ async def test_replace_client_is_thread_safe_for_concurrent_calls() -> None:
     async def do_replace() -> None:
         # Небольшая задержка, чтобы генерации начались до замены.
         await asyncio.sleep(0.01)
-        await container.replace_client(new_client)
+        mock_client_manager = MagicMock(spec=ClientManagementService)
+        mock_client_manager.create_text_client.return_value = new_client
+        config = GigaChatConfig(authorization_key="test")
+        await container.replace_client(config=config, client_manager=mock_client_manager)
 
     gen_task = asyncio.create_task(generate_loop())
     replace_task = asyncio.create_task(do_replace())

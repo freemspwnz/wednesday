@@ -2,34 +2,18 @@
 Динамический контейнер для текстового ML‑клиента (`ITextToTextClient`).
 
 Основная задача этого модуля — предоставить **одну точку доступа** к текущему
-текстовому клиенту бота (LLM) и подготовить инфраструктуру для будущих
-админ‑команд, которые смогут менять бэкенд в рантайме без рестарта бота.
+текстовому клиенту бота (LLM) и поддержку runtime-замены клиентов без рестарта бота.
 
-Ключевые идеи:
+Клиенты создаются через Dependency Injection в `infra.container._create_clients()`
+с использованием `ClientManagementService`.
 
-- контейнер реализует интерфейс `ITextToTextClient` и прозрачно проксирует
-  вызовы (`generate`, `check_api_status`, `get_available_models`, `set_model`)
-  к текущему активному клиенту;
-- все сервисы (бот, генератор изображений и т.п.) должны зависеть от
-  контейнера, а не от конкретной реализации (`GigaChatTextClient`);
-- при замене клиента в рантайме старый экземпляр корректно закрывается
-  через его асинхронный метод `aclose()` (если он реализован).
+Для runtime-замены используйте:
+    await container.replace_client(
+        config=new_config,
+        client_manager=client_manager,
+    )
 
-Использование (будущее, для админ‑команд):
-
-    from infra.clients.text_client_container import get_text_client_container
-    from infra.clients.gigachat_text import GigaChatTextClient
-
-    container = get_text_client_container()
-
-    # Создаём нового клиента (например, с другими cred'ами или вообще другого провайдера)
-    new_client = GigaChatTextClient(...)
-
-    # Безопасно подменяем активный клиент:
-    await container.replace_client(new_client)
-
-    # Все существующие сервисы, которые уже держат ссылку на контейнер,
-    # автоматически начнут использовать нового клиента без рестарта процесса.
+Все клиенты требуют конфиг, поэтому метод принимает конфиг и создаёт клиент внутри.
 """
 
 from __future__ import annotations
@@ -37,9 +21,11 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 
+from infra.clients.client_manager import ClientManagementService
 from infra.clients.models.status import APIStatusResult, SetModelResult
 from infra.logging.logger import get_logger
-from shared.protocols import ITextToTextClient
+from shared.config import GigaChatConfig
+from shared.protocols import IModelsRepo, ITextToTextClient
 
 logger = get_logger(__name__)
 
@@ -99,29 +85,43 @@ class TextClientContainer(ITextToTextClient):
             client_type=type(client).__name__,
         )
 
-    async def replace_client(self, client: ITextToTextClient | None) -> None:
-        """
-        Асинхронно заменяет активный клиент на новый и корректно закрывает старый.
+    async def replace_client(
+        self,
+        config: GigaChatConfig,
+        client_manager: ClientManagementService,
+        models_repo: IModelsRepo | None = None,
+    ) -> None:
+        """Заменяет активный клиент новым, созданным из конфига.
 
-        Этот метод предназначен для будущих админ‑команд, которые смогут в
-        рантайме переключать LLM‑бэкенд (например, GigaChat -> другой провайдер)
-        без остановки процесса бота.
+        Все клиенты требуют конфиг для создания, поэтому этот метод принимает
+        конфиг и создаёт клиент через ClientManagementService.
 
-        Алгоритм:
-        - берём lock, сохраняем ссылку на старый клиент;
-        - устанавливаем новый клиент;
-        - если у старого есть асинхронный метод `aclose()`, вызываем его;
-        - все сервисы, работающие через контейнер, автоматически начнут
-          использовать новый клиент.
+        Args:
+            config: Конфигурация для нового клиента.
+            client_manager: Сервис для создания клиентов.
+            models_repo: Репозиторий моделей (опционально).
+
+        Raises:
+            ValueError: Если не удалось создать клиент (например, authorization_key не задан).
         """
         async with self._lock:
-            old_client: ITextToTextClient | None = self._client
-            self._client = client
+            # Создаём новый клиент
+            new_client = client_manager.create_text_client(
+                config=config,
+                models_repo=models_repo,
+            )
 
-            if client is not None:
+            if new_client is None:
+                raise ValueError("Не удалось создать текстовый клиент: authorization_key не задан")
+
+            # Сохраняем старый клиент для закрытия
+            old_client: ITextToTextClient | None = self._client
+            self._client = new_client
+
+            if new_client is not None:
                 self._logger.info(
                     "Активный текстовый клиент заменён",
-                    new_client_type=type(client).__name__,
+                    new_client_type=type(new_client).__name__,
                     old_client_type=type(old_client).__name__ if old_client is not None else None,
                 )
 
@@ -131,11 +131,11 @@ class TextClientContainer(ITextToTextClient):
                     aclose = old_client.aclose
                     if asyncio.iscoroutinefunction(aclose):
                         await aclose()
-                    else:  # pragma: no cover - защитный фоллбек для нестандартных реализаций
+                    else:  # pragma: no cover
                         maybe_coro = aclose()
                         if asyncio.iscoroutine(maybe_coro):
                             await maybe_coro
-                except Exception as exc:  # pragma: no cover - защитное логирование
+                except Exception as exc:  # pragma: no cover
                     self._logger.warning(
                         "Не удалось корректно закрыть старый текстовый клиент при замене",
                         error=str(exc),

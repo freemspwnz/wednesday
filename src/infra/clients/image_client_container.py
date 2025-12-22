@@ -2,33 +2,18 @@
 Динамический контейнер для клиента генерации изображений (`ITextToImageClient`).
 
 Основная задача этого модуля — предоставить **одну точку доступа** к текущему
-клиенту генерации изображений (TTI) и подготовить инфраструктуру для будущих
-админ‑команд, которые смогут менять бэкенд в рантайме без рестарта бота.
+клиенту генерации изображений (TTI) и поддержку runtime-замены клиентов без рестарта бота.
 
-Ключевые идеи:
+Клиенты создаются через Dependency Injection в `infra.container._create_clients()`
+с использованием `ClientManagementService`.
 
-- контейнер реализует интерфейс `ITextToImageClient` и прозрачно проксирует
-  вызовы (`generate`) к текущему активному клиенту;
-- все сервисы (бот, генератор изображений и т.п.) должны зависеть от
-  контейнера, а не от конкретной реализации (`KandinskyClient`);
-- при замене клиента в рантайме старый экземпляр корректно закрывается
-  через его асинхронный метод `aclose()` (если он реализован).
+Для runtime-замены используйте:
+    await container.replace_client(
+        config=new_config,
+        client_manager=client_manager,
+    )
 
-Использование (будущее, для админ‑команд):
-
-    from infra.clients.image_client_container import get_image_client_container
-    from infra.clients.kandinsky import KandinskyClient
-
-    container = get_image_client_container()
-
-    # Создаём нового клиента (например, другой провайдер TTI)
-    new_client = KandinskyClient()
-
-    # Безопасно подменяем активный клиент:
-    await container.replace_client(new_client)
-
-    # Все существующие сервисы, которые уже держат ссылку на контейнер,
-    # автоматически начнут использовать нового клиента без рестарта процесса.
+Все клиенты требуют конфиг, поэтому метод принимает конфиг и создаёт клиент внутри.
 """
 
 from __future__ import annotations
@@ -36,9 +21,11 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 
+from infra.clients.client_manager import ClientManagementService
 from infra.clients.models.status import APIStatusResult, SetModelResult
 from infra.logging.logger import get_logger
-from shared.protocols import ITextToImageClient
+from shared.config import KandinskyConfig
+from shared.protocols import IModelsRepo, ITextToImageClient
 
 logger = get_logger(__name__)
 
@@ -97,35 +84,51 @@ class ImageClientContainer(ITextToImageClient):
             client_type=type(client).__name__,
         )
 
-    async def replace_client(self, client: ITextToImageClient | None) -> None:
-        """
-        Асинхронно заменяет активный клиент на новый и корректно закрывает старый.
+    async def replace_client(
+        self,
+        config: KandinskyConfig,
+        client_manager: ClientManagementService,
+        models_repo: IModelsRepo | None = None,
+    ) -> None:
+        """Заменяет активный клиент новым, созданным из конфига.
 
-        Этот метод предназначен для будущих админ‑команд, которые смогут в
-        рантайме переключать TTI‑бэкенд (например, Kandinsky -> другой провайдер)
-        без остановки процесса бота.
+        Все клиенты требуют конфиг для создания, поэтому этот метод принимает
+        конфиг и создаёт клиент через ClientManagementService.
 
-        Алгоритм:
-        - берём lock, сохраняем ссылку на старый клиент;
-        - устанавливаем новый клиент;
-        - если у старого есть асинхронный метод `aclose()`, вызываем его;
-        - все сервисы, работающие через контейнер, автоматически начнут
-          использовать новый клиент.
+        Args:
+            config: Конфигурация для нового клиента.
+            client_manager: Сервис для создания клиентов.
+            models_repo: Репозиторий моделей (опционально).
 
-        Пример использования (для будущих админ‑команд):
+        Example:
+            from infra.clients.client_manager import ClientManagementService
+            from infra.clients.image_client_container import get_image_client_container
+            from shared.config import KandinskyConfig
 
             container = get_image_client_container()
-            new_client = KandinskyClient()  # или другой ITextToImageClient
-            await container.replace_client(new_client)
+            new_config = KandinskyConfig(api_key="...", secret_key="...")
+            manager = ClientManagementService(models_repo=repo)
+
+            await container.replace_client(
+                config=new_config,
+                client_manager=manager,
+            )
         """
         async with self._lock:
-            old_client: ITextToImageClient | None = self._client
-            self._client = client
+            # Создаём новый клиент
+            new_client = client_manager.create_image_client(
+                config=config,
+                models_repo=models_repo,
+            )
 
-            if client is not None:
+            # Сохраняем старый клиент для закрытия
+            old_client: ITextToImageClient | None = self._client
+            self._client = new_client
+
+            if new_client is not None:
                 self._logger.info(
                     "Активный клиент генерации изображений заменён",
-                    new_client_type=type(client).__name__,
+                    new_client_type=type(new_client).__name__,
                     old_client_type=type(old_client).__name__ if old_client is not None else None,
                 )
 
@@ -135,11 +138,11 @@ class ImageClientContainer(ITextToImageClient):
                     aclose = old_client.aclose
                     if asyncio.iscoroutinefunction(aclose):
                         await aclose()
-                    else:  # pragma: no cover - защитный фоллбек для нестандартных реализаций
+                    else:  # pragma: no cover
                         maybe_coro = aclose()
                         if asyncio.iscoroutine(maybe_coro):
                             await maybe_coro
-                except Exception as exc:  # pragma: no cover - защитное логирование
+                except Exception as exc:  # pragma: no cover
                     self._logger.warning(
                         "Не удалось корректно закрыть старый клиент генерации изображений при замене",
                         error=str(exc),

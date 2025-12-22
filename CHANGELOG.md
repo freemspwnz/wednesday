@@ -12,6 +12,12 @@
 
 ### Изменено
 
+- **Обновлены контейнеры клиентов для работы с ClientManagementService**:
+  - Метод `replace_client()` в `ImageClientContainer` теперь принимает `config` и `client_manager` вместо готового клиента
+  - Метод `replace_client()` в `TextClientContainer` теперь принимает `config` и `client_manager` вместо готового клиента
+  - Обновлены docstring модулей контейнеров для отражения нового подхода к созданию клиентов
+  - Клиенты теперь создаются через `ClientManagementService` с кастомными конфигами для runtime-замены
+
 - **Рефакторинг конфигурации: завершен переход на Pydantic Config**:
   - Полностью завершен переход с dataclass на Pydantic BaseSettings для всех моделей конфигурации
   - Все модули используют единый `Config` класс из `shared.config`
