@@ -51,6 +51,7 @@ from shared.config import (
     KandinskyConfig,
     PromptFallbackConfig,
 )
+from shared.config_v2 import ConfigV2
 from shared.protocols import (
     IChatsRepo,
     ICircuitBreaker,
@@ -63,19 +64,26 @@ from shared.protocols import (
 )
 
 
-def _create_clients(config: Config, models_repo: IModelsRepo | None = None) -> tuple:
+def _create_clients(
+    config: Config | ConfigV2,
+    models_repo: IModelsRepo | None = None,
+) -> tuple:
     """Создаёт клиенты для внешних ML‑сервисов.
 
     Args:
-        config: Экземпляр Config для создания конфигураций клиентов.
+        config: Экземпляр Config или ConfigV2 для создания конфигураций клиентов.
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
 
     Returns:
         Кортеж (image_client, text_client) для использования в сервисах.
     """
-    # Создаем конфигурации из переданного config
-    gigachat_config = GigaChatConfig.from_config(config)
-    kandinsky_config = KandinskyConfig.from_config(config)
+    # Поддержка как старого Config, так и нового ConfigV2
+    if isinstance(config, ConfigV2):
+        gigachat_config = config.to_gigachat_config()
+        kandinsky_config = config.to_kandinsky_config()
+    else:
+        gigachat_config = GigaChatConfig.from_config(config)
+        kandinsky_config = KandinskyConfig.from_config(config)
 
     # Передаем в фабрики
     image_client = create_image_client(kandinsky_config=kandinsky_config, models_repo=models_repo)
@@ -84,7 +92,7 @@ def _create_clients(config: Config, models_repo: IModelsRepo | None = None) -> t
 
 
 def build_image_stack(
-    config: Config,
+    config: Config | ConfigV2,
     db_pool: asyncpg.Pool,
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
@@ -148,9 +156,12 @@ def build_image_stack(
     prompt_cache = PromptCache(redis_client=redis_client)
 
     # Получаем конфигурацию circuit breaker
-    from shared.config import config
+    if isinstance(config, ConfigV2):
+        cb_config = config.to_circuit_breaker_config()
+    else:
+        from shared.config import config as global_config
 
-    cb_config = config.get_circuit_breaker_config()
+        cb_config = global_config.get_circuit_breaker_config()
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(
         redis_client=redis_client,
         key="cb:kandinsky_api",
@@ -237,7 +248,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     )
 
 
-def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
+def build_bot_services(config: Config | ConfigV2, db_pool: asyncpg.Pool) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
     На этом этапе:
@@ -252,7 +263,11 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         Настроенный экземпляр BotServices.
     """
 
-    app_settings = AppSettings.from_config(config)
+    # Поддержка как старого Config, так и нового ConfigV2
+    if isinstance(config, ConfigV2):
+        app_settings = config.to_app_settings()
+    else:
+        app_settings = AppSettings.from_config(config)
 
     # Создаём общий логгер для всех сервисов
     app_logger = get_logger("app")
@@ -395,7 +410,11 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     )
 
 
-def build_bot(config: Config, db_pool: asyncpg.Pool, services: BotServices | None = None) -> WednesdayBot:
+def build_bot(
+    config: Config | ConfigV2,
+    db_pool: asyncpg.Pool,
+    services: BotServices | None = None,
+) -> WednesdayBot:
     """Создаёт и настраивает экземпляр WednesdayBot.
 
     Единственная точка создания WednesdayBot в приложении. Использует

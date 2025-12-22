@@ -7,11 +7,20 @@
 
 import os
 from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import aiohttp
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from shared.config import (
+        AppSettings,
+        CircuitBreakerConfig,
+        GigaChatConfig,
+        KandinskyConfig,
+        RetryConfig,
+    )
 
 
 def _read_secret_file(file_path: str) -> str | None:
@@ -138,7 +147,7 @@ class TelegramConfig(BaseSettings):
         return _get_env_value("TELEGRAM_VLESS_PROXY")
 
 
-class KandinskyConfig(BaseSettings):
+class KandinskyConfigV2(BaseSettings):
     """Конфигурация для Kandinsky клиента."""
 
     model_config = SettingsConfigDict(env_prefix="KANDINSKY_", extra="ignore")
@@ -178,7 +187,7 @@ class KandinskyConfig(BaseSettings):
         return _get_env_value("KANDINSKY_SECRET_KEY")
 
 
-class GigaChatConfig(BaseSettings):
+class GigaChatConfigV2(BaseSettings):
     """Конфигурация для GigaChat клиента."""
 
     model_config = SettingsConfigDict(env_prefix="GIGACHAT_", extra="ignore")
@@ -384,7 +393,7 @@ class SentryConfig(BaseSettings):
     release: str | None = Field(default=None, alias="RELEASE")
 
 
-class RetryConfig(BaseSettings):
+class RetryConfigV2(BaseSettings):
     """Конфигурация для retry механизмов."""
 
     model_config = SettingsConfigDict(env_prefix="RETRY_", extra="ignore")
@@ -406,7 +415,7 @@ class RetryConfig(BaseSettings):
         return int(value) if value else 5
 
 
-class CircuitBreakerConfig(BaseSettings):
+class CircuitBreakerConfigV2(BaseSettings):
     """Конфигурация для circuit breaker."""
 
     model_config = SettingsConfigDict(env_prefix="CIRCUIT_BREAKER_", extra="ignore")
@@ -514,14 +523,14 @@ class ConfigV2(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
-    kandinsky: KandinskyConfig = Field(default_factory=KandinskyConfig)
-    gigachat: GigaChatConfig = Field(default_factory=GigaChatConfig)
+    kandinsky: KandinskyConfigV2 = Field(default_factory=KandinskyConfigV2)
+    gigachat: GigaChatConfigV2 = Field(default_factory=GigaChatConfigV2)
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     sentry: SentryConfig = Field(default_factory=SentryConfig)
-    retry: RetryConfig = Field(default_factory=RetryConfig)
-    circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
+    retry: RetryConfigV2 = Field(default_factory=RetryConfigV2)
+    circuit_breaker: CircuitBreakerConfigV2 = Field(default_factory=CircuitBreakerConfigV2)
 
     # Дополнительные настройки
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
@@ -553,3 +562,125 @@ class ConfigV2(BaseSettings):
             return port if port > 0 else None
         except (ValueError, TypeError):
             return None
+
+    def to_gigachat_config(self) -> "GigaChatConfig":
+        """Преобразует GigaChatConfig в старый dataclass для обратной совместимости.
+
+        Returns:
+            Экземпляр GigaChatConfigCompat (старый dataclass).
+        """
+        from shared.config import GigaChatConfig, HttpTimeoutConfig as HttpTimeoutConfigCompat
+
+        def _convert_timeout(timeout: HttpTimeoutConfig) -> HttpTimeoutConfigCompat:
+            """Преобразует Pydantic HttpTimeoutConfig в dataclass."""
+            return HttpTimeoutConfigCompat(
+                total=timeout.total,
+                connect=timeout.connect,
+                sock_read=timeout.sock_read,
+            )
+
+        return GigaChatConfig(
+            auth_url=self.gigachat.auth_url,
+            api_url=self.gigachat.api_url,
+            models_url=self.gigachat.models_url,
+            authorization_key=self.gigachat.authorization_key,
+            scope=self.gigachat.scope,
+            model=self.gigachat.model,
+            verify_ssl=self.gigachat.verify_ssl,
+            prompt_timeout=_convert_timeout(self.gigachat.prompt_timeout),
+            models_timeout=_convert_timeout(self.gigachat.models_timeout),
+            token_timeout=_convert_timeout(self.gigachat.token_timeout),
+        )
+
+    def to_kandinsky_config(self) -> "KandinskyConfig":
+        """Преобразует KandinskyConfig в старый dataclass для обратной совместимости.
+
+        Returns:
+            Экземпляр KandinskyConfigCompat (старый dataclass).
+        """
+        from shared.config import (
+            HttpTimeoutConfig as HttpTimeoutConfigCompat,
+            KandinskyConfig,
+        )
+
+        def _convert_timeout(timeout: HttpTimeoutConfig) -> HttpTimeoutConfigCompat:
+            """Преобразует Pydantic HttpTimeoutConfig в dataclass."""
+            return HttpTimeoutConfigCompat(
+                total=timeout.total,
+                connect=timeout.connect,
+                sock_read=timeout.sock_read,
+            )
+
+        return KandinskyConfig(
+            api_key=self.kandinsky.api_key,
+            secret_key=self.kandinsky.secret_key,
+            base_url=self.kandinsky.base_url,
+            generation_timeout=_convert_timeout(self.kandinsky.generation_timeout),
+            check_timeout=_convert_timeout(self.kandinsky.check_timeout),
+        )
+
+    def to_app_settings(self) -> "AppSettings":
+        """Преобразует AppSettingsConfig в старый dataclass для обратной совместимости.
+
+        Returns:
+            Экземпляр AppSettings (старый dataclass).
+        """
+        from shared.config import AppSettings
+
+        app_settings_config = AppSettingsConfig()
+        # Используем данные из self для создания AppSettings
+        admin_chat_id: int | None = None
+        if self.telegram.admin_chat_id:
+            try:
+                admin_chat_id = int(self.telegram.admin_chat_id)
+            except (ValueError, TypeError):
+                admin_chat_id = None
+
+        chat_id: int | None = None
+        if self.telegram.chat_id:
+            try:
+                chat_id = int(self.telegram.chat_id)
+            except (ValueError, TypeError):
+                chat_id = None
+
+        return AppSettings(
+            admin_chat_id=admin_chat_id,
+            chat_id=chat_id,
+            scheduler_send_times=self.scheduler.send_times,
+            frog_rate_limit_minutes=app_settings_config.frog_rate_limit_minutes,
+            frog_rate_limit_window_seconds=app_settings_config.frog_rate_limit_window_seconds,
+            frog_rate_limit_max_requests=app_settings_config.frog_rate_limit_max_requests,
+            scheduler_tz=self.scheduler.tz,
+            time_format_length=app_settings_config.time_format_length,
+        )
+
+    def to_retry_config(self) -> "RetryConfig":
+        """Преобразует RetryConfig в старый dataclass для обратной совместимости.
+
+        Returns:
+            Экземпляр RetryConfig (старый dataclass).
+        """
+        from shared.config import RetryConfig
+
+        return RetryConfig(
+            standard_max_attempts=self.retry.standard_max_attempts,
+            critical_max_attempts=self.retry.critical_max_attempts,
+            optional_max_attempts=self.retry.optional_max_attempts,
+            multiplier=self.retry.multiplier,
+            min_wait=self.retry.min_wait,
+            max_wait=self.retry.max_wait,
+        )
+
+    def to_circuit_breaker_config(self) -> "CircuitBreakerConfig":
+        """Преобразует CircuitBreakerConfig в старый dataclass для обратной совместимости.
+
+        Returns:
+            Экземпляр CircuitBreakerConfig (старый dataclass).
+        """
+        from shared.config import CircuitBreakerConfig
+
+        return CircuitBreakerConfig(
+            threshold=self.circuit_breaker.threshold,
+            window=self.circuit_breaker.window,
+            cooldown=self.circuit_breaker.cooldown,
+        )
