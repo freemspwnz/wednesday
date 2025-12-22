@@ -667,10 +667,10 @@ class WednesdayBot:
                     # Не редактируем сообщение в админском чате — оно предназначено для других чатов
                     skip_admin_edit = False
                     try:
-                        from shared.config_v2 import ConfigV2
+                        from shared.config import Config
 
                         # Используем глобальный config из модуля
-                        if isinstance(config, ConfigV2):
+                        if isinstance(config, Config):
                             admin_chat_id_env = config.telegram.admin_chat_id
                         else:
                             admin_chat_id_env = getattr(config, "admin_chat_id", None)
@@ -934,10 +934,10 @@ class WednesdayBot:
                     # Не редактируем в админском чате
                     skip_admin_edit = False
                     try:
-                        from shared.config_v2 import ConfigV2
+                        from shared.config import Config
 
                         # Используем глобальный config из модуля
-                        if isinstance(config, ConfigV2):
+                        if isinstance(config, Config):
                             admin_chat_id_env = config.telegram.admin_chat_id
                         else:
                             admin_chat_id_env = getattr(config, "admin_chat_id", None)

@@ -20,8 +20,9 @@ def test_mypy_config_present() -> None:
 
 def test_imports() -> None:
     """Проверяет, что все основные модули импортируются без ошибок."""
-    import bot.wednesday_bot  # noqa: F401
     import utils.usage_tracker  # noqa: F401
+
+    import bot.wednesday_bot  # noqa: F401
 
     assert True
 
