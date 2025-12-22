@@ -13,6 +13,7 @@ from app.admin_dashboard_service import AdminDashboardService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
 from app.image_service import ImageService
+from app.model_management_service import ModelManagementService
 from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.repos.dispatch_registry import DispatchRegistry
@@ -43,6 +44,7 @@ class BotServices:
     frog_rate_limiter: FrogRateLimiterService
     frog_request_service: FrogRequestService
     admin_dashboard_service: AdminDashboardService | None = None
+    model_management_service: ModelManagementService | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
 

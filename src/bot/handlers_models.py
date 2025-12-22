@@ -4,7 +4,6 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
-from infra.clients import get_image_client_container, get_text_client_container
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError
 from shared.bot_services import BotServices
 
@@ -24,17 +23,13 @@ class ModelHandlers(BaseHandlers):
         services: BotServices,
     ) -> None:
         super().__init__(services)
-        # Клиенты используются для команд установки моделей,
-        # а агрегированные списки моделей отдаёт AdminDashboardService.
-        # Получаем клиенты напрямую из контейнеров.
+        # Используем ModelManagementService для управления моделями
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
+        if self.services.model_management_service is None:
+            raise ValueError("model_management_service must be provided in BotServices")
         self._dashboard_service = self.services.admin_dashboard_service
-        # Получаем клиенты из контейнеров для установки моделей
-        image_container = get_image_client_container()
-        text_container = get_text_client_container()
-        self.image_client = image_container
-        self.text_client = text_container if text_container else None
+        self._model_management_service = self.services.model_management_service
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_kandinsky_model.
@@ -97,7 +92,7 @@ class ModelHandlers(BaseHandlers):
             self.logger.error(f"Не удалось отправить сообщение о начале установки после {3} попыток: {e}")
 
         try:
-            result = await self.image_client.set_model(model_arg)
+            result = await self._model_management_service.set_kandinsky_model(model_arg)
             if result.success:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
@@ -184,20 +179,8 @@ class ModelHandlers(BaseHandlers):
 
         model_name = context.args[0]
 
-        if not self.text_client:
-            try:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ GigaChat клиент не инициализирован",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
-            return
-
         try:
-            result = await self.text_client.set_model(model_name)
+            result = await self._model_management_service.set_gigachat_model(model_name)
             await self._retry_on_connect_error(
                 update.message.reply_text,
                 result.message,

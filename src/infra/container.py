@@ -24,6 +24,7 @@ from app.fallback_service import FallbackService
 from app.frog_limit_service import FrogRateLimiterService
 from app.image_service import ImageService
 from app.image_storage_unit_of_work import ImageStorageUnitOfWork
+from app.model_management_service import ModelManagementService
 from app.prompt_service import PromptService
 from app.target_preparation_service import TargetPreparationService
 from domain.caption_service import CaptionService
@@ -414,6 +415,14 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         models_repo=models_repo,
     )
 
+    # Создаём ModelManagementService для управления моделями
+    model_management_service = ModelManagementService(
+        image_client=image_client,
+        text_client=text_client,
+        models_repo=models_repo,
+        logger=app_logger,
+    )
+
     return BotServices(
         usage=usage,
         chats=chats,
@@ -428,6 +437,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         bot_controller=None,
         dispatch_service=dispatch_service,
         admin_dashboard_service=admin_dashboard_service,
+        model_management_service=model_management_service,
     )
 
 
