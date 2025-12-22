@@ -22,14 +22,14 @@ class ImageService(BaseService):
     """Application service для координации генерации изображений.
 
     Координирует работу:
-    - ImageGenerationService (генерация с retry логикой)
+    - ImageGenerationService (генерация изображений)
     - CaptionService (выбор подписей)
     - ImageStorageUnitOfWork (сохранение в кэш и хранилище через Unit of Work)
     - PromptService (промпты)
     - CircuitBreakerService (circuit breaker)
     - MetricsRecorder (метрики)
 
-    Retry логика для генерации изображений находится в ImageGenerationService (domain слой).
+    Retry логика для генерации изображений находится на уровне клиента (ITextToImageClient).
     Сохранение изображений управляется через ImageStorageUnitOfWork для обеспечения согласованности данных.
     """
 
@@ -104,7 +104,7 @@ class ImageService(BaseService):
         2. Выбирает подпись через CaptionService (если доступен)
         3. Генерирует промпт через PromptService
         4. Проверяет кэш изображений (если доступен)
-        5. Генерирует изображение через ImageGenerationService (retry логика в domain слое)
+        5. Генерирует изображение через ImageGenerationService (retry логика на уровне клиента)
         6. Сохраняет в кэш и хранилище через ImageStorageUnitOfWork (с компенсационными действиями)
         7. Записывает метрики (если доступны)
 
@@ -253,7 +253,7 @@ class ImageService(BaseService):
                     error_message=str(e),
                 )
 
-        # 4. Генерируем изображение (retry логика теперь в ImageGenerationService)
+        # 4. Генерируем изображение (retry логика на уровне клиента)
         try:
             self.logger.info(
                 f"Начинаю генерацию изображения для промпта: {prompt[:100]}...",

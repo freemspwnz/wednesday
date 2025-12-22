@@ -17,7 +17,6 @@ from shared.base.exceptions import (
     NetworkError,
 )
 from shared.protocols import ITextToImageClient
-from shared.retry import retry_standard
 
 MIN_PROMPT_LENGTH = 1
 """Минимальная длина промпта для генерации изображения."""
@@ -83,7 +82,6 @@ class ImageGenerationService:
         if len(prompt) > MAX_PROMPT_LENGTH:
             raise ValueError(f"Промпт слишком длинный (максимум {MAX_PROMPT_LENGTH} символов, получено {len(prompt)})")
 
-    @retry_standard(service_name="image_generation", method_name="generate")
     async def generate(
         self,
         prompt: str,
@@ -95,7 +93,7 @@ class ImageGenerationService:
         через ITextToImageClient без кэширования, метрик и других
         инфраструктурных зависимостей.
 
-        Retry логика применяется автоматически для сетевых ошибок через декоратор.
+        Retry логика применяется на уровне клиента (ITextToImageClient).
 
         Args:
             prompt: Текстовый промпт для генерации изображения.

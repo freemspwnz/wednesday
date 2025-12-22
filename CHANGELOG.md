@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Перенос retry логики с domain слоя на уровень клиента**:
+  - Удален импорт `retry_standard` из `domain/image_generation.py`
+  - Убран декоратор `@retry_standard` с метода `generate()` в `ImageGenerationService`
+  - Обновлен docstring метода `generate()` - указано, что retry логика применяется на уровне клиента (ITextToImageClient)
+  - Обновлены комментарии в `app/image_service.py` - указано, что retry логика находится на уровне клиента, а не в domain слое
+
 - **Удаление логирования из domain слоя**:
   - Удалено наследование от `BaseService` в трех domain сервисах: `PromptGenerationService`, `ImageGenerationService`, `CaptionService`
   - Убраны все вызовы `self.logger` из domain сервисов для обеспечения чистоты доменного слоя
