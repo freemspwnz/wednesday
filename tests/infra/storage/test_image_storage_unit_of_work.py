@@ -5,13 +5,23 @@ from __future__ import annotations
 import pytest
 
 from app.image_storage_unit_of_work import (
-    ImageSaveOperation,
     ImageStorageUnitOfWork,
 )
+from infra.storage.failed_cache_queue import FailedCacheOperation, FailedCacheQueue
 from shared.base.exceptions import StorageError
 from shared.protocols import ICache, IImageStorage
 
 pytestmark = [pytest.mark.unit]
+
+
+def _create_test_failed_cache_queue() -> FailedCacheQueue:
+    """Создаёт FailedCacheQueue для unit-тестов с in-memory Redis."""
+    from infra.logging.logger import get_logger
+    from infra.redis.redis_client import get_redis
+
+    redis_client = get_redis()  # Использует in-memory Redis для unit-тестов
+    logger = get_logger("test")
+    return FailedCacheQueue(redis_client=redis_client, logger=logger)
 
 
 class MockCache(ICache[tuple[bytes, str]]):
@@ -105,9 +115,14 @@ class MockStorage(IImageStorage):
 @pytest.mark.asyncio
 async def test_save_image_success_both() -> None:
     """Тест успешного сохранения в кэш и хранилище."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     image_data = b"test-image-data"
     caption = "test caption"
@@ -132,10 +147,15 @@ async def test_save_image_success_both() -> None:
 @pytest.mark.asyncio
 async def test_save_image_storage_failure() -> None:
     """Тест ошибки сохранения в хранилище."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
     storage.should_fail_save = True
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     result = await uow.save_image(
         image_data=b"test-data",
@@ -151,10 +171,15 @@ async def test_save_image_storage_failure() -> None:
 @pytest.mark.asyncio
 async def test_save_image_cache_failure_storage_success() -> None:
     """Тест ошибки сохранения в кэш при успешном сохранении в хранилище."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     cache.should_fail_set = True
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     image_data = b"test-image-data"
     caption = "test caption"
@@ -172,16 +197,21 @@ async def test_save_image_cache_failure_storage_success() -> None:
     assert uow._operations[0].storage_saved is True
     assert uow._operations[0].cache_saved is False
     # Операция должна быть добавлена в очередь пересоздания
-    assert len(uow._failed_cache_operations) == 1
-    assert uow._failed_cache_operations[0].cache_key == cache_key
+    queue_size = await failed_cache_queue.size()
+    assert queue_size == 1
 
 
 @pytest.mark.asyncio
 async def test_rebuild_cache_from_storage_success() -> None:
     """Тест успешного пересоздания кэша из хранилища."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     image_data = b"test-image-data"
     caption = "test caption"
@@ -209,9 +239,14 @@ async def test_rebuild_cache_from_storage_success() -> None:
 @pytest.mark.asyncio
 async def test_rebuild_cache_from_storage_file_not_found() -> None:
     """Тест пересоздания кэша при отсутствии файла."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     with pytest.raises(FileNotFoundError):
         await uow.rebuild_cache_from_storage(
@@ -224,8 +259,13 @@ async def test_rebuild_cache_from_storage_file_not_found() -> None:
 @pytest.mark.asyncio
 async def test_rebuild_cache_from_storage_no_cache() -> None:
     """Тест пересоздания кэша без кэша."""
+    from infra.logging.logger import get_logger
+
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=None, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=None, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     result = await uow.rebuild_cache_from_storage(
         cache_key="test-key",
@@ -239,8 +279,13 @@ async def test_rebuild_cache_from_storage_no_cache() -> None:
 @pytest.mark.asyncio
 async def test_rebuild_cache_from_storage_no_storage() -> None:
     """Тест пересоздания кэша без хранилища."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=None)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=None, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     result = await uow.rebuild_cache_from_storage(
         cache_key="test-key",
@@ -254,9 +299,14 @@ async def test_rebuild_cache_from_storage_no_storage() -> None:
 @pytest.mark.asyncio
 async def test_background_rebuild_task() -> None:
     """Тест фоновой задачи пересоздания кэша."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     image_data = b"test-image-data"
     caption = "test caption"
@@ -271,7 +321,8 @@ async def test_background_rebuild_task() -> None:
     )
 
     # Проверяем, что операция добавлена в очередь
-    assert len(uow._failed_cache_operations) == 1
+    queue_size = await failed_cache_queue.size()
+    assert queue_size == 1
     assert uow._rebuild_running is True
 
     # Исправляем кэш и ждём завершения фоновой задачи
@@ -286,7 +337,8 @@ async def test_background_rebuild_task() -> None:
             break
 
     # Проверяем, что кэш был пересоздан
-    assert len(uow._failed_cache_operations) == 0
+    queue_size_after = await failed_cache_queue.size()
+    assert queue_size_after == 0
     assert uow._rebuild_running is False
     # Проверяем, что кэш был вызван (через rebuild_cache_from_storage)
     assert len(cache.set_calls) >= 1
@@ -295,9 +347,14 @@ async def test_background_rebuild_task() -> None:
 @pytest.mark.asyncio
 async def test_background_rebuild_task_retry_on_failure() -> None:
     """Тест повторных попыток фоновой задачи при ошибках."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     image_data = b"test-image-data"
     caption = "test caption"
@@ -307,14 +364,13 @@ async def test_background_rebuild_task_retry_on_failure() -> None:
     storage_path = await storage.save(image_data, prefix="frog")
 
     # Добавляем операцию в очередь вручную
-    operation = ImageSaveOperation(
-        image_data=image_data,
-        caption=caption,
-        cache_key=cache_key,
-        storage_path=storage_path,
-        storage_saved=True,
+    await failed_cache_queue.enqueue(
+        FailedCacheOperation(
+            cache_key=cache_key,
+            storage_path=storage_path,
+            caption=caption,
+        )
     )
-    uow._failed_cache_operations.append(operation)
 
     # Кэш будет падать первые несколько раз
     call_count = 0
@@ -336,20 +392,27 @@ async def test_background_rebuild_task_retry_on_failure() -> None:
 
     for _ in range(20):  # Максимум 10 секунд
         await asyncio.sleep(0.5)
-        if not uow._rebuild_running and len(uow._failed_cache_operations) == 0:
+        queue_size = await failed_cache_queue.size()
+        if not uow._rebuild_running and queue_size == 0:
             break
 
     # Проверяем, что кэш был пересоздан после retry
-    assert len(uow._failed_cache_operations) == 0
+    queue_size = await failed_cache_queue.size()
+    assert queue_size == 0
     assert call_count >= 2  # Было несколько попыток
 
 
 @pytest.mark.asyncio
 async def test_commit() -> None:
     """Тест метода commit."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     await uow.save_image(
         image_data=b"test-data",
@@ -364,9 +427,14 @@ async def test_commit() -> None:
 @pytest.mark.asyncio
 async def test_rollback() -> None:
     """Тест метода rollback."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     await uow.save_image(
         image_data=b"test-data",
@@ -385,9 +453,14 @@ async def test_rollback() -> None:
 @pytest.mark.asyncio
 async def test_clear() -> None:
     """Тест метода clear."""
+    from infra.logging.logger import get_logger
+
     cache = MockCache()
     storage = MockStorage()
-    uow = ImageStorageUnitOfWork(cache=cache, storage=storage)
+    failed_cache_queue = _create_test_failed_cache_queue()
+    uow = ImageStorageUnitOfWork(
+        cache=cache, storage=storage, failed_cache_queue=failed_cache_queue, logger=get_logger("test")
+    )
 
     await uow.save_image(
         image_data=b"test-data",

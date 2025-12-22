@@ -12,11 +12,11 @@
   - Добавлена поддержка операций со списками в `_InMemoryRedis` (rpush, lpop, lrange, llen) для работы очереди
 
 - **Интеграция Redis очереди в ImageStorageUnitOfWork**:
-  - Добавлен параметр `failed_cache_queue` в конструктор `ImageStorageUnitOfWork` для поддержки персистентной очереди
+  - Добавлен обязательный параметр `failed_cache_queue` в конструктор `ImageStorageUnitOfWork` для поддержки персистентной очереди
   - Обновлен метод `save_image` для добавления операций в Redis очередь при ошибках сохранения в кэш
-  - Обновлен метод `_rebuild_failed_caches_loop` для обработки как локальной, так и Redis очереди
+  - Обновлен метод `_rebuild_failed_caches_loop` для обработки Redis очереди
   - Добавлен метод `restore_from_persistent_queue` для восстановления очереди при старте приложения
-  - Сохранена обратная совместимость с локальной очередью через fallback механизм
+  - Удалена локальная очередь `_failed_cache_operations` - теперь используется только Redis очередь с автоматическим fallback на in-memory через `RedisBackendService`
 
 - **Интеграция FailedCacheQueue в container.py и восстановление при старте**:
   - Обновлена функция `build_image_stack` для создания и передачи `FailedCacheQueue` в `ImageStorageUnitOfWork`
@@ -26,6 +26,14 @@
 - **Тесты для восстановления очереди из Redis**:
   - Добавлен integration тест `test_restore_from_persistent_queue` для проверки восстановления очереди при старте
   - Тест проверяет создание очереди, добавление операций и запуск фоновой задачи пересоздания кэша
+  - Обновлены все unit-тесты для передачи обязательного параметра `failed_cache_queue`
+
+- **Удаление обратной совместимости с локальной очередью**:
+  - Удалена локальная очередь `_failed_cache_operations` (deque) из `ImageStorageUnitOfWork`
+  - Параметр `failed_cache_queue` теперь обязательный (убрана опциональность `| None`)
+  - Упрощен метод `save_image()` - убрана логика fallback на локальную очередь
+  - Упрощен метод `_rebuild_failed_caches_loop()` - убрана обработка локальной очереди, теперь обрабатывается только Redis очередь
+  - Fallback на in-memory Redis автоматически обрабатывается на уровне `RedisBackendService`
 
 - **ModelManagementService для управления моделями ML-клиентов**:
   - Создан новый сервис `src/app/model_management_service.py` для инкапсуляции логики выбора и сохранения моделей

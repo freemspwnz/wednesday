@@ -216,9 +216,9 @@ def build_image_stack(
 
     # Создаём UnitOfWork для управления сохранением изображений
     image_storage_uow = ImageStorageUnitOfWork(
+        failed_cache_queue=failed_cache_queue,
         cache=image_cache,
         storage=image_storage,
-        failed_cache_queue=failed_cache_queue,
         logger=app_logger,
     )
 
