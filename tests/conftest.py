@@ -625,7 +625,8 @@ async def gigachat_client() -> AsyncIterator[Any]:
         models_timeout=timeout,
         token_timeout=timeout,
     )
-    client = GigaChatTextClient(config=config)
+    models_repo = _InMemoryModelsRepo()
+    client = GigaChatTextClient(config=config, models_repo=models_repo)
     try:
         yield client
     finally:

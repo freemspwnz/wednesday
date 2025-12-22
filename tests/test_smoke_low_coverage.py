@@ -41,8 +41,11 @@ def test_create_image_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> 
         check_timeout=check_timeout,
     )
 
-    client_manager = ClientManagementService()
-    client_manager.create_image_client(config=config)
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    client_manager = ClientManagementService(models_repo=models_repo)
+    client_manager.create_image_client(config=config, models_repo=models_repo)
     # Проверяем, что клиент был создан через мок
     dummy_container.set_initial_client.assert_not_called()  # set_initial_client вызывается в _create_clients, не здесь
 
@@ -80,8 +83,11 @@ def test_create_text_client_uses_container(monkeypatch: pytest.MonkeyPatch) -> N
         token_timeout=timeout,
     )
 
-    client_manager = ClientManagementService()
-    client_manager.create_text_client(config=config)
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    client_manager = ClientManagementService(models_repo=models_repo)
+    client_manager.create_text_client(config=config, models_repo=models_repo)
     # Проверяем, что клиент был создан через мок
     dummy_container.set_initial_client.assert_not_called()  # set_initial_client вызывается в _create_clients, не здесь
 
@@ -432,7 +438,10 @@ async def test_gigachat_text_client_initialization(monkeypatch: pytest.MonkeyPat
         token_timeout=timeout,
     )
 
-    async with GigaChatTextClient(config=config) as client:
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    async with GigaChatTextClient(config=config, models_repo=models_repo) as client:
         assert client._auth_url is not None
         assert client._api_url is not None
         assert client._authorization_key is not None
@@ -477,7 +486,10 @@ async def test_gigachat_text_client_context_manager(monkeypatch: pytest.MonkeyPa
         token_timeout=timeout,
     )
 
-    async with GigaChatTextClient(config=config) as client:
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    async with GigaChatTextClient(config=config, models_repo=models_repo) as client:
         assert client._session is not None
         assert client._session == mock_session
 
@@ -522,8 +534,11 @@ async def test_gigachat_text_client_context_manager_exception(monkeypatch: pytes
         token_timeout=timeout,
     )
 
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
     try:
-        async with GigaChatTextClient(config=config) as client:
+        async with GigaChatTextClient(config=config, models_repo=models_repo) as client:
             assert client._session is not None
             # Имитируем исключение внутри контекста
             raise ValueError("Test exception")

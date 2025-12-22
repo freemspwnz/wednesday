@@ -8,6 +8,7 @@ from loguru import logger
 
 from infra.clients.gigachat_text import GigaChatTextClient
 from shared.config import GigaChatConfig, HttpTimeoutConfig
+from tests.conftest import _InMemoryModelsRepo
 
 
 class _DummyResponse:
@@ -79,7 +80,8 @@ async def test_gigachat_text_client_concurrent_token_requests(monkeypatch: pytes
         token_timeout=timeout,
     )
 
-    async with GigaChatTextClient(config=config) as client:
+    models_repo = _InMemoryModelsRepo()
+    async with GigaChatTextClient(config=config, models_repo=models_repo) as client:
         # Подменяем внутренний session на заглушку, чтобы не ходить в сеть.
         dummy_session = _DummySession()
         monkeypatch.setattr(client, "_session", dummy_session, raising=True)
@@ -122,7 +124,8 @@ async def test_gigachat_text_client_authorization_key_preview(monkeypatch: pytes
         token_timeout=timeout,
     )
 
-    async with GigaChatTextClient(config=config) as client:
+    models_repo = _InMemoryModelsRepo()
+    async with GigaChatTextClient(config=config, models_repo=models_repo) as client:
         # Подменяем session, чтобы не было реальных HTTP‑запросов.
         dummy_session = _DummySession()
         monkeypatch.setattr(client, "_session", dummy_session, raising=True)

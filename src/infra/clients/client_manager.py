@@ -30,7 +30,7 @@ class ClientManagementService:
 
     def __init__(
         self,
-        models_repo: IModelsRepo | None = None,
+        models_repo: IModelsRepo,
     ) -> None:
         """Инициализация сервиса управления клиентами.
 
@@ -58,6 +58,8 @@ class ClientManagementService:
         from infra.clients.kandinsky import KandinskyClient
 
         repo = models_repo or self._models_repo
+        if repo is None:
+            raise ValueError("models_repo must be provided either in constructor or as parameter")
         client = KandinskyClient(config=config, models_repo=repo)
 
         self._logger.info(
@@ -93,6 +95,8 @@ class ClientManagementService:
         from infra.clients.gigachat_text import GigaChatTextClient
 
         repo = models_repo or self._models_repo
+        if repo is None:
+            raise ValueError("models_repo must be provided either in constructor or as parameter")
         client = GigaChatTextClient(config=config, models_repo=repo)
 
         self._logger.info(

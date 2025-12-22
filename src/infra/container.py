@@ -74,12 +74,20 @@ def _create_clients(
     Args:
         config: Экземпляр Config для создания конфигураций клиентов.
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
+            Если None, создаётся новый ModelsRepo с пулом из get_postgres_pool().
 
     Returns:
         Кортеж (image_client_container, text_client_container | None).
         Контейнеры реализуют интерфейсы ITextToImageClient и ITextToTextClient
         и обеспечивают runtime-замену клиентов.
     """
+    # Создаём models_repo, если не передан
+    if models_repo is None:
+        from infra.database.postgres_client import get_postgres_pool
+        from infra.repos import ModelsRepo
+
+        models_repo = ModelsRepo(pool=get_postgres_pool())
+
     # Создаём сервис управления клиентами
     client_manager = ClientManagementService(models_repo=models_repo)
 

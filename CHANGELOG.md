@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Рефакторинг GigaChatTextClient для устранения сильной связности с Postgres**:
+  - Параметр `models_repo` теперь обязательный (убрана опциональность `| None`)
+  - Убраны внутренние вызовы `get_postgres_pool()` и создание `ModelsRepo` внутри клиента
+  - Удалён неиспользуемый импорт `ModelsRepo` из `gigachat_text.py`
+  - Обновлён `ClientManagementService` для обязательной передачи `models_repo` в конструктор
+  - Добавлена валидация наличия `models_repo` при создании клиентов через `ClientManagementService`
+
 ### Добавлено
 
 - **ClientManagementService для управления клиентами ML-сервисов**:

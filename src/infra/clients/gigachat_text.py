@@ -46,7 +46,6 @@ from infra.clients.models import (
     SetModelResult,
 )
 from infra.clients.sber_clients_exceptions import map_client_errors
-from infra.repos import ModelsRepo
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from shared.config import GigaChatConfig
 from shared.protocols import IModelsRepo, ITextToTextClient
@@ -123,14 +122,13 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
     def __init__(
         self,
         config: GigaChatConfig,
-        models_repo: IModelsRepo | None = None,
+        models_repo: IModelsRepo,
     ) -> None:
         """Инициализация клиента GigaChat.
 
         Args:
             config: Конфигурация GigaChat клиента (обязательна).
             models_repo: Репозиторий моделей для сохранения/получения настроек моделей.
-                Если не передан, создается новый экземпляр ModelsRepo при необходимости.
         """
         self._auth_url: str = config.auth_url
         self._api_url: str = config.api_url
@@ -139,7 +137,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         self._scope: str = config.scope
         self._verify_ssl: bool | str = config.verify_ssl
         self._model: str = config.model
-        self._models_repo: IModelsRepo | None = models_repo
+        self._models_repo: IModelsRepo = models_repo
         self._config: GigaChatConfig = config
 
         # Кэш токена
@@ -409,10 +407,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         available_models = await self.get_available_models(save_models=False)
         if model_name in available_models:
             # Сохраняем модель в async-хранилище
-            from infra.database.postgres_client import get_postgres_pool
-
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-            await models_store.set_gigachat_model(model_name)
+            await self._models_repo.set_gigachat_model(model_name)
             self._model = model_name
 
             msg = f"✅ Модель GigaChat установлена: {model_name}"
@@ -628,10 +623,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             Название текущей модели.
         """
         try:
-            from infra.database.postgres_client import get_postgres_pool
-
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-            stored_model = await models_store.get_gigachat_model()
+            stored_model = await self._models_repo.get_gigachat_model()
             if stored_model:
                 return stored_model
         except Exception:
