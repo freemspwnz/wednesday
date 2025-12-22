@@ -32,7 +32,9 @@ from domain.prompt_generation import PromptGenerationService
 from infra.cache.image_cache import ImageCacheService
 from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
-from infra.clients.factory import create_image_client, create_text_client
+from infra.clients.client_manager import ClientManagementService
+from infra.clients.image_client_container import get_image_client_container
+from infra.clients.text_client_container import get_text_client_container
 from infra.logging.logger import get_logger
 from infra.metrics.metrics import Metrics
 from infra.metrics.metrics_recorder import MetricsRecorder
@@ -63,23 +65,49 @@ from shared.protocols import (
 def _create_clients(
     config: Config,
     models_repo: IModelsRepo | None = None,
-) -> tuple:
-    """Создаёт клиенты для внешних ML‑сервисов.
+) -> tuple[ITextToImageClient, ITextToTextClient | None]:
+    """Создаёт клиенты для внешних ML‑сервисов через Dependency Injection.
+
+    Клиенты создаются через ClientManagementService и регистрируются в контейнерах
+    для поддержки runtime-замены и корректного cleanup.
 
     Args:
         config: Экземпляр Config для создания конфигураций клиентов.
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
 
     Returns:
-        Кортеж (image_client, text_client) для использования в сервисах.
+        Кортеж (image_client_container, text_client_container | None).
+        Контейнеры реализуют интерфейсы ITextToImageClient и ITextToTextClient
+        и обеспечивают runtime-замену клиентов.
     """
-    gigachat_config = config.gigachat
-    kandinsky_config = config.kandinsky
+    # Создаём сервис управления клиентами
+    client_manager = ClientManagementService(models_repo=models_repo)
 
-    # Передаем в фабрики
-    image_client = create_image_client(kandinsky_config=kandinsky_config, models_repo=models_repo)
-    text_client = create_text_client(gigachat_config=gigachat_config, models_repo=models_repo)
-    return (image_client, text_client)
+    # Создаём клиенты через DI
+    kandinsky_config = config.kandinsky
+    image_client = client_manager.create_image_client(
+        config=kandinsky_config,
+        models_repo=models_repo,
+    )
+
+    # Регистрируем в контейнере
+    image_container = get_image_client_container()
+    image_container.set_initial_client(image_client)
+
+    # Создаём текстовый клиент, если настроен
+    text_container: ITextToTextClient | None = None
+    gigachat_config = config.gigachat
+    if gigachat_config.authorization_key:
+        text_client = client_manager.create_text_client(
+            config=gigachat_config,
+            models_repo=models_repo,
+        )
+        if text_client is not None:
+            text_container_instance = get_text_client_container()
+            text_container_instance.set_initial_client(text_client)
+            text_container = text_container_instance
+
+    return (image_container, text_container)
 
 
 def build_image_stack(
@@ -98,9 +126,9 @@ def build_image_stack(
         config: Экземпляр Config для создания клиентов и чтения настроек.
         db_pool: Пул подключений PostgreSQL.
         image_client: Опциональный клиент для генерации изображений.
-            Если None, создаётся новый через create_image_client().
+            Если None, создаётся новый через DI в _create_clients().
         text_client: Опциональный клиент для генерации текста.
-            Если None, создаётся новый через create_text_client().
+            Если None, создаётся новый через DI в _create_clients().
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
 
     Returns:

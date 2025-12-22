@@ -18,6 +18,13 @@
   - Обновлены docstring модулей контейнеров для отражения нового подхода к созданию клиентов
   - Клиенты теперь создаются через `ClientManagementService` с кастомными конфигами для runtime-замены
 
+- **Рефакторинг container.py для использования ClientManagementService**:
+  - Удален импорт `create_image_client` и `create_text_client` из `infra.clients.factory`
+  - Добавлен импорт `ClientManagementService` и функций получения контейнеров
+  - Полностью переписана функция `_create_clients()` для использования `ClientManagementService` и регистрации клиентов в контейнерах
+  - Обновлены комментарии в `build_image_stack()` для отражения нового подхода через DI
+  - Клиенты теперь регистрируются в контейнерах для поддержки runtime-замены и корректного cleanup
+
 - **Рефакторинг конфигурации: завершен переход на Pydantic Config**:
   - Полностью завершен переход с dataclass на Pydantic BaseSettings для всех моделей конфигурации
   - Все модули используют единый `Config` класс из `shared.config`
