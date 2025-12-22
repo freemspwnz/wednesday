@@ -412,7 +412,10 @@ class ImageGenerator:
     ):
         # Принимает абстрактные интерфейсы
         if image_client is None:
-            self._image_client = create_image_client()
+            from infra.container import _create_clients
+            from shared.config import Config
+            config = Config()
+            self._image_client, _ = _create_clients(config)
         else:
             self._image_client = image_client
 ```

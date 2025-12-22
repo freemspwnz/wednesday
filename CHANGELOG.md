@@ -32,6 +32,11 @@
   - Обновлен docstring модуля для отражения нового подхода через DI и контейнеры
   - Обновлены тесты в `tests/test_smoke_low_coverage.py` для использования `ClientManagementService` вместо factory
 
+- **Обновление документации после рефакторинга клиентов**:
+  - Обновлен `docs/ARCHITECTURE.md`: заменены упоминания factory на `ClientManagementService` и обновлены описания DI
+  - Обновлен `docs/TESTING_GUIDE.md`: примеры использования обновлены для нового подхода через `_create_clients()`
+  - Все тесты обновлены для использования нового API `replace_client()` с `config` и `client_manager`
+
 - **Рефакторинг конфигурации: завершен переход на Pydantic Config**:
   - Полностью завершен переход с dataclass на Pydantic BaseSettings для всех моделей конфигурации
   - Все модули используют единый `Config` класс из `shared.config`
