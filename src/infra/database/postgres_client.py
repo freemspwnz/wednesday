@@ -19,7 +19,8 @@ from dataclasses import dataclass
 import asyncpg
 
 from infra.logging.logger import get_logger
-from shared.config import config
+from shared.config import Config
+from shared.config_v2 import ConfigV2
 
 logger = get_logger(__name__)
 
@@ -31,6 +32,7 @@ async def init_postgres_pool(
     *,
     min_size: int = 1,
     max_size: int = 10,
+    config: Config | ConfigV2 | None = None,
     **connect_kwargs: object,
 ) -> asyncpg.Pool:
     """
@@ -71,14 +73,27 @@ async def init_postgres_pool(
     if _pool is not None:
         return _pool
 
-    user = config.postgres_user
-    password = config.postgres_password
-    database = config.postgres_db
-    host = config.postgres_host
-    port = config.postgres_port
+    # Поддержка как старого Config, так и нового ConfigV2
+    if config is None:
+        from shared.config import config as global_config
+
+        config = global_config
+
+    if isinstance(config, ConfigV2):
+        user = config.postgres.user
+        password = config.postgres.password
+        database = config.postgres.db
+        host = config.postgres.host
+        port = config.postgres.port
+    else:
+        user = config.postgres_user
+        password = config.postgres_password
+        database = config.postgres_db
+        host = config.postgres_host
+        port = config.postgres_port
 
     # Создаём базу данных, если она не существует
-    await ensure_database()
+    await ensure_database(config=config)
 
     # ВАЖНО: используем database (POSTGRES_DB), а не user (POSTGRES_USER) в DSN
     dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
@@ -198,22 +213,37 @@ def get_pool_metrics(pool: asyncpg.Pool | None = None) -> PoolMetrics | None:
     )
 
 
-async def ensure_database() -> None:
+async def ensure_database(config: Config | ConfigV2 | None = None) -> None:
     """Создаёт базу данных, если она не существует.
 
     Подключается к системной базе 'postgres' для проверки и создания
     целевой базы данных перед инициализацией пула подключений.
+
+    Args:
+        config: Экземпляр Config или ConfigV2. Если None, используется глобальный config.
 
     Raises:
         asyncpg.InvalidPasswordError: При неверном пароле для подключения.
         asyncpg.PostgresError: При ошибке PostgreSQL при создании базы данных.
         Exception: При неожиданной ошибке при проверке/создании базы данных.
     """
-    user = config.postgres_user
-    password = config.postgres_password
-    database = config.postgres_db
-    host = config.postgres_host
-    port = config.postgres_port
+    if config is None:
+        from shared.config import config as global_config
+
+        config = global_config
+
+    if isinstance(config, ConfigV2):
+        user = config.postgres.user
+        password = config.postgres.password
+        database = config.postgres.db
+        host = config.postgres.host
+        port = config.postgres.port
+    else:
+        user = config.postgres_user
+        password = config.postgres_password
+        database = config.postgres_db
+        host = config.postgres_host
+        port = config.postgres_port
 
     # Подключаемся к системной базе 'postgres' для проверки существования целевой БД
     system_dsn = f"postgresql://{user}:{password}@{host}:{port}/postgres"

@@ -23,6 +23,8 @@ import redis.asyncio as redis
 from redis.exceptions import RedisError
 
 from infra.logging.logger import get_logger
+from shared.config import Config
+from shared.config_v2 import ConfigV2
 
 logger = get_logger(__name__)
 
@@ -348,30 +350,51 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
         return await fallback_method(*args, **kwargs)
 
 
-def get_redis_url() -> str | None:
+def get_redis_url(config: Config | ConfigV2 | None = None) -> str | None:
     """Возвращает URL Redis для использования в Celery.
 
     Используется для настройки Celery broker и backend.
     Формирует URL из переменных окружения или конфигурации.
 
+    Args:
+        config: Экземпляр Config или ConfigV2. Если None, используется глобальный config.
+
     Returns:
         URL Redis в формате redis://host:port/db или redis://password@host:port/db.
         Если Redis не настроен, возвращает None.
     """
-    from shared.config import config
+    from shared.config_v2 import ConfigV2
 
-    if config.redis_url:
-        return config.redis_url
+    if config is None:
+        from shared.config import config as global_config
+
+        config = global_config
+
+    if isinstance(config, ConfigV2):
+        redis_url = config.redis.url
+        redis_host = config.redis.host
+        redis_port = config.redis.port
+        redis_db = config.redis.db
+        redis_password = config.redis.password
+    else:
+        redis_url = config.redis_url
+        redis_host = config.redis_host
+        redis_port = config.redis_port
+        redis_db = config.redis_db
+        redis_password = config.redis_password
+
+    if redis_url:
+        return redis_url
 
     # Формируем URL из отдельных параметров
     # Проверяем, что password не пустая строка и не None
     # ВАЖНО: Экранируем пароль через urllib.parse.quote для корректной работы с Celery/kombu
     # Специальные символы в пароле (например, !) могут ломать парсинг URL
-    if config.redis_password and config.redis_password.strip():
+    if redis_password and redis_password.strip():
         from urllib.parse import quote
 
-        password_encoded = quote(config.redis_password, safe="")
+        password_encoded = quote(redis_password, safe="")
         password_part = f":{password_encoded}@"
     else:
         password_part = ""
-    return f"redis://{password_part}{config.redis_host}:{config.redis_port}/{config.redis_db}"
+    return f"redis://{password_part}{redis_host}:{redis_port}/{redis_db}"

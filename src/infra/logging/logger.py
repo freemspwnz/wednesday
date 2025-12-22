@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from shared.protocols import ILogger
 
 from shared.config import config
+from shared.config_v2 import ConfigV2
 from shared.paths import LOGS_DIR
 
 # Типы для уровней логирования декораторов
@@ -92,18 +93,25 @@ def _get_known_secret_values() -> list[str]:
     secrets: list[str] = []
 
     try:
+        # Поддержка как старого Config, так и нового ConfigV2
+        if isinstance(config, ConfigV2):
+            gigachat_key = config.gigachat.authorization_key
+            redis_password = config.redis.password
+            postgres_password = config.postgres.password
+        else:
+            gigachat_key = config.gigachat_authorization_key
+            redis_password = config.redis_password
+            postgres_password = config.postgres_password
+
         # Основной чувствительный секрет — authorization key GigaChat.
-        gigachat_key = config.gigachat_authorization_key
         if gigachat_key and len(gigachat_key) >= _MIN_SECRET_LENGTH:
             secrets.append(gigachat_key)
 
         # Добавляем пароль Redis для маскировки в логах
-        redis_password = config.redis_password
         if redis_password and len(redis_password) >= _MIN_SECRET_LENGTH:
             secrets.append(redis_password)
 
         # Добавляем пароль Postgres для маскировки в логах
-        postgres_password = config.postgres_password
         if postgres_password and len(postgres_password) >= _MIN_SECRET_LENGTH:
             secrets.append(postgres_password)
     except Exception:
@@ -160,11 +168,14 @@ def setup_logger() -> None:
     # Удаляем стандартный обработчик loguru
     logger.remove()
 
+    # Поддержка как старого Config, так и нового ConfigV2
+    log_level = config.log_level
+
     # Основной sink: JSON в stdout (единственный обязательный sink)
     logger.add(
         sys.stdout,
         serialize=True,
-        level=config.log_level,
+        level=log_level,
         backtrace=False,  # Отключить для прода
         diagnose=False,  # Отключить для прода
         format="{message}",  # Минимальный формат, т.к. serialize=True
@@ -181,7 +192,7 @@ def setup_logger() -> None:
         logger.add(
             log_dir / "wednesday_bot.log",
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
-            level=config.log_level,
+            level=log_level,
             rotation="10 MB",
             retention="7 days",
             compression="zip",
@@ -193,7 +204,7 @@ def setup_logger() -> None:
         logger.add(
             log_dir / "wednesday_bot.events.jsonl",
             serialize=True,
-            level=config.log_level,
+            level=log_level,
             rotation="10 MB",
             retention="7 days",
             compression="zip",
@@ -207,7 +218,7 @@ def setup_logger() -> None:
     # Интегрируем только uvicorn logger
     uvicorn_logger = logging.getLogger("uvicorn")
     uvicorn_logger.handlers = [LoguruHandler()]
-    uvicorn_logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
+    uvicorn_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
     uvicorn_logger.propagate = False  # Отключить propagate для избежания дублирования
 
     # Интегрируем prometheus_client logger

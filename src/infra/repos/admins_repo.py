@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncpg
 
 from infra.logging.logger import get_logger, log_all_methods
-from shared.config import config
+from shared.config import Config, config
+from shared.config_v2 import ConfigV2
 
 
 @log_all_methods()
@@ -22,14 +23,31 @@ class AdminsRepo:
     и всегда имеет права независимо от содержимого таблицы.
     """
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(
+        self,
+        pool: asyncpg.Pool,
+        admin_chat_id: str | None = None,
+        config_obj: Config | ConfigV2 | None = None,
+    ) -> None:
         """Инициализирует репозиторий администраторов.
 
         Args:
             pool: Пул подключений PostgreSQL.
+            admin_chat_id: ID главного администратора. Если None, читается из config.
+            config_obj: Экземпляр Config или ConfigV2. Если None, используется глобальный config.
         """
         self._pool = pool
         self.logger = get_logger(__name__)
+        self._config = config_obj if config_obj is not None else config
+        self._admin_chat_id = admin_chat_id
+
+    def _get_admin_chat_id(self) -> str | None:
+        """Получает ID главного администратора из конфигурации."""
+        if self._admin_chat_id is not None:
+            return self._admin_chat_id
+        if isinstance(self._config, ConfigV2):
+            return self._config.telegram.admin_chat_id
+        return self._config.admin_chat_id
 
     async def is_admin(self, user_id: int) -> bool:
         """Проверяет, является ли пользователь администратором.
@@ -47,7 +65,7 @@ class AdminsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         # Главный админ из .env всегда имеет права
-        main_admin = config.admin_chat_id
+        main_admin = self._get_admin_chat_id()
         if main_admin and int(main_admin) == user_id:
             return True
 
@@ -151,7 +169,7 @@ class AdminsRepo:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         admin_ids = await self.list_admins()
-        main_admin = config.admin_chat_id
+        main_admin = self._get_admin_chat_id()
         if main_admin:
             main_id = int(main_admin)
             if main_id not in admin_ids:

@@ -16,13 +16,14 @@ from celery.schedules import crontab
 from infra.logging.logger import LoguruHandler, get_logger
 from infra.redis.redis_client import get_redis_url
 from shared.config import config
+from shared.config_v2 import ConfigV2
 
 logger = get_logger(__name__)
 
 # Получаем URL Redis для брокера и результата
 # Используем get_redis_url(), который читает REDIS_HOST из переменных окружения
 # В docker-compose.yml REDIS_HOST=redis установлен в секции environment
-redis_url_initial = get_redis_url()
+redis_url_initial = get_redis_url(config=config)
 if not redis_url_initial or redis_url_initial.strip() == "":
     # Fallback на redis:6379 (правильный хост для Docker сети)
     redis_url_initial = "redis://redis:6379/0"
@@ -62,7 +63,11 @@ celery_app.conf.broker_write_url = redis_url_initial
 
 # Настройка таймзон
 celery_app.conf.enable_utc = False
-celery_app.conf.timezone = config.scheduler_tz or "Europe/Amsterdam"
+# Поддержка как старого Config, так и нового ConfigV2
+if isinstance(config, ConfigV2):
+    celery_app.conf.timezone = config.scheduler.tz or "Europe/Amsterdam"
+else:
+    celery_app.conf.timezone = config.scheduler_tz or "Europe/Amsterdam"
 
 # ⚠️ ВАЖНО: Celery Beat может игнорировать timezone, если system timezone = UTC
 # или Docker контейнер не содержит /usr/share/zoneinfo
@@ -75,7 +80,14 @@ celery_app.conf.accept_content = ["json"]
 celery_app.conf.result_serializer = "json"
 
 # Настройки производительности
-celery_app.conf.worker_prefetch_multiplier = int(config._get_env_var("WORKER_PREFETCH_MULTIPLIER") or "1")
+# Поддержка как старого Config, так и нового ConfigV2
+if isinstance(config, ConfigV2):
+    import os
+
+    worker_prefetch = int(os.getenv("WORKER_PREFETCH_MULTIPLIER", "1"))
+else:
+    worker_prefetch = int(config._get_env_var("WORKER_PREFETCH_MULTIPLIER") or "1")
+celery_app.conf.worker_prefetch_multiplier = worker_prefetch
 celery_app.conf.task_acks_late = True
 celery_app.conf.task_reject_on_worker_lost = True
 celery_app.conf.worker_max_tasks_per_child = 50  # Избегает memory leaks
@@ -91,7 +103,12 @@ celery_app.conf.task_routes = {
 }
 
 # ⚠️ ВАЖНО: Dead Letter Queue для задач, которые упали после всех retry
-if config._get_env_var("CELERY_DLQ_ENABLED") == "1":
+if isinstance(config, ConfigV2):
+    dlq_enabled = os.getenv("CELERY_DLQ_ENABLED") == "1"
+else:
+    dlq_enabled = config._get_env_var("CELERY_DLQ_ENABLED") == "1"
+
+if dlq_enabled:
     celery_app.conf.task_routes.update({
         "wednesday.send_frog": {
             "queue": "wednesday",
@@ -104,11 +121,16 @@ if config._get_env_var("CELERY_DLQ_ENABLED") == "1":
     celery_app.conf.task_acks_late = True
 
 # Настройка Beat
-celery_app.conf.beat_max_loop_interval = int(config._get_env_var("BEAT_MAX_LOOP_INTERVAL") or "10")
+if isinstance(config, ConfigV2):
+    beat_max_loop = int(os.getenv("BEAT_MAX_LOOP_INTERVAL", "10"))
+    send_times = config.scheduler.send_times  # ["09:00", "12:00", "18:00"]
+    wednesday_day = config.scheduler.wednesday_day  # 2 (среда)
+else:
+    beat_max_loop = int(config._get_env_var("BEAT_MAX_LOOP_INTERVAL") or "10")
+    send_times = config.scheduler_send_times  # ["09:00", "12:00", "18:00"]
+    wednesday_day = config.scheduler_wednesday_day  # 2 (среда)
 
-# Парсим времена отправки из конфигурации
-send_times = config.scheduler_send_times  # ["09:00", "12:00", "18:00"]
-wednesday_day = config.scheduler_wednesday_day  # 2 (среда)
+celery_app.conf.beat_max_loop_interval = beat_max_loop
 
 # Создаём расписание для каждого временного слота
 beat_schedule = {}

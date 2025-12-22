@@ -16,6 +16,15 @@
   - Сохранены константы `ImageConfig` и `PromptFallbackConfig` для обратной совместимости
   - Добавлены методы преобразования новых моделей в старые dataclass'ы для обратной совместимости
 
+- **Миграция infra/ модулей на поддержку ConfigV2**:
+  - Обновлен `postgres_client.py`: функции `init_postgres_pool()` и `ensure_database()` принимают параметр `config`
+  - Обновлен `redis_client.py`: функция `get_redis_url()` принимает параметр `config`
+  - Обновлен `celery/context.py`: функции `_ensure_pools_initialized()` и `get_services_context()` принимают параметр `config_obj`
+  - Обновлен `celery/app.py`: поддержка ConfigV2 для всех настроек scheduler и Celery
+  - Обновлен `repos/admins_repo.py`: конструктор принимает параметры `admin_chat_id` и `config_obj`
+  - Обновлен `logging/logger.py`: поддержка ConfigV2 для получения секретов и log_level
+  - Все модули сохраняют обратную совместимость с глобальным config
+
 ### Изменено
 
 - **Обновлен container.py для поддержки новой конфигурации**:
