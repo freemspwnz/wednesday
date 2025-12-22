@@ -397,3 +397,62 @@ async def test_clear() -> None:
 
     uow.clear()
     assert len(uow._operations) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.redis
+async def test_restore_from_persistent_queue() -> None:
+    """Тест восстановления очереди из Redis при старте."""
+    from infra.logging.logger import get_logger
+    from infra.redis.redis_client import get_redis
+    from infra.storage.failed_cache_queue import FailedCacheOperation, FailedCacheQueue
+
+    cache = MockCache()
+    storage = MockStorage()
+    logger = get_logger("test")
+    redis_client = get_redis()
+    failed_cache_queue = FailedCacheQueue(
+        redis_client=redis_client,
+        logger=logger,
+    )
+
+    # Очищаем очередь перед тестом
+    await failed_cache_queue.clear()
+
+    # Сохраняем файлы в хранилище для последующего пересоздания кэша
+    image_data_1 = b"test-image-data-1"
+    image_data_2 = b"test-image-data-2"
+    storage_path_1 = await storage.save(image_data_1, prefix="frog")
+    storage_path_2 = await storage.save(image_data_2, prefix="frog")
+
+    # Добавляем тестовые операции
+    test_op1 = FailedCacheOperation(
+        cache_key="test_key_1",
+        storage_path=storage_path_1,
+        caption="test caption 1",
+    )
+    test_op2 = FailedCacheOperation(
+        cache_key="test_key_2",
+        storage_path=storage_path_2,
+        caption="test caption 2",
+    )
+
+    await failed_cache_queue.enqueue(test_op1)
+    await failed_cache_queue.enqueue(test_op2)
+
+    # Создаём UoW и восстанавливаем очередь
+    uow = ImageStorageUnitOfWork(
+        cache=cache,
+        storage=storage,
+        failed_cache_queue=failed_cache_queue,
+        logger=logger,
+    )
+
+    await uow.restore_from_persistent_queue()
+
+    # Проверяем, что фоновая задача запущена
+    assert uow._rebuild_running is True
+
+    # Очищаем очередь после теста
+    await failed_cache_queue.clear()
