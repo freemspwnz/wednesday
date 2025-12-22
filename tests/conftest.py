@@ -208,11 +208,12 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
     """
     import asyncpg
     from infra.database.postgres_client import close_postgres_pool, init_postgres_pool
-    from shared.config import config
+    from shared.config import Config, config
+    from shared.config_v2 import ConfigV2
 
     try:
         # Создаём пул с минимальными параметрами для тестов
-        pool = await init_postgres_pool(min_size=1, max_size=2)
+        pool = await init_postgres_pool(min_size=1, max_size=2, config=config)
         # Убеждаемся в наличии схемы, используя созданный пул напрямую
         from infra.database.postgres_schema import _DDL_STATEMENTS
         async with pool.acquire() as conn:
@@ -225,8 +226,13 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
         yield pool
     except (OSError, asyncpg.InvalidPasswordError, asyncpg.PostgresConnectionError) as exc:
         # Улучшенное сообщение об ошибке подключения
-        postgres_host = config.postgres_host
-        postgres_port = config.postgres_port
+        # Поддержка как старого Config, так и нового ConfigV2
+        if isinstance(config, ConfigV2):
+            postgres_host = config.postgres.host
+            postgres_port = config.postgres.port
+        else:
+            postgres_host = config.postgres_host
+            postgres_port = config.postgres_port
         is_docker = _is_running_in_docker()
         if is_docker:
             hint = (
