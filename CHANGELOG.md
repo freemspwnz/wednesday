@@ -8,6 +8,13 @@
   - Добавлена зависимость `pydantic-settings>=2.0.0` в `requirements.txt` и `pyproject.toml`
   - Подготовка к миграции на Pydantic BaseSettings для управления конфигурацией
 
+- **Новая структура конфигурации на основе Pydantic (config_v2.py)**:
+  - Создан модуль `src/shared/config_v2.py` с вложенными Pydantic моделями
+  - Реализованы модели: `TelegramConfig`, `KandinskyConfig`, `GigaChatConfig`, `PostgresConfig`, `RedisConfig`, `SchedulerConfig`, `SentryConfig`, `RetryConfig`, `CircuitBreakerConfig`, `AppSettingsConfig`
+  - Добавлена поддержка чтения секретов из файлов через переменные *_FILE через валидаторы
+  - Главная модель `ConfigV2` объединяет все вложенные конфигурации
+  - Сохранены константы `ImageConfig` и `PromptFallbackConfig` для обратной совместимости
+
 ### Изменено
 
 - **Перенос retry логики с domain слоя на уровень клиента**:
