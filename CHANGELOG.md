@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Рефакторинг конфигурации: Этап 1 - преобразование dataclass'ов в Pydantic модели**:
+  - Переименованы классы в `config_v2.py`: `KandinskyConfigV2` → `KandinskyConfig`, `GigaChatConfigV2` → `GigaChatConfig`, `RetryConfigV2` → `RetryConfig`, `CircuitBreakerConfigV2` → `CircuitBreakerConfig`, `AppSettingsConfig` → `AppSettings`
+  - Преобразован `ImageConfig` в Pydantic BaseModel с ClassVar полями для констант
+  - Преобразован `PromptFallbackConfig` в Pydantic BaseModel с полями `frog_prompts` и `styles`
+  - Обновлены ссылки на переименованные классы в `ConfigV2` (поля `kandinsky`, `gigachat`, `retry`, `circuit_breaker`)
+
 ### Добавлено
 
 - **Поддержка pydantic-settings для новой структуры конфигурации**:

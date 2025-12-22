@@ -10,16 +10,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 import aiohttp
-from pydantic import Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 if TYPE_CHECKING:
     from shared.config import (
-        AppSettings,
-        CircuitBreakerConfig,
-        GigaChatConfig,
-        KandinskyConfig,
-        RetryConfig,
+        AppSettings as AppSettingsCompat,
+        CircuitBreakerConfig as CircuitBreakerConfigCompat,
+        GigaChatConfig as GigaChatConfigCompat,
+        KandinskyConfig as KandinskyConfigCompat,
+        RetryConfig as RetryConfigCompat,
     )
 
 
@@ -147,7 +147,7 @@ class TelegramConfig(BaseSettings):
         return _get_env_value("TELEGRAM_VLESS_PROXY")
 
 
-class KandinskyConfigV2(BaseSettings):
+class KandinskyConfig(BaseSettings):
     """Конфигурация для Kandinsky клиента."""
 
     model_config = SettingsConfigDict(env_prefix="KANDINSKY_", extra="ignore")
@@ -187,7 +187,7 @@ class KandinskyConfigV2(BaseSettings):
         return _get_env_value("KANDINSKY_SECRET_KEY")
 
 
-class GigaChatConfigV2(BaseSettings):
+class GigaChatConfig(BaseSettings):
     """Конфигурация для GigaChat клиента."""
 
     model_config = SettingsConfigDict(env_prefix="GIGACHAT_", extra="ignore")
@@ -393,7 +393,7 @@ class SentryConfig(BaseSettings):
     release: str | None = Field(default=None, alias="RELEASE")
 
 
-class RetryConfigV2(BaseSettings):
+class RetryConfig(BaseSettings):
     """Конфигурация для retry механизмов."""
 
     model_config = SettingsConfigDict(env_prefix="RETRY_", extra="ignore")
@@ -415,7 +415,7 @@ class RetryConfigV2(BaseSettings):
         return int(value) if value else 5
 
 
-class CircuitBreakerConfigV2(BaseSettings):
+class CircuitBreakerConfig(BaseSettings):
     """Конфигурация для circuit breaker."""
 
     model_config = SettingsConfigDict(env_prefix="CIRCUIT_BREAKER_", extra="ignore")
@@ -425,7 +425,7 @@ class CircuitBreakerConfigV2(BaseSettings):
     cooldown: int | None = Field(default=None, alias="COOLDOWN")
 
 
-class AppSettingsConfig(BaseSettings):
+class AppSettings(BaseSettings):
     """Настройки приложения для DI."""
 
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
@@ -440,7 +440,7 @@ class AppSettingsConfig(BaseSettings):
     time_format_length: int = Field(default=5)
 
     @model_validator(mode="after")
-    def _parse_chat_ids(self) -> "AppSettingsConfig":
+    def _parse_chat_ids(self) -> "AppSettings":
         """Парсит chat_id и admin_chat_id из строк в int."""
         telegram_config = TelegramConfig()
         if telegram_config.admin_chat_id:
@@ -460,8 +460,10 @@ class AppSettingsConfig(BaseSettings):
         return self
 
 
-class ImageConfig:
+class ImageConfig(BaseModel):
     """Константы для настройки генерации изображений."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     FROG_PROMPTS: ClassVar[list[str]] = [
         "cute cartoon frog, green, sitting on a mushroom",
@@ -491,8 +493,8 @@ class ImageConfig:
         "cartoon, creative, artistic, imaginative",
     ]
 
-    WIDTH = 1024
-    HEIGHT = 1024
+    WIDTH: ClassVar[int] = 1024
+    HEIGHT: ClassVar[int] = 1024
 
     CAPTIONS: ClassVar[list[str]] = [
         "It's Wednesday, my dudes!",
@@ -500,18 +502,13 @@ class ImageConfig:
     ]
 
 
-class PromptFallbackConfig:
+class PromptFallbackConfig(BaseModel):
     """Конфигурация для fallback промптов генерации изображений."""
 
-    def __init__(self, frog_prompts: list[str], styles: list[str]) -> None:
-        """Инициализирует конфигурацию fallback промптов.
+    model_config = ConfigDict(frozen=True)
 
-        Args:
-            frog_prompts: Список промптов для жабы.
-            styles: Список стилей.
-        """
-        self.frog_prompts = frog_prompts
-        self.styles = styles
+    frog_prompts: list[str]
+    styles: list[str]
 
 
 class ConfigV2(BaseSettings):
@@ -523,14 +520,14 @@ class ConfigV2(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
-    kandinsky: KandinskyConfigV2 = Field(default_factory=KandinskyConfigV2)
-    gigachat: GigaChatConfigV2 = Field(default_factory=GigaChatConfigV2)
+    kandinsky: KandinskyConfig = Field(default_factory=KandinskyConfig)
+    gigachat: GigaChatConfig = Field(default_factory=GigaChatConfig)
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     sentry: SentryConfig = Field(default_factory=SentryConfig)
-    retry: RetryConfigV2 = Field(default_factory=RetryConfigV2)
-    circuit_breaker: CircuitBreakerConfigV2 = Field(default_factory=CircuitBreakerConfigV2)
+    retry: RetryConfig = Field(default_factory=RetryConfig)
+    circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
 
     # Дополнительные настройки
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
@@ -563,13 +560,13 @@ class ConfigV2(BaseSettings):
         except (ValueError, TypeError):
             return None
 
-    def to_gigachat_config(self) -> "GigaChatConfig":
+    def to_gigachat_config(self) -> "GigaChatConfigCompat":
         """Преобразует GigaChatConfig в старый dataclass для обратной совместимости.
 
         Returns:
             Экземпляр GigaChatConfigCompat (старый dataclass).
         """
-        from shared.config import GigaChatConfig, HttpTimeoutConfig as HttpTimeoutConfigCompat
+        from shared.config import GigaChatConfig as GigaChatConfigCompat, HttpTimeoutConfig as HttpTimeoutConfigCompat
 
         def _convert_timeout(timeout: HttpTimeoutConfig) -> HttpTimeoutConfigCompat:
             """Преобразует Pydantic HttpTimeoutConfig в dataclass."""
@@ -579,7 +576,7 @@ class ConfigV2(BaseSettings):
                 sock_read=timeout.sock_read,
             )
 
-        return GigaChatConfig(
+        return GigaChatConfigCompat(
             auth_url=self.gigachat.auth_url,
             api_url=self.gigachat.api_url,
             models_url=self.gigachat.models_url,
@@ -592,7 +589,7 @@ class ConfigV2(BaseSettings):
             token_timeout=_convert_timeout(self.gigachat.token_timeout),
         )
 
-    def to_kandinsky_config(self) -> "KandinskyConfig":
+    def to_kandinsky_config(self) -> "KandinskyConfigCompat":
         """Преобразует KandinskyConfig в старый dataclass для обратной совместимости.
 
         Returns:
@@ -600,7 +597,7 @@ class ConfigV2(BaseSettings):
         """
         from shared.config import (
             HttpTimeoutConfig as HttpTimeoutConfigCompat,
-            KandinskyConfig,
+            KandinskyConfig as KandinskyConfigCompat,
         )
 
         def _convert_timeout(timeout: HttpTimeoutConfig) -> HttpTimeoutConfigCompat:
@@ -611,7 +608,7 @@ class ConfigV2(BaseSettings):
                 sock_read=timeout.sock_read,
             )
 
-        return KandinskyConfig(
+        return KandinskyConfigCompat(
             api_key=self.kandinsky.api_key,
             secret_key=self.kandinsky.secret_key,
             base_url=self.kandinsky.base_url,
@@ -619,15 +616,14 @@ class ConfigV2(BaseSettings):
             check_timeout=_convert_timeout(self.kandinsky.check_timeout),
         )
 
-    def to_app_settings(self) -> "AppSettings":
-        """Преобразует AppSettingsConfig в старый dataclass для обратной совместимости.
+    def to_app_settings(self) -> "AppSettingsCompat":
+        """Преобразует AppSettings в старый dataclass для обратной совместимости.
 
         Returns:
-            Экземпляр AppSettings (старый dataclass).
+            Экземпляр AppSettingsCompat (старый dataclass).
         """
-        from shared.config import AppSettings
+        from shared.config import AppSettings as AppSettingsCompat
 
-        app_settings_config = AppSettingsConfig()
         # Используем данные из self для создания AppSettings
         admin_chat_id: int | None = None
         if self.telegram.admin_chat_id:
@@ -643,26 +639,27 @@ class ConfigV2(BaseSettings):
             except (ValueError, TypeError):
                 chat_id = None
 
-        return AppSettings(
+        app_settings = AppSettings()
+        return AppSettingsCompat(
             admin_chat_id=admin_chat_id,
             chat_id=chat_id,
             scheduler_send_times=self.scheduler.send_times,
-            frog_rate_limit_minutes=app_settings_config.frog_rate_limit_minutes,
-            frog_rate_limit_window_seconds=app_settings_config.frog_rate_limit_window_seconds,
-            frog_rate_limit_max_requests=app_settings_config.frog_rate_limit_max_requests,
+            frog_rate_limit_minutes=app_settings.frog_rate_limit_minutes,
+            frog_rate_limit_window_seconds=app_settings.frog_rate_limit_window_seconds,
+            frog_rate_limit_max_requests=app_settings.frog_rate_limit_max_requests,
             scheduler_tz=self.scheduler.tz,
-            time_format_length=app_settings_config.time_format_length,
+            time_format_length=app_settings.time_format_length,
         )
 
-    def to_retry_config(self) -> "RetryConfig":
+    def to_retry_config(self) -> "RetryConfigCompat":
         """Преобразует RetryConfig в старый dataclass для обратной совместимости.
 
         Returns:
-            Экземпляр RetryConfig (старый dataclass).
+            Экземпляр RetryConfigCompat (старый dataclass).
         """
-        from shared.config import RetryConfig
+        from shared.config import RetryConfig as RetryConfigCompat
 
-        return RetryConfig(
+        return RetryConfigCompat(
             standard_max_attempts=self.retry.standard_max_attempts,
             critical_max_attempts=self.retry.critical_max_attempts,
             optional_max_attempts=self.retry.optional_max_attempts,
@@ -671,15 +668,15 @@ class ConfigV2(BaseSettings):
             max_wait=self.retry.max_wait,
         )
 
-    def to_circuit_breaker_config(self) -> "CircuitBreakerConfig":
+    def to_circuit_breaker_config(self) -> "CircuitBreakerConfigCompat":
         """Преобразует CircuitBreakerConfig в старый dataclass для обратной совместимости.
 
         Returns:
-            Экземпляр CircuitBreakerConfig (старый dataclass).
+            Экземпляр CircuitBreakerConfigCompat (старый dataclass).
         """
-        from shared.config import CircuitBreakerConfig
+        from shared.config import CircuitBreakerConfig as CircuitBreakerConfigCompat
 
-        return CircuitBreakerConfig(
+        return CircuitBreakerConfigCompat(
             threshold=self.circuit_breaker.threshold,
             window=self.circuit_breaker.window,
             cooldown=self.circuit_breaker.cooldown,
