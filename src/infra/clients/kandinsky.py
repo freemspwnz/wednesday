@@ -50,7 +50,7 @@ from infra.clients.models import (
 from infra.clients.sber_clients_exceptions import map_client_errors
 from infra.repos import ModelsRepo
 from shared.base.exceptions import APIError, NetworkError
-from shared.config import KandinskyConfig
+from shared.config_v2 import KandinskyConfig
 from shared.protocols import IModelsRepo, ITextToImageClient
 
 HTTP_STATUS_OK: Final[int] = 200

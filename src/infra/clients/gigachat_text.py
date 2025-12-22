@@ -48,7 +48,7 @@ from infra.clients.models import (
 from infra.clients.sber_clients_exceptions import map_client_errors
 from infra.repos import ModelsRepo
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
-from shared.config import GigaChatConfig
+from shared.config_v2 import GigaChatConfig
 from shared.protocols import IModelsRepo, ITextToTextClient
 
 HTTP_STATUS_OK: Final[int] = 200

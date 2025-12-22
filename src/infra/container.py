@@ -76,15 +76,15 @@ def _create_clients(
     """
     # Используем ConfigV2 (старый Config больше не поддерживается)
     if isinstance(config, ConfigV2):
-        gigachat_config = config.to_gigachat_config()
-        kandinsky_config = config.to_kandinsky_config()
+        gigachat_config = config.gigachat
+        kandinsky_config = config.kandinsky
     else:
         # Fallback: создаём ConfigV2 из переменных окружения
         from shared.config_v2 import ConfigV2 as ConfigV2Type
 
         config_v2 = ConfigV2Type()
-        gigachat_config = config_v2.to_gigachat_config()
-        kandinsky_config = config_v2.to_kandinsky_config()
+        gigachat_config = config_v2.gigachat
+        kandinsky_config = config_v2.kandinsky
 
     # Передаем в фабрики
     image_client = create_image_client(kandinsky_config=kandinsky_config, models_repo=models_repo)

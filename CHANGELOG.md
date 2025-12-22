@@ -4,6 +4,11 @@
 
 ### Изменено
 
+- **Рефакторинг конфигурации: Этап 2 - обновление клиентов для работы с Pydantic-моделями**:
+  - Обновлен `src/infra/clients/kandinsky.py`: заменен импорт `KandinskyConfig` на версию из `config_v2`
+  - Обновлен `src/infra/clients/gigachat_text.py`: заменен импорт `GigaChatConfig` на версию из `config_v2`
+  - Обновлен `src/infra/clients/factory.py`: импорты `GigaChatConfig` и `KandinskyConfig` заменены на версии из `config_v2`
+
 - **Рефакторинг конфигурации: Этап 1 - преобразование dataclass'ов в Pydantic модели**:
   - Переименованы классы в `config_v2.py`: `KandinskyConfigV2` → `KandinskyConfig`, `GigaChatConfigV2` → `GigaChatConfig`, `RetryConfigV2` → `RetryConfig`, `CircuitBreakerConfigV2` → `CircuitBreakerConfig`, `AppSettingsConfig` → `AppSettings`
   - Преобразован `ImageConfig` в Pydantic BaseModel с ClassVar полями для констант

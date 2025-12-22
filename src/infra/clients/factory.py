@@ -25,7 +25,7 @@ from infra.clients.image_client_container import get_image_client_container
 from infra.clients.kandinsky import KandinskyClient
 from infra.clients.text_client_container import get_text_client_container
 from infra.logging.logger import get_logger
-from shared.config import GigaChatConfig, KandinskyConfig
+from shared.config_v2 import GigaChatConfig, KandinskyConfig
 from shared.protocols import IModelsRepo, ITextToImageClient, ITextToTextClient
 
 logger = get_logger(__name__)
