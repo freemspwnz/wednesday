@@ -15,6 +15,7 @@ from shared.base.exceptions import (
     ClientError,
     ImageGenerationError,
     NetworkError,
+    UnexpectedImageGenerationError,
 )
 from shared.protocols import ITextToImageClient
 
@@ -128,5 +129,6 @@ class ImageGenerationService:
             raise ImageGenerationError(f"Ошибка API при генерации изображения: {exc}") from exc
         except ClientError as exc:
             raise ImageGenerationError("Ошибка клиента при генерации изображения") from exc
-        except Exception as e:
-            raise ImageGenerationError(f"Ошибка при генерации изображения: {e}") from e
+        except Exception as exc:
+            # Явно помечаем как неожиданный сценарий
+            raise UnexpectedImageGenerationError(f"Неожиданная ошибка при генерации изображения: {exc}") from exc

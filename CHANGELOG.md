@@ -114,6 +114,11 @@
   - Метод `get_fallback_prompt()` теперь использует `self._fallback_config.default_fallback_prompt` из конфига
   - Дефолтный промпт теперь является частью конфигурации, что позволяет настраивать его через dependency injection без изменений доменного кода
 
+- **Уточнение обработки неожиданных ошибок в ImageGenerationService**:
+  - Добавлен класс `UnexpectedImageGenerationError`, наследующий от `ImageGenerationError`
+  - Метод `generate()` в `ImageGenerationService` теперь использует `UnexpectedImageGenerationError` для неожиданных ошибок
+  - Позволяет app-слою отличать ожидаемые бизнес-ошибки от инцидентов, требующих отдельного логирования/алертинга
+
 ### Добавлено
 
 - **Поддержка pydantic-settings для новой структуры конфигурации**:

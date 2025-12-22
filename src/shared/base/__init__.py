@@ -9,6 +9,7 @@ from shared.base.exceptions import (
     MessagingError,
     MessagingNetworkError,
     StorageError,
+    UnexpectedImageGenerationError,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "MessagingError",
     "MessagingNetworkError",
     "StorageError",
+    "UnexpectedImageGenerationError",
 ]

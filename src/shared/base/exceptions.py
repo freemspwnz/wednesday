@@ -31,6 +31,12 @@ class ImageGenerationError(AppError):
     pass
 
 
+class UnexpectedImageGenerationError(ImageGenerationError):
+    """Неожиданная ошибка при генерации изображения (баг или нестандартный сценарий)."""
+
+    pass
+
+
 class StorageError(AppError):
     """Ошибки файлового хранилища."""
 
