@@ -48,7 +48,6 @@ from infra.clients.models import (
     SetModelResult,
 )
 from infra.clients.sber_clients_exceptions import map_client_errors
-from infra.repos import ModelsRepo
 from shared.base.exceptions import APIError, NetworkError
 from shared.config import KandinskyConfig
 from shared.protocols import IModelsRepo, ITextToImageClient
@@ -81,19 +80,18 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     ENDPOINT_PIPELINE_RUN = "key/api/v1/pipeline/run"
     ENDPOINT_PIPELINE_STATUS = "key/api/v1/pipeline/status"
 
-    def __init__(self, config: KandinskyConfig, models_repo: IModelsRepo | None = None) -> None:
+    def __init__(self, config: KandinskyConfig, models_repo: IModelsRepo) -> None:
         """Инициализация клиента Kandinsky.
 
         Args:
             config: Конфигурация Kandinsky клиента (обязательна).
             models_repo: Репозиторий моделей для сохранения/получения настроек моделей.
-                Если не передан, создается новый экземпляр ModelsRepo при необходимости.
         """
         self._api_key: str | None = config.api_key
         self._secret_key: str | None = config.secret_key
         self._base_url: str = config.base_url
         self._proxy_url: str | None = None
-        self._models_repo: IModelsRepo | None = models_repo
+        self._models_repo: IModelsRepo = models_repo
         self._config: KandinskyConfig = config
 
         # Proxy берём из стандартных переменных окружения, как и в старой реализации.
@@ -209,10 +207,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         # Используем меньший таймаут для проверки статуса
         timeout = self._config.check_timeout.to_client_timeout()
 
-        from infra.database.postgres_client import get_postgres_pool
-
-        models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-        current_pipeline_id, current_pipeline_name = await models_store.get_kandinsky_model()
+        current_pipeline_id, current_pipeline_name = await self._models_repo.get_kandinsky_model()
 
         bound.debug("Запрос списка pipelines для dry‑run статуса")
         pipelines_data_json = await self._fetch_pipelines(headers=headers, timeout=timeout)
@@ -220,7 +215,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             pipelines = [KandinskyPipelineResponse.model_validate(p) for p in pipelines_data_json]
 
             if save_models:
-                await models_store.set_kandinsky_available_models(pipelines_data_json)
+                await self._models_repo.set_kandinsky_available_models(pipelines_data_json)
                 bound.debug(
                     "Сохранён список из {} моделей Kandinsky",
                     len(pipelines),
@@ -285,12 +280,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             # Fallback: пытаемся получить из хранилища
             bound.debug("Попытка получить модели из хранилища после ошибки API")
             try:
-                from infra.database.postgres_client import get_postgres_pool
-
-                models_store = (
-                    self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-                )
-                stored_models = await models_store.get_kandinsky_available_models()
+                stored_models = await self._models_repo.get_kandinsky_available_models()
                 if stored_models:
                     bound.debug("Получен список из {} моделей из хранилища", len(stored_models))
                     return stored_models
@@ -349,12 +339,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             if pipeline.id == model_identifier:
                 matched_model_name = pipeline.name
                 matched_pipeline_id = pipeline.id
-                from infra.database.postgres_client import get_postgres_pool
-
-                models_store = (
-                    self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-                )
-                await models_store.set_kandinsky_model(matched_pipeline_id, matched_model_name)
+                await self._models_repo.set_kandinsky_model(matched_pipeline_id, matched_model_name)
                 msg = f"Модель установлена: {matched_model_name} (ID: {matched_pipeline_id})"
                 bound.info(msg)
                 return SetModelResult.ok(msg)
@@ -370,10 +355,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             matched_pipeline = matches[0]
             selected_model_name = matched_pipeline.name
             selected_pipeline_id = matched_pipeline.id
-            from infra.database.postgres_client import get_postgres_pool
-
-            models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-            await models_store.set_kandinsky_model(selected_pipeline_id, selected_model_name)
+            await self._models_repo.set_kandinsky_model(selected_pipeline_id, selected_model_name)
             msg = f"Модель установлена: {selected_model_name} (ID: {selected_pipeline_id})"
             bound.info(msg)
             return SetModelResult.ok(msg)
@@ -487,10 +469,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     ) -> str:
         """Выбирает актуальный pipeline ID, используя сохранённую модель или первую доступную."""
         bound = logger.bind(event="kandinsky_get_pipeline", user_id=user_id)
-        from infra.database.postgres_client import get_postgres_pool
-
-        models_store = self._models_repo if self._models_repo is not None else ModelsRepo(pool=get_postgres_pool())
-        saved_pipeline_id, saved_pipeline_name = await models_store.get_kandinsky_model()
+        saved_pipeline_id, saved_pipeline_name = await self._models_repo.get_kandinsky_model()
 
         data_json = await self._fetch_pipelines(headers=headers)
         if not data_json or not isinstance(data_json, list):
@@ -524,7 +503,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         first_pipeline = pipelines[0]
         pipeline_id: str = str(first_pipeline.id)
         pipeline_name: str = str(first_pipeline.name)
-        await models_store.set_kandinsky_model(pipeline_id, pipeline_name)
+        await self._models_repo.set_kandinsky_model(pipeline_id, pipeline_name)
         bound.bind(pipeline_id=pipeline_id, pipeline_name=pipeline_name).info(
             "Выбран pipeline для генерации через Kandinsky",
         )

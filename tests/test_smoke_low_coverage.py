@@ -245,7 +245,10 @@ def test_kandinsky_client_initialization(monkeypatch: pytest.MonkeyPatch) -> Non
         generation_timeout=timeout,
         check_timeout=check_timeout,
     )
-    client = KandinskyClient(config=config)
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    client = KandinskyClient(config=config, models_repo=models_repo)
 
     assert client._api_key is not None
     assert client._secret_key is not None
@@ -269,7 +272,10 @@ async def test_kandinsky_client_auth_headers(monkeypatch: pytest.MonkeyPatch) ->
         generation_timeout=timeout,
         check_timeout=check_timeout,
     )
-    client = KandinskyClient(config=config)
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    client = KandinskyClient(config=config, models_repo=models_repo)
     headers = client._get_auth_headers()
 
     assert "X-Key" in headers
@@ -298,7 +304,10 @@ async def test_kandinsky_client_aclose(monkeypatch: pytest.MonkeyPatch) -> None:
         generation_timeout=timeout,
         check_timeout=check_timeout,
     )
-    client = KandinskyClient(config=config)
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    client = KandinskyClient(config=config, models_repo=models_repo)
 
     # Проверяем, что сессия создана
     assert client._session is not None
@@ -351,7 +360,10 @@ async def test_kandinsky_client_context_manager(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
 
-    async with KandinskyClient(config=config) as client:
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
+    async with KandinskyClient(config=config, models_repo=models_repo) as client:
         assert client._session is not None
         assert client._session == mock_session
 
@@ -389,8 +401,11 @@ async def test_kandinsky_client_context_manager_exception(monkeypatch: pytest.Mo
 
     monkeypatch.setattr("aiohttp.ClientSession", _mock_session_init)
 
+    from tests.conftest import _InMemoryModelsRepo
+
+    models_repo = _InMemoryModelsRepo()
     try:
-        async with KandinskyClient(config=config) as client:
+        async with KandinskyClient(config=config, models_repo=models_repo) as client:
             assert client._session is not None
             # Имитируем исключение внутри контекста
             raise ValueError("Test exception")
