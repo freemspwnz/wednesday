@@ -61,6 +61,44 @@ class ServiceError(AppError):
     pass
 
 
+class UnexpectedAppError(AppError):
+    """Базовый класс для неожиданных ошибок application‑слоя.
+
+    Используется для обёртки действительно неожиданных ошибок (программные баги,
+    нарушения инвариантов), которые не относятся к ожидаемым доменным или
+    инфраструктурным сбоям.
+    """
+
+    def __init__(self, message: str, original_error: Exception | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        self.original_error = original_error
+
+
+class UnexpectedDispatchError(UnexpectedAppError):
+    """Неожиданная ошибка при выполнении рассылки или отправке сообщений."""
+
+    pass
+
+
+class UnexpectedImageError(UnexpectedAppError):
+    """Неожиданная ошибка при генерации или сохранении изображений."""
+
+    pass
+
+
+class UnexpectedPromptError(UnexpectedAppError):
+    """Неожиданная ошибка при генерации или получении fallback‑промпта."""
+
+    pass
+
+
+class UnexpectedAPIError(UnexpectedAppError):
+    """Неожиданная ошибка при работе с внешними API статуса/списков моделей."""
+
+    pass
+
+
 class ClientError(AppError):
     """Базовое исключение для всех ошибок клиентов API."""
 

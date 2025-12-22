@@ -328,10 +328,10 @@ class SchedulerConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SCHEDULER_", extra="ignore")
 
     # Константы для валидации
-    TIME_FORMAT_LENGTH = 5
-    HOURS_IN_DAY = 24
-    MINUTES_IN_HOUR = 60
-    DAYS_IN_WEEK = 7
+    TIME_FORMAT_LENGTH: ClassVar[int] = 5
+    HOURS_IN_DAY: ClassVar[int] = 24
+    MINUTES_IN_HOUR: ClassVar[int] = 60
+    DAYS_IN_WEEK: ClassVar[int] = 7
 
     send_times: list[str] = Field(
         default_factory=lambda: ["09:00", "12:00", "18:00"],

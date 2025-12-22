@@ -12,7 +12,14 @@ from app.prompt_service import PromptService
 from domain.caption_service import CaptionService
 from domain.image_generation import ImageGenerationService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import CacheError, CircuitBreakerOpen, ImageGenerationError, ServiceError, StorageError
+from shared.base.exceptions import (
+    CacheError,
+    CircuitBreakerOpen,
+    ImageGenerationError,
+    ServiceError,
+    StorageError,
+    UnexpectedImageError,
+)
 from shared.protocols import ICache, ICircuitBreaker, IImageStorage, IImageStorageUnitOfWork, ILogger, IMetrics
 
 CACHE_VALUE_TUPLE_LENGTH = 2
@@ -176,13 +183,19 @@ class ImageService(BaseService):
                     status="ok",
                 )
             except Exception as e:
+                # Неожиданная ошибка при выборе подписи — логируем как unexpected,
+                # но продолжаем генерацию с пустой подписью (graceful degradation).
+                unexpected_error = UnexpectedImageError(
+                    f"Unexpected error while selecting caption: {e}",
+                    original_error=e,
+                )
                 self.logger.warning(
-                    f"Ошибка при выборе подписи через CaptionService: {e}",
+                    f"Ошибка при выборе подписи через CaptionService: {unexpected_error}",
                     event="caption_selection_failed",
                     user_id=user_id_str,
                     status="warning",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
+                    error_type=type(unexpected_error).__name__,
+                    error_message=str(unexpected_error),
                 )
                 caption = ""
         else:
@@ -326,28 +339,34 @@ class ImageService(BaseService):
             import traceback
 
             elapsed = time.perf_counter() - start_time
+            unexpected_error = UnexpectedImageError(
+                f"Unexpected error while generating image: {e}",
+                original_error=e,
+            )
             self.logger.error(
-                f"Неожиданная ошибка при генерации изображения: {e}",
+                f"Неожиданная ошибка при генерации изображения: {unexpected_error}",
                 event="unexpected_generation_error",
                 user_id=user_id_str,
                 latency_ms=round(elapsed * 1000),
                 status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
+                error_type=type(unexpected_error).__name__,
+                error_message=str(unexpected_error),
                 traceback=traceback.format_exc(),
             )
             if self._metrics:
                 try:
                     await self._metrics.increment_generation_failed()
-                except ServiceError as e:
+                except ServiceError as metrics_error:
                     self.logger.warning(
-                        f"Ошибка при записи метрики failed: {e}",
+                        f"Ошибка при записи метрики failed: {metrics_error}",
                         event="metrics_error",
                         status="warning",
-                        error_type=type(e).__name__,
-                        error_message=str(e),
+                        error_type=type(metrics_error).__name__,
+                        error_message=str(metrics_error),
                     )
-            return None
+            # Пробрасываем неожиданную ошибку выше, чтобы верхний уровень мог
+            # принять решение (fallback, алертинг и т.п.).
+            raise unexpected_error from e
 
         if not image_data_result:
             elapsed = time.perf_counter() - start_time

@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from domain.prompt_generation import PromptGenerationService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import CacheError
+from shared.base.exceptions import (
+    APIError,
+    AuthenticationError,
+    CacheError,
+    ClientError,
+    NetworkError,
+    UnexpectedPromptError,
+)
 from shared.protocols import ICache, ILogger
 
 
@@ -89,15 +96,30 @@ class PromptService(BaseService):
                     event="prompt_generation_success",
                     status="success",
                 )
-        except Exception as e:
+        except (AuthenticationError, NetworkError, APIError, ClientError) as e:
+            # Ожидаемые ошибки клиентов/сетевые сбои — логируем и используем fallback
             self.logger.warning(
-                f"Ошибка при генерации промпта через domain сервис: {e}",
-                event="prompt_generation_failed",
+                f"Ошибка клиента при генерации промпта: {e}",
+                event="prompt_generation_client_error",
                 status="error",
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
             prompt = None
+        except Exception as e:
+            # Действительно неожиданная ошибка доменного сервиса генерации промптов
+            unexpected_error = UnexpectedPromptError(
+                f"Unexpected error while generating prompt: {e}",
+                original_error=e,
+            )
+            self.logger.error(
+                f"Неожиданная ошибка при генерации промпта через domain сервис: {unexpected_error}",
+                event="prompt_generation_failed",
+                status="error",
+                error_type=type(unexpected_error).__name__,
+                error_message=str(unexpected_error),
+            )
+            raise unexpected_error from e
 
         if prompt is None:
             # Используем статический fallback
@@ -114,12 +136,17 @@ class PromptService(BaseService):
                     status="fallback",
                 )
             except Exception as e:
+                # Неожиданная ошибка при получении статического fallback‑промпта
+                unexpected_error = UnexpectedPromptError(
+                    f"Unexpected error while getting fallback prompt: {e}",
+                    original_error=e,
+                )
                 self.logger.error(
-                    f"Ошибка при получении fallback промпта: {e}",
+                    f"Ошибка при получении fallback промпта: {unexpected_error}",
                     event="prompt_fallback_failed",
                     status="error",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
+                    error_type=type(unexpected_error).__name__,
+                    error_message=str(unexpected_error),
                 )
                 return None
 

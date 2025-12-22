@@ -8,10 +8,13 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
-# Устанавливаем корень проекта в sys.path до всех импортов
-# Это необходимо для unit-тестов, которые запускаются локально
-if sys.path[0] != (repo_root := str(Path(__file__).parent.parent)):
-    sys.path.insert(0, repo_root)
+# Устанавливаем корень проекта и src/ в sys.path до всех импортов
+repo_root = Path(__file__).resolve().parent.parent
+src_root = repo_root / "src"
+
+for p in (str(repo_root), str(src_root)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 import pytest
 import pytest_asyncio

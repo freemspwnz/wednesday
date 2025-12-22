@@ -258,6 +258,13 @@
   - Заменен класс `DispatchResult(dict)` на `TypedDict` в `app/dispatch_result.py`
   - Добавлена явная типизация всех полей: `slot_date`, `slot_time`, `total_targets`, `success_count`, `failed_count`, `used_fallback`
   - Улучшена типобезопасность и валидация полей на этапе разработки
+  - Обновлена документация и тесты для работы с новым типом `DispatchResult`
+
+- **Уточнение стратегии обработки ошибок в слое app/**:
+  - Добавлена иерархия `UnexpectedAppError` и специализированные исключения `UnexpectedDispatchError`, `UnexpectedImageError`, `UnexpectedPromptError`, `UnexpectedAPIError` в `shared.base.exceptions`
+  - В `DispatchService`, `DispatchExecutionService`, `FallbackService`, `ImageService`, `PromptService`, `APIStatusService` сузены широкие `except Exception` до обработки конкретных доменных/инфраструктурных ошибок
+  - Для действительно неожиданных ошибок (`Exception`, не являющихся доменными/инфраструктурными) реализовано оборачивание в `Unexpected*Error` и проброс выше по стеку с подробным структурированным логированием
+  - В `docs/ARCHITECTURE.md` зафиксирована общая стратегия обработки ожидаемых и неожиданных ошибок в слое `app/`
   - Все существующие использования остаются совместимыми
 
 - **Рефакторинг зависимостей от infra/ в app/ слое**:

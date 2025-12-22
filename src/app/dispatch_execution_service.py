@@ -7,7 +7,14 @@ from collections.abc import Awaitable, Callable
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_result import DispatchResult
 from shared.base.base_service import BaseService
-from shared.base.exceptions import MessagingAPIError, MessagingNetworkError, RepoError, ServiceError
+from shared.base.exceptions import (
+    AppError,
+    MessagingAPIError,
+    MessagingNetworkError,
+    RepoError,
+    ServiceError,
+    UnexpectedDispatchError,
+)
 from shared.protocols import IDispatchRegistry, ILogger, IMetrics, IUsageTracker
 from shared.retry import retry_on_connect_error
 
@@ -127,22 +134,19 @@ class DispatchExecutionService(BaseService):
                 pass
             result["failed_count"] += 1
             return False
-        except Exception as send_error:
-            # Неожиданные программные ошибки
-            import traceback
-
+        except AppError as send_error:
+            # Ожидаемые доменные/инфраструктурные ошибки приложения
             self.logger.error(
-                f"Неожиданная программная ошибка при отправке изображения в чат {target_chat}: {send_error}",
-                event="unexpected_dispatch_error",
+                f"Ошибка приложения при отправке изображения в чат {target_chat}: {send_error}",
+                event="dispatch_app_error",
                 status="error",
                 error_type=type(send_error).__name__,
                 error_message=str(send_error),
-                traceback=traceback.format_exc(),
                 chat_id=target_chat,
             )
             try:
                 await send_error_message(
-                    f"Не удалось отправить изображение в чат {target_chat} из-за внутренней ошибки",
+                    f"Не удалось отправить изображение в чат {target_chat} из-за ошибки приложения",
                 )
             except ServiceError:  # pragma: no cover
                 pass
@@ -152,6 +156,25 @@ class DispatchExecutionService(BaseService):
                 pass
             result["failed_count"] += 1
             return False
+        except Exception as send_error:
+            # Действительно неожиданные программные ошибки
+            import traceback
+
+            unexpected_error = UnexpectedDispatchError(
+                f"Unexpected error while sending image to chat {target_chat}: {send_error}",
+                original_error=send_error,
+            )
+
+            self.logger.error(
+                f"Неожиданная программная ошибка при отправке изображения в чат {target_chat}: {unexpected_error}",
+                event="unexpected_dispatch_error",
+                status="error",
+                error_type=type(unexpected_error).__name__,
+                error_message=str(unexpected_error),
+                traceback=traceback.format_exc(),
+                chat_id=target_chat,
+            )
+            raise unexpected_error from send_error
 
     async def send_to_targets(  # noqa: PLR0913, PLR0917
         self,

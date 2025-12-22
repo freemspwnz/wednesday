@@ -9,7 +9,7 @@ from app.dispatch_execution_service import DispatchExecutionService
 from app.dispatch_result import DispatchResult
 from app.image_service import ImageService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import RepoError, ServiceError
+from shared.base.exceptions import AppError, RepoError, ServiceError, UnexpectedDispatchError
 from shared.protocols import IDispatchRegistry, ILogger, IMetrics
 
 
@@ -109,19 +109,38 @@ class FallbackService(BaseService):
                         # Это менее критично, чем сама отправка
                     result["success_count"] += 1
 
-            except Exception as send_error:
-                import traceback
-
+            except AppError as send_error:
+                # Ожидаемые ошибки приложения при отправке fallback‑сообщений
                 self.logger.error(
-                    f"Ошибка при отправке fallback в чат {target_chat}: {send_error}",
-                    event="fallback_send_error",
+                    f"Ошибка приложения при отправке fallback в чат {target_chat}: {send_error}",
+                    event="fallback_app_error",
                     status="error",
                     error_type=type(send_error).__name__,
                     error_message=str(send_error),
-                    traceback=traceback.format_exc(),
                     chat_id=target_chat,
                 )
                 result["failed_count"] += 1
+            except Exception as send_error:
+                # Действительно неожиданные ошибки при отправке fallback
+                import traceback
+
+                unexpected_error = UnexpectedDispatchError(
+                    f"Unexpected error while sending fallback to chat {target_chat}: {send_error}",
+                    original_error=send_error,
+                )
+
+                self.logger.error(
+                    f"Неожиданная ошибка при отправке fallback в чат {target_chat}: {unexpected_error}",
+                    event="fallback_send_error",
+                    status="error",
+                    error_type=type(unexpected_error).__name__,
+                    error_message=str(unexpected_error),
+                    traceback=traceback.format_exc(),
+                    chat_id=target_chat,
+                )
+                # Не продолжаем немедленно рассылку при неожиданных ошибках,
+                # пусть верхний уровень решит стратегию обработки
+                raise unexpected_error from send_error
 
     async def handle_generation_failure(  # noqa: PLR0913, PLR0917
         self,

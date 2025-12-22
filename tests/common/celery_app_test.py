@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from celery import Celery
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from tests.shared.test_config import config_test
+from tests.helpers.utils.config_test import config_test
 
 # Получаем URL Redis для брокера и результата из тестового тестового конфига
 redis_url = config_test.celery_test_redis_url

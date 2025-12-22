@@ -20,7 +20,7 @@ from app.fallback_service import FallbackService
 from app.image_service import ImageService
 from app.target_preparation_service import TargetPreparationService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import ServiceError
+from shared.base.exceptions import ServiceError, UnexpectedDispatchError
 from shared.protocols import ILogger
 
 
@@ -159,6 +159,25 @@ class DispatchService(BaseService):
                     result=result,
                 )
 
+        except ServiceError as e:
+            # Ожидаемые ошибки сервисов (доменные/инфраструктурные) обрабатываем через fallback
+            if "targets" not in locals():
+                targets = await self._target_preparation_service.prepare_targets(
+                    main_chat_id=main_chat_id,
+                    send_error_message=send_error_message,
+                )
+                result["total_targets"] = len(targets)
+
+            return await self._fallback_service.handle_unexpected_error(
+                error=e,
+                slot_date=slot_date,
+                slot_time=slot_time,
+                targets=targets,
+                send_admin_error=send_admin_error,
+                send_user_friendly_error=send_user_friendly_error,
+                send_fallback_image=send_fallback_image,
+                result=result,
+            )
         except Exception as e:
             import traceback
 
@@ -170,19 +189,23 @@ class DispatchService(BaseService):
                 )
                 result["total_targets"] = len(targets)
 
-            # Логируем неожиданную ошибку
-            if not isinstance(e, ServiceError):
-                self.logger.error(
-                    f"Неожиданная ошибка при выполнении рассылки: {e}",
-                    event="unexpected_dispatch_error",
-                    status="error",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    traceback=traceback.format_exc(),
-                )
+            unexpected_error = UnexpectedDispatchError(
+                f"Unexpected error during dispatch execution: {e}",
+                original_error=e,
+            )
+
+            # Логируем действительно неожиданную ошибку
+            self.logger.error(
+                f"Неожиданная ошибка при выполнении рассылки: {unexpected_error}",
+                event="unexpected_dispatch_error",
+                status="error",
+                error_type=type(unexpected_error).__name__,
+                error_message=str(unexpected_error),
+                traceback=traceback.format_exc(),
+            )
 
             return await self._fallback_service.handle_unexpected_error(
-                error=e,
+                error=unexpected_error,
                 slot_date=slot_date,
                 slot_time=slot_time,
                 targets=targets,
