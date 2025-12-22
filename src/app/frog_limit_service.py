@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from shared.base.base_service import BaseService
-from shared.config import AppSettings
+from shared.config_v2 import AppSettings
 from shared.protocols import ILogger, IRateLimiter
 
 # Константы

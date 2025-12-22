@@ -19,7 +19,6 @@ from dataclasses import dataclass
 import asyncpg
 
 from infra.logging.logger import get_logger
-from shared.config import Config
 from shared.config_v2 import ConfigV2
 
 logger = get_logger(__name__)
@@ -32,7 +31,7 @@ async def init_postgres_pool(
     *,
     min_size: int = 1,
     max_size: int = 10,
-    config: Config | ConfigV2 | None = None,
+    config: ConfigV2 | None = None,
     **connect_kwargs: object,
 ) -> asyncpg.Pool:
     """
@@ -213,7 +212,7 @@ def get_pool_metrics(pool: asyncpg.Pool | None = None) -> PoolMetrics | None:
     )
 
 
-async def ensure_database(config: Config | ConfigV2 | None = None) -> None:
+async def ensure_database(config: ConfigV2 | None = None) -> None:
     """Создаёт базу данных, если она не существует.
 
     Подключается к системной базе 'postgres' для проверки и создания

@@ -4,19 +4,27 @@
 
 ### Изменено
 
-- **Рефакторинг конфигурации: Этап 3 - удаление методов преобразования из ConfigV2**:
+- **Рефакторинг конфигурации: обновление остальных модулей**:
+  - Обновлен `src/shared/bot_services.py`: заменен импорт `AppSettings` на Pydantic-версию из `config_v2`
+  - Обновлен `src/app/frog_limit_service.py`: заменен импорт `AppSettings` на Pydantic-версию из `config_v2`
+  - Обновлен `src/bot/support_bot.py`: заменен вызов `config.to_app_settings()` на прямое создание `AppSettings()` из `config_v2`
+  - Обновлен `src/shared/retry.py`: заменены все вызовы `config.to_retry_config()` на прямое использование `config.retry`
+  - Обновлены все модули с типизацией `Config | ConfigV2`: заменены на `ConfigV2`, удалены импорты старого `Config`
+  - Обновлены сигнатуры функций в `celery/context.py`, `postgres_client.py`, `admins_repo.py`, `redis_client.py` для использования только `ConfigV2`
+
+- **Рефакторинг конфигурации: удаление методов преобразования из ConfigV2**:
   - Обновлен `_create_clients()` в `container.py`: удалены проверки `isinstance(config, ConfigV2)`, теперь всегда используется `ConfigV2`
   - Обновлен `build_image_stack()` в `container.py`: заменен вызов `config.to_circuit_breaker_config()` на прямое использование `config.circuit_breaker`
   - Обновлен `build_bot_services()` в `container.py`: заменен вызов `config.to_app_settings()` на прямое создание `AppSettings()` из `config_v2`
   - Удалены все методы преобразования из `ConfigV2`: `to_gigachat_config()`, `to_kandinsky_config()`, `to_app_settings()`, `to_retry_config()`, `to_circuit_breaker_config()`
   - Обновлены сигнатуры функций в `container.py`: все функции теперь принимают только `ConfigV2`, а не `Config | ConfigV2`
 
-- **Рефакторинг конфигурации: Этап 2 - обновление клиентов для работы с Pydantic-моделями**:
+- **Рефакторинг конфигурации: обновление клиентов для работы с Pydantic-моделями**:
   - Обновлен `src/infra/clients/kandinsky.py`: заменен импорт `KandinskyConfig` на версию из `config_v2`
   - Обновлен `src/infra/clients/gigachat_text.py`: заменен импорт `GigaChatConfig` на версию из `config_v2`
   - Обновлен `src/infra/clients/factory.py`: импорты `GigaChatConfig` и `KandinskyConfig` заменены на версии из `config_v2`
 
-- **Рефакторинг конфигурации: Этап 1 - преобразование dataclass'ов в Pydantic модели**:
+- **Рефакторинг конфигурации: преобразование dataclass'ов в Pydantic модели**:
   - Переименованы классы в `config_v2.py`: `KandinskyConfigV2` → `KandinskyConfig`, `GigaChatConfigV2` → `GigaChatConfig`, `RetryConfigV2` → `RetryConfig`, `CircuitBreakerConfigV2` → `CircuitBreakerConfig`, `AppSettingsConfig` → `AppSettings`
   - Преобразован `ImageConfig` в Pydantic BaseModel с ClassVar полями для констант
   - Преобразован `PromptFallbackConfig` в Pydantic BaseModel с полями `frog_prompts` и `styles`

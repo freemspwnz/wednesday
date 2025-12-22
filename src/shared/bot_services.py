@@ -16,7 +16,7 @@ from app.image_service import ImageService
 from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.repos.dispatch_registry import DispatchRegistry
-from shared.config import AppSettings
+from shared.config_v2 import AppSettings
 from shared.protocols import IChatsRepo, IMetrics, IUsageTracker
 
 if TYPE_CHECKING:

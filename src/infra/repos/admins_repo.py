@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncpg
 
 from infra.logging.logger import get_logger, log_all_methods
-from shared.config import Config
 from shared.config_v2 import ConfigV2
 
 # Создаём экземпляр ConfigV2 при импорте модуля
@@ -30,7 +29,7 @@ class AdminsRepo:
         self,
         pool: asyncpg.Pool,
         admin_chat_id: str | None = None,
-        config_obj: Config | ConfigV2 | None = None,
+        config_obj: ConfigV2 | None = None,
     ) -> None:
         """Инициализирует репозиторий администраторов.
 
