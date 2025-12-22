@@ -19,7 +19,10 @@ from infra.database.postgres_client import get_postgres_pool, init_postgres_pool
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger, log_event
 from infra.redis.redis_client import get_redis, init_redis_pool, redis_available
-from shared.config import config
+from shared.config_v2 import ConfigV2
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+config = ConfigV2()
 
 if TYPE_CHECKING:
     from loguru import Logger as LoggerType
@@ -350,17 +353,17 @@ class BotRunner:
         """
         self.logger.info("Начало проверки требований для запуска")
 
-        # На этом этапе переменные окружения уже загружены через utils.config:
+        # На этом этапе переменные окружения уже загружены через ConfigV2:
         # сначала из окружения контейнера, затем при необходимости fallback из .env.
         # Здесь мы только логируем наличие ключевых обязательных переменных.
         self.logger.info("Проверка конфигурации: логирование обязательных переменных окружения")
         try:
             # Проверяем, что все обязательные переменные загружены
-            telegram_token = config.telegram_token
-            kandinsky_api_key = config.kandinsky_api_key
-            kandinsky_secret_key = config.kandinsky_secret_key
-            chat_id = config.chat_id
-            admin_chat_id = config.admin_chat_id
+            telegram_token = config.telegram.bot_token
+            kandinsky_api_key = config.kandinsky.api_key
+            kandinsky_secret_key = config.kandinsky.secret_key
+            chat_id = config.telegram.chat_id
+            admin_chat_id = config.telegram.admin_chat_id
             self.logger.info("Все обязательные переменные конфигурации загружены успешно")
             self.logger.info(f"TELEGRAM_BOT_TOKEN: {'установлен' if telegram_token else 'не установлен'}")
             self.logger.info(f"KANDINSKY_API_KEY: {'установлен' if kandinsky_api_key else 'не установлен'}")
@@ -382,16 +385,16 @@ class BotRunner:
           fallback'ами, а все Redis‑зависимые сервисы логируют режим работы.
         """
         self.logger.info("Пробую инициализировать Redis‑клиент (если задан конфиг)")
-        url = config.redis_url
+        url = config.redis.url
         try:
             if url:
                 await init_redis_pool(url=url)
             else:
                 await init_redis_pool(
-                    host=config.redis_host,
-                    port=config.redis_port,
-                    db=config.redis_db,
-                    password=config.redis_password,
+                    host=config.redis.host,
+                    port=config.redis.port,
+                    db=config.redis.db,
+                    password=config.redis.password,
                 )
             self.logger.info(
                 f"Redis успешно инициализирован, режим работы: redis_available={redis_available()}",
@@ -412,7 +415,7 @@ class BotRunner:
         self.logger.info("Пробую инициализировать пул Postgres")
         try:
             # Бот в основном IO‑bound, поэтому достаточно небольшого пула.
-            await init_postgres_pool(min_size=1, max_size=10)
+            await init_postgres_pool(min_size=1, max_size=10, config=config)
             self.logger.info("Postgres успешно инициализирован")
         except Exception as exc:
             self.logger.error(
@@ -540,7 +543,7 @@ def _init_sentry(logger: "LoggerType") -> None:
     healthcheck и других потенциальных HTTP‑сервисов также подключается
     FastAPI‑интеграция.
     """
-    dsn = config.sentry_dsn
+    dsn = config.sentry.dsn
     if not dsn:
         logger.info("Sentry отключён (SENTRY_DSN не задан)")
         log_event(
@@ -559,8 +562,8 @@ def _init_sentry(logger: "LoggerType") -> None:
 
         sentry_sdk.init(
             dsn=dsn,
-            environment=config.sentry_environment,
-            release=config.sentry_release,
+            environment=config.sentry.environment,
+            release=config.sentry.release,
             integrations=[
                 AsyncioIntegration(),
                 FastApiIntegration(),
@@ -575,8 +578,8 @@ def _init_sentry(logger: "LoggerType") -> None:
             event="sentry_initialized",
             status="ok",
             extra={
-                "environment": config.sentry_environment,
-                "release": config.sentry_release,
+                "environment": config.sentry.environment,
+                "release": config.sentry.release,
             },
             level="info",
             message="Sentry SDK успешно инициализирован",

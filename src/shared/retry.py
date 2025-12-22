@@ -34,7 +34,10 @@ else:
     from tenacity.wait import wait_base
 
 from infra.logging.logger import get_logger, log_event
-from shared.config import config
+from shared.config_v2 import ConfigV2
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+_config: ConfigV2 = ConfigV2()
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
@@ -260,7 +263,11 @@ def retry_critical(  # noqa: PLR0913, PLR0917
     Returns:
         Декоратор retry
     """
-    retry_cfg = config.get_retry_config()
+    # Поддержка как старого Config, так и нового ConfigV2
+    if isinstance(_config, ConfigV2):
+        retry_cfg = _config.to_retry_config()
+    else:
+        retry_cfg = _config.get_retry_config()
 
     attempts = max_attempts or retry_cfg.critical_max_attempts
     mult = multiplier or retry_cfg.multiplier
@@ -312,7 +319,11 @@ def retry_standard(  # noqa: PLR0913, PLR0917
     Returns:
         Декоратор retry
     """
-    retry_cfg = config.get_retry_config()
+    # Поддержка как старого Config, так и нового ConfigV2
+    if isinstance(_config, ConfigV2):
+        retry_cfg = _config.to_retry_config()
+    else:
+        retry_cfg = _config.get_retry_config()
 
     attempts = max_attempts or retry_cfg.standard_max_attempts
     mult = multiplier or retry_cfg.multiplier
@@ -364,7 +375,11 @@ def retry_optional(  # noqa: PLR0913, PLR0917
     Returns:
         Декоратор retry
     """
-    retry_cfg = config.get_retry_config()
+    # Поддержка как старого Config, так и нового ConfigV2
+    if isinstance(_config, ConfigV2):
+        retry_cfg = _config.to_retry_config()
+    else:
+        retry_cfg = _config.get_retry_config()
 
     attempts = max_attempts or retry_cfg.optional_max_attempts
     mult = multiplier or retry_cfg.multiplier
@@ -409,7 +424,11 @@ def retry_with_logging(
     Returns:
         Декоратор retry
     """
-    retry_cfg = config.get_retry_config()
+    # Поддержка как старого Config, так и нового ConfigV2
+    if isinstance(_config, ConfigV2):
+        retry_cfg = _config.to_retry_config()
+    else:
+        retry_cfg = _config.get_retry_config()
     attempts = max_attempts or retry_cfg.critical_max_attempts
     return retry_critical(service_name=service_name, method_name=method_name, max_attempts=attempts)
 

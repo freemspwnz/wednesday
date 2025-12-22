@@ -23,8 +23,12 @@ from bot.wednesday_bot import (
 )
 from infra.logging.logger import get_logger, log_all_methods
 from infra.rate_limiting import RateLimiter
-from shared.config import config
+from shared.config import AppSettings
+from shared.config_v2 import ConfigV2
 from shared.protocols import IRateLimiter
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+config: ConfigV2 = ConfigV2()
 
 # Константы для SupportBot
 MAX_POLLING_ATTEMPTS = 4  # максимальное количество попыток запуска polling
@@ -95,9 +99,11 @@ class SupportBot(BaseHandlers):
             redis_client=redis_client, prefix="rate:support:", window=60, limit=20
         )
         # Настройки приложения для доступа к конфигурации через DI
-        from shared.config import AppSettings
-
-        self.settings: AppSettings = AppSettings.from_config(config)
+        # Поддержка как старого Config, так и нового ConfigV2
+        if isinstance(config, ConfigV2):
+            self.settings: AppSettings = config.to_app_settings()
+        else:
+            self.settings = AppSettings.from_config(config)
         # Создаем минимальный BotServices только с settings для использования BaseHandlers
         # SupportBot не использует остальные сервисы, поэтому передаем заглушки для обязательных полей
         from app.frog_limit_service import FrogRateLimiterService

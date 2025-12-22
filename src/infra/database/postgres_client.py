@@ -73,11 +73,11 @@ async def init_postgres_pool(
     if _pool is not None:
         return _pool
 
-    # Поддержка как старого Config, так и нового ConfigV2
+    # Используем ConfigV2 по умолчанию
     if config is None:
-        from shared.config import config as global_config
+        from shared.config_v2 import ConfigV2
 
-        config = global_config
+        config = ConfigV2()
 
     if isinstance(config, ConfigV2):
         user = config.postgres.user
@@ -228,9 +228,9 @@ async def ensure_database(config: Config | ConfigV2 | None = None) -> None:
         Exception: При неожиданной ошибке при проверке/создании базы данных.
     """
     if config is None:
-        from shared.config import config as global_config
+        from shared.config_v2 import ConfigV2
 
-        config = global_config
+        config = ConfigV2()
 
     if isinstance(config, ConfigV2):
         user = config.postgres.user

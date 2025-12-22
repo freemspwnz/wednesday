@@ -17,8 +17,11 @@ from infra.database.postgres_client import close_postgres_pool, init_postgres_po
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger
 from infra.redis.redis_client import close_redis, init_redis_pool
-from shared.config import Config, config
+from shared.config import Config
 from shared.config_v2 import ConfigV2
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+config: ConfigV2 = ConfigV2()
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot

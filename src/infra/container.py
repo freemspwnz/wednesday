@@ -44,11 +44,8 @@ from infra.repos.usage_tracker import UsageTracker
 from infra.storage.image_storage import ImageStorageService
 from shared.bot_services import BotServices
 from shared.config import (
-    AppSettings,
     Config,
-    GigaChatConfig,
     ImageConfig,
-    KandinskyConfig,
     PromptFallbackConfig,
 )
 from shared.config_v2 import ConfigV2
@@ -77,13 +74,17 @@ def _create_clients(
     Returns:
         Кортеж (image_client, text_client) для использования в сервисах.
     """
-    # Поддержка как старого Config, так и нового ConfigV2
+    # Используем ConfigV2 (старый Config больше не поддерживается)
     if isinstance(config, ConfigV2):
         gigachat_config = config.to_gigachat_config()
         kandinsky_config = config.to_kandinsky_config()
     else:
-        gigachat_config = GigaChatConfig.from_config(config)
-        kandinsky_config = KandinskyConfig.from_config(config)
+        # Fallback: создаём ConfigV2 из переменных окружения
+        from shared.config_v2 import ConfigV2 as ConfigV2Type
+
+        config_v2 = ConfigV2Type()
+        gigachat_config = config_v2.to_gigachat_config()
+        kandinsky_config = config_v2.to_kandinsky_config()
 
     # Передаем в фабрики
     image_client = create_image_client(kandinsky_config=kandinsky_config, models_repo=models_repo)
@@ -156,12 +157,15 @@ def build_image_stack(
     prompt_cache = PromptCache(redis_client=redis_client)
 
     # Получаем конфигурацию circuit breaker
+    # Используем ConfigV2 (старый Config больше не поддерживается)
     if isinstance(config, ConfigV2):
         cb_config = config.to_circuit_breaker_config()
     else:
-        from shared.config import config as global_config
+        # Fallback: создаём ConfigV2 из переменных окружения
+        from shared.config_v2 import ConfigV2 as ConfigV2Type
 
-        cb_config = global_config.get_circuit_breaker_config()
+        config_v2 = ConfigV2Type()
+        cb_config = config_v2.to_circuit_breaker_config()
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(
         redis_client=redis_client,
         key="cb:kandinsky_api",
@@ -263,11 +267,15 @@ def build_bot_services(config: Config | ConfigV2, db_pool: asyncpg.Pool) -> BotS
         Настроенный экземпляр BotServices.
     """
 
-    # Поддержка как старого Config, так и нового ConfigV2
+    # Используем ConfigV2 (старый Config больше не поддерживается)
     if isinstance(config, ConfigV2):
         app_settings = config.to_app_settings()
     else:
-        app_settings = AppSettings.from_config(config)
+        # Fallback: создаём ConfigV2 из переменных окружения
+        from shared.config_v2 import ConfigV2 as ConfigV2Type
+
+        config_v2 = ConfigV2Type()
+        app_settings = config_v2.to_app_settings()
 
     # Создаём общий логгер для всех сервисов
     app_logger = get_logger("app")

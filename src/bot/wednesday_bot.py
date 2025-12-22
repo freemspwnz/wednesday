@@ -16,7 +16,10 @@ from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
 from infra.logging.logger import get_logger, log_all_methods, log_event
 from shared.bot_services import BotServices
-from shared.config import config
+from shared.config_v2 import ConfigV2
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+config: ConfigV2 = ConfigV2()
 
 # Константы для магических чисел
 CONNECTION_POOL_SIZE = 20
@@ -76,8 +79,8 @@ class WednesdayBot:
             read_timeout=READ_TIMEOUT_SECONDS,
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
-        # config.telegram_token проверяется в _validate_required_vars, поэтому не может быть None
-        telegram_token: str = config.telegram_token or ""
+        # config.telegram.bot_token проверяется при инициализации ConfigV2
+        telegram_token: str = config.telegram.bot_token or ""
         assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
         self.logger.info("Создание Application с токеном")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
@@ -103,7 +106,7 @@ class WednesdayBot:
         self.model_handlers: ModelHandlers = ModelHandlers(self.services)
 
         # ID чата для отправки сообщений
-        self.chat_id: str | None = config.chat_id
+        self.chat_id: str | None = config.telegram.chat_id
         self.logger.info(f"Chat ID установлен: {self.chat_id}")
 
         # Флаг состояния бота
@@ -542,10 +545,15 @@ class WednesdayBot:
         settings = self.services.settings
         configured_times = settings.scheduler_send_times
         # День недели и таймзона берутся из глобальной конфигурации, но не протекают через протокол планировщика
-        from shared.config import config as _config
+        from shared.config_v2 import ConfigV2
 
-        wednesday_day = _config.scheduler_wednesday_day
-        timezone = _config.scheduler_tz or "Europe/Moscow"
+        # Используем глобальный config из модуля
+        if isinstance(config, ConfigV2):
+            wednesday_day = config.scheduler.wednesday_day
+            timezone = config.scheduler.tz or "Europe/Moscow"
+        else:
+            wednesday_day = config.scheduler_wednesday_day
+            timezone = config.scheduler_tz or "Europe/Moscow"
 
         self.logger.info(
             "Используется Celery для планирования задач: "
@@ -606,9 +614,13 @@ class WednesdayBot:
                 )
                 # Дублируем в админ-чат, если задан, избегая повтора, если CHAT_ID совпадает
                 try:
-                    from shared.config import config as _cfg
+                    from shared.config_v2 import ConfigV2
 
-                    admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
+                    # Используем глобальный config из модуля
+                    if isinstance(config, ConfigV2):
+                        admin_chat_id_env = config.telegram.admin_chat_id
+                    else:
+                        admin_chat_id_env = getattr(config, "admin_chat_id", None)
                     if admin_chat_id_env:
                         try:
                             admin_chat_id_val = int(str(admin_chat_id_env))
@@ -655,19 +667,23 @@ class WednesdayBot:
                     # Не редактируем сообщение в админском чате — оно предназначено для других чатов
                     skip_admin_edit = False
                     try:
-                        from shared.config import config as _cfg
+                        from shared.config_v2 import ConfigV2
 
-                        admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
-                        if admin_chat_id_env:
-                            try:
-                                admin_chat_str: str = str(admin_chat_id_env)
-                                chat_id_str: str = str(chat_id) if chat_id is not None else ""
-                                if admin_chat_str and chat_id_str:
-                                    skip_admin_edit = int(admin_chat_str) == int(chat_id_str)
-                                else:
+                        # Используем глобальный config из модуля
+                        if isinstance(config, ConfigV2):
+                            admin_chat_id_env = config.telegram.admin_chat_id
+                        else:
+                            admin_chat_id_env = getattr(config, "admin_chat_id", None)
+                            if admin_chat_id_env:
+                                try:
+                                    admin_chat_str: str = str(admin_chat_id_env)
+                                    chat_id_str: str = str(chat_id) if chat_id is not None else ""
+                                    if admin_chat_str and chat_id_str:
+                                        skip_admin_edit = int(admin_chat_str) == int(chat_id_str)
+                                    else:
+                                        skip_admin_edit = False
+                                except Exception:
                                     skip_admin_edit = False
-                            except Exception:
-                                skip_admin_edit = False
                     except Exception:
                         skip_admin_edit = False
 
@@ -918,19 +934,23 @@ class WednesdayBot:
                     # Не редактируем в админском чате
                     skip_admin_edit = False
                     try:
-                        from shared.config import config as _cfg
+                        from shared.config_v2 import ConfigV2
 
-                        admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
-                        if admin_chat_id_env:
-                            try:
-                                admin_chat_str: str = str(admin_chat_id_env)
-                                chat_id_str: str = str(chat_id) if chat_id is not None else ""
-                                if admin_chat_str and chat_id_str:
-                                    skip_admin_edit = int(admin_chat_str) == int(chat_id_str)
-                                else:
+                        # Используем глобальный config из модуля
+                        if isinstance(config, ConfigV2):
+                            admin_chat_id_env = config.telegram.admin_chat_id
+                        else:
+                            admin_chat_id_env = getattr(config, "admin_chat_id", None)
+                            if admin_chat_id_env:
+                                try:
+                                    admin_chat_str: str = str(admin_chat_id_env)
+                                    chat_id_str: str = str(chat_id) if chat_id is not None else ""
+                                    if admin_chat_str and chat_id_str:
+                                        skip_admin_edit = int(admin_chat_str) == int(chat_id_str)
+                                    else:
+                                        skip_admin_edit = False
+                                except Exception:
                                     skip_admin_edit = False
-                            except Exception:
-                                skip_admin_edit = False
                     except Exception:
                         skip_admin_edit = False
 
@@ -982,9 +1002,13 @@ class WednesdayBot:
                     "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
                 )
                 from infra.repos import AdminsRepo
-                from shared.config import config as _cfg
+                from shared.config_v2 import ConfigV2
 
-                admin_chat_id_env = getattr(_cfg, "admin_chat_id", None)
+                # Используем глобальный config из модуля
+                if isinstance(config, ConfigV2):
+                    admin_chat_id_env = config.telegram.admin_chat_id
+                else:
+                    admin_chat_id_env = getattr(config, "admin_chat_id", None)
                 has_pending_edit = hasattr(self, "pending_shutdown_edit") and isinstance(
                     self.pending_shutdown_edit,
                     dict,

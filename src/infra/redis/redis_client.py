@@ -366,9 +366,7 @@ def get_redis_url(config: Config | ConfigV2 | None = None) -> str | None:
     from shared.config_v2 import ConfigV2
 
     if config is None:
-        from shared.config import config as global_config
-
-        config = global_config
+        config = ConfigV2()
 
     if isinstance(config, ConfigV2):
         redis_url = config.redis.url

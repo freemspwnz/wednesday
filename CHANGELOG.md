@@ -34,6 +34,16 @@
   - Тесты проверяют валидацию всех вложенных моделей (HttpTimeoutConfig, SchedulerConfig, PostgresConfig, RedisConfig)
   - Обновлен `tests/conftest.py` для поддержки ConfigV2 при создании postgres pool
 
+- **Обновление main.py и остальных модулей для использования ConfigV2**:
+  - Обновлен `main.py`: использует ConfigV2 вместо старого Config
+  - Обновлен `bot/support_bot.py`: использует ConfigV2 с fallback на старый Config
+  - Обновлен `bot/wednesday_bot.py`: использует ConfigV2 с fallback на старый Config
+  - Обновлен `shared/retry.py`: использует ConfigV2 для получения retry конфигурации
+  - Обновлен `celery/app.py`: использует ConfigV2 вместо старого Config
+  - Обновлен `celery/context.py`: использует ConfigV2 с fallback
+  - Старый Config класс помечен как DEPRECATED, методы from_config() также помечены как устаревшие
+  - Глобальный экземпляр старого config удалён в пользу ConfigV2
+
 ### Технические детали миграции
 
 Миграция на новую структуру конфигурации выполнена с сохранением полной обратной совместимости:

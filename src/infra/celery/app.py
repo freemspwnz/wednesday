@@ -15,8 +15,10 @@ from celery.schedules import crontab
 
 from infra.logging.logger import LoguruHandler, get_logger
 from infra.redis.redis_client import get_redis_url
-from shared.config import config
 from shared.config_v2 import ConfigV2
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+config: ConfigV2 = ConfigV2()
 
 logger = get_logger(__name__)
 

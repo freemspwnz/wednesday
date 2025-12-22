@@ -44,7 +44,11 @@ def _load_dotenv_if_needed() -> None:
 
 class Config:  # noqa: PLR0904
     """
-    Класс для управления конфигурацией приложения.
+    DEPRECATED: Класс для управления конфигурацией приложения (старая версия).
+
+    Этот класс устарел и будет удалён в будущих версиях.
+    Используйте ConfigV2 из shared.config_v2 вместо этого.
+
     Содержит все необходимые настройки и токены.
     """
 
@@ -665,8 +669,9 @@ class Config:  # noqa: PLR0904
         return int(Config._get_env_var("SCHEDULER_WEDNESDAY_DAY") or "2")
 
 
-# Создаем глобальный экземпляр конфигурации
-config = Config()
+# DEPRECATED: Глобальный экземпляр старого Config больше не создаётся.
+# Используйте ConfigV2 из shared.config_v2 вместо этого.
+# config = Config()  # Удалено в пользу ConfigV2
 
 
 # Константы для работы с изображениями
@@ -850,7 +855,9 @@ class GigaChatConfig:
 
     @classmethod
     def from_config(cls, config: Config) -> "GigaChatConfig":
-        """Создает GigaChatConfig из Config.
+        """DEPRECATED: Создает GigaChatConfig из Config.
+
+        Этот метод устарел. Используйте ConfigV2.to_gigachat_config() вместо этого.
 
         Args:
             config: Экземпляр Config.
@@ -902,7 +909,9 @@ class KandinskyConfig:
 
     @classmethod
     def from_config(cls, config: Config) -> "KandinskyConfig":
-        """Создает KandinskyConfig из Config.
+        """DEPRECATED: Создает KandinskyConfig из Config.
+
+        Этот метод устарел. Используйте ConfigV2.to_kandinsky_config() вместо этого.
 
         Args:
             config: Экземпляр Config.
@@ -951,7 +960,9 @@ class RetryConfig:
 
     @classmethod
     def from_config(cls, config: Config) -> "RetryConfig":
-        """Создает RetryConfig из Config.
+        """DEPRECATED: Создает RetryConfig из Config.
+
+        Этот метод устарел. Используйте ConfigV2.to_retry_config() вместо этого.
 
         Args:
             config: Экземпляр Config.
@@ -993,7 +1004,9 @@ class CircuitBreakerConfig:
 
     @classmethod
     def from_config(cls, config: Config) -> "CircuitBreakerConfig":
-        """Создает CircuitBreakerConfig из Config.
+        """DEPRECATED: Создает CircuitBreakerConfig из Config.
+
+        Этот метод устарел. Используйте ConfigV2.to_circuit_breaker_config() вместо этого.
 
         Args:
             config: Экземпляр Config.
@@ -1034,7 +1047,9 @@ class AppSettings:
 
     @classmethod
     def from_config(cls, config: Config) -> "AppSettings":
-        """Создает AppSettings из Config.
+        """DEPRECATED: Создает AppSettings из Config.
+
+        Этот метод устарел. Используйте ConfigV2.to_app_settings() вместо этого.
 
         Args:
             config: Экземпляр Config.

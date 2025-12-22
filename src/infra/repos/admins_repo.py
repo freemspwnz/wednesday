@@ -10,8 +10,11 @@ from __future__ import annotations
 import asyncpg
 
 from infra.logging.logger import get_logger, log_all_methods
-from shared.config import Config, config
+from shared.config import Config
 from shared.config_v2 import ConfigV2
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+config: ConfigV2 = ConfigV2()
 
 
 @log_all_methods()

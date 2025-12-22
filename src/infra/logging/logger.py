@@ -19,9 +19,11 @@ if TYPE_CHECKING:
 
     from shared.protocols import ILogger
 
-from shared.config import config
 from shared.config_v2 import ConfigV2
 from shared.paths import LOGS_DIR
+
+# Создаём экземпляр ConfigV2 при импорте модуля
+config: ConfigV2 = ConfigV2()
 
 # Типы для уровней логирования декораторов
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
