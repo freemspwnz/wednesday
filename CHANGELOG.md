@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Рефакторинг конфигурации: Этап 3 - удаление методов преобразования из ConfigV2**:
+  - Обновлен `_create_clients()` в `container.py`: удалены проверки `isinstance(config, ConfigV2)`, теперь всегда используется `ConfigV2`
+  - Обновлен `build_image_stack()` в `container.py`: заменен вызов `config.to_circuit_breaker_config()` на прямое использование `config.circuit_breaker`
+  - Обновлен `build_bot_services()` в `container.py`: заменен вызов `config.to_app_settings()` на прямое создание `AppSettings()` из `config_v2`
+  - Удалены все методы преобразования из `ConfigV2`: `to_gigachat_config()`, `to_kandinsky_config()`, `to_app_settings()`, `to_retry_config()`, `to_circuit_breaker_config()`
+  - Обновлены сигнатуры функций в `container.py`: все функции теперь принимают только `ConfigV2`, а не `Config | ConfigV2`
+
 - **Рефакторинг конфигурации: Этап 2 - обновление клиентов для работы с Pydantic-моделями**:
   - Обновлен `src/infra/clients/kandinsky.py`: заменен импорт `KandinskyConfig` на версию из `config_v2`
   - Обновлен `src/infra/clients/gigachat_text.py`: заменен импорт `GigaChatConfig` на версию из `config_v2`

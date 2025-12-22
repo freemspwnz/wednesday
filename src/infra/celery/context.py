@@ -117,7 +117,10 @@ async def get_services_context(config_obj: Config | ConfigV2 | None = None) -> d
 
                 # Создаём экземпляры сервисов
                 postgres_pool = get_postgres_pool()
-                bot = build_bot(config_obj, db_pool=postgres_pool)
+                # Convert to ConfigV2 if needed
+                if not isinstance(config_obj, ConfigV2):
+                    config_obj = ConfigV2()
+                bot = build_bot(config=config_obj, db_pool=postgres_pool)
 
                 _services_context = {
                     "bot": bot,

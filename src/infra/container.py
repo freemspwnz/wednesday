@@ -44,7 +44,6 @@ from infra.repos.usage_tracker import UsageTracker
 from infra.storage.image_storage import ImageStorageService
 from shared.bot_services import BotServices
 from shared.config import (
-    Config,
     ImageConfig,
     PromptFallbackConfig,
 )
@@ -62,29 +61,20 @@ from shared.protocols import (
 
 
 def _create_clients(
-    config: Config | ConfigV2,
+    config: ConfigV2,
     models_repo: IModelsRepo | None = None,
 ) -> tuple:
     """Создаёт клиенты для внешних ML‑сервисов.
 
     Args:
-        config: Экземпляр Config или ConfigV2 для создания конфигураций клиентов.
+        config: Экземпляр ConfigV2 для создания конфигураций клиентов.
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
 
     Returns:
         Кортеж (image_client, text_client) для использования в сервисах.
     """
-    # Используем ConfigV2 (старый Config больше не поддерживается)
-    if isinstance(config, ConfigV2):
-        gigachat_config = config.gigachat
-        kandinsky_config = config.kandinsky
-    else:
-        # Fallback: создаём ConfigV2 из переменных окружения
-        from shared.config_v2 import ConfigV2 as ConfigV2Type
-
-        config_v2 = ConfigV2Type()
-        gigachat_config = config_v2.gigachat
-        kandinsky_config = config_v2.kandinsky
+    gigachat_config = config.gigachat
+    kandinsky_config = config.kandinsky
 
     # Передаем в фабрики
     image_client = create_image_client(kandinsky_config=kandinsky_config, models_repo=models_repo)
@@ -93,7 +83,7 @@ def _create_clients(
 
 
 def build_image_stack(
-    config: Config | ConfigV2,
+    config: ConfigV2,
     db_pool: asyncpg.Pool,
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
@@ -105,7 +95,7 @@ def build_image_stack(
     чтобы упростить дальнейшее сопровождение и тестирование.
 
     Args:
-        config: Экземпляр Config для создания клиентов и чтения настроек.
+        config: Экземпляр ConfigV2 для создания клиентов и чтения настроек.
         db_pool: Пул подключений PostgreSQL.
         image_client: Опциональный клиент для генерации изображений.
             Если None, создаётся новый через create_image_client().
@@ -157,15 +147,7 @@ def build_image_stack(
     prompt_cache = PromptCache(redis_client=redis_client)
 
     # Получаем конфигурацию circuit breaker
-    # Используем ConfigV2 (старый Config больше не поддерживается)
-    if isinstance(config, ConfigV2):
-        cb_config = config.to_circuit_breaker_config()
-    else:
-        # Fallback: создаём ConfigV2 из переменных окружения
-        from shared.config_v2 import ConfigV2 as ConfigV2Type
-
-        config_v2 = ConfigV2Type()
-        cb_config = config_v2.to_circuit_breaker_config()
+    cb_config = config.circuit_breaker
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(
         redis_client=redis_client,
         key="cb:kandinsky_api",
@@ -252,7 +234,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     )
 
 
-def build_bot_services(config: Config | ConfigV2, db_pool: asyncpg.Pool) -> BotServices:
+def build_bot_services(config: ConfigV2, db_pool: asyncpg.Pool) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
     На этом этапе:
@@ -260,22 +242,17 @@ def build_bot_services(config: Config | ConfigV2, db_pool: asyncpg.Pool) -> BotS
     - остальные сервисы повторяют существующую инициализацию из WednesdayBot.
 
     Args:
-        config: Экземпляр Config для создания сервисов и настроек.
+        config: Экземпляр ConfigV2 для создания сервисов и настроек.
         db_pool: Пул подключений PostgreSQL.
 
     Returns:
         Настроенный экземпляр BotServices.
     """
 
-    # Используем ConfigV2 (старый Config больше не поддерживается)
-    if isinstance(config, ConfigV2):
-        app_settings = config.to_app_settings()
-    else:
-        # Fallback: создаём ConfigV2 из переменных окружения
-        from shared.config_v2 import ConfigV2 as ConfigV2Type
+    # Создаём AppSettings из ConfigV2
+    from shared.config_v2 import AppSettings
 
-        config_v2 = ConfigV2Type()
-        app_settings = config_v2.to_app_settings()
+    app_settings = AppSettings()
 
     # Создаём общий логгер для всех сервисов
     app_logger = get_logger("app")
@@ -419,7 +396,7 @@ def build_bot_services(config: Config | ConfigV2, db_pool: asyncpg.Pool) -> BotS
 
 
 def build_bot(
-    config: Config | ConfigV2,
+    config: ConfigV2,
     db_pool: asyncpg.Pool,
     services: BotServices | None = None,
 ) -> WednesdayBot:
@@ -429,7 +406,7 @@ def build_bot(
     Dependency Injection для передачи зависимостей в бот.
 
     Args:
-        config: Экземпляр Config для создания сервисов и зависимостей.
+        config: Экземпляр ConfigV2 для создания сервисов и зависимостей.
         db_pool: Пул подключений PostgreSQL.
         services: Опциональный контейнер сервисов. Если None, создаётся
             новый через build_bot_services().
