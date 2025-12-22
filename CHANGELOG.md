@@ -108,6 +108,12 @@
   - Добавлена обработка разных источников промпта через `PromptSource` enum
   - Улучшено логирование различных сценариев генерации промпта
 
+- **Вынесение дефолтного fallback-промпта из кода PromptGenerationService**:
+  - Добавлено поле `default_fallback_prompt` в класс `PromptFallbackConfig` в `config.py` с дефолтным значением
+  - Убрана захардкоженная строка из метода `get_fallback_prompt()` в `PromptGenerationService`
+  - Метод `get_fallback_prompt()` теперь использует `self._fallback_config.default_fallback_prompt` из конфига
+  - Дефолтный промпт теперь является частью конфигурации, что позволяет настраивать его через dependency injection без изменений доменного кода
+
 ### Добавлено
 
 - **Поддержка pydantic-settings для новой структуры конфигурации**:

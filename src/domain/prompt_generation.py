@@ -54,6 +54,7 @@ class PromptGenerationService:
             text_client: Клиент для генерации текста (опционально). Если None,
                 используется только статический fallback.
             fallback_config: Конфигурация для fallback промптов (опционально).
+                Если None, используется дефолтный промпт из PromptFallbackConfig.
         """
         self._text_client = text_client
         self._fallback_config = fallback_config
@@ -103,8 +104,14 @@ class PromptGenerationService:
             Статический промпт для генерации изображения.
         """
         if not self._fallback_config or not self._fallback_config.frog_prompts or not self._fallback_config.styles:
-            # Fallback на дефолтный промпт, если конфигурация не предоставлена
-            return "cartoon frog, green, high quality, detailed, Wednesday frog meme"
+            # Fallback на дефолтный промпт из конфига, если конфигурация не предоставлена или пуста
+            if self._fallback_config:
+                return self._fallback_config.default_fallback_prompt
+
+            return PromptFallbackConfig(
+                frog_prompts=[],
+                styles=[],
+            ).default_fallback_prompt
 
         frog_prompt = random.choice(self._fallback_config.frog_prompts)
         style = random.choice(self._fallback_config.styles)

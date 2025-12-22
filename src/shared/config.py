@@ -500,6 +500,7 @@ class PromptFallbackConfig(BaseModel):
 
     frog_prompts: list[str]
     styles: list[str]
+    default_fallback_prompt: str = "cartoon frog, green, high quality, detailed, Wednesday frog meme"
 
 
 class Config(BaseSettings):
