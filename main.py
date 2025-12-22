@@ -231,6 +231,23 @@ class BotRunner:
                 self.logger.info("[Supervisor] Создание экземпляра WednesdayBot")
                 postgres_pool = get_postgres_pool()
                 self.bot = build_bot(config, db_pool=postgres_pool)
+
+                # Восстанавливаем очередь непересозданных кэшей
+                try:
+                    if hasattr(self.bot, "services") and hasattr(self.bot.services, "image_service"):
+                        image_service = self.bot.services.image_service
+                        if image_service and hasattr(image_service, "_storage_uow"):
+                            uow = image_service._storage_uow
+                            if hasattr(uow, "restore_from_persistent_queue"):
+                                self.logger.info("Восстановление очереди непересозданных кэшей из Redis")
+                                await uow.restore_from_persistent_queue()
+                except Exception as e:
+                    # Логируем, но не прерываем запуск бота
+                    self.logger.warning(
+                        f"Не удалось восстановить очередь непересозданных кэшей: {e}",
+                        exc_info=True,
+                    )
+
                 try:
                     if self.pending_startup_edit:
                         self.logger.info(

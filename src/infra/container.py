@@ -44,6 +44,7 @@ from infra.rate_limiting.rate_limiter import RateLimiter
 from infra.repos import ChatsRepo, ImagesRepo, ModelsRepo, PromptsRepo
 from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
+from infra.storage.failed_cache_queue import FailedCacheQueue
 from infra.storage.image_storage import ImageStorageService
 from shared.bot_services import BotServices
 from shared.config import (
@@ -183,6 +184,13 @@ def build_image_stack(
     image_storage = ImageStorageService(logger=app_logger)
     prompt_cache = PromptCache(redis_client=redis_client)
 
+    # Создаём очередь для непересозданных кэшей
+    failed_cache_queue = FailedCacheQueue(
+        redis_client=redis_client,
+        prefix="failed_cache:",
+        logger=app_logger,
+    )
+
     # Получаем конфигурацию circuit breaker
     cb_config = config.circuit_breaker
     circuit_breaker: ICircuitBreaker = CircuitBreakerService(
@@ -210,6 +218,7 @@ def build_image_stack(
     image_storage_uow = ImageStorageUnitOfWork(
         cache=image_cache,
         storage=image_storage,
+        failed_cache_queue=failed_cache_queue,
         logger=app_logger,
     )
 
