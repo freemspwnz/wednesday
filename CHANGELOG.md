@@ -102,10 +102,11 @@
   - Инфраструктурный слой больше не знает о структуре `bot.services`, что улучшает разделение слоёв и соответствует принципам SOLID
 
 - **Улучшение shutdown логики и типизации**:
-  - Создан `CleanupService` в `src/app/cleanup_service.py` для инкапсуляции логики graceful shutdown
+  - Создан `CleanupService` в `src/infra/cleanup_service.py` для инкапсуляции логики graceful shutdown в infra-слое
   - Обновлен `shutdown_services()` для использования `CleanupService` вместо прямого вызова `bot.services.cleanup()`
   - Создан `ServicesContext` Protocol в `src/infra/celery/services_context.py` для типизации контекста сервисов
-  - Добавлена функция `build_cleanup_service()` в `src/infra/container.py` для создания `CleanupService` через DI
+  - Обновлена функция `build_cleanup_service()` в `src/infra/container.py` для создания `CleanupService` через DI из infra-слоя
+  - Удалена инфраструктурная логика из `src/app/cleanup_service.py`, модуль оставлен как тонкая заглушка для обратной совместимости
   - Улучшена типизация в `context.py` с использованием Protocol вместо `dict[str, object]`
 
 - **Рефакторинг дублирования в FrogProcessingService**:

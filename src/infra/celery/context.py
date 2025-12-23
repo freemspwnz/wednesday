@@ -20,7 +20,7 @@ from infra.redis.redis_client import init_redis_pool
 from shared.config import Config
 
 if TYPE_CHECKING:
-    from app.cleanup_service import CleanupService
+    from infra.cleanup_service import CleanupService
     from infra.redis.redis_client import RedisClient
 
 # Создаём экземпляр Config при импорте модуля

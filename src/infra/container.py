@@ -14,9 +14,9 @@ import asyncpg
 
 if TYPE_CHECKING:
     from app.admin_notification_service import AdminNotificationService
-    from app.cleanup_service import CleanupService
     from app.frog_processing_service import FrogProcessingService
     from bot.wednesday_bot import WednesdayBot
+    from infra.cleanup_service import CleanupService
     from infra.redis.redis_client import RedisClient
 
 from app.admin_dashboard_service import AdminDashboardService
@@ -376,7 +376,7 @@ def build_cleanup_service(logger: ILogger) -> CleanupService:
     Returns:
         Настроенный CleanupService.
     """
-    from app.cleanup_service import CleanupService
+    from infra.cleanup_service import CleanupService
 
     return CleanupService(logger=logger)
 
