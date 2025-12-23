@@ -10,6 +10,7 @@ import pytest
 
 from app.database_operations_service import DatabaseOperationsService
 from infra.database.database_unit_of_work import DatabaseUnitOfWork
+from infra.logging.logger import get_logger
 from infra.metrics.metrics import Metrics
 from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
@@ -37,7 +38,7 @@ async def test_database_operations_record_dispatch_success(
     """Тест успешной регистрации отправки через DatabaseOperationsService."""
     dispatch_registry = DispatchRegistry(pool=async_postgres_pool)
     usage_tracker = UsageTracker(pool=async_postgres_pool)
-    metrics = Metrics(pool=async_postgres_pool)
+    metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
     def create_unit_of_work() -> DatabaseUnitOfWork:
         return DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())
@@ -83,7 +84,7 @@ async def test_database_operations_record_dispatch_success_rollback_on_error(
     """Тест отката транзакции при ошибке одной из операций."""
     dispatch_registry = DispatchRegistry(pool=async_postgres_pool)
     usage_tracker = UsageTracker(pool=async_postgres_pool)
-    metrics = Metrics(pool=async_postgres_pool)
+    metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
     # Создаем мок, который будет падать при вызове increment
     class FailingUsageTracker(UsageTracker):
@@ -136,7 +137,7 @@ async def test_database_operations_record_dispatch_failure(
     """Тест регистрации неуспешной отправки."""
     dispatch_registry = DispatchRegistry(pool=async_postgres_pool)
     usage_tracker = UsageTracker(pool=async_postgres_pool)
-    metrics = Metrics(pool=async_postgres_pool)
+    metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
     def create_unit_of_work() -> DatabaseUnitOfWork:
         return DatabaseUnitOfWork(pool=async_postgres_pool, logger=_create_mock_logger())

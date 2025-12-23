@@ -11,8 +11,10 @@ from typing import Any, Protocol, runtime_checkable
 
 import asyncpg
 
-from infra.logging.logger import get_logger, log_all_methods
+from infra.logging.logger import get_logger
 from infra.redis.redis_client import safe_redis_call
+from shared.base.base_service import BaseService
+from shared.protocols import ILogger, IMetrics
 
 _logger = get_logger(__name__)
 
@@ -202,8 +204,7 @@ async def record_metric(  # noqa: PLR0913
             )
 
 
-@log_all_methods()
-class Metrics:
+class Metrics(BaseService, IMetrics):
     """
     Репозиторий метрик производительности.
 
@@ -211,14 +212,15 @@ class Metrics:
     текущих сценариев мониторинга.
     """
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, *, logger: ILogger) -> None:
         """Инициализирует репозиторий метрик.
 
         Args:
             pool: Пул подключений PostgreSQL.
+            logger: Экземпляр логгера для использования в сервисе.
         """
+        super().__init__(logger)
         self._pool = pool
-        self.logger = get_logger(__name__)
 
     async def _ensure_row(self) -> None:
         """Гарантирует наличие базовой строки метрик (id=1).
@@ -244,16 +246,30 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        await self._ensure_row()
-        if connection is not None:
-            await connection.execute(
-                "UPDATE metrics SET generations_success = generations_success + 1 WHERE id = 1;",
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
+        try:
+            await self._ensure_row()
+            if connection is not None:
+                await connection.execute(
                     "UPDATE metrics SET generations_success = generations_success + 1 WHERE id = 1;",
                 )
+            else:
+                async with self._pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE metrics SET generations_success = generations_success + 1 WHERE id = 1;",
+                    )
+            self.logger.debug(
+                "Записана метрика: increment_generation_success",
+                event="metric_recorded",
+                status="success",
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики increment_generation_success: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def increment_generation_failed(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик неудачных генераций изображений.
@@ -264,16 +280,30 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        await self._ensure_row()
-        if connection is not None:
-            await connection.execute(
-                "UPDATE metrics SET generations_failed = generations_failed + 1 WHERE id = 1;",
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
+        try:
+            await self._ensure_row()
+            if connection is not None:
+                await connection.execute(
                     "UPDATE metrics SET generations_failed = generations_failed + 1 WHERE id = 1;",
                 )
+            else:
+                async with self._pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE metrics SET generations_failed = generations_failed + 1 WHERE id = 1;",
+                    )
+            self.logger.debug(
+                "Записана метрика: increment_generation_failed",
+                event="metric_recorded",
+                status="failed",
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики increment_generation_failed: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def increment_generation_retry(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик повторных попыток генерации изображений.
@@ -327,16 +357,30 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        await self._ensure_row()
-        if connection is not None:
-            await connection.execute(
-                "UPDATE metrics SET dispatch_success = dispatch_success + 1 WHERE id = 1;",
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
+        try:
+            await self._ensure_row()
+            if connection is not None:
+                await connection.execute(
                     "UPDATE metrics SET dispatch_success = dispatch_success + 1 WHERE id = 1;",
                 )
+            else:
+                async with self._pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE metrics SET dispatch_success = dispatch_success + 1 WHERE id = 1;",
+                    )
+            self.logger.debug(
+                "Записана метрика: increment_dispatch_success",
+                event="metric_recorded",
+                status="success",
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики increment_dispatch_success: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def increment_dispatch_failed(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик неудачных отправок сообщений.
@@ -347,16 +391,30 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        await self._ensure_row()
-        if connection is not None:
-            await connection.execute(
-                "UPDATE metrics SET dispatch_failed = dispatch_failed + 1 WHERE id = 1;",
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
+        try:
+            await self._ensure_row()
+            if connection is not None:
+                await connection.execute(
                     "UPDATE metrics SET dispatch_failed = dispatch_failed + 1 WHERE id = 1;",
                 )
+            else:
+                async with self._pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE metrics SET dispatch_failed = dispatch_failed + 1 WHERE id = 1;",
+                    )
+            self.logger.debug(
+                "Записана метрика: increment_dispatch_failed",
+                event="metric_recorded",
+                status="failed",
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики increment_dispatch_failed: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def increment_circuit_breaker_trip(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик срабатываний circuit breaker.
@@ -388,8 +446,22 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных или Redis.
         """
-        # Используем record_metric для записи события cache_hit, передавая пул явно
-        await record_metric(pool=self._pool, event_type="cache_hit", status="hit")
+        try:
+            # Используем record_metric для записи события cache_hit, передавая пул явно
+            await record_metric(pool=self._pool, event_type="cache_hit", status="hit")
+            self.logger.debug(
+                "Записана метрика: increment_cache_hit",
+                event="metric_recorded",
+                status="cache_hit",
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики increment_cache_hit: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def record_circuit_breaker_trip(self) -> None:
         """Увеличивает счётчик срабатываний circuit breaker.
@@ -399,7 +471,21 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        await self.increment_circuit_breaker_trip()
+        try:
+            await self.increment_circuit_breaker_trip()
+            self.logger.debug(
+                "Записана метрика: record_circuit_breaker_trip",
+                event="metric_recorded",
+                status="circuit_breaker_trip",
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики record_circuit_breaker_trip: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def get_summary(self) -> dict[str, Any]:
         """Возвращает сводку всех метрик производительности.
@@ -418,24 +504,66 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
-        await self._ensure_row()
-        async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT
-                    generations_success,
-                    generations_failed,
-                    generations_retries,
-                    generations_total_time,
-                    dispatch_success,
-                    dispatch_failed,
-                    circuit_breaker_trips
-                FROM metrics
-                WHERE id = 1;
-                """,
-            )
+        try:
+            await self._ensure_row()
+            async with self._pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT
+                        generations_success,
+                        generations_failed,
+                        generations_retries,
+                        generations_total_time,
+                        dispatch_success,
+                        dispatch_failed,
+                        circuit_breaker_trips
+                    FROM metrics
+                    WHERE id = 1;
+                    """,
+                )
 
-        if row is None:  # pragma: no cover - защитный фоллбек
+            if row is None:  # pragma: no cover - защитный фоллбек
+                return {
+                    "generations_total": 0,
+                    "generations_success": 0,
+                    "generations_failed": 0,
+                    "generations_retries": 0,
+                    "average_generation_time": "0.00s",
+                    "dispatches_success": 0,
+                    "dispatches_failed": 0,
+                    "circuit_breaker_trips": 0,
+                }
+
+            gen_success = int(row["generations_success"])
+            gen_failed = int(row["generations_failed"])
+            gen_retries = int(row["generations_retries"])
+            total_time = float(row["generations_total_time"])
+            disp_success = int(row["dispatch_success"])
+            disp_failed = int(row["dispatch_failed"])
+            trips = int(row["circuit_breaker_trips"])
+
+            total_gen = gen_success + gen_failed
+            avg_time = total_time / total_gen if total_gen else 0.0
+
+            return {
+                "generations_total": total_gen,
+                "generations_success": gen_success,
+                "generations_failed": gen_failed,
+                "generations_retries": gen_retries,
+                "average_generation_time": f"{avg_time:.2f}s",
+                "dispatches_success": disp_success,
+                "dispatches_failed": disp_failed,
+                "circuit_breaker_trips": trips,
+            }
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при получении сводки метрик: {e}",
+                event="metric_summary_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            # Возвращаем пустую сводку при ошибке
             return {
                 "generations_total": 0,
                 "generations_success": 0,
@@ -446,28 +574,6 @@ class Metrics:
                 "dispatches_failed": 0,
                 "circuit_breaker_trips": 0,
             }
-
-        gen_success = int(row["generations_success"])
-        gen_failed = int(row["generations_failed"])
-        gen_retries = int(row["generations_retries"])
-        total_time = float(row["generations_total_time"])
-        disp_success = int(row["dispatch_success"])
-        disp_failed = int(row["dispatch_failed"])
-        trips = int(row["circuit_breaker_trips"])
-
-        total_gen = gen_success + gen_failed
-        avg_time = total_time / total_gen if total_gen else 0.0
-
-        return {
-            "generations_total": total_gen,
-            "generations_success": gen_success,
-            "generations_failed": gen_failed,
-            "generations_retries": gen_retries,
-            "average_generation_time": f"{avg_time:.2f}s",
-            "dispatches_success": disp_success,
-            "dispatches_failed": disp_failed,
-            "circuit_breaker_trips": trips,
-        }
 
 
 async def get_daily_generation_stats(pool: asyncpg.Pool, days: int = 7) -> list[dict[str, Any]]:

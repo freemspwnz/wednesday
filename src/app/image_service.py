@@ -34,7 +34,7 @@ class ImageService(BaseService):
     - ImageStorageUnitOfWork (сохранение в кэш и хранилище через Unit of Work)
     - PromptService (промпты)
     - CircuitBreakerService (circuit breaker)
-    - MetricsRecorder (метрики)
+    - Metrics (метрики)
 
     Retry логика для генерации изображений находится на уровне клиента (ITextToImageClient).
     Сохранение изображений управляется через ImageStorageUnitOfWork для обеспечения согласованности данных.

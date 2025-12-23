@@ -951,6 +951,7 @@ async def test_chats_store_list_chat_ids(monkeypatch: pytest.MonkeyPatch) -> Non
 @pytest.mark.asyncio
 async def test_metrics_increment_generation_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест инкремента успешных генераций в Metrics с моком Postgres."""
+    from infra.logging.logger import get_logger
     from infra.metrics.metrics import Metrics
 
     # Мокируем Postgres pool
@@ -975,7 +976,7 @@ async def test_metrics_increment_generation_success(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr("utils.metrics.get_postgres_pool", _mock_get_pool)
 
-    metrics = Metrics(pool=mock_pool)
+    metrics = Metrics(pool=mock_pool, logger=get_logger(__name__))
     await metrics.increment_generation_success()
 
     assert mock_conn.execute.await_count >= 1
@@ -984,6 +985,7 @@ async def test_metrics_increment_generation_success(monkeypatch: pytest.MonkeyPa
 @pytest.mark.asyncio
 async def test_metrics_get_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Тест получения сводки метрик в Metrics с моком Postgres."""
+    from infra.logging.logger import get_logger
     from infra.metrics.metrics import Metrics
 
     # Мокируем Postgres pool
@@ -1018,7 +1020,7 @@ async def test_metrics_get_summary(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("utils.metrics.get_postgres_pool", _mock_get_pool)
 
-    metrics = Metrics(pool=mock_pool)
+    metrics = Metrics(pool=mock_pool, logger=get_logger(__name__))
     result = await metrics.get_summary()
 
     assert isinstance(result, dict)

@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Рефакторинг Metrics: объединение Metrics и MetricsRecorder**:
+  - Класс `Metrics` теперь наследуется от `BaseService` и явно реализует протокол `IMetrics`
+  - Удален декоратор `@log_all_methods()` - логирование теперь через `BaseService`
+  - Конструктор `Metrics` теперь принимает обязательный параметр `logger: ILogger` через Dependency Injection
+  - Все методы протокола `IMetrics` обернуты в `try/except` с логированием успешных операций на `DEBUG` и ошибок на `WARNING`
+  - Метод `get_summary` возвращает пустую сводку при ошибке вместо проброса исключения (best-effort семантика)
+  - Удален класс `MetricsRecorder` - вся функциональность перенесена в `Metrics`
+  - Обновлен `container.py`: удален импорт и использование `MetricsRecorder`, все сервисы теперь используют `Metrics` напрямую
+  - Обновлен `__init__.py` в `infra/metrics`: удален экспорт `MetricsRecorder`, добавлены экспорты `Metrics`, `record_metric`, `get_daily_generation_stats`, `get_top_prompts`
+  - Обновлены все тесты: добавлена передача `logger` в конструктор `Metrics`
+  - Методы вне протокола (`increment_generation_retry`, `add_generation_time`, `increment_circuit_breaker_trip`) оставлены без изменений для обратной совместимости
+  - Функция `record_metric` оставлена как отдельная функция для прямого использования в других модулях
+
 ### Добавлено
 
 - **Расширение протокола IMessagingService для рефакторинга Celery-таски**:

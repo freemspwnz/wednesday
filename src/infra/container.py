@@ -42,7 +42,6 @@ from infra.clients.image_client_container import get_image_client_container
 from infra.clients.text_client_container import get_text_client_container
 from infra.logging.logger import get_logger
 from infra.metrics.metrics import Metrics
-from infra.metrics.metrics_recorder import MetricsRecorder
 from infra.rate_limiting.circuit_breaker import CircuitBreakerService
 from infra.rate_limiting.rate_limiter import RateLimiter
 from infra.repos import AdminsRepo, ChatsRepo, ImagesRepo, ModelsRepo, PromptsRepo
@@ -219,7 +218,7 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
         cooldown=cb_config.cooldown,
     )
     # Создаём Metrics для передачи в ImageService
-    metrics = Metrics(pool=db_pool)
+    metrics = Metrics(pool=db_pool, logger=app_logger)
 
     # Application‑сервисы
     prompt_service = PromptService(
@@ -444,8 +443,8 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
 
     chats = ChatsRepo(pool=db_pool)
     dispatch_registry = DispatchRegistry(pool=db_pool)
-    # Создаём Metrics для передачи в MetricsRecorder
-    metrics = Metrics(pool=db_pool)
+    # Создаём Metrics
+    metrics = Metrics(pool=db_pool, logger=app_logger)
 
     prompt_cache = PromptCache(redis_client=redis_client)
     user_state_store = UserStateCache(redis_client=redis_client)
@@ -486,9 +485,6 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         logger=app_logger,
     )
 
-    # Создаём MetricsRecorder для передачи в DatabaseOperationsService
-    metrics_recorder = MetricsRecorder(metrics=metrics, postgres_pool=db_pool, logger=app_logger)
-
     # Создаём фабрику для Unit of Work
     from infra.database.database_unit_of_work import DatabaseUnitOfWork
 
@@ -499,14 +495,14 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     database_operations = DatabaseOperationsService(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage,
-        metrics=metrics_recorder,
+        metrics=metrics,
         unit_of_work_factory=create_unit_of_work,
         logger=app_logger,
     )
 
     dispatch_execution_service = DispatchExecutionService(
         dispatch_registry=dispatch_registry,
-        metrics=metrics_recorder,
+        metrics=metrics,
         usage_tracker=usage,
         database_operations=database_operations,
         logger=app_logger,
@@ -517,7 +513,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         dispatch_execution_service=dispatch_execution_service,
         dispatch_registry=dispatch_registry,
         database_operations=database_operations,
-        metrics=metrics_recorder,
+        metrics=metrics,
         logger=app_logger,
     )
 
@@ -532,7 +528,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     admin_dashboard_service = build_admin_dashboard_service(
         usage=usage,
         chats=chats,
-        metrics=metrics_recorder,
+        metrics=metrics,
         image_client=image_client,
         text_client=text_client,
         db_pool=db_pool,
@@ -551,7 +547,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         usage=usage,
         chats=chats,
         dispatch_registry=dispatch_registry,
-        metrics=metrics_recorder,
+        metrics=metrics,
         prompt_cache=prompt_cache,
         user_state_store=user_state_store,
         settings=app_settings,
