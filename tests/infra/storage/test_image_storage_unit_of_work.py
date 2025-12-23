@@ -17,9 +17,9 @@ pytestmark = [pytest.mark.unit]
 def _create_test_failed_cache_queue() -> FailedCacheQueue:
     """Создаёт FailedCacheQueue для unit-тестов с in-memory Redis."""
     from infra.logging.logger import get_logger
-    from infra.redis.redis_client import get_redis
+    from infra.redis.redis_client import _get_redis
 
-    redis_client = get_redis()  # Использует in-memory Redis для unit-тестов
+    redis_client = _get_redis()  # Использует in-memory Redis для unit-тестов (приватная функция)
     logger = get_logger("test")
     return FailedCacheQueue(redis_client=redis_client, logger=logger)
 
@@ -478,13 +478,13 @@ async def test_clear() -> None:
 async def test_restore_from_persistent_queue() -> None:
     """Тест восстановления очереди из Redis при старте."""
     from infra.logging.logger import get_logger
-    from infra.redis.redis_client import get_redis
+    from infra.redis.redis_client import _get_redis
     from infra.storage.failed_cache_queue import FailedCacheOperation, FailedCacheQueue
 
     cache = MockCache()
     storage = MockStorage()
     logger = get_logger("test")
-    redis_client = get_redis()
+    redis_client = _get_redis()  # Используем приватную функцию
     failed_cache_queue = FailedCacheQueue(
         redis_client=redis_client,
         logger=logger,

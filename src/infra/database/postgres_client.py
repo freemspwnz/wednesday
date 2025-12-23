@@ -4,7 +4,7 @@
 Дизайн:
 - Используем единый пул `asyncpg.Pool` на всё время жизни процесса.
 - Инициализация выполняется один раз через `init_postgres_pool(...)` (обычно при старте в `main.py`).
-- Остальной код получает пул через `get_postgres_pool()` и не создает собственные подключения.
+- Остальной код получает пул через Dependency Injection из container.py или main.py.
 
 Поведение при ошибках:
 - При неудачной инициализации логируем подробную ошибку и пробрасываем её дальше —
@@ -125,16 +125,19 @@ async def init_postgres_pool(
         raise
 
 
-def get_postgres_pool() -> asyncpg.Pool:
+def _get_postgres_pool() -> asyncpg.Pool:
     """
-    Возвращает инициализированный пул подключений к PostgreSQL.
+    Внутренняя функция для получения пула подключений.
+
+    ВАЖНО: Не используйте эту функцию напрямую в коде приложения!
+    Получайте пул через Dependency Injection из container.py или main.py.
 
     Raises:
         RuntimeError: если пул ещё не инициализирован.
     """
     if _pool is None:
         raise RuntimeError(
-            "Postgres pool не инициализирован. Вызовите init_postgres_pool() на этапе старта приложения.",
+            "Postgres pool не инициализирован. Используйте init_postgres_pool() на этапе старта приложения."
         )
     return _pool
 
@@ -199,7 +202,7 @@ def get_pool_metrics(pool: asyncpg.Pool | None = None) -> PoolMetrics | None:
     """
     if pool is None:
         try:
-            pool = get_postgres_pool()
+            pool = _get_postgres_pool()  # Используем приватную функцию
         except RuntimeError:
             return None
 

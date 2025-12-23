@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncpg
 
-from infra.database.postgres_client import get_postgres_pool
+from infra.database.postgres_client import _get_postgres_pool
 from shared.base.base_service import BaseService
 from shared.protocols import ILogger
 
@@ -30,7 +30,7 @@ class DatabaseUnitOfWork(BaseService):
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
-        self._pool = pool or get_postgres_pool()
+        self._pool = pool or _get_postgres_pool()  # Используем приватную функцию как fallback
         self._connection: asyncpg.Connection | None = None
         self._transaction: asyncpg.Transaction | None = None
         self._is_committed = False

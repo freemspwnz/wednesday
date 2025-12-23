@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from infra.database.postgres_client import get_postgres_pool
+from infra.database.postgres_client import _get_postgres_pool
 from infra.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -155,7 +155,7 @@ async def ensure_schema() -> None:
     Raises:
         Exception: При ошибке выполнения DDL-запросов в PostgreSQL.
     """
-    pool = get_postgres_pool()
+    pool = _get_postgres_pool()  # Используем приватную функцию
     logger.info("Проверяю инициализацию схемы Postgres (создание таблиц при необходимости)")
 
     async with pool.acquire() as conn:

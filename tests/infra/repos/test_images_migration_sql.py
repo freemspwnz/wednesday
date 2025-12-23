@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from infra.database.postgres_client import get_postgres_pool
+from infra.database.postgres_client import _get_postgres_pool
 
 SQL_DIR = Path("docs/sql")
 
@@ -31,7 +31,7 @@ async def test_images_migration_up_and_down_applies_successfully(cleanup_tables:
     up_sql = up_path.read_text(encoding="utf-8")
     down_sql = down_path.read_text(encoding="utf-8")
 
-    pool = get_postgres_pool()
+    pool = _get_postgres_pool()  # Используем приватную функцию
     async with pool.acquire() as conn:
         # Начинаем с чистого состояния: удаляем таблицу, если она уже есть.
         await conn.execute("DROP TABLE IF EXISTS images CASCADE;")

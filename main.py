@@ -16,13 +16,12 @@ from prometheus_client import start_http_server
 
 from bot.support_bot import SupportBot
 from infra.container import build_bot
-from infra.database.postgres_client import get_postgres_pool, init_postgres_pool
+from infra.database.postgres_client import init_postgres_pool
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger, log_event
 from infra.redis.redis_client import (
     RedisClient,
     _InMemoryRedis,
-    get_redis,
     init_redis_pool,
     redis_available,
 )
@@ -196,9 +195,10 @@ class BotRunner:
 
                 self.logger.info("Создание экземпляра SupportBot")
                 self.support_bot = SupportBot(
+                    redis_client=redis_client,
+                    postgres_pool=postgres_pool,
                     request_start_main=request_start_main,
                     config=config,
-                    redis_client=redis_client,
                 )
                 # Если есть отложенное редактирование для статуса остановки основного — передадим SupportBot
                 try:
@@ -501,8 +501,10 @@ class BotRunner:
                 level="warning",
                 message="Redis недоступен при старте, используется in-memory fallback",
             )
-            # Получаем in-memory fallback
-            redis_client = get_redis()
+            # Получаем in-memory fallback через приватную функцию
+            from infra.redis.redis_client import _get_redis
+
+            redis_client = _get_redis()
             if not isinstance(redis_client, _InMemoryRedis):
                 # Это не должно произойти, но на всякий случай
                 self.logger.warning("Неожиданный тип Redis-клиента, создаём in-memory fallback")
@@ -748,12 +750,15 @@ def _start_health_server(logger: "LoggerType") -> None:
         # Если инициализация не удалась — оставляем None, а сам healthcheck
         # корректно отразит недоступность зависимостей.
         try:
-            health_app.state.redis = get_redis()
+            from infra.database.postgres_client import _get_postgres_pool
+            from infra.redis.redis_client import _get_redis
+
+            health_app.state.redis = _get_redis()  # Используем приватную функцию
         except Exception:
             health_app.state.redis = None
 
         try:
-            health_app.state.postgres_pool = get_postgres_pool()
+            health_app.state.postgres_pool = _get_postgres_pool()  # Используем приватную функцию
         except Exception:
             health_app.state.postgres_pool = None
 

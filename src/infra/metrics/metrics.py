@@ -11,7 +11,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import asyncpg
 
-from infra.database.postgres_client import get_postgres_pool
+from infra.database.postgres_client import _get_postgres_pool
 from infra.logging.logger import get_logger, log_all_methods
 from infra.redis.redis_client import safe_redis_call
 
@@ -79,7 +79,7 @@ async def record_metric(  # noqa: PLR0913
         # Это делает события наблюдаемыми через SQL (в том числе в тестах и админских
         # diagnostics), при этом ошибка записи в БД не должна влиять на горячий путь.
         try:
-            pool = get_postgres_pool()
+            pool = _get_postgres_pool()  # Используем приватную функцию
             async with pool.acquire() as conn:
                 await conn.execute(
                     """
@@ -117,7 +117,7 @@ async def record_metric(  # noqa: PLR0913
         )
         # Fallback: при недоступности очереди можем (опционально) писать напрямую в Postgres.
         try:
-            pool = get_postgres_pool()
+            pool = _get_postgres_pool()  # Используем приватную функцию
             async with pool.acquire() as conn:
                 await conn.execute(
                     """
@@ -433,7 +433,7 @@ async def get_daily_generation_stats(days: int = 7) -> list[dict[str, Any]]:
     Raises:
         Exception: При ошибке доступа к базе данных PostgreSQL.
     """
-    pool = get_postgres_pool()
+    pool = _get_postgres_pool()  # Используем приватную функцию
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
@@ -482,7 +482,7 @@ async def get_top_prompts(limit: int = 10) -> list[dict[str, Any]]:
     Raises:
         Exception: При ошибке доступа к базе данных PostgreSQL.
     """
-    pool = get_postgres_pool()
+    pool = _get_postgres_pool()  # Используем приватную функцию
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """

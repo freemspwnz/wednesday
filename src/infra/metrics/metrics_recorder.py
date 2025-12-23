@@ -28,10 +28,10 @@ class MetricsRecorder(BaseService, IMetrics):
             metrics: Экземпляр Metrics для записи метрик. Если None, создаётся новый.
             logger: Экземпляр логгера для использования в сервисе.
         """
-        from infra.database.postgres_client import get_postgres_pool
+        from infra.database.postgres_client import _get_postgres_pool
 
         super().__init__(logger)
-        self._metrics = metrics or Metrics(pool=get_postgres_pool())
+        self._metrics = metrics or Metrics(pool=_get_postgres_pool())  # Используем приватную функцию
 
     async def increment_generation_success(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик успешных генераций изображений."""

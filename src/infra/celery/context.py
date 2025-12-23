@@ -114,12 +114,25 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
             if _services_context is None:
                 # Ленивый импорт для избежания циклических зависимостей
                 from infra.container import build_bot
-                from infra.database.postgres_client import get_postgres_pool
-                from infra.redis.redis_client import get_redis
+                from infra.database.postgres_client import _get_postgres_pool  # Приватная функция
+                from infra.redis.redis_client import _get_redis  # Приватная функция
 
                 # Получаем пулы (они уже инициализированы в _ensure_pools_initialized)
-                postgres_pool = get_postgres_pool()
-                redis_client = get_redis()
+                try:
+                    postgres_pool = _get_postgres_pool()
+                except RuntimeError as e:
+                    logger.error(f"Не удалось получить postgres_pool: {e}")
+                    raise RuntimeError(
+                        "Postgres pool не инициализирован. Убедитесь, что _ensure_pools_initialized() был вызван."
+                    ) from e
+
+                try:
+                    redis_client = _get_redis()
+                except RuntimeError as e:
+                    logger.error(f"Не удалось получить redis_client: {e}")
+                    raise RuntimeError(
+                        "Redis client не инициализирован. Убедитесь, что _ensure_pools_initialized() был вызван."
+                    ) from e
 
                 # Convert to Config if needed
                 if not isinstance(config_obj, Config):

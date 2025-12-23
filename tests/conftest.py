@@ -291,10 +291,10 @@ async def cleanup_tables() -> AsyncIterator[None]:
     """
     # Используем session-пул напрямую, не вызывая _ensure_postgres_schema,
     # чтобы избежать проблем с event loops. Схема уже инициализирована в async_postgres_pool.
-    from infra.database.postgres_client import get_postgres_pool
+    from infra.database.postgres_client import _get_postgres_pool
 
     try:
-        pool = get_postgres_pool()
+        pool = _get_postgres_pool()  # Используем приватную функцию
     except RuntimeError as exc:
         # Пул не инициализирован
         error_msg = (
@@ -385,7 +385,7 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
     # Используем session-пул напрямую, не вызывая _ensure_postgres_schema,
     # чтобы избежать проблем с event loops. Схема уже инициализирована в async_postgres_pool.
     try:
-        pool = get_postgres_pool()
+        pool = _get_postgres_pool()  # Используем приватную функцию
     except RuntimeError as exc:
         # Пул не инициализирован
         error_msg = (
@@ -400,9 +400,9 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
         # Начинаем транзакцию ПЕРЕД патчем, чтобы все операции были в транзакции
         await transaction_conn.execute("BEGIN")
 
-        # Патчим get_postgres_pool() чтобы возвращал патченный пул
-        # Это позволяет использовать транзакцию во всех местах, где используется get_postgres_pool()
-        from infra.database.postgres_client import get_postgres_pool
+        # Патчим _get_postgres_pool() чтобы возвращал патченный пул
+        # Это позволяет использовать транзакцию во всех местах, где используется _get_postgres_pool()
+        from infra.database.postgres_client import _get_postgres_pool
 
         class PatchedPool:
             """Обёртка над пулом, которая всегда возвращает транзакционное соединение."""
@@ -428,8 +428,8 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
 
         patched_pool = PatchedPool(pool, transaction_conn)
         # Сохраняем оригинальную функцию для восстановления
-        original_get_pool = get_postgres_pool
-        monkeypatch.setattr("utils.postgres_client.get_postgres_pool", lambda: patched_pool)
+        original_get_pool = _get_postgres_pool
+        monkeypatch.setattr("infra.database.postgres_client._get_postgres_pool", lambda: patched_pool)
 
         yield
     finally:

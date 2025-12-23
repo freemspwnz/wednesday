@@ -72,7 +72,16 @@ def support_bot(monkeypatch: Any) -> Any:
     monkeypatch.setattr(sb_module, "MessageHandler", DummyMessageHandler)
     monkeypatch.setattr(sb_module, "filters", SimpleNamespace(COMMAND="COMMAND"))
 
-    bot = sb_module.SupportBot()
+    from unittest.mock import MagicMock
+
+    import asyncpg
+
+    from infra.redis.redis_client import _InMemoryRedis
+
+    redis_client = _InMemoryRedis()
+    # Создаём мок пула для тестов
+    mock_pool = MagicMock(spec=asyncpg.Pool)
+    bot = sb_module.SupportBot(redis_client=redis_client, postgres_pool=mock_pool)
     return bot
 
 

@@ -38,11 +38,12 @@ class BaseHandlers:
         Args:
             services: Контейнер сервисов бота для доступа к зависимостям.
         """
-        from infra.database.postgres_client import get_postgres_pool
-
         self.logger = get_logger(__name__)
         self.services: BotServices = services
-        self.admins_store: AdminsRepo = AdminsRepo(pool=get_postgres_pool())
+        # Используем пул из сервисов (ОБЯЗАТЕЛЬНО)
+        if not hasattr(services, 'postgres_pool') or services.postgres_pool is None:
+            raise RuntimeError("postgres_pool не инициализирован в BotServices")
+        self.admins_store: AdminsRepo = AdminsRepo(pool=services.postgres_pool)
 
     async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.

@@ -96,7 +96,7 @@ class FailedCacheQueue(RedisBackendService):
         """Инициализирует очередь.
 
         Args:
-            redis_client: Redis клиент (из get_redis()).
+            redis_client: Redis клиент (передаётся через Dependency Injection).
             prefix: Префикс для ключей Redis (по умолчанию "failed_cache:").
             logger: Логгер (опционально, создаётся автоматически если None).
         """

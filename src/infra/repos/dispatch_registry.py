@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 import asyncpg
 
-from infra.database.postgres_client import get_postgres_pool
+from infra.database.postgres_client import _get_postgres_pool
 from infra.logging.logger import get_logger, log_all_methods
 
 
@@ -127,7 +127,7 @@ class DispatchRegistry:
                 )
                 raise
         else:
-            pool = get_postgres_pool()
+            pool = _get_postgres_pool()  # Используем приватную функцию как fallback
             async with pool.acquire() as conn:
                 try:
                     await conn.execute(

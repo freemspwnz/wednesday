@@ -374,18 +374,14 @@ class WednesdayBot:
         """
         from infra.repos import AdminsRepo
 
-        # Используем пул из сервисов, если доступен
-        if self.services.postgres_pool is not None:
-            pool = self.services.postgres_pool
-        else:
-            # Fallback для обратной совместимости (deprecated)
-            from infra.database.postgres_client import get_postgres_pool
-
-            pool = get_postgres_pool()
-            self.logger.warning(
-                "Использование get_postgres_pool() напрямую устарело. Используйте pool из BotServices.",
+        # Получаем пул из сервисов (ОБЯЗАТЕЛЬНО)
+        if not hasattr(self.services, 'postgres_pool') or self.services.postgres_pool is None:
+            self.logger.error(
+                "postgres_pool недоступен в BotServices. Убедитесь, что пул передаётся через Dependency Injection."
             )
+            raise RuntimeError("postgres_pool не инициализирован в BotServices")
 
+        pool = self.services.postgres_pool
         admins_store = AdminsRepo(pool=pool)
         all_admins = await admins_store.list_all_admins()
 
@@ -648,19 +644,15 @@ class WednesdayBot:
                         try:
                             from infra.repos import AdminsRepo
 
-                            # Используем пул из сервисов, если доступен
-                            if self.services.postgres_pool is not None:
-                                pool = self.services.postgres_pool
-                            else:
-                                # Fallback для обратной совместимости (deprecated)
-                                from infra.database.postgres_client import get_postgres_pool
-
-                                pool = get_postgres_pool()
-                                self.logger.warning(
-                                    "Использование get_postgres_pool() напрямую устарело. "
-                                    "Используйте pool из BotServices.",
+                            # Получаем пул из сервисов (ОБЯЗАТЕЛЬНО)
+                            if not hasattr(self.services, 'postgres_pool') or self.services.postgres_pool is None:
+                                self.logger.error(
+                                    "postgres_pool недоступен в BotServices. "
+                                    "Убедитесь, что пул передаётся через Dependency Injection."
                                 )
+                                raise RuntimeError("postgres_pool не инициализирован в BotServices")
 
+                            pool = self.services.postgres_pool
                             admins = await AdminsRepo(pool=pool).list_all_admins()
                             for admin_id in admins:
                                 try:
@@ -1055,18 +1047,15 @@ class WednesdayBot:
                 else:
                     from infra.repos import AdminsRepo
 
-                    # Используем пул из сервисов, если доступен
-                    if self.services.postgres_pool is not None:
-                        pool = self.services.postgres_pool
-                    else:
-                        # Fallback для обратной совместимости (deprecated)
-                        from infra.database.postgres_client import get_postgres_pool
-
-                        pool = get_postgres_pool()
-                        self.logger.warning(
-                            "Использование get_postgres_pool() напрямую устарело. Используйте pool из BotServices.",
+                    # Получаем пул из сервисов (ОБЯЗАТЕЛЬНО)
+                    if not hasattr(self.services, 'postgres_pool') or self.services.postgres_pool is None:
+                        self.logger.error(
+                            "postgres_pool недоступен в BotServices. "
+                            "Убедитесь, что пул передаётся через Dependency Injection."
                         )
+                        raise RuntimeError("postgres_pool не инициализирован в BotServices")
 
+                    pool = self.services.postgres_pool
                     admins = await AdminsRepo(pool=pool).list_all_admins()
                     for admin_id in admins:
                         try:

@@ -4,7 +4,7 @@
 Дизайн:
 - Используем один экземпляр клиента `redis.asyncio.Redis` на всё время жизни приложения.
 - Инициализация выполняется один раз через `init_redis_pool(...)` (обычно при старте в `main.py`).
-- Остальной код импортирует и использует `get_redis()`, не создавая собственных подключений.
+- Остальной код получает клиент через Dependency Injection из container.py или main.py.
 - При недоступности Redis используется лёгкий in‑memory fallback c поддержкой TTL.
 
 Почему один клиент:
@@ -371,17 +371,15 @@ async def init_redis_pool(
             raise
 
 
-def get_redis() -> redis.Redis | _InMemoryRedis:
+def _get_redis() -> redis.Redis | _InMemoryRedis:
     """
-    Возвращает инициализированный Redis‑клиент.
+    Внутренняя функция для получения Redis-клиента.
 
-    Поведение:
-    - Если `init_redis_pool()` был успешно вызван — возвращается реальный клиент Redis.
-    - Если инициализация не выполнялась или не удалась — возвращается in‑memory fallback.
+    ВАЖНО: Не используйте эту функцию напрямую в коде приложения!
+    Получайте клиент через Dependency Injection из container.py или main.py.
 
-    Такое поведение гарантирует, что остальной код может всегда вызывать `get_redis()`
-    без дополнительной проверки на `None`, а доступность настоящего Redis можно
-    узнать через `redis_available()`.
+    Returns:
+        Redis-клиент (реальный или in-memory fallback).
     """
     return _redis
 
@@ -424,7 +422,7 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
     Параметр `func_name` — имя метода Redis (например, "set", "get", "incr").
     Остальные аргументы передаются как есть в метод клиента.
     """
-    client = get_redis()
+    client = _get_redis()  # Используем приватную функцию
     method = getattr(client, func_name, None)
     if method is None:
         raise AttributeError(f"Redis backend не поддерживает метод {func_name!r}")
@@ -442,7 +440,7 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
             _redis = _InMemoryRedis()
             _redis_is_real = False
         # Повторяем операцию уже на in‑memory backend (ошибки пробрасываем).
-        fallback = get_redis()
+        fallback = _get_redis()  # Используем приватную функцию
         fallback_method = getattr(fallback, func_name, None)
         if fallback_method is None:
             raise

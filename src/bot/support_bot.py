@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import asyncpg
 from telegram import Update
 from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -63,9 +64,10 @@ class SupportBot(BaseHandlers):
 
     def __init__(
         self,
+        redis_client: "RedisClient",
+        postgres_pool: asyncpg.Pool | None = None,
         request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
         config: Config | None = None,
-        redis_client: "RedisClient | None" = None,
     ) -> None:
         """Инициализирует SupportBot.
 
@@ -78,7 +80,12 @@ class SupportBot(BaseHandlers):
                 Принимает словарь с метаданными (chat_id, message_id) для редактирования статусного
                 сообщения. Если None, запуск основного бота через /start будет недоступен.
             config: Экземпляр Config. Если None, используется глобальный config.
-            redis_client: Redis-клиент для rate limiter. Если None, используется get_redis().
+            redis_client: Redis-клиент для rate limiter (ОБЯЗАТЕЛЬНЫЙ).
+            postgres_pool: Пул подключений PostgreSQL (опциональный, для BotServices).
+                Если None, будет попытка получить через приватную функцию.
+
+        Raises:
+            ValueError: Если redis_client равен None.
         """
         # Сначала создаем все необходимые компоненты для BotServices
         request: HTTPXRequest = HTTPXRequest(
@@ -109,20 +116,12 @@ class SupportBot(BaseHandlers):
         # (например, /log), чтобы избежать случайного "забивания" лог‑канала.
         # В случае недоступности Redis лимитер автоматически работает в in‑memory
         # режиме и не блокирует админа.
-        if redis_client is not None:
-            redis_client_for_limiter = redis_client
-        else:
-            # Fallback для обратной совместимости (deprecated)
-            from infra.redis.redis_client import get_redis
-
-            redis_client_for_limiter = get_redis()
-            logger = get_logger(__name__)
-            logger.warning(
-                "Использование get_redis() напрямую в SupportBot устарело. Передавайте redis_client через конструктор.",
-            )
+        # redis_client теперь обязательный параметр
+        if redis_client is None:
+            raise ValueError("redis_client не может быть None. Передайте Redis-клиент через Dependency Injection.")
 
         self.rate_limiter: RateLimiter = RateLimiter(
-            redis_client=redis_client_for_limiter,
+            redis_client=redis_client,
             prefix="rate:support:",
             window=60,
             limit=20,
@@ -139,17 +138,16 @@ class SupportBot(BaseHandlers):
         app_logger = get_logger("app")
 
         # Создаём rate limiters для команды /frog
-        # Используем redis_client из rate_limiter или получаем новый
-        redis_client_for_limiter = redis_client if redis_client is not None else get_redis()
+        # redis_client уже проверен выше и не может быть None
         SECONDS_PER_MINUTE = 60
         global_limiter: IRateLimiter = RateLimiter(
-            redis_client=redis_client_for_limiter,
+            redis_client=redis_client,
             prefix="frog:global:",
             window=self.settings.frog_rate_limit_window_seconds,
             limit=self.settings.frog_rate_limit_max_requests,
         )
         user_limiter: IRateLimiter = RateLimiter(
-            redis_client=redis_client_for_limiter,
+            redis_client=redis_client,
             prefix="frog:user:",
             window=self.settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
             limit=1,
@@ -165,7 +163,24 @@ class SupportBot(BaseHandlers):
 
         task_queue = CeleryTaskQueue()
         frog_request_service = FrogRequestService(task_queue=task_queue, logger=app_logger)
+        # SupportBot не использует postgres_pool напрямую, но BotServices требует его
+        # Используем переданный пул или пытаемся получить через приватную функцию
+        if postgres_pool is None:
+            from infra.database.postgres_client import _get_postgres_pool
+
+            try:
+                postgres_pool = _get_postgres_pool()  # Используем приватную функцию
+            except RuntimeError:
+                # Если пул не инициализирован, выбрасываем ошибку
+                # SupportBot требует postgres_pool для BotServices
+                raise RuntimeError(
+                    "postgres_pool не инициализирован. "
+                    "Передайте пул через Dependency Injection или убедитесь, что он инициализирован."
+                ) from None
+
         services: BotServices = BotServices(
+            postgres_pool=postgres_pool,
+            redis_client=redis_client,
             usage=None,  # type: ignore[arg-type]
             chats=None,  # type: ignore[arg-type]
             dispatch_registry=None,  # type: ignore[arg-type]
