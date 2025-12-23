@@ -89,7 +89,7 @@ class TextClientContainer(ITextToTextClient):
         self,
         config: GigaChatConfig,
         client_manager: ClientManagementService,
-        models_repo: IModelsRepo | None = None,
+        models_repo: IModelsRepo,
     ) -> None:
         """Заменяет активный клиент новым, созданным из конфига.
 
@@ -99,7 +99,7 @@ class TextClientContainer(ITextToTextClient):
         Args:
             config: Конфигурация для нового клиента.
             client_manager: Сервис для создания клиентов.
-            models_repo: Репозиторий моделей (опционально).
+            models_repo: Репозиторий моделей (обязательный).
 
         Raises:
             ValueError: Если не удалось создать клиент (например, authorization_key не задан).

@@ -82,9 +82,14 @@ async def test_replace_client_closes_old_and_uses_new() -> None:
     # Меняем клиента через ClientManagementService
     mock_client_manager = MagicMock(spec=ClientManagementService)
     mock_client_manager.create_image_client.return_value = new_client
+    mock_models_repo = MagicMock()
     config = KandinskyConfig(api_key="test", secret_key="test")
 
-    await container.replace_client(config=config, client_manager=mock_client_manager)
+    await container.replace_client(
+        config=config,
+        client_manager=mock_client_manager,
+        models_repo=mock_models_repo,
+    )
 
     # Старый клиент должен быть закрыт, новый — использоваться для новых вызовов.
     assert old_client.closed is True
@@ -127,8 +132,13 @@ async def test_replace_client_is_thread_safe_for_concurrent_calls() -> None:
         await asyncio.sleep(0.01)
         mock_client_manager = MagicMock(spec=ClientManagementService)
         mock_client_manager.create_image_client.return_value = new_client
+        mock_models_repo = MagicMock()
         config = KandinskyConfig(api_key="test", secret_key="test")
-        await container.replace_client(config=config, client_manager=mock_client_manager)
+        await container.replace_client(
+            config=config,
+            client_manager=mock_client_manager,
+            models_repo=mock_models_repo,
+        )
 
     gen_task = asyncio.create_task(generate_loop())
     replace_task = asyncio.create_task(do_replace())
@@ -213,12 +223,20 @@ async def test_replace_client_creates_new_client_via_manager() -> None:
     # Заменяем клиента через ClientManagementService
     mock_client_manager = MagicMock(spec=ClientManagementService)
     mock_client_manager.create_image_client.return_value = new_client
+    mock_models_repo = MagicMock()
     config = KandinskyConfig(api_key="test", secret_key="test")
-    await container.replace_client(config=config, client_manager=mock_client_manager)
+    await container.replace_client(
+        config=config,
+        client_manager=mock_client_manager,
+        models_repo=mock_models_repo,
+    )
 
     assert container.get_client() is new_client
     assert await container.generate("test") == b"c2:test"
-    mock_client_manager.create_image_client.assert_called_once_with(config=config, models_repo=None)
+    mock_client_manager.create_image_client.assert_called_once_with(
+        config=config,
+        models_repo=mock_models_repo,
+    )
 
 
 @pytest.mark.asyncio
@@ -255,8 +273,13 @@ async def test_replace_client_handles_aclose_exception_gracefully() -> None:
     # Замена должна пройти успешно, даже если закрытие старого клиента упало
     mock_client_manager = MagicMock(spec=ClientManagementService)
     mock_client_manager.create_image_client.return_value = new_client
+    mock_models_repo = MagicMock()
     config = KandinskyConfig(api_key="test", secret_key="test")
-    await container.replace_client(config=config, client_manager=mock_client_manager)
+    await container.replace_client(
+        config=config,
+        client_manager=mock_client_manager,
+        models_repo=mock_models_repo,
+    )
 
     # Новый клиент должен работать
     result = await container.generate("test")
@@ -323,6 +346,11 @@ async def test_get_client_returns_current_client() -> None:
     new_client = _ClosableMockImageClient("c2")
     mock_client_manager = MagicMock(spec=ClientManagementService)
     mock_client_manager.create_image_client.return_value = new_client
+    mock_models_repo = MagicMock()
     config = KandinskyConfig(api_key="test", secret_key="test")
-    await container.replace_client(config=config, client_manager=mock_client_manager)
+    await container.replace_client(
+        config=config,
+        client_manager=mock_client_manager,
+        models_repo=mock_models_repo,
+    )
     assert container.get_client() is new_client

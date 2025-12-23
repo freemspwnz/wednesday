@@ -384,16 +384,16 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
 
     @map_client_errors(event_name="gigachat_set_model", service_name="gigachat")
     async def set_model(self, model_name: str) -> SetModelResult:  # type: ignore[override]
-        """Устанавливает текущую модель GigaChat.
+        """Выбирает модель GigaChat.
 
-        Проверяет доступность указанной модели и сохраняет её в хранилище для
-        использования в последующих запросах.
+        Проверяет доступность указанной модели. НЕ сохраняет модель в хранилище -
+        это ответственность app-слоя. Возвращает информацию о выбранной модели.
 
         Args:
             model_name: Название модели для установки.
 
         Returns:
-            SetModelResult с информацией о результате установки.
+            SetModelResult с информацией о выбранной модели (model_name).
 
         Raises:
             ValueError: Если модель не найдена.
@@ -402,17 +402,13 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             APIError: При других ошибках API (4xx, 5xx).
         """
         bound = logger.bind(event="gigachat_set_model", model_name=model_name)
-        bound.info("Установка модели GigaChat")
+        bound.info("Выбор модели GigaChat")
 
         available_models = await self.get_available_models(save_models=False)
         if model_name in available_models:
-            # Сохраняем модель в async-хранилище
-            await self._models_repo.set_gigachat_model(model_name)
-            self._model = model_name
-
-            msg = f"✅ Модель GigaChat установлена: {model_name}"
+            msg = f"✅ Модель GigaChat выбрана: {model_name}"
             bound.info(msg)
-            return SetModelResult.ok(msg)
+            return SetModelResult.ok(msg, model_name=model_name)
         else:
             msg = f"❌ Модель '{model_name}' не найдена в списке доступных"
             bound.warning(msg)

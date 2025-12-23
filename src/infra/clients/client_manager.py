@@ -43,24 +43,20 @@ class ClientManagementService:
     def create_image_client(
         self,
         config: KandinskyConfig,
-        models_repo: IModelsRepo | None = None,
+        models_repo: IModelsRepo,
     ) -> ITextToImageClient:
         """Создаёт клиент для генерации изображений.
 
         Args:
             config: Конфигурация Kandinsky клиента.
-            models_repo: Репозиторий моделей. Если None, используется
-                models_repo из конструктора.
+            models_repo: Репозиторий моделей (обязательный).
 
         Returns:
             Экземпляр KandinskyClient, реализующий ITextToImageClient.
         """
         from infra.clients.kandinsky import KandinskyClient
 
-        repo = models_repo or self._models_repo
-        if repo is None:
-            raise ValueError("models_repo must be provided either in constructor or as parameter")
-        client = KandinskyClient(config=config, models_repo=repo)
+        client = KandinskyClient(config=config, models_repo=models_repo)
 
         self._logger.info(
             "Создан клиент генерации изображений",
@@ -73,14 +69,13 @@ class ClientManagementService:
     def create_text_client(
         self,
         config: GigaChatConfig,
-        models_repo: IModelsRepo | None = None,
+        models_repo: IModelsRepo,
     ) -> ITextToTextClient | None:
         """Создаёт клиент для генерации текста.
 
         Args:
             config: Конфигурация GigaChat клиента.
-            models_repo: Репозиторий моделей. Если None, используется
-                models_repo из конструктора.
+            models_repo: Репозиторий моделей (обязательный).
 
         Returns:
             Экземпляр GigaChatTextClient, реализующий ITextToTextClient,
@@ -94,10 +89,7 @@ class ClientManagementService:
 
         from infra.clients.gigachat_text import GigaChatTextClient
 
-        repo = models_repo or self._models_repo
-        if repo is None:
-            raise ValueError("models_repo must be provided either in constructor or as parameter")
-        client = GigaChatTextClient(config=config, models_repo=repo)
+        client = GigaChatTextClient(config=config, models_repo=models_repo)
 
         self._logger.info(
             "Создан текстовый клиент",

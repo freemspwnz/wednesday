@@ -296,18 +296,17 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
 
     @map_client_errors(event_name="kandinsky_set_model", service_name="kandinsky")
     async def set_model(self, model_identifier: str) -> SetModelResult:  # type: ignore[override]
-        """Устанавливает текущую модель (pipeline) по ID или части названия.
+        """Выбирает модель (pipeline) по ID или части названия.
 
         Выполняет поиск модели по точному совпадению ID или частичному совпадению
-        названия (регистронезависимо). Сохраняет выбранную модель в хранилище.
-        Если найдено несколько моделей, соответствующих частичному совпадению,
-        возвращается ошибка с предложением уточнить название или использовать ID.
+        названия (регистронезависимо). НЕ сохраняет модель в хранилище - это
+        ответственность app-слоя. Возвращает информацию о выбранной модели.
 
         Args:
             model_identifier: ID модели или часть названия для поиска.
 
         Returns:
-            SetModelResult с информацией о результате установки.
+            SetModelResult с информацией о выбранной модели (model_id, model_name).
 
         Raises:
             ValueError: Если API ключи не сконфигурированы или модель не найдена.
@@ -339,10 +338,13 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             if pipeline.id == model_identifier:
                 matched_model_name = pipeline.name
                 matched_pipeline_id = pipeline.id
-                await self._models_repo.set_kandinsky_model(matched_pipeline_id, matched_model_name)
-                msg = f"Модель установлена: {matched_model_name} (ID: {matched_pipeline_id})"
+                msg = f"Модель выбрана: {matched_model_name} (ID: {matched_pipeline_id})"
                 bound.info(msg)
-                return SetModelResult.ok(msg)
+                return SetModelResult.ok(
+                    msg,
+                    model_id=matched_pipeline_id,
+                    model_name=matched_model_name,
+                )
 
         # 2. Частичное совпадение по названию (регистронезависимо).
         model_identifier_lower = model_identifier.lower()
@@ -355,10 +357,13 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             matched_pipeline = matches[0]
             selected_model_name = matched_pipeline.name
             selected_pipeline_id = matched_pipeline.id
-            await self._models_repo.set_kandinsky_model(selected_pipeline_id, selected_model_name)
-            msg = f"Модель установлена: {selected_model_name} (ID: {selected_pipeline_id})"
+            msg = f"Модель выбрана: {selected_model_name} (ID: {selected_pipeline_id})"
             bound.info(msg)
-            return SetModelResult.ok(msg)
+            return SetModelResult.ok(
+                msg,
+                model_id=selected_pipeline_id,
+                model_name=selected_model_name,
+            )
 
         if len(matches) > 1:
             models_list = [f"{p.name} (ID: {p.id})" for p in matches]
@@ -503,7 +508,8 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         first_pipeline = pipelines[0]
         pipeline_id: str = str(first_pipeline.id)
         pipeline_name: str = str(first_pipeline.name)
-        await self._models_repo.set_kandinsky_model(pipeline_id, pipeline_name)
+        # НЕ сохраняем модель здесь - это ответственность app-слоя
+        # Метод используется только для получения pipeline_id при генерации
         bound.bind(pipeline_id=pipeline_id, pipeline_name=pipeline_name).info(
             "Выбран pipeline для генерации через Kandinsky",
         )

@@ -39,13 +39,20 @@ class SetModelResult:
 
     success: bool
     message: str
+    model_id: str | None = None
+    model_name: str | None = None
 
     @classmethod
-    def ok(cls, message: str) -> SetModelResult:
+    def ok(
+        cls,
+        message: str,
+        model_id: str | None = None,
+        model_name: str | None = None,
+    ) -> SetModelResult:
         """Создаёт результат успешной установки модели."""
-        return cls(success=True, message=message)
+        return cls(success=True, message=message, model_id=model_id, model_name=model_name)
 
     @classmethod
     def error(cls, message: str) -> SetModelResult:
         """Создаёт результат ошибки установки модели."""
-        return cls(success=False, message=message)
+        return cls(success=False, message=message, model_id=None, model_name=None)

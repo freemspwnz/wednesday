@@ -212,6 +212,12 @@
   - Обновлён `handlers_models.py` для использования `ModelManagementService` вместо прямых вызовов клиентов
   - Убраны прямые вызовы `set_model()` на клиентах из обработчиков
   - Добавлен `ModelManagementService` в `BotServices` и `container.py`
+  - Клиенты больше не сохраняют модели напрямую - только возвращают информацию о выбранной модели
+  - `SetModelResult` расширен полями `model_id` и `model_name` для передачи информации о выбранной модели
+  - `ModelManagementService` теперь сохраняет модели в репозиторий после получения результата от клиента
+  - Параметр `models_repo` сделан обязательным в `ClientManagementService.create_*_client()` методах
+  - Параметр `models_repo` сделан обязательным в контейнерах `replace_client()` методах
+  - Обновлены все тесты для передачи обязательного параметра `models_repo`
   - Параметр `models_repo` теперь обязательный (убрана опциональность `| None`)
   - Убраны внутренние вызовы `get_postgres_pool()` и создание `ModelsRepo` внутри клиента
   - Удалён неиспользуемый импорт `ModelsRepo` из `gigachat_text.py`

@@ -88,7 +88,7 @@ class ImageClientContainer(ITextToImageClient):
         self,
         config: KandinskyConfig,
         client_manager: ClientManagementService,
-        models_repo: IModelsRepo | None = None,
+        models_repo: IModelsRepo,
     ) -> None:
         """Заменяет активный клиент новым, созданным из конфига.
 
@@ -98,7 +98,7 @@ class ImageClientContainer(ITextToImageClient):
         Args:
             config: Конфигурация для нового клиента.
             client_manager: Сервис для создания клиентов.
-            models_repo: Репозиторий моделей (опционально).
+            models_repo: Репозиторий моделей (обязательный).
 
         Example:
             from infra.clients.client_manager import ClientManagementService
@@ -112,6 +112,7 @@ class ImageClientContainer(ITextToImageClient):
             await container.replace_client(
                 config=new_config,
                 client_manager=manager,
+                models_repo=repo,
             )
         """
         async with self._lock:
