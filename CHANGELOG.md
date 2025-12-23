@@ -6,6 +6,7 @@
 
 - **Расширение протокола IMessagingService для рефакторинга Celery-таски**:
   - Добавлен метод `delete_message` в протокол `IMessagingService` для удаления сообщений из чата
+  - Реализован метод `delete_message` в `PTBMessagingService` с использованием декоратора `@map_telegram_exceptions`
   - Метод поддерживает те же исключения, что и другие методы протокола: `MessagingNetworkError` и `MessagingAPIError`
 
 - **Полный отказ от обратной совместимости через fallback-механизмы**:

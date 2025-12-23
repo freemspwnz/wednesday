@@ -65,3 +65,24 @@ class PTBMessagingService:
             chat_id=chat_id,
             text=text,
         )
+
+    @map_telegram_exceptions
+    async def delete_message(
+        self,
+        chat_id: int,
+        message_id: int,
+    ) -> None:
+        """Удаляет сообщение из чата.
+
+        Args:
+            chat_id: ID чата.
+            message_id: ID сообщения для удаления.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках.
+            MessagingAPIError: При ошибках API (сообщение не найдено, нет прав).
+        """
+        await self._bot.delete_message(
+            chat_id=chat_id,
+            message_id=message_id,
+        )
