@@ -194,66 +194,16 @@ class FrogProcessingService(BaseService):
             chat_id=chat_id,
         )
 
-        # Удаление статусного сообщения
-        if status_message_id:
-            try:
-                await self._messaging.delete_message(
-                    chat_id=chat_id,
-                    message_id=status_message_id,
-                )
-            except Exception:
-                pass
-
-        # Отправка дружелюбного сообщения
-        friendly_message = (
-            "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
-            "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
+        # Используем общую логику fallback
+        await self._send_fallback_response(
+            chat_id=chat_id,
+            user_id=user_id,
+            status_message_id=status_message_id,
+            friendly_message=(
+                "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
+                "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
+            ),
         )
-        try:
-            await self._messaging.send_message(
-                chat_id=chat_id,
-                text=friendly_message,
-            )
-        except MessagingError as e:
-            self.logger.error(
-                f"Не удалось отправить дружелюбное сообщение: {e}",
-                event="friendly_message_send_failed",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-
-        # Отправка случайного изображения
-        fallback_image = await self._image_service.get_random_saved_image()
-        if fallback_image:
-            fallback_image_data, fallback_caption = fallback_image
-            try:
-                await self._messaging.send_image(
-                    chat_id=chat_id,
-                    image=fallback_image_data,
-                    caption=fallback_caption,
-                )
-                self.logger.info(
-                    f"Случайное изображение отправлено пользователю {user_id} как fallback",
-                    event="fallback_image_sent",
-                    status="ok",
-                    user_id=user_id,
-                )
-            except MessagingError as e:
-                self.logger.error(
-                    f"Не удалось отправить fallback изображение: {e}",
-                    event="fallback_image_send_failed",
-                    status="error",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                )
-        else:
-            self.logger.warning(
-                "Нет сохраненных изображений для отправки как fallback",
-                event="fallback_image_unavailable",
-                status="warning",
-                user_id=user_id,
-            )
 
         # Уведомление администраторов
         if self._admin_notifier:
@@ -315,50 +265,16 @@ class FrogProcessingService(BaseService):
             exc_info=True,
         )
 
-        # Удаление статусного сообщения
-        if status_message_id:
-            try:
-                await self._messaging.delete_message(
-                    chat_id=chat_id,
-                    message_id=status_message_id,
-                )
-            except Exception:
-                pass
-
-        # Отправка дружелюбного сообщения и fallback
-        try:
-            friendly_message = (
+        # Используем общую логику fallback
+        await self._send_fallback_response(
+            chat_id=chat_id,
+            user_id=user_id,
+            status_message_id=status_message_id,
+            friendly_message=(
                 "🐸 К сожалению, произошла ошибка при генерации.\n"
                 "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
-            )
-            await self._messaging.send_message(
-                chat_id=chat_id,
-                text=friendly_message,
-            )
-
-            # Отправка случайного изображения
-            fallback_image = await self._image_service.get_random_saved_image()
-            if fallback_image:
-                fallback_image_data, fallback_caption = fallback_image
-                await self._messaging.send_image(
-                    chat_id=chat_id,
-                    image=fallback_image_data,
-                    caption=fallback_caption,
-                )
-                self.logger.info(
-                    f"Случайное изображение отправлено пользователю {user_id} как fallback",
-                    event="fallback_image_sent",
-                    status="ok",
-                    user_id=user_id,
-                )
-        except MessagingError as send_error:
-            self.logger.error(
-                f"Не удалось отправить fallback сообщение/изображение: {send_error}",
-                event="fallback_send_failed",
-                status="error",
-                error_type=type(send_error).__name__,
-                error_message=str(send_error),
-            )
+            ),
+        )
 
         # Уведомление администраторов с трейсом
         if self._admin_notifier:
@@ -370,3 +286,80 @@ class FrogProcessingService(BaseService):
             )
 
         return {"status": "failed", "error": error_details}
+
+    async def _send_fallback_response(
+        self,
+        chat_id: int,
+        user_id: int,
+        status_message_id: int | None,
+        friendly_message: str,
+    ) -> None:
+        """Отправляет fallback-ответ при ошибке генерации.
+
+        Выполняет:
+        - Удаление статусного сообщения (если указано)
+        - Отправку дружелюбного сообщения
+        - Отправку случайного изображения из архива (если доступно)
+
+        Args:
+            chat_id: ID чата.
+            user_id: ID пользователя.
+            status_message_id: ID статусного сообщения для удаления (опционально).
+            friendly_message: Текст дружелюбного сообщения.
+        """
+        # Удаление статусного сообщения
+        if status_message_id:
+            try:
+                await self._messaging.delete_message(
+                    chat_id=chat_id,
+                    message_id=status_message_id,
+                )
+            except Exception:
+                pass
+
+        # Отправка дружелюбного сообщения
+        try:
+            await self._messaging.send_message(
+                chat_id=chat_id,
+                text=friendly_message,
+            )
+        except MessagingError as e:
+            self.logger.error(
+                f"Не удалось отправить дружелюбное сообщение: {e}",
+                event="friendly_message_send_failed",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+
+        # Отправка случайного изображения
+        fallback_image = await self._image_service.get_random_saved_image()
+        if fallback_image:
+            fallback_image_data, fallback_caption = fallback_image
+            try:
+                await self._messaging.send_image(
+                    chat_id=chat_id,
+                    image=fallback_image_data,
+                    caption=fallback_caption,
+                )
+                self.logger.info(
+                    f"Случайное изображение отправлено пользователю {user_id} как fallback",
+                    event="fallback_image_sent",
+                    status="ok",
+                    user_id=user_id,
+                )
+            except MessagingError as e:
+                self.logger.error(
+                    f"Не удалось отправить fallback изображение: {e}",
+                    event="fallback_image_send_failed",
+                    status="error",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
+        else:
+            self.logger.warning(
+                "Нет сохраненных изображений для отправки как fallback",
+                event="fallback_image_unavailable",
+                status="warning",
+                user_id=user_id,
+            )

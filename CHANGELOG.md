@@ -48,6 +48,24 @@
   - Обновлены все тесты для использования `get_services_context()` вместо `CeleryServices.get_bot()` и `CeleryServices.get_generator()`
   - Инфраструктурный слой больше не знает о структуре `bot.services`, что улучшает разделение слоёв и соответствует принципам SOLID
 
+- **Улучшение shutdown логики и типизации**:
+  - Создан `CleanupService` в `src/app/cleanup_service.py` для инкапсуляции логики graceful shutdown
+  - Обновлен `shutdown_services()` для использования `CleanupService` вместо прямого вызова `bot.services.cleanup()`
+  - Создан `ServicesContext` Protocol в `src/infra/celery/services_context.py` для типизации контекста сервисов
+  - Добавлена функция `build_cleanup_service()` в `src/infra/container.py` для создания `CleanupService` через DI
+  - Улучшена типизация в `context.py` с использованием Protocol вместо `dict[str, object]`
+
+- **Рефакторинг дублирования в FrogProcessingService**:
+  - Вынесена общая fallback-логика в метод `_send_fallback_response()` для устранения дублирования между `_handle_generation_failure` и `_handle_unexpected_error`
+  - Упрощена структура методов обработки ошибок за счет переиспользования общего кода
+  - Улучшено соответствие принципу DRY (Don't Repeat Yourself)
+
+- **Добавление unit-тестов для FrogProcessingService**:
+  - Создан файл `tests/app/test_frog_processing_service.py` с полным покрытием тестами
+  - Добавлены тесты для успешной обработки запросов, обработки ошибок генерации, неожиданных ошибок, ошибок отправки сообщений
+  - Добавлены тесты для опциональных зависимостей (usage_tracker, admin_notifier)
+  - Добавлены тесты для fallback-логики и различных сценариев
+
 - **Полный отказ от обратной совместимости через fallback-механизмы**:
   - Удалены все fallback-механизмы для полного соответствия принципам Dependency Injection
   - Все инфраструктурные зависимости теперь передаются явно через параметры конструкторов

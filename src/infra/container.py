@@ -14,6 +14,7 @@ import asyncpg
 
 if TYPE_CHECKING:
     from app.admin_notification_service import AdminNotificationService
+    from app.cleanup_service import CleanupService
     from app.frog_processing_service import FrogProcessingService
     from bot.wednesday_bot import WednesdayBot
     from infra.redis.redis_client import RedisClient
@@ -365,6 +366,20 @@ def build_frog_processing_service(
         admin_notifier=admin_notifier,
         logger=logger,
     )
+
+
+def build_cleanup_service(logger: ILogger) -> CleanupService:
+    """Создаёт CleanupService с зависимостями.
+
+    Args:
+        logger: Логгер.
+
+    Returns:
+        Настроенный CleanupService.
+    """
+    from app.cleanup_service import CleanupService
+
+    return CleanupService(logger=logger)
 
 
 def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: RedisClient) -> BotServices:
