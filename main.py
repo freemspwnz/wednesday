@@ -11,6 +11,7 @@ import types
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import asyncpg
 from prometheus_client import start_http_server
 
 from bot.support_bot import SupportBot
@@ -18,7 +19,13 @@ from infra.container import build_bot
 from infra.database.postgres_client import get_postgres_pool, init_postgres_pool
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger, log_event
-from infra.redis.redis_client import get_redis, init_redis_pool, redis_available
+from infra.redis.redis_client import (
+    RedisClient,
+    _InMemoryRedis,
+    get_redis,
+    init_redis_pool,
+    redis_available,
+)
 from shared.config import Config
 
 # Создаём экземпляр Config при импорте модуля
@@ -147,12 +154,13 @@ class BotRunner:
         self.logger.info("Начало выполнения метода run()")
 
         try:
-            # Проверяем конфигурацию и инициализируем Redis (если доступен)
+            # Проверяем конфигурацию
             self.logger.info("Проверка требований перед запуском")
             self._check_requirements()
             self.logger.info("Проверка требований завершена успешно")
-            await self._init_redis_if_configured()
-            await self._init_postgres_if_configured()
+
+            # === Инициализация и валидация инфраструктуры ===
+            postgres_pool, redis_client = await self._init_and_validate_infrastructure()
             await ensure_schema()
 
             # Общий цикл: сначала пробуем запускать основной бот; при остановке — включаем SupportBot
@@ -229,8 +237,11 @@ class BotRunner:
 
                 # Этап 2: запускаем основной бот
                 self.logger.info("[Supervisor] Создание экземпляра WednesdayBot")
-                postgres_pool = get_postgres_pool()
-                self.bot = build_bot(config, db_pool=postgres_pool)
+                self.bot = build_bot(
+                    config=config,
+                    db_pool=postgres_pool,
+                    redis_client=redis_client,
+                )
 
                 # Восстанавливаем очередь непересозданных кэшей
                 try:
@@ -364,6 +375,144 @@ class BotRunner:
             await self._cleanup()
             raise
 
+    async def _init_and_validate_infrastructure(
+        self,
+    ) -> tuple[asyncpg.Pool, RedisClient]:
+        """
+        Инициализирует и валидирует инфраструктурные зависимости.
+
+        Выполняет:
+        1. Инициализацию Postgres (критичная зависимость)
+        2. Валидацию Postgres (проверка соединения)
+        3. Инициализацию Redis (некритичная, с fallback)
+        4. Валидацию Redis (если доступен)
+
+        Returns:
+            Кортеж (postgres_pool, redis_client) с инициализированными клиентами.
+
+        Raises:
+            RuntimeError: Если критичные зависимости (Postgres) не инициализированы.
+            Exception: При ошибках подключения к Postgres (пробрасывается дальше).
+        """
+        self.logger.info("Начало инициализации инфраструктурных зависимостей")
+        log_event(
+            event="infrastructure_init_start",
+            status="started",
+            level="info",
+            message="Начало инициализации инфраструктурных зависимостей",
+        )
+
+        # === Инициализация Postgres (критичная зависимость) ===
+        self.logger.info("Инициализация пула подключений PostgreSQL...")
+        log_event(
+            event="postgres_init_start",
+            status="started",
+            level="info",
+            message="Инициализация пула подключений PostgreSQL",
+        )
+        try:
+            postgres_pool = await init_postgres_pool(
+                min_size=1,
+                max_size=10,
+                config=config,
+            )
+
+            # Валидация Postgres: проверяем, что пул работает
+            async with postgres_pool.acquire() as conn:
+                result = await conn.fetchval("SELECT 1;")
+                if result != 1:
+                    raise RuntimeError("Postgres pool validation failed: unexpected query result")
+
+            pool_size = postgres_pool.get_size()
+            idle_size = postgres_pool.get_idle_size()
+            self.logger.info(
+                f"Postgres pool успешно инициализирован и валидирован (size={pool_size}, idle={idle_size})",
+            )
+            log_event(
+                event="postgres_init_success",
+                status="ok",
+                extra={"pool_size": pool_size, "idle_size": idle_size},
+                level="info",
+                message="Postgres pool успешно инициализирован и валидирован",
+            )
+        except Exception as exc:
+            self.logger.error(
+                f"Критическая ошибка: не удалось инициализировать Postgres: {exc}",
+                exc_info=True,
+            )
+            log_event(
+                event="postgres_init_failed",
+                status="error",
+                extra={"error": str(exc)},
+                level="error",
+                message="Критическая ошибка: не удалось инициализировать Postgres",
+            )
+            raise
+
+        # === Инициализация Redis (некритичная зависимость) ===
+        self.logger.info("Инициализация Redis-клиента...")
+        log_event(
+            event="redis_init_start",
+            status="started",
+            level="info",
+            message="Инициализация Redis-клиента",
+        )
+        redis_client: RedisClient
+
+        try:
+            url = config.redis.url
+            if url:
+                redis_client = await init_redis_pool(url=url)
+            else:
+                redis_client = await init_redis_pool(
+                    host=config.redis.host,
+                    port=config.redis.port,
+                    db=config.redis.db,
+                    password=config.redis.password,
+                )
+
+            # Валидация Redis: проверяем доступность
+            await redis_client.ping()
+            is_real = redis_available()
+            mode = "real Redis" if is_real else "in-memory fallback"
+            self.logger.info(
+                f"Redis успешно инициализирован и валидирован (режим: {mode})",
+            )
+            log_event(
+                event="redis_init_success",
+                status="ok",
+                extra={"mode": mode, "is_real": is_real},
+                level="info",
+                message="Redis успешно инициализирован и валидирован",
+            )
+        except Exception as exc:
+            # Redis не критичен — продолжаем с fallback
+            self.logger.warning(
+                f"Redis недоступен при старте ({exc!s}). Продолжаем в режиме fallback (in-memory).",
+            )
+            log_event(
+                event="redis_init_fallback",
+                status="warning",
+                extra={"error": str(exc)},
+                level="warning",
+                message="Redis недоступен при старте, используется in-memory fallback",
+            )
+            # Получаем in-memory fallback
+            redis_client = get_redis()
+            if not isinstance(redis_client, _InMemoryRedis):
+                # Это не должно произойти, но на всякий случай
+                self.logger.warning("Неожиданный тип Redis-клиента, создаём in-memory fallback")
+                redis_client = _InMemoryRedis()
+
+        self.logger.info("Инициализация инфраструктурных зависимостей завершена")
+        log_event(
+            event="infrastructure_init_success",
+            status="ok",
+            level="info",
+            message="Инициализация инфраструктурных зависимостей завершена",
+        )
+        return (postgres_pool, redis_client)
+
     def _check_requirements(self) -> None:
         """
         Проверяет наличие необходимых файлов и настроек.
@@ -391,55 +540,6 @@ class BotRunner:
             self.logger.error(f"Ошибка в конфигурации: {e}", exc_info=True)
             sys.exit(1)
         self.logger.info("Проверка требований завершена успешно")
-
-    async def _init_redis_if_configured(self) -> None:
-        """
-        Пытается инициализировать глобальный Redis‑клиент.
-
-        Важно:
-        - Redis не является жёсткой зависимостью — при ошибке инициализации
-          приложение продолжает работу в деградированном режиме с in‑memory
-          fallback'ами, а все Redis‑зависимые сервисы логируют режим работы.
-        """
-        self.logger.info("Пробую инициализировать Redis‑клиент (если задан конфиг)")
-        url = config.redis.url
-        try:
-            if url:
-                await init_redis_pool(url=url)
-            else:
-                await init_redis_pool(
-                    host=config.redis.host,
-                    port=config.redis.port,
-                    db=config.redis.db,
-                    password=config.redis.password,
-                )
-            self.logger.info(
-                f"Redis успешно инициализирован, режим работы: redis_available={redis_available()}",
-            )
-        except Exception as exc:
-            # Явно фиксируем, что работаем без Redis, но не прерываем запуск.
-            self.logger.warning(f"Redis недоступен при старте ({exc!s}). Продолжаем в режиме fallback (in‑memory).")
-
-    async def _init_postgres_if_configured(self) -> None:
-        """
-        Инициализирует пул подключений к Postgres.
-
-        Важно:
-        - Postgres используется для постоянного хранения данных (чаты, админы, лимиты и т.п.).
-        - При ошибке инициализации запуск приложения прерывается, чтобы избежать работы
-          в полудеградированном состоянии без персистентности.
-        """
-        self.logger.info("Пробую инициализировать пул Postgres")
-        try:
-            # Бот в основном IO‑bound, поэтому достаточно небольшого пула.
-            await init_postgres_pool(min_size=1, max_size=10, config=config)
-            self.logger.info("Postgres успешно инициализирован")
-        except Exception as exc:
-            self.logger.error(
-                "Не удалось инициализировать Postgres: "
-                f"{exc}. Проверьте доступность БД и переменные окружения POSTGRES_*. ",
-            )
-            raise
 
     async def _cleanup(self) -> None:
         """

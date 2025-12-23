@@ -14,6 +14,7 @@ import asyncpg
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
+    from infra.redis.redis_client import RedisClient
 
 from app.admin_dashboard_service import AdminDashboardService
 from app.api_status_service import APIStatusService
@@ -120,9 +121,10 @@ def _create_clients(
     return (image_container, text_container)
 
 
-def build_image_stack(
+def build_image_stack(  # noqa: PLR0913, PLR0917
     config: Config,
     db_pool: asyncpg.Pool,
+    redis_client: RedisClient,
     image_client: ITextToImageClient | None = None,
     text_client: ITextToTextClient | None = None,
     models_repo: IModelsRepo | None = None,
@@ -135,6 +137,7 @@ def build_image_stack(
     Args:
         config: Экземпляр Config для создания клиентов и чтения настроек.
         db_pool: Пул подключений PostgreSQL.
+        redis_client: Redis-клиент для использования в сервисах.
         image_client: Опциональный клиент для генерации изображений.
             Если None, создаётся новый через DI в _create_clients().
         text_client: Опциональный клиент для генерации текста.
@@ -167,11 +170,6 @@ def build_image_stack(
         text_client=text_client,
         fallback_config=fallback_config,
     )
-
-    # Получаем Redis клиент явно
-    from infra.redis.redis_client import get_redis
-
-    redis_client = get_redis()
 
     # Инфраструктура
     images_repo = ImagesRepo(pool=db_pool)
@@ -280,7 +278,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     )
 
 
-def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
+def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: RedisClient) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
     На этом этапе:
@@ -290,6 +288,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     Args:
         config: Экземпляр Config для создания сервисов и настроек.
         db_pool: Пул подключений PostgreSQL.
+        redis_client: Redis-клиент для использования в сервисах.
 
     Returns:
         Настроенный экземпляр BotServices.
@@ -316,6 +315,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
         text_client=text_client,
         models_repo=models_repo,
         db_pool=db_pool,
+        redis_client=redis_client,
     )
 
     usage = UsageTracker(
@@ -327,11 +327,6 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
     chats = ChatsRepo(pool=db_pool)
     dispatch_registry = DispatchRegistry(pool=db_pool)
     metrics = Metrics(pool=db_pool)
-
-    # Получаем Redis клиент явно
-    from infra.redis.redis_client import get_redis
-
-    redis_client = get_redis()
 
     prompt_cache = PromptCache(redis_client=redis_client)
     user_state_store = UserStateCache(redis_client=redis_client)
@@ -453,6 +448,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool) -> BotServices:
 def build_bot(
     config: Config,
     db_pool: asyncpg.Pool,
+    redis_client: RedisClient,
     services: BotServices | None = None,
 ) -> WednesdayBot:
     """Создаёт и настраивает экземпляр WednesdayBot.
@@ -463,6 +459,7 @@ def build_bot(
     Args:
         config: Экземпляр Config для создания сервисов и зависимостей.
         db_pool: Пул подключений PostgreSQL.
+        redis_client: Redis-клиент для использования в сервисах.
         services: Опциональный контейнер сервисов. Если None, создаётся
             новый через build_bot_services().
 
@@ -477,7 +474,7 @@ def build_bot(
     from bot.wednesday_bot import WednesdayBot
 
     if services is None:
-        services = build_bot_services(config, db_pool)
+        services = build_bot_services(config, db_pool, redis_client)
 
     # Создаём бот с внедрёнными зависимостями
     bot = WednesdayBot(services=services)

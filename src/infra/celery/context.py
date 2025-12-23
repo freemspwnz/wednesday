@@ -113,13 +113,15 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
                 # Ленивый импорт для избежания циклических зависимостей
                 from infra.container import build_bot
                 from infra.database.postgres_client import get_postgres_pool
+                from infra.redis.redis_client import get_redis
 
                 # Создаём экземпляры сервисов
                 postgres_pool = get_postgres_pool()
+                redis_client = get_redis()
                 # Convert to Config if needed
                 if not isinstance(config_obj, Config):
                     config_obj = Config()
-                bot = build_bot(config=config_obj, db_pool=postgres_pool)
+                bot = build_bot(config=config_obj, db_pool=postgres_pool, redis_client=redis_client)
 
                 _services_context = {
                     "bot": bot,
