@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncpg
 
-from infra.database.postgres_client import _get_postgres_pool
 from infra.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -147,7 +146,7 @@ _DDL_STATEMENTS: list[str] = [
 ]
 
 
-async def ensure_schema(pool: asyncpg.Pool | None = None) -> None:
+async def ensure_schema(pool: asyncpg.Pool) -> None:
     """Гарантирует наличие всех необходимых таблиц в базе Postgres.
 
     Создаёт все необходимые таблицы, если их ещё нет, используя
@@ -155,15 +154,14 @@ async def ensure_schema(pool: asyncpg.Pool | None = None) -> None:
     при каждом запуске приложения.
 
     Args:
-        pool: Пул подключений PostgreSQL. Если не указан, используется
-            глобальный пул через _get_postgres_pool() (для обратной совместимости).
+        pool: Пул подключений PostgreSQL (обязательный параметр).
 
     Raises:
+        ValueError: Если pool равен None.
         Exception: При ошибке выполнения DDL-запросов в PostgreSQL.
     """
-    # Используем переданный пул или глобальный (для обратной совместимости)
     if pool is None:
-        pool = _get_postgres_pool()
+        raise ValueError("pool не может быть None. Передайте пул подключений PostgreSQL через Dependency Injection.")
 
     logger.info("Проверяю инициализацию схемы Postgres (создание таблиц при необходимости)")
 
@@ -185,6 +183,7 @@ if __name__ == "__main__":
 
     async def _main() -> None:
         # Инициализируем пул соединений на основе переменных окружения
+
         pool = await init_postgres_pool(min_size=1, max_size=2)
         await ensure_schema(pool=pool)
         await close_postgres_pool()

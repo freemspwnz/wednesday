@@ -7,8 +7,8 @@ from infra.database.postgres_schema import ensure_schema  # reuse основно
 
 
 async def _main() -> None:
-    await init_postgres_pool(min_size=1, max_size=2)
-    await ensure_schema()
+    pool = await init_postgres_pool(min_size=1, max_size=2)
+    await ensure_schema(pool=pool)
     await close_postgres_pool()
 
 

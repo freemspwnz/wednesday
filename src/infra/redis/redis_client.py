@@ -375,12 +375,21 @@ def _get_redis() -> redis.Redis | _InMemoryRedis:
     """
     Внутренняя функция для получения Redis-клиента.
 
-    ВАЖНО: Не используйте эту функцию напрямую в коде приложения!
-    Получайте клиент через Dependency Injection из container.py или main.py.
+    DEPRECATED: Используйте Dependency Injection вместо глобальных функций.
+    Эта функция будет удалена в будущих версиях.
+    Получайте клиент через DI из container.py или main.py.
 
     Returns:
         Redis-клиент (реальный или in-memory fallback).
     """
+    import warnings
+
+    warnings.warn(
+        "_get_redis() is deprecated. Use Dependency Injection instead. "
+        "Get the client through DI from container.py or main.py.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return _redis
 
 

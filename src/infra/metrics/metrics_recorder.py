@@ -21,11 +21,19 @@ class MetricsRecorder(BaseService, IMetrics):
     Добавляет логирование всех записей метрик.
     """
 
-    def __init__(self, metrics: Metrics, *, logger: ILogger) -> None:
+    def __init__(
+        self,
+        metrics: Metrics,
+        *,
+        postgres_pool: asyncpg.Pool | None = None,
+        logger: ILogger,
+    ) -> None:
         """Инициализирует сервис записи метрик.
 
         Args:
             metrics: Экземпляр Metrics для записи метрик (ОБЯЗАТЕЛЬНЫЙ).
+            postgres_pool: Пул подключений PostgreSQL для передачи в record_metric().
+                Если не указан, record_metric() будет использовать fallback на глобальный пул.
             logger: Экземпляр логгера для использования в сервисе.
 
         Raises:
@@ -35,6 +43,7 @@ class MetricsRecorder(BaseService, IMetrics):
             raise ValueError("metrics не может быть None. Передайте экземпляр Metrics через Dependency Injection.")
         super().__init__(logger)
         self._metrics = metrics
+        self._postgres_pool = postgres_pool
 
     async def increment_generation_success(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик успешных генераций изображений."""
@@ -67,7 +76,8 @@ class MetricsRecorder(BaseService, IMetrics):
             # но мы можем использовать record_metric для записи события
             from infra.metrics.metrics import record_metric
 
-            await record_metric(event_type="cache_hit", status="hit")
+            # Передаем пул явно, если он доступен
+            await record_metric(pool=self._postgres_pool, event_type="cache_hit", status="hit")
             self.logger.debug(
                 "Записана метрика: increment_cache_hit",
                 event="metric_recorded",

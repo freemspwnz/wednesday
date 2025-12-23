@@ -129,12 +129,21 @@ def _get_postgres_pool() -> asyncpg.Pool:
     """
     Внутренняя функция для получения пула подключений.
 
-    ВАЖНО: Не используйте эту функцию напрямую в коде приложения!
-    Получайте пул через Dependency Injection из container.py или main.py.
+    DEPRECATED: Используйте Dependency Injection вместо глобальных функций.
+    Эта функция будет удалена в будущих версиях.
+    Получайте пул через DI из container.py или main.py.
 
     Raises:
         RuntimeError: если пул ещё не инициализирован.
     """
+    import warnings
+
+    warnings.warn(
+        "_get_postgres_pool() is deprecated. Use Dependency Injection instead. "
+        "Get the pool through DI from container.py or main.py.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if _pool is None:
         raise RuntimeError(
             "Postgres pool не инициализирован. Используйте init_postgres_pool() на этапе старта приложения."

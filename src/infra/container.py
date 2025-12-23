@@ -487,7 +487,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     )
 
     # Создаём MetricsRecorder для передачи в DatabaseOperationsService
-    metrics_recorder = MetricsRecorder(metrics=metrics, logger=app_logger)
+    metrics_recorder = MetricsRecorder(metrics=metrics, postgres_pool=db_pool, logger=app_logger)
 
     # Создаём фабрику для Unit of Work
     from infra.database.database_unit_of_work import DatabaseUnitOfWork

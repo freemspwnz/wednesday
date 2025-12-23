@@ -26,10 +26,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from redis.exceptions import RedisError
 
-from infra.database.postgres_client import _get_postgres_pool, get_pool_metrics
+from infra.database.postgres_client import get_pool_metrics
 from infra.logging.logger import get_logger, log_event, log_http
 from infra.metrics.prometheus_metrics import update_pool_metrics
-from infra.redis.redis_client import _get_redis
 
 logger = get_logger(__name__)
 
@@ -93,21 +92,16 @@ async def _check_redis() -> dict[str, Any]:
     """
     started = time.monotonic()
 
-    # Если main() уже прокинул клиент в app.state, используем его;
-    # иначе — fallback на глобальный singleton через приватную функцию
-    # (для обратной совместимости и случаев, когда healthcheck вызывается до полной инициализации).
+    # Используем клиент из app.state, установленный в _init_and_validate_infrastructure()
     client = getattr(app.state, "redis", None)
     if client is None:
-        try:
-            client = _get_redis()  # Fallback на глобальный singleton (для обратной совместимости)
-        except RuntimeError:
-            # Если Redis не инициализирован, возвращаем dict с ошибкой
-            return {
-                "status": "down",
-                "using_fallback": False,
-                "latency_ms": 0.0,
-                "details": "Redis не инициализирован",
-            }
+        # Если Redis не инициализирован в app.state, возвращаем dict с ошибкой
+        return {
+            "status": "down",
+            "using_fallback": False,
+            "latency_ms": 0.0,
+            "details": "Redis не инициализирован в app.state",
+        }
 
     # В тестах (и потенциально в других окружениях) client может быть
     # замокан на класс вместо инстанса. В этом случае создаём экземпляр.
@@ -166,21 +160,16 @@ async def _check_postgres() -> dict[str, Any]:
     """
     started = time.monotonic()
 
-    # Сначала пробуем взять пул из app.state, если main() его туда прокинул;
-    # иначе — fallback на глобальный singleton через приватную функцию
-    # (для обратной совместимости и случаев, когда healthcheck вызывается до полной инициализации).
+    # Используем пул из app.state, установленный в _init_and_validate_infrastructure()
     pool = getattr(app.state, "postgres_pool", None)
     if pool is None:
-        try:
-            pool = _get_postgres_pool()  # Fallback на глобальный singleton (для обратной совместимости)
-        except RuntimeError:
-            # Если пул не инициализирован, возвращаем dict с ошибкой
-            return {
-                "status": "down",
-                "latency_ms": 0.0,
-                "details": "Postgres pool не инициализирован",
-                "pool_metrics": None,
-            }
+        # Если пул не инициализирован в app.state, возвращаем dict с ошибкой
+        return {
+            "status": "down",
+            "latency_ms": 0.0,
+            "details": "Postgres pool не инициализирован в app.state",
+            "pool_metrics": None,
+        }
 
     # В тестах пул может быть подменён на фабрику; если это callable без acquire,
     # создаём экземпляр перед использованием.
@@ -273,20 +262,15 @@ async def _check_metrics_stream() -> dict[str, Any]:
     started = time.monotonic()
 
     # Для очереди метрик важен именно реальный Redis, а не in‑memory fallback.
-    # Сначала пробуем взять клиент из app.state, если main() его туда прокинул;
-    # иначе — fallback на глобальный singleton через приватную функцию
-    # (для обратной совместимости и случаев, когда healthcheck вызывается до полной инициализации).
+    # Используем клиент из app.state, установленный в _init_and_validate_infrastructure()
     client = getattr(app.state, "redis", None)
     if client is None:
-        try:
-            client = _get_redis()  # Fallback на глобальный singleton (для обратной совместимости)
-        except RuntimeError:
-            # Если Redis не инициализирован, возвращаем dict с ошибкой
-            return {
-                "status": "down",
-                "latency_ms": 0.0,
-                "details": "Redis не инициализирован",
-            }
+        # Если Redis не инициализирован в app.state, возвращаем dict с ошибкой
+        return {
+            "status": "down",
+            "latency_ms": 0.0,
+            "details": "Redis не инициализирован в app.state",
+        }
 
     # Аналогично _check_redis, учитываем возможность подмены на класс в тестах.
     if isinstance(client, type):

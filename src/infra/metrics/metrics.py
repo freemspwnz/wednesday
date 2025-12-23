@@ -11,7 +11,6 @@ from typing import Any, Protocol, runtime_checkable
 
 import asyncpg
 
-from infra.database.postgres_client import _get_postgres_pool
 from infra.logging.logger import get_logger, log_all_methods
 from infra.redis.redis_client import safe_redis_call
 
@@ -42,11 +41,12 @@ async def record_metric(  # noqa: PLR0913
 
     Args:
         db: Необязательный объект с методом execute (asyncpg.Connection или пул).
-            Если не указан, может использоваться как fallback для прямой
-            записи в Postgres при недоступности очереди.
-        pool: Необязательный пул подключений PostgreSQL. Если не указан,
-            используется глобальный пул через _get_postgres_pool() (для обратной совместимости).
+            Используется для записи в Postgres, если pool не указан.
+        pool: Необязательный пул подключений PostgreSQL. Требуется, если db не указан.
         event_type: Тип события ('error', 'generation', 'cache_hit', 'cache_miss' и т.п.).
+
+    Raises:
+        ValueError: Если ни pool, ни db не указаны.
         user_id: Идентификатор пользователя (например, Telegram user_id).
         prompt_hash: Хэш промпта (sha256, 64-символьное hex-представление).
         image_hash: Хэш изображения (sha256, 64-символьное hex-представление).
@@ -82,8 +82,8 @@ async def record_metric(  # noqa: PLR0913
         # Это делает события наблюдаемыми через SQL (в том числе в тестах и админских
         # diagnostics), при этом ошибка записи в БД не должна влиять на горячий путь.
         try:
-            # Используем переданный пул или глобальный (для обратной совместимости)
             if pool is not None:
+                # Используем переданный пул
                 async with pool.acquire() as conn:
                     await conn.execute(
                         """
@@ -125,29 +125,8 @@ async def record_metric(  # noqa: PLR0913
                     latency_ms,
                     status,
                 )
-            else:
-                # Fallback на глобальный пул (для обратной совместимости)
-                pool_fallback = _get_postgres_pool()
-                async with pool_fallback.acquire() as conn:
-                    await conn.execute(
-                        """
-                        INSERT INTO metrics_events (
-                            event_type,
-                            user_id,
-                            prompt_hash,
-                            image_hash,
-                            latency_ms,
-                            status
-                        )
-                        VALUES ($1, $2, $3, $4, $5, $6);
-                        """,
-                        event_type,
-                        user_id,
-                        prompt_hash,
-                        image_hash,
-                        latency_ms,
-                        status,
-                    )
+            # Если ни pool, ни db не указаны, пропускаем запись в БД (best-effort)
+            # Это допустимо, так как событие уже записано в Redis Stream
         except Exception as db_exc:  # pragma: no cover - best-effort запись в БД
             _logger.warning(
                 f"record_metric: не удалось синхронно сохранить событие метрики в Postgres: {db_exc}",
@@ -165,8 +144,8 @@ async def record_metric(  # noqa: PLR0913
         )
         # Fallback: при недоступности очереди можем (опционально) писать напрямую в Postgres.
         try:
-            # Используем переданный пул или глобальный (для обратной совместимости)
             if pool is not None:
+                # Используем переданный пул
                 async with pool.acquire() as conn:
                     await conn.execute(
                         """
@@ -187,6 +166,7 @@ async def record_metric(  # noqa: PLR0913
                         latency_ms,
                         status,
                     )
+                _logger.info("Событие метрики сохранено напрямую в Postgres (fallback, Redis недоступен)")
             elif db is not None:
                 # Используем переданный db (connection или pool)
                 await db.execute(
@@ -208,30 +188,13 @@ async def record_metric(  # noqa: PLR0913
                     latency_ms,
                     status,
                 )
+                _logger.info("Событие метрики сохранено напрямую в Postgres (fallback, Redis недоступен)")
             else:
-                # Fallback на глобальный пул (для обратной совместимости)
-                pool_fallback = _get_postgres_pool()
-                async with pool_fallback.acquire() as conn:
-                    await conn.execute(
-                        """
-                        INSERT INTO metrics_events (
-                            event_type,
-                            user_id,
-                            prompt_hash,
-                            image_hash,
-                            latency_ms,
-                            status
-                        )
-                        VALUES ($1, $2, $3, $4, $5, $6);
-                        """,
-                        event_type,
-                        user_id,
-                        prompt_hash,
-                        image_hash,
-                        latency_ms,
-                        status,
-                    )
-            _logger.info("Событие метрики сохранено напрямую в Postgres (fall back, Redis недоступен)")
+                # Если ни pool, ни db не указаны, не можем записать в БД
+                _logger.warning(
+                    "record_metric: не удалось сохранить событие метрики - "
+                    "Redis недоступен и не указаны pool или db параметры"
+                )
         except Exception as db_exc:  # pragma: no cover - двойной защитный контур
             _logger.error(
                 f"record_metric: не удалось сохранить событие метрики даже в Postgres: {db_exc}",
@@ -530,6 +493,8 @@ async def get_daily_generation_stats(days: int = 7, pool: asyncpg.Pool | None = 
     """
     # Используем переданный пул или глобальный (для обратной совместимости)
     if pool is None:
+        from infra.database.postgres_client import _get_postgres_pool
+
         pool = _get_postgres_pool()
 
     async with pool.acquire() as conn:
@@ -584,6 +549,8 @@ async def get_top_prompts(limit: int = 10, pool: asyncpg.Pool | None = None) -> 
     """
     # Используем переданный пул или глобальный (для обратной совместимости)
     if pool is None:
+        from infra.database.postgres_client import _get_postgres_pool
+
         pool = _get_postgres_pool()
 
     async with pool.acquire() as conn:

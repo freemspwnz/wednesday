@@ -510,6 +510,17 @@ class BotRunner:
                 self.logger.warning("Неожиданный тип Redis-клиента, создаём in-memory fallback")
                 redis_client = _InMemoryRedis()
 
+        # Устанавливаем пулы в app.state для healthcheck
+        try:
+            from infra.healthcheck import app as health_app
+
+            health_app.state.postgres_pool = postgres_pool
+            health_app.state.redis = redis_client
+            self.logger.info("Пул и Redis-клиент установлены в app.state для healthcheck")
+        except Exception as exc:
+            # Ошибка установки app.state не критична, логируем и продолжаем
+            self.logger.warning(f"Не удалось установить пулы в app.state: {exc}")
+
         self.logger.info("Инициализация инфраструктурных зависимостей завершена")
         log_event(
             event="infrastructure_init_success",
@@ -746,21 +757,13 @@ def _start_health_server(logger: "LoggerType") -> None:
 
         from infra.healthcheck import app as health_app
 
-        # Прокидываем реальные клиенты в FastAPI‑приложение healthcheck.
-        # Если инициализация не удалась — оставляем None, а сам healthcheck
+        # Пул и Redis-клиент устанавливаются в app.state в _init_and_validate_infrastructure()
+        # после инициализации инфраструктуры. Если они не установлены, healthcheck
         # корректно отразит недоступность зависимостей.
-        try:
-            from infra.database.postgres_client import _get_postgres_pool
-            from infra.redis.redis_client import _get_redis
-
-            health_app.state.redis = _get_redis()  # Используем приватную функцию
-        except Exception:
-            health_app.state.redis = None
-
-        try:
-            health_app.state.postgres_pool = _get_postgres_pool()  # Используем приватную функцию
-        except Exception:
+        if not hasattr(health_app.state, "postgres_pool"):
             health_app.state.postgres_pool = None
+        if not hasattr(health_app.state, "redis"):
+            health_app.state.redis = None
 
         uvicorn_config = uvicorn.Config(
             app=health_app,
