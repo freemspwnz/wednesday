@@ -67,6 +67,10 @@ class ModelManagementService(BaseService):
             await self._models_repo.set_kandinsky_model(result.model_id, result.model_name)
             self.logger.info(
                 f"Kandinsky model saved to repository: {result.model_name} (ID: {result.model_id})",
+                event="model_set_kandinsky",
+                status="success",
+                model_id=result.model_id,
+                model_name=result.model_name,
             )
             # Обновляем сообщение для пользователя
             msg = f"Модель установлена: {result.model_name} (ID: {result.model_id})"
@@ -100,7 +104,12 @@ class ModelManagementService(BaseService):
         # Сохраняем в репозиторий в app-слое
         if result.success and result.model_name:
             await self._models_repo.set_gigachat_model(result.model_name)
-            self.logger.info(f"GigaChat model saved to repository: {result.model_name}")
+            self.logger.info(
+                f"GigaChat model saved to repository: {result.model_name}",
+                event="model_set_gigachat",
+                status="success",
+                model_name=result.model_name,
+            )
             # Обновляем сообщение для пользователя
             msg = f"✅ Модель GigaChat установлена: {result.model_name}"
             return SetModelResult.ok(msg, model_name=result.model_name)
