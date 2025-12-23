@@ -4,6 +4,15 @@
 
 ### Изменено
 
+- **Рефакторинг PromptGenerationService: унификация обработки ошибок и упрощение API**:
+  - Удалены `PromptGenerationResult` и `PromptSource` как избыточные абстракции
+  - Метод `generate()` теперь возвращает `Prompt` вместо `PromptGenerationResult`
+  - Все ошибки (ожидаемые и неожиданные) теперь бросают `PromptGenerationError` для унификации с `ImageGenerationService`
+  - Валидация промпта происходит сразу после получения от клиента через Value Object `Prompt`
+  - Метод `get_fallback_prompt()` теперь возвращает `Prompt` вместо `str` для консистентности
+  - Fallback логика перенесена в `PromptService` (app-слой), что соответствует разделению ответственности
+  - Обновлен `PromptService` для работы с новым упрощенным API
+
 - **Рефакторинг ImageGenerationService: инкапсуляция валидации промпта в Value Object**:
   - Создан Value Object `Prompt` в `src/domain/value_objects.py` для инкапсуляции бизнес-правил валидации и нормализации промпта
   - Константы `MIN_PROMPT_LENGTH` и `MAX_PROMPT_LENGTH` перенесены в модуль value_objects

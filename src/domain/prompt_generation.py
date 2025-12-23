@@ -7,9 +7,8 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
-from enum import Enum, auto
 
+from domain.value_objects import Prompt
 from shared.base.exceptions import (
     APIError,
     AuthenticationError,
@@ -19,22 +18,6 @@ from shared.base.exceptions import (
 )
 from shared.config import PromptFallbackConfig
 from shared.protocols import ITextToTextClient
-
-
-class PromptSource(Enum):
-    """Источник промпта для генерации изображения."""
-
-    AI = auto()
-    FALLBACK_REQUIRED = auto()
-    UNAVAILABLE = auto()
-
-
-@dataclass
-class PromptGenerationResult:
-    """Результат генерации промпта с указанием источника."""
-
-    prompt: str | None
-    source: PromptSource
 
 
 class PromptGenerationService:
@@ -53,70 +36,69 @@ class PromptGenerationService:
 
         Args:
             text_client: Клиент для генерации текста (опционально). Если None,
-                используется только статический fallback.
+                метод generate() будет бросать PromptGenerationError.
             fallback_config: Конфигурация для fallback промптов (опционально).
-                Если None, метод get_fallback_prompt() будет бросать ValueError.
+                Если None, метод get_fallback_prompt() будет бросать PromptGenerationError.
         """
         self._text_client = text_client
         self._fallback_config = fallback_config
 
-    async def generate(self) -> PromptGenerationResult:
+    async def generate(self) -> Prompt:
         """Генерирует промпт для генерации изображения.
 
-        Выполняет генерацию через ITextToTextClient. При ожидаемых ошибках клиента
-        возвращает результат с источником FALLBACK_REQUIRED, сигнализируя о необходимости
-        использовать статический fallback в вызывающем коде (fail-safe стратегия).
+        Выполняет генерацию через ITextToTextClient с валидацией результата.
 
         Returns:
-            Результат генерации промпта с указанием источника.
+            Валидированный Prompt.
 
         Raises:
-            PromptGenerationError: При неожиданных ошибках генерации промпта.
-
-        Note:
-            Ожидаемые ошибки клиента (AuthenticationError, NetworkError, APIError, ClientError)
-            обрабатываются и возвращают результат с источником FALLBACK_REQUIRED.
-            Неожиданные ошибки оборачиваются в PromptGenerationError и пробрасываются
-            для корректной обработки в app-слое.
+            PromptGenerationError: При ошибках генерации промпта (ошибки клиента,
+                ошибки валидации, неожиданные ошибки).
         """
         if self._text_client is None:
-            return PromptGenerationResult(
-                prompt=None,
-                source=PromptSource.UNAVAILABLE,
-            )
+            raise PromptGenerationError("Text client is not available")
 
         try:
-            prompt = await self._text_client.generate("prompt_for_kandinsky")
-            return PromptGenerationResult(prompt=prompt, source=PromptSource.AI)
+            prompt_text = await self._text_client.generate("prompt_for_kandinsky")
+            # Валидация промпта сразу после получения от клиента
+            return Prompt(prompt_text)
 
-        except (AuthenticationError, NetworkError, APIError, ClientError):
-            # Ожидаемые ошибки клиента → используем fallback (fail-safe стратегия)
-            return PromptGenerationResult(
-                prompt=None,
-                source=PromptSource.FALLBACK_REQUIRED,
-            )
+        except (AuthenticationError, NetworkError, APIError, ClientError) as exc:
+            # Ошибки клиента → оборачиваем в доменное исключение
+            raise PromptGenerationError(f"Ошибка клиента при генерации промпта: {exc}") from exc
+        except ValueError as exc:
+            # Ошибка валидации промпта
+            raise PromptGenerationError(f"Невалидный промпт от клиента: {exc}") from exc
         except Exception as exc:
             # Неожиданные ошибки → оборачиваем в доменное исключение
             raise PromptGenerationError(f"Неожиданная ошибка при генерации промпта: {exc}") from exc
 
-    def get_fallback_prompt(self) -> str:
+    def get_fallback_prompt(self) -> Prompt:
         """Возвращает статический промпт из конфигурации (fallback).
 
         Используется когда не удалось получить промпт через текстовый клиент.
         Выбирает случайный промпт и стиль из переданной конфигурации.
 
         Returns:
-            Статический промпт для генерации изображения.
+            Валидированный статический промпт для генерации изображения.
 
         Raises:
-            ValueError: Если конфигурация не предоставлена во время инициализации.
+            PromptGenerationError: Если конфигурация не предоставлена или fallback промпт невалиден.
         """
         if not self._fallback_config:
-            raise ValueError("Fallback config is required. Provide PromptFallbackConfig during initialization.")
+            raise PromptGenerationError(
+                "Fallback config is required. Provide PromptFallbackConfig during initialization."
+            )
 
-        if not self._fallback_config.frog_prompts or not self._fallback_config.styles:
-            return self._fallback_config.default_fallback_prompt
+        try:
+            if not self._fallback_config.frog_prompts or not self._fallback_config.styles:
+                fallback_text = self._fallback_config.default_fallback_prompt
+            else:
+                frog_prompt = random.choice(self._fallback_config.frog_prompts)
+                style = random.choice(self._fallback_config.styles)
+                fallback_text = f"{frog_prompt}, {style}, high quality, detailed, Wednesday frog meme"
 
-        frog_prompt = random.choice(self._fallback_config.frog_prompts)
-        style = random.choice(self._fallback_config.styles)
-        return f"{frog_prompt}, {style}, high quality, detailed, Wednesday frog meme"
+            # Валидация fallback промпта
+            return Prompt(fallback_text)
+        except ValueError as exc:
+            raise PromptGenerationError(f"Невалидный fallback промпт: {exc}") from exc

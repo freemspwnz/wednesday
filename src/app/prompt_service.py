@@ -6,10 +6,7 @@
 
 from __future__ import annotations
 
-from domain.prompt_generation import (
-    PromptGenerationService,
-    PromptSource,
-)
+from domain.prompt_generation import PromptGenerationService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CacheError, PromptGenerationError, UnexpectedPromptError
 from shared.protocols import ICache, ILogger
@@ -85,44 +82,44 @@ class PromptService(BaseService):
         )
 
         try:
-            result = await self._generation_service.generate()
-            if result.source == PromptSource.AI and result.prompt is not None:
-                self.logger.info(
-                    f"Промпт успешно сгенерирован: {result.prompt[:100]}...",
-                    event="prompt_generation_success",
-                    status="success",
-                )
-                prompt = result.prompt
-            elif result.source == PromptSource.FALLBACK_REQUIRED:
-                self.logger.warning(
-                    "Ошибка клиента при генерации промпта, требуется fallback",
-                    event="prompt_generation_client_error",
-                    status="error",
-                )
-                prompt = None
-            elif result.source == PromptSource.UNAVAILABLE:
-                self.logger.warning(
-                    "Текстовый клиент недоступен, требуется fallback",
-                    event="prompt_generation_unavailable",
-                    status="warning",
-                )
-                prompt = None
-            else:
-                prompt = None
+            prompt_obj = await self._generation_service.generate()
+            self.logger.info(
+                f"Промпт успешно сгенерирован: {prompt_obj.value[:100]}...",
+                event="prompt_generation_success",
+                status="success",
+            )
+            prompt = prompt_obj.value
         except PromptGenerationError as e:
-            # Доменное исключение генерации промптов
-            unexpected_error = UnexpectedPromptError(
-                f"Error while generating prompt: {e}",
-                original_error=e,
-            )
-            self.logger.error(
-                f"Ошибка при генерации промпта через domain сервис: {unexpected_error}",
-                event="prompt_generation_failed",
+            # Доменное исключение генерации промптов → используем fallback
+            self.logger.warning(
+                f"Ошибка при генерации промпта, используется fallback: {e}",
+                event="prompt_generation_client_error",
                 status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
+                error_type=type(e).__name__,
+                error_message=str(e),
             )
-            raise unexpected_error from e
+            try:
+                fallback_prompt = self._generation_service.get_fallback_prompt()
+                prompt = fallback_prompt.value
+                self.logger.warning(
+                    "Использован статический fallback-промпт",
+                    event="prompt_fallback_used",
+                    status="fallback",
+                )
+            except PromptGenerationError as fallback_error:
+                # Ошибка при получении fallback промпта
+                unexpected_error = UnexpectedPromptError(
+                    f"Failed to get fallback prompt: {fallback_error}",
+                    original_error=fallback_error,
+                )
+                self.logger.error(
+                    f"Ошибка при получении fallback промпта: {unexpected_error}",
+                    event="prompt_fallback_failed",
+                    status="error",
+                    error_type=type(unexpected_error).__name__,
+                    error_message=str(unexpected_error),
+                )
+                return None
         except Exception as e:
             # Другие неожиданные ошибки
             unexpected_error = UnexpectedPromptError(
@@ -137,35 +134,6 @@ class PromptService(BaseService):
                 error_message=str(unexpected_error),
             )
             raise unexpected_error from e
-
-        if prompt is None:
-            # Используем статический fallback
-            self.logger.info(
-                "Начинаю получение fallback промпта",
-                event="prompt_fallback_started",
-                status="started",
-            )
-            try:
-                prompt = self._generation_service.get_fallback_prompt()
-                self.logger.warning(
-                    "Использован статический fallback-промпт",
-                    event="prompt_fallback_used",
-                    status="fallback",
-                )
-            except Exception as e:
-                # Неожиданная ошибка при получении статического fallback‑промпта
-                unexpected_error = UnexpectedPromptError(
-                    f"Unexpected error while getting fallback prompt: {e}",
-                    original_error=e,
-                )
-                self.logger.error(
-                    f"Ошибка при получении fallback промпта: {unexpected_error}",
-                    event="prompt_fallback_failed",
-                    status="error",
-                    error_type=type(unexpected_error).__name__,
-                    error_message=str(unexpected_error),
-                )
-                return None
 
         # Сохраняем в кэш (если доступен)
         if prompt and self._cache is not None:
