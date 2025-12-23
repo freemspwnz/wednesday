@@ -59,32 +59,40 @@ async def _ensure_pools_initialized(
     async with _init_lock:
         # Инициализируем Redis и Postgres (async)
         # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
-        if isinstance(config_obj, Config):
-            if config_obj.redis.url:
-                await init_redis_pool(url=config_obj.redis.url)
+        redis_client: RedisClient
+        try:
+            if isinstance(config_obj, Config):
+                if config_obj.redis.url:
+                    redis_client = await init_redis_pool(url=config_obj.redis.url)
+                else:
+                    redis_client = await init_redis_pool(
+                        host=config_obj.redis.host,
+                        port=config_obj.redis.port,
+                        db=config_obj.redis.db,
+                        password=config_obj.redis.password,
+                    )
+            elif config_obj.redis_url:
+                redis_client = await init_redis_pool(url=config_obj.redis_url)
             else:
-                await init_redis_pool(
-                    host=config_obj.redis.host,
-                    port=config_obj.redis.port,
-                    db=config_obj.redis.db,
-                    password=config_obj.redis.password,
+                redis_client = await init_redis_pool(
+                    host=config_obj.redis_host,
+                    port=config_obj.redis_port,
+                    db=config_obj.redis_db,
+                    password=config_obj.redis_password,
                 )
-        elif config_obj.redis_url:
-            await init_redis_pool(url=config_obj.redis_url)
-        else:
-            await init_redis_pool(
-                host=config_obj.redis_host,
-                port=config_obj.redis_port,
-                db=config_obj.redis_db,
-                password=config_obj.redis_password,
+        except Exception as exc:
+            # Redis не критичен для Celery worker — продолжаем с fallback
+            logger.warning(
+                f"Redis недоступен при инициализации Celery worker ({exc!s}). "
+                "Продолжаем в режиме fallback (in-memory).",
             )
+            # Создаем in-memory fallback напрямую
+            from infra.redis.redis_client import _InMemoryRedis
+
+            redis_client = _InMemoryRedis()
+
         postgres_pool = await init_postgres_pool(min_size=1, max_size=10, config=config_obj)
         await ensure_schema(pool=postgres_pool)
-
-        # Получаем redis_client через приватную функцию (после явной инициализации)
-        from infra.redis.redis_client import _get_redis
-
-        redis_client = _get_redis()
 
         logger.info("Celery pools initialized in worker process")
         return (postgres_pool, redis_client)
