@@ -11,7 +11,7 @@ from domain.prompt_generation import (
     PromptSource,
 )
 from shared.base.base_service import BaseService
-from shared.base.exceptions import CacheError, UnexpectedPromptError
+from shared.base.exceptions import CacheError, PromptGenerationError, UnexpectedPromptError
 from shared.protocols import ICache, ILogger
 
 
@@ -109,8 +109,22 @@ class PromptService(BaseService):
                 prompt = None
             else:
                 prompt = None
+        except PromptGenerationError as e:
+            # Доменное исключение генерации промптов
+            unexpected_error = UnexpectedPromptError(
+                f"Error while generating prompt: {e}",
+                original_error=e,
+            )
+            self.logger.error(
+                f"Ошибка при генерации промпта через domain сервис: {unexpected_error}",
+                event="prompt_generation_failed",
+                status="error",
+                error_type=type(unexpected_error).__name__,
+                error_message=str(unexpected_error),
+            )
+            raise unexpected_error from e
         except Exception as e:
-            # Неожиданная ошибка доменного сервиса генерации промптов
+            # Другие неожиданные ошибки
             unexpected_error = UnexpectedPromptError(
                 f"Unexpected error while generating prompt: {e}",
                 original_error=e,

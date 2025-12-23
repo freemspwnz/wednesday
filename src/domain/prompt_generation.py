@@ -15,6 +15,7 @@ from shared.base.exceptions import (
     AuthenticationError,
     ClientError,
     NetworkError,
+    PromptGenerationError,
 )
 from shared.config import PromptFallbackConfig
 from shared.protocols import ITextToTextClient
@@ -64,18 +65,19 @@ class PromptGenerationService:
 
         Выполняет генерацию через ITextToTextClient. При ожидаемых ошибках клиента
         возвращает результат с источником FALLBACK_REQUIRED, сигнализируя о необходимости
-        использовать статический fallback в вызывающем коде.
+        использовать статический fallback в вызывающем коде (fail-safe стратегия).
 
         Returns:
             Результат генерации промпта с указанием источника.
 
         Raises:
-            Exception: Неожиданные ошибки пробрасываются дальше для обработки в app-слое.
+            PromptGenerationError: При неожиданных ошибках генерации промпта.
 
         Note:
             Ожидаемые ошибки клиента (AuthenticationError, NetworkError, APIError, ClientError)
             обрабатываются и возвращают результат с источником FALLBACK_REQUIRED.
-            Неожиданные ошибки пробрасываются для корректной обработки в app-слое.
+            Неожиданные ошибки оборачиваются в PromptGenerationError и пробрасываются
+            для корректной обработки в app-слое.
         """
         if self._text_client is None:
             return PromptGenerationResult(
@@ -88,11 +90,14 @@ class PromptGenerationService:
             return PromptGenerationResult(prompt=prompt, source=PromptSource.AI)
 
         except (AuthenticationError, NetworkError, APIError, ClientError):
-            # Ожидаемые ошибки клиента → используем fallback
+            # Ожидаемые ошибки клиента → используем fallback (fail-safe стратегия)
             return PromptGenerationResult(
                 prompt=None,
                 source=PromptSource.FALLBACK_REQUIRED,
             )
+        except Exception as exc:
+            # Неожиданные ошибки → оборачиваем в доменное исключение
+            raise PromptGenerationError(f"Неожиданная ошибка при генерации промпта: {exc}") from exc
 
     def get_fallback_prompt(self) -> str:
         """Возвращает статический промпт из конфигурации (fallback).

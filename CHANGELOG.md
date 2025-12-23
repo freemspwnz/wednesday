@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Рефакторинг PromptGenerationService: добавление доменного исключения и улучшение обработки ошибок**:
+  - Создано доменное исключение `PromptGenerationError` в `shared/base/exceptions.py`
+  - Неожиданные ошибки в `PromptGenerationService.generate()` теперь оборачиваются в `PromptGenerationError` вместо проброса общего `Exception`
+  - Обновлен docstring метода `generate()` с указанием специфичного исключения `PromptGenerationError`
+  - Улучшена обработка ошибок в `PromptService` для явной обработки `PromptGenerationError`
+  - Сохранена fail-safe стратегия для ожидаемых ошибок клиента (AuthenticationError, NetworkError, APIError, ClientError)
+
 - **Рефакторинг ImageGenerationService: оптимизация преобразования user_id**:
   - Переменная `user_id_str` теперь создается непосредственно перед использованием вместо начала метода
   - Улучшена читаемость кода за счет локализации преобразования типа рядом с вызовом клиента

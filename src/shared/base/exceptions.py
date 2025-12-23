@@ -37,6 +37,12 @@ class UnexpectedImageGenerationError(ImageGenerationError):
     pass
 
 
+class PromptGenerationError(AppError):
+    """Ошибки генерации промптов."""
+
+    pass
+
+
 class StorageError(AppError):
     """Ошибки файлового хранилища."""
 
