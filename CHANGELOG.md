@@ -23,6 +23,11 @@
   - Реализованы методы `_handle_generation_failure` и `_handle_unexpected_error` для обработки различных типов ошибок
   - Интегрирована поддержка опциональных зависимостей: `usage_tracker` и `admin_notifier`
 
+- **Обновление DI контейнера для новых сервисов**:
+  - Добавлена функция `build_admin_notification_service` в `src/infra/container.py` для создания `AdminNotificationService` с зависимостями
+  - Добавлена функция `build_frog_processing_service` в `src/infra/container.py` для создания `FrogProcessingService` с зависимостями
+  - Добавлены импорты `AdminsRepo`, `ILogger` и `IMessagingService` для поддержки новых функций сборки
+
 - **Полный отказ от обратной совместимости через fallback-механизмы**:
   - Удалены все fallback-механизмы для полного соответствия принципам Dependency Injection
   - Все инфраструктурные зависимости теперь передаются явно через параметры конструкторов

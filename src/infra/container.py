@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import asyncpg
 
 if TYPE_CHECKING:
+    from app.admin_notification_service import AdminNotificationService
+    from app.frog_processing_service import FrogProcessingService
     from bot.wednesday_bot import WednesdayBot
     from infra.redis.redis_client import RedisClient
 
@@ -42,7 +44,7 @@ from infra.metrics.metrics import Metrics
 from infra.metrics.metrics_recorder import MetricsRecorder
 from infra.rate_limiting.circuit_breaker import CircuitBreakerService
 from infra.rate_limiting.rate_limiter import RateLimiter
-from infra.repos import ChatsRepo, ImagesRepo, ModelsRepo, PromptsRepo
+from infra.repos import AdminsRepo, ChatsRepo, ImagesRepo, ModelsRepo, PromptsRepo
 from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
 from infra.storage.failed_cache_queue import FailedCacheQueue
@@ -56,6 +58,8 @@ from shared.config import (
 from shared.protocols import (
     IChatsRepo,
     ICircuitBreaker,
+    ILogger,
+    IMessagingService,
     IMetrics,
     IModelsRepo,
     IRateLimiter,
@@ -306,6 +310,60 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
         metrics=metrics,
         api_status_service=api_status_service,
         logger=app_logger,
+    )
+
+
+def build_admin_notification_service(
+    messaging_service: IMessagingService,
+    admins_repo: AdminsRepo,
+    logger: ILogger,
+) -> AdminNotificationService:
+    """Создаёт AdminNotificationService с зависимостями.
+
+    Args:
+        messaging_service: Сервис отправки сообщений.
+        admins_repo: Репозиторий администраторов.
+        logger: Логгер.
+
+    Returns:
+        Настроенный AdminNotificationService.
+    """
+    from app.admin_notification_service import AdminNotificationService
+
+    return AdminNotificationService(
+        messaging_service=messaging_service,
+        admins_repo=admins_repo,
+        logger=logger,
+    )
+
+
+def build_frog_processing_service(
+    image_service: ImageService,
+    messaging_service: IMessagingService,
+    usage_tracker: IUsageTracker | None,
+    admin_notifier: AdminNotificationService | None,
+    logger: ILogger,
+) -> FrogProcessingService:
+    """Создаёт FrogProcessingService с зависимостями.
+
+    Args:
+        image_service: Сервис генерации изображений.
+        messaging_service: Сервис отправки сообщений.
+        usage_tracker: Трекер использования.
+        admin_notifier: Сервис уведомления администраторов.
+        logger: Логгер.
+
+    Returns:
+        Настроенный FrogProcessingService.
+    """
+    from app.frog_processing_service import FrogProcessingService
+
+    return FrogProcessingService(
+        image_service=image_service,
+        messaging_service=messaging_service,
+        usage_tracker=usage_tracker,
+        admin_notifier=admin_notifier,
+        logger=logger,
     )
 
 
