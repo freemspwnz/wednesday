@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from domain.image_generation import (
-    MAX_PROMPT_LENGTH,
-    MIN_PROMPT_LENGTH,
-    ImageGenerationService,
-)
+from domain.image_generation import ImageGenerationService
+from domain.value_objects import MAX_PROMPT_LENGTH, MIN_PROMPT_LENGTH, Prompt
 from infra.clients.models.status import APIStatusResult, SetModelResult
 from shared.base.exceptions import ImageGenerationError
 from shared.protocols import ITextToImageClient
@@ -44,42 +41,42 @@ class MockImageClient(ITextToImageClient):
         return SetModelResult.ok("ok")
 
 
-class TestNormalizePrompt:
-    """Тесты для метода _normalize_prompt."""
+class TestPromptNormalize:
+    """Тесты для метода _normalize в Value Object Prompt."""
 
     def test_removes_trailing_whitespace(self) -> None:
         """Тест на удаление пробелов по краям."""
-        result = ImageGenerationService._normalize_prompt("  test prompt  ")
+        result = Prompt._normalize("  test prompt  ")
         assert result == "test prompt"
 
     def test_removes_extra_spaces_inside(self) -> None:
         """Тест на удаление лишних пробелов внутри текста."""
-        result = ImageGenerationService._normalize_prompt("test    prompt   with    spaces")
+        result = Prompt._normalize("test    prompt   with    spaces")
         assert result == "test prompt with spaces"
 
     def test_handles_empty_string_after_strip(self) -> None:
         """Тест на обработку пустой строки после strip."""
-        result = ImageGenerationService._normalize_prompt("   ")
+        result = Prompt._normalize("   ")
         assert result == ""
 
     def test_preserves_single_space(self) -> None:
         """Тест на сохранение одного пробела между словами."""
-        result = ImageGenerationService._normalize_prompt("test prompt")
+        result = Prompt._normalize("test prompt")
         assert result == "test prompt"
 
     def test_handles_newlines_and_tabs(self) -> None:
         """Тест на обработку переносов строк и табуляций."""
-        result = ImageGenerationService._normalize_prompt("test\tprompt\nwith\n\tnewlines")
+        result = Prompt._normalize("test\tprompt\nwith\n\tnewlines")
         assert result == "test prompt with newlines"
 
 
-class TestValidatePrompt:
-    """Тесты для метода _validate_prompt."""
+class TestPromptValidation:
+    """Тесты для валидации в Value Object Prompt."""
 
     def test_raises_on_empty_prompt(self) -> None:
         """Тест на пустой промпт должен выбрасывать ValueError."""
         with pytest.raises(ValueError, match="Промпт не может быть пустым"):
-            ImageGenerationService._validate_prompt("")
+            Prompt("")
 
     def test_raises_on_too_short_prompt(self) -> None:
         """Тест на промпт короче MIN_PROMPT_LENGTH должен выбрасывать ValueError."""
@@ -87,25 +84,32 @@ class TestValidatePrompt:
         # Но если MIN_PROMPT_LENGTH будет больше 1, это проверит такой случай
         if MIN_PROMPT_LENGTH > 1:
             with pytest.raises(ValueError, match="слишком короткий"):
-                ImageGenerationService._validate_prompt("a" * (MIN_PROMPT_LENGTH - 1))
+                Prompt("a" * (MIN_PROMPT_LENGTH - 1))
 
     def test_raises_on_too_long_prompt(self) -> None:
         """Тест на промпт длиннее MAX_PROMPT_LENGTH должен выбрасывать ValueError."""
         long_prompt = "a" * (MAX_PROMPT_LENGTH + 1)
         with pytest.raises(ValueError, match="слишком длинный"):
-            ImageGenerationService._validate_prompt(long_prompt)
+            Prompt(long_prompt)
 
     def test_accepts_valid_prompt(self) -> None:
         """Тест на валидный промпт не должен выбрасывать исключение."""
         valid_prompt = "a" * MIN_PROMPT_LENGTH
         # Не должно быть исключения
-        ImageGenerationService._validate_prompt(valid_prompt)
+        prompt = Prompt(valid_prompt)
+        assert prompt.value == valid_prompt
 
     def test_accepts_max_length_prompt(self) -> None:
         """Тест на промпт максимальной длины должен быть валидным."""
         max_prompt = "a" * MAX_PROMPT_LENGTH
         # Не должно быть исключения
-        ImageGenerationService._validate_prompt(max_prompt)
+        prompt = Prompt(max_prompt)
+        assert prompt.value == max_prompt
+
+    def test_normalizes_prompt_on_creation(self) -> None:
+        """Тест на нормализацию промпта при создании."""
+        prompt = Prompt("  test   prompt  ")
+        assert prompt.value == "test prompt"
 
 
 class TestGenerate:

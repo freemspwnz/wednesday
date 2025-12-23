@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Рефакторинг ImageGenerationService: инкапсуляция валидации промпта в Value Object**:
+  - Создан Value Object `Prompt` в `src/domain/value_objects.py` для инкапсуляции бизнес-правил валидации и нормализации промпта
+  - Константы `MIN_PROMPT_LENGTH` и `MAX_PROMPT_LENGTH` перенесены в модуль value_objects
+  - Удалены методы `_normalize_prompt()` и `_validate_prompt()` из `ImageGenerationService`
+  - Метод `generate()` теперь использует `Prompt` для валидации и нормализации промпта
+  - Улучшена тестируемость и возможность переиспользования логики валидации промпта
+  - Соответствие принципу Single Responsibility через выделение ответственности валидации в отдельный Value Object
+
 - **Рефакторинг PromptGenerationService: добавление доменного исключения и улучшение обработки ошибок**:
   - Создано доменное исключение `PromptGenerationError` в `shared/base/exceptions.py`
   - Неожиданные ошибки в `PromptGenerationService.generate()` теперь оборачиваются в `PromptGenerationError` вместо проброса общего `Exception`
