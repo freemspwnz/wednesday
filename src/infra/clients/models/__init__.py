@@ -17,10 +17,7 @@ from infra.clients.models.kandinsky import (
     KandinskyStatus,
     KandinskyStatusResponse,
 )
-from infra.clients.models.status import (
-    APIStatusResult,
-    SetModelResult,
-)
+from shared.models import APIStatusResult, SetModelResult
 
 __all__ = [
     "APIStatusResult",
