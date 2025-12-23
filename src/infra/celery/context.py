@@ -96,6 +96,8 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
     Returns:
         Словарь с сервисами:
         - bot: Экземпляр WednesdayBot
+        - postgres_pool: Пул подключений PostgreSQL (для прямого использования в задачах)
+        - redis_client: Redis-клиент (для прямого использования в задачах)
 
     Raises:
         RuntimeError: Если не удалось инициализировать сервисы.
@@ -115,16 +117,25 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
                 from infra.database.postgres_client import get_postgres_pool
                 from infra.redis.redis_client import get_redis
 
-                # Создаём экземпляры сервисов
+                # Получаем пулы (они уже инициализированы в _ensure_pools_initialized)
                 postgres_pool = get_postgres_pool()
                 redis_client = get_redis()
+
                 # Convert to Config if needed
                 if not isinstance(config_obj, Config):
                     config_obj = Config()
-                bot = build_bot(config=config_obj, db_pool=postgres_pool, redis_client=redis_client)
+
+                # Передаём пулы явно в build_bot
+                bot = build_bot(
+                    config=config_obj,
+                    db_pool=postgres_pool,
+                    redis_client=redis_client,
+                )
 
                 _services_context = {
                     "bot": bot,
+                    "postgres_pool": postgres_pool,  # Добавляем в контекст
+                    "redis_client": redis_client,  # Добавляем в контекст
                 }
                 logger.info("Celery services context created in worker process")
 
