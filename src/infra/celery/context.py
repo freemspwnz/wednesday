@@ -23,7 +23,7 @@ from shared.config import Config
 config: Config = Config()
 
 if TYPE_CHECKING:
-    from bot.wednesday_bot import WednesdayBot
+    pass
 
 logger = get_logger(__name__)
 
@@ -98,6 +98,8 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
         - bot: Экземпляр WednesdayBot
         - postgres_pool: Пул подключений PostgreSQL (для прямого использования в задачах)
         - redis_client: Redis-клиент (для прямого использования в задачах)
+        - image_service: Экземпляр ImageService для генерации изображений
+        - usage_tracker: Экземпляр UsageTracker для отслеживания использования
         - frog_processing: Экземпляр FrogProcessingService для обработки запросов /frog
 
     Raises:
@@ -139,20 +141,36 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
                 if not isinstance(config_obj, Config):
                     config_obj = Config()
 
-                # Передаём пулы явно в build_bot
-                bot = build_bot(
+                # Создаём сервисы через DI-контейнер (без зависимости от bot.services)
+                from infra.container import (
+                    build_admin_notification_service,
+                    build_frog_processing_service,
+                    build_image_stack,
+                )
+                from infra.messaging.ptb import PTBMessagingService
+                from infra.repos import AdminsRepo
+                from infra.repos.usage_tracker import UsageTracker
+
+                # Создаём image_service через DI-контейнер
+                image_service = build_image_stack(
                     config=config_obj,
                     db_pool=postgres_pool,
                     redis_client=redis_client,
                 )
 
-                # Создаём FrogProcessingService через DI для использования в Celery задачах
-                from infra.container import (
-                    build_admin_notification_service,
-                    build_frog_processing_service,
+                # Создаём usage_tracker через DI
+                usage_tracker = UsageTracker(
+                    pool=postgres_pool,
+                    monthly_quota=100,
+                    frog_threshold=70,
                 )
-                from infra.messaging.ptb import PTBMessagingService
-                from infra.repos import AdminsRepo
+
+                # Передаём пулы явно в build_bot (bot нужен для некоторых задач)
+                bot = build_bot(
+                    config=config_obj,
+                    db_pool=postgres_pool,
+                    redis_client=redis_client,
+                )
 
                 # Создаём messaging service
                 messaging_service = PTBMessagingService(bot=bot.application.bot)
@@ -165,15 +183,11 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
                     logger=logger,
                 )
 
-                # Создаём frog processing service
-                image_service = bot.services.image_service
-                if image_service is None:
-                    raise RuntimeError("ImageService is not available in BotServices")
-
+                # Создаём frog processing service через DI (без зависимости от bot.services)
                 frog_processing = build_frog_processing_service(
                     image_service=image_service,
                     messaging_service=messaging_service,
-                    usage_tracker=bot.services.usage,
+                    usage_tracker=usage_tracker,
                     admin_notifier=admin_notifier,
                     logger=logger,
                 )
@@ -182,6 +196,8 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
                     "bot": bot,
                     "postgres_pool": postgres_pool,  # Добавляем в контекст
                     "redis_client": redis_client,  # Добавляем в контекст
+                    "image_service": image_service,  # Добавляем в контекст
+                    "usage_tracker": usage_tracker,  # Добавляем в контекст
                     "frog_processing": frog_processing,  # Добавляем в контекст
                 }
                 logger.info("Celery services context created in worker process")
@@ -240,45 +256,6 @@ async def shutdown_services() -> None:
     finally:
         _services_context = None
         logger.info("Celery services shutdown complete")
-
-
-# Обратная совместимость: класс CeleryServices для существующего кода
-class CeleryServices:
-    """Класс для обратной совместимости (deprecated).
-
-    Используйте функцию get_services_context() вместо этого класса.
-    """
-
-    @classmethod
-    async def get_bot(cls) -> WednesdayBot:
-        """Получает экземпляр WednesdayBot.
-
-        Deprecated: используйте get_services_context()["bot"] вместо этого метода.
-
-        Returns:
-            Экземпляр WednesdayBot.
-
-        Raises:
-            RuntimeError: Если не удалось инициализировать WednesdayBot.
-        """
-        from bot.wednesday_bot import WednesdayBot
-
-        context = await get_services_context()
-        bot = context.get("bot")
-        if not isinstance(bot, WednesdayBot):
-            raise RuntimeError("Failed to initialize WednesdayBot")
-        return bot
-
-    @classmethod
-    async def get_generator(cls) -> None:
-        """DEPRECATED: генератор изображений больше не предоставляется напрямую.
-
-        Deprecated: используйте get_services_context()["generator"] вместо этого метода.
-
-        Returns:
-            None.
-        """
-        await get_services_context()
 
 
 # Регистрируем shutdown handler

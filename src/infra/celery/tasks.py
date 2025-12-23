@@ -284,11 +284,11 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
     try:
         # Получаем контекст сервисов (инициализация происходит внутри, после fork)
         context = await get_services_context()
-        bot_instance = _get_wednesday_bot(context)
 
-        image_service: ImageService | None = bot_instance.services.image_service
-        if image_service is None:
-            raise RuntimeError("ImageService is not available in BotServices")
+        # Получаем image_service из контекста (создан через DI)
+        image_service = context.get("image_service")
+        if not isinstance(image_service, ImageService):
+            raise RuntimeError("ImageService is not available in context")
 
         result = await image_service.generate_frog_image(user_id=user_id)
 

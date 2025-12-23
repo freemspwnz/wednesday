@@ -40,6 +40,14 @@
   - Удалены прямые импорты и создание `PTBMessagingService`, `AdminsRepo` и `AdminNotificationService` из задачи - теперь все зависимости создаются через DI в контексте
   - Задача `send_frog_manual` теперь только оркестрирует выполнение, получая готовый сервис из контекста, что соответствует принципам SOLID и рекомендациям аудита
 
+- **Полное устранение зависимости от bot.services в инфраструктурном слое**:
+  - Создание `image_service` и `usage_tracker` через DI-контейнер в `get_services_context()` без доступа к `bot.services`
+  - Добавлены `image_service` и `usage_tracker` в контекст сервисов для прямого использования в Celery-задачах
+  - Обновлена задача `generate_frog_image_task` для использования `image_service` из контекста вместо `bot.services.image_service`
+  - Удален класс `CeleryServices` (deprecated) после миграции всех тестов на использование `get_services_context()`
+  - Обновлены все тесты для использования `get_services_context()` вместо `CeleryServices.get_bot()` и `CeleryServices.get_generator()`
+  - Инфраструктурный слой больше не знает о структуре `bot.services`, что улучшает разделение слоёв и соответствует принципам SOLID
+
 - **Полный отказ от обратной совместимости через fallback-механизмы**:
   - Удалены все fallback-механизмы для полного соответствия принципам Dependency Injection
   - Все инфраструктурные зависимости теперь передаются явно через параметры конструкторов

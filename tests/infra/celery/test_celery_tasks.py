@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from infra.celery.context import CeleryServices
+from infra.celery.context import get_services_context
 from infra.celery.tasks import (
     daily_cleanup_task,
     daily_statistics_task,
@@ -21,31 +21,33 @@ pytestmark = [pytest.mark.unit]
 
 
 @pytest.mark.asyncio
-async def test_celery_services_lazy_init(reset_singletons: Any) -> None:
-    """Тест lazy инициализации CeleryServices."""
+async def test_services_context_lazy_init(reset_singletons: Any) -> None:
+    """Тест lazy инициализации services context."""
 
     with (
         patch("infra.celery.context.init_redis_pool") as mock_redis,
         patch("infra.celery.context.init_postgres_pool") as mock_pg,
         patch("infra.celery.context.ensure_schema") as mock_schema,
-        patch("infra.celery.context.WednesdayBot") as mock_bot_class,
+        patch("infra.celery.context.build_bot") as mock_build_bot,
     ):
         mock_bot_instance = MagicMock()
-        mock_bot_class.return_value = mock_bot_instance
+        mock_build_bot.return_value = mock_bot_instance
 
         # Первый вызов должен инициализировать
-        await CeleryServices.get_bot()
+        context = await get_services_context()
+        assert "bot" in context
 
         mock_redis.assert_called_once()
         mock_pg.assert_called_once()
         mock_schema.assert_called_once()
-        mock_bot_class.assert_called_once()
+        mock_build_bot.assert_called_once()
 
         # Второй вызов не должен повторно инициализировать
-        await CeleryServices.get_bot()
+        context2 = await get_services_context()
+        assert context is context2  # Должен вернуть тот же контекст
         assert mock_redis.call_count == 1
         assert mock_pg.call_count == 1
-        assert mock_bot_class.call_count == 1
+        assert mock_build_bot.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -81,12 +83,12 @@ async def test_send_wednesday_frog_task_success(reset_singletons: Any) -> None:
     mock_self.request.id = "test-task-id"
 
     with (
-        patch("infra.celery.context.CeleryServices.get_bot") as mock_get_bot,
+        patch("infra.celery.context.get_services_context") as mock_get_context,
         patch("infra.celery.context.log_event") as mock_log_event,
     ):
         mock_bot = AsyncMock()
         mock_bot.send_wednesday_frog = AsyncMock()
-        mock_get_bot.return_value = mock_bot
+        mock_get_context.return_value = {"bot": mock_bot}
 
         # Для задач с bind=True обходим оба декоратора и вызываем исходную функцию напрямую
         # Получаем исходную функцию через __wrapped__ дважды (Celery и log_celery_task)
@@ -116,12 +118,12 @@ async def test_send_wednesday_frog_task_retry_on_network_error() -> None:
     mock_self.retry = MagicMock(side_effect=Exception("Retry called"))
 
     with (
-        patch("infra.celery.context.CeleryServices.get_bot") as mock_get_bot,
+        patch("infra.celery.context.get_services_context") as mock_get_context,
         patch("infra.celery.context.CELERY_TASK_RETRIES_TOTAL") as mock_retry_metric,
     ):
         mock_bot = AsyncMock()
         mock_bot.send_wednesday_frog = AsyncMock(side_effect=aiohttp.ClientError())
-        mock_get_bot.return_value = mock_bot
+        mock_get_context.return_value = {"bot": mock_bot}
 
         # Для тестирования retry обходим оба декоратора и вызываем исходную функцию напрямую
         # Retry логика находится в исходной функции, так что мы можем тестировать её напрямую
@@ -149,10 +151,10 @@ async def test_send_wednesday_frog_task_no_retry_on_business_error() -> None:
     mock_self.request.id = "test-task-id"
     mock_self.retry = MagicMock()
 
-    with patch("infra.celery.context.CeleryServices.get_bot") as mock_get_bot:
+    with patch("infra.celery.context.get_services_context") as mock_get_context:
         mock_bot = AsyncMock()
         mock_bot.send_wednesday_frog = AsyncMock(side_effect=ValueError("Business logic error"))
-        mock_get_bot.return_value = mock_bot
+        mock_get_context.return_value = {"bot": mock_bot}
 
         # Обходим декораторы для прямого вызова исходной функции
         task_func = send_wednesday_frog_task
@@ -176,10 +178,10 @@ async def test_generate_frog_image_task_success() -> None:
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
 
-    with patch("infra.celery.context.CeleryServices.get_generator") as mock_get_gen:
-        mock_gen = AsyncMock()
-        mock_gen.generate_frog_image = AsyncMock(return_value=(b"image_data", "caption"))
-        mock_get_gen.return_value = mock_gen
+    with patch("infra.celery.context.get_services_context") as mock_get_context:
+        mock_image_service = AsyncMock()
+        mock_image_service.generate_frog_image = AsyncMock(return_value=(b"image_data", "caption"))
+        mock_get_context.return_value = {"image_service": mock_image_service}
 
         task_func = generate_frog_image_task
         if hasattr(task_func, '__wrapped__'):
@@ -193,7 +195,7 @@ async def test_generate_frog_image_task_success() -> None:
         assert result["status"] == "success"
         assert "image_size" in result
         assert result["image_size"] == len(b"image_data")
-        mock_gen.generate_frog_image.assert_called_once_with(user_id=123)
+        mock_image_service.generate_frog_image.assert_called_once_with(user_id=123)
 
 
 @pytest.mark.asyncio
@@ -203,10 +205,10 @@ async def test_generate_frog_image_task_failed() -> None:
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
 
-    with patch("infra.celery.context.CeleryServices.get_generator") as mock_get_gen:
-        mock_gen = AsyncMock()
-        mock_gen.generate_frog_image = AsyncMock(return_value=None)
-        mock_get_gen.return_value = mock_gen
+    with patch("infra.celery.context.get_services_context") as mock_get_context:
+        mock_image_service = AsyncMock()
+        mock_image_service.generate_frog_image = AsyncMock(return_value=None)
+        mock_get_context.return_value = {"image_service": mock_image_service}
 
         task_func = generate_frog_image_task
         if hasattr(task_func, '__wrapped__'):
@@ -231,12 +233,12 @@ async def test_generate_frog_image_task_retry_on_network_error() -> None:
     mock_self.retry = MagicMock(side_effect=Exception("Retry called"))
 
     with (
-        patch("infra.celery.context.CeleryServices.get_generator") as mock_get_gen,
+        patch("infra.celery.context.get_services_context") as mock_get_context,
         patch("infra.celery.context.CELERY_TASK_RETRIES_TOTAL") as mock_retry_metric,
     ):
-        mock_gen = AsyncMock()
-        mock_gen.generate_frog_image = AsyncMock(side_effect=aiohttp.ClientError())
-        mock_get_gen.return_value = mock_gen
+        mock_image_service = AsyncMock()
+        mock_image_service.generate_frog_image = AsyncMock(side_effect=aiohttp.ClientError())
+        mock_get_context.return_value = {"image_service": mock_image_service}
 
         # Для тестирования retry обходим оба декоратора и вызываем исходную функцию напрямую
         task_func = generate_frog_image_task
@@ -262,11 +264,11 @@ async def test_daily_cleanup_task_success(reset_singletons: Any) -> None:
     mock_self.request.id = "test-task-id"
 
     with (
-        patch("services.celery.context.CeleryServices.get_bot") as mock_get_bot,
-        patch("utils.dispatch_registry.DispatchRegistry") as mock_registry_class,
+        patch("infra.celery.context.get_services_context") as mock_get_context,
+        patch("infra.repos.dispatch_registry.DispatchRegistry") as mock_registry_class,
     ):
-        mock_bot = AsyncMock()
-        mock_get_bot.return_value = mock_bot
+        mock_pool = MagicMock()
+        mock_get_context.return_value = {"postgres_pool": mock_pool}
 
         mock_registry = AsyncMock()
         mock_registry.cleanup_old = AsyncMock()
@@ -292,9 +294,8 @@ async def test_daily_statistics_task_success(reset_singletons: Any) -> None:
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
 
-    with patch("infra.celery.context.CeleryServices.get_bot") as mock_get_bot:
-        mock_bot = AsyncMock()
-        mock_get_bot.return_value = mock_bot
+    with patch("infra.celery.context.get_services_context") as mock_get_context:
+        mock_get_context.return_value = {}
 
         task_func = daily_statistics_task
         if hasattr(task_func, '__wrapped__'):
@@ -309,24 +310,20 @@ async def test_daily_statistics_task_success(reset_singletons: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_celery_services_shutdown() -> None:
-    """Тест graceful shutdown CeleryServices."""
+async def test_services_context_shutdown() -> None:
+    """Тест graceful shutdown services context."""
     # Инициализируем контекст сервисов
     import infra.celery.context as celery_context_module
     from infra.celery.context import shutdown_services
 
     mock_bot = MagicMock()
-    mock_generator = MagicMock()
-
-    # Мокаем aclose методы для bot и generator
-    mock_bot_aclose = AsyncMock()
-    mock_generator_aclose = AsyncMock()
-    mock_bot.aclose = mock_bot_aclose
-    mock_generator.aclose = mock_generator_aclose
+    mock_bot.services = MagicMock()
+    mock_bot.services.cleanup = AsyncMock()
 
     celery_context_module._services_context = {
         "bot": mock_bot,
-        "generator": mock_generator,
+        "postgres_pool": MagicMock(),
+        "redis_client": MagicMock(),
     }
 
     with (
@@ -338,6 +335,7 @@ async def test_celery_services_shutdown() -> None:
         # Проверяем, что ресурсы были закрыты
         mock_close_pg.assert_awaited_once()
         mock_close_redis.assert_awaited_once()
+        mock_bot.services.cleanup.assert_awaited_once()
 
         # Проверяем, что состояние сброшено
         assert celery_context_module._services_context is None
