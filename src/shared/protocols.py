@@ -678,6 +678,23 @@ class IMessagingService(Protocol):
         """
         ...
 
+    async def delete_message(
+        self,
+        chat_id: int,
+        message_id: int,
+    ) -> None:
+        """Удаляет сообщение из чата.
+
+        Args:
+            chat_id: ID чата.
+            message_id: ID сообщения для удаления.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках.
+            MessagingAPIError: При ошибках API (сообщение не найдено, нет прав).
+        """
+        ...
+
 
 @runtime_checkable
 class IDispatchRegistry(Protocol):
