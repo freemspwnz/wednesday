@@ -83,8 +83,9 @@ async def _ensure_pools_initialized(
         except Exception as exc:
             # Redis не критичен для Celery worker — продолжаем с fallback
             logger.warning(
-                f"Redis недоступен при инициализации Celery worker ({exc!s}). "
-                "Продолжаем в режиме fallback (in-memory).",
+                f"Redis недоступен при инициализации Celery worker: {exc!s}",
+                event="celery_redis_unavailable",
+                status="warning",
             )
             # Создаем in-memory fallback напрямую
             from infra.redis.redis_client import _InMemoryRedis
@@ -94,7 +95,11 @@ async def _ensure_pools_initialized(
         postgres_pool = await init_postgres_pool(min_size=1, max_size=10, config=config_obj)
         await ensure_schema(pool=postgres_pool)
 
-        logger.info("Celery pools initialized in worker process")
+        logger.info(
+            "Пулы Celery (PostgreSQL и Redis) инициализированы в worker-процессе",
+            event="celery_pools_initialized",
+            status="success",
+        )
         return (postgres_pool, redis_client)
 
 
@@ -207,7 +212,11 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
             "usage_tracker": usage_tracker,  # Добавляем в контекст
             "frog_processing": frog_processing,  # Добавляем в контекст
         }
-        logger.info("Celery services context created in worker process")
+        logger.info(
+            "Контекст сервисов Celery создан в worker-процессе",
+            event="celery_services_context_created",
+            status="success",
+        )
 
     return _services_context
 
@@ -228,20 +237,38 @@ async def shutdown_services() -> None:
     if _services_context is None:
         return
 
-    logger.info("Shutting down Celery services...")
+    logger.info(
+        "Начинаю graceful shutdown сервисов Celery",
+        event="celery_shutdown_started",
+        status="started",
+    )
 
     try:
         # Используем CleanupService для закрытия всех ресурсов
         if _cleanup_service is not None:
             await _cleanup_service.cleanup_all()
         else:
-            logger.warning("CleanupService not initialized, skipping cleanup")
+            logger.warning(
+                "CleanupService не инициализирован, пропускаю этап очистки ресурсов",
+                event="celery_cleanup_service_missing",
+                status="warning",
+            )
     except Exception as e:
-        logger.error(f"Error during Celery services shutdown: {e}")
+        logger.error(
+            f"Ошибка во время graceful shutdown сервисов Celery: {e}",
+            event="celery_shutdown_error",
+            status="error",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
     finally:
         _services_context = None
         _cleanup_service = None
-        logger.info("Celery services shutdown complete")
+        logger.info(
+            "Graceful shutdown сервисов Celery завершён",
+            event="celery_shutdown_completed",
+            status="success",
+        )
 
 
 # Регистрируем shutdown handler

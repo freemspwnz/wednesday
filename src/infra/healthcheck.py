@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 
 # Экспортируемое FastAPI‑приложение. Uvicorn использует его для запуска
 # HTTP‑сервера внутри того же event loop, что и Telegram‑бот.
-app = FastAPI(title="Wednesday Frog Bot Healthcheck")
+app = FastAPI(title="Wednesday Frog Bot — healthcheck")
 
 # HTTP статус код для разделения успешных и ошибочных запросов
 _HTTP_STATUS_OK_MAX = 399
@@ -355,7 +355,7 @@ async def _check_celery() -> dict[str, Any]:
                 "status": "down",
                 "workers_count": 0,
                 "latency_ms": latency_ms,
-                "details": "No workers available",
+                "details": "Нет доступных Celery workers",
             }
     except Exception as exc:
         latency_ms = (time.monotonic() - started) * 1000.0
