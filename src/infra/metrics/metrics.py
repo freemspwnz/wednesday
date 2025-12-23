@@ -470,7 +470,7 @@ class Metrics:
         }
 
 
-async def get_daily_generation_stats(days: int = 7, pool: asyncpg.Pool | None = None) -> list[dict[str, Any]]:
+async def get_daily_generation_stats(pool: asyncpg.Pool, days: int = 7) -> list[dict[str, Any]]:
     """Возвращает агрегированную статистику генераций по дням.
 
     Для каждого дня рассчитываются:
@@ -479,8 +479,7 @@ async def get_daily_generation_stats(days: int = 7, pool: asyncpg.Pool | None = 
 
     Args:
         days: Количество дней для анализа (по умолчанию 7).
-        pool: Пул подключений PostgreSQL. Если не указан, используется
-            глобальный пул через _get_postgres_pool() (для обратной совместимости).
+        pool: Пул подключений PostgreSQL (обязательный параметр).
 
     Returns:
         Список словарей с ключами:
@@ -489,13 +488,11 @@ async def get_daily_generation_stats(days: int = 7, pool: asyncpg.Pool | None = 
         - avg_latency_ms: средняя латентность в миллисекундах (или None)
 
     Raises:
+        ValueError: Если pool равен None.
         Exception: При ошибке доступа к базе данных PostgreSQL.
     """
-    # Используем переданный пул или глобальный (для обратной совместимости)
     if pool is None:
-        from infra.database.postgres_client import _get_postgres_pool
-
-        pool = _get_postgres_pool()
+        raise ValueError("pool не может быть None. Передайте пул подключений PostgreSQL через Dependency Injection.")
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -530,13 +527,12 @@ async def get_daily_generation_stats(days: int = 7, pool: asyncpg.Pool | None = 
     return result
 
 
-async def get_top_prompts(limit: int = 10, pool: asyncpg.Pool | None = None) -> list[dict[str, Any]]:
+async def get_top_prompts(pool: asyncpg.Pool, limit: int = 10) -> list[dict[str, Any]]:
     """Возвращает топ промптов по количеству успешных генераций.
 
     Args:
         limit: Максимальное количество строк в выдаче (по умолчанию 10).
-        pool: Пул подключений PostgreSQL. Если не указан, используется
-            глобальный пул через _get_postgres_pool() (для обратной совместимости).
+        pool: Пул подключений PostgreSQL (обязательный параметр).
 
     Returns:
         Список словарей с ключами:
@@ -545,13 +541,11 @@ async def get_top_prompts(limit: int = 10, pool: asyncpg.Pool | None = None) -> 
         - avg_latency_ms: средняя латентность в миллисекундах (или None)
 
     Raises:
+        ValueError: Если pool равен None.
         Exception: При ошибке доступа к базе данных PostgreSQL.
     """
-    # Используем переданный пул или глобальный (для обратной совместимости)
     if pool is None:
-        from infra.database.postgres_client import _get_postgres_pool
-
-        pool = _get_postgres_pool()
+        raise ValueError("pool не может быть None. Передайте пул подключений PostgreSQL через Dependency Injection.")
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
