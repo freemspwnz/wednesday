@@ -147,7 +147,17 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
 
     Returns:
         Настроенный экземпляр ImageService.
+
+    Raises:
+        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
     """
+    # Валидация параметров
+    if config is None:
+        raise ValueError("config не может быть None")
+    if db_pool is None:
+        raise ValueError("db_pool не может быть None")
+    if redis_client is None:
+        raise ValueError("redis_client не может быть None")
 
     # Инфраструктура и клиенты
     if image_client is None or text_client is None:
@@ -260,7 +270,22 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
 
     Returns:
         Экземпляр AdminDashboardService с внедрёнными зависимостями.
+
+    Raises:
+        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
     """
+    # Валидация параметров
+    if usage is None:
+        raise ValueError("usage не может быть None")
+    if chats is None:
+        raise ValueError("chats не может быть None")
+    if metrics is None:
+        raise ValueError("metrics не может быть None")
+    if image_client is None:
+        raise ValueError("image_client не может быть None")
+    if db_pool is None:
+        raise ValueError("db_pool не может быть None")
+
     models_store = models_repo if models_repo is not None else ModelsRepo(pool=db_pool)
 
     # Создаём общий логгер для всех сервисов
@@ -297,7 +322,17 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
 
     Returns:
         Настроенный экземпляр BotServices.
+
+    Raises:
+        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
     """
+    # Валидация параметров
+    if config is None:
+        raise ValueError("config не может быть None")
+    if db_pool is None:
+        raise ValueError("db_pool не может быть None")
+    if redis_client is None:
+        raise ValueError("redis_client не может быть None")
 
     # Создаём AppSettings из Config
     from shared.config import AppSettings
@@ -478,10 +513,21 @@ def build_bot(
     Returns:
         Настроенный экземпляр WednesdayBot с внедрёнными зависимостями.
 
+    Raises:
+        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
+
     Note:
         Эта функция является Composition Root для WednesdayBot. Все зависимости
         создаются здесь и передаются в бот через конструктор.
     """
+    # Валидация параметров
+    if config is None:
+        raise ValueError("config не может быть None")
+    if db_pool is None:
+        raise ValueError("db_pool не может быть None")
+    if redis_client is None:
+        raise ValueError("redis_client не может быть None")
+
     # Ленивый импорт для избежания циклических зависимостей
     from bot.wednesday_bot import WednesdayBot
 
