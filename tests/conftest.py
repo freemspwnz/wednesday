@@ -289,19 +289,18 @@ async def cleanup_tables() -> AsyncIterator[None]:
         async def test_something(cleanup_tables):
             # тест использует БД
     """
-    # Используем session-пул напрямую, не вызывая _ensure_postgres_schema,
-    # чтобы избежать проблем с event loops. Схема уже инициализирована в async_postgres_pool.
-    from infra.database.postgres_client import _get_postgres_pool
+    # Используем session-пул напрямую из фикстуры async_postgres_pool
+    # Схема уже инициализирована в async_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    try:
-        pool = _get_postgres_pool()  # Используем приватную функцию
-    except RuntimeError as exc:
-        # Пул не инициализирован
+    if _pool is None:
         error_msg = (
             "Postgres pool не инициализирован. Запустите `make test-up` "
             "или экспортируйте корректные POSTGRES_* переменные."
         )
-        _handle_postgres_error(exc, error_msg)
+        _handle_postgres_error(RuntimeError("Pool not initialized"), error_msg)
+
+    pool = _pool
 
     # Очищаем таблицы ПЕРЕД тестом
     try:
@@ -380,29 +379,29 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
     """
     import asyncpg
     from contextlib import asynccontextmanager
-    from infra.database.postgres_client import get_postgres_pool
 
-    # Используем session-пул напрямую, не вызывая _ensure_postgres_schema,
-    # чтобы избежать проблем с event loops. Схема уже инициализирована в async_postgres_pool.
-    try:
-        pool = _get_postgres_pool()  # Используем приватную функцию
-    except RuntimeError as exc:
-        # Пул не инициализирован
+    # Используем session-пул напрямую из фикстуры async_postgres_pool
+    # Схема уже инициализирована в async_postgres_pool
+    from infra.database.postgres_client import _pool
+
+    if _pool is None:
         error_msg = (
             "Postgres pool не инициализирован. Запустите `make test-up` "
             "или экспортируйте корректные POSTGRES_* переменные."
         )
-        _handle_postgres_error(exc, error_msg)
+        _handle_postgres_error(RuntimeError("Pool not initialized"), error_msg)
+
+    pool = _pool
 
     # Получаем соединение и начинаем транзакцию
     transaction_conn = await pool.acquire()
     try:
-        # Начинаем транзакцию ПЕРЕД патчем, чтобы все операции были в транзакции
+        # Начинаем транзакцию
         await transaction_conn.execute("BEGIN")
 
-        # Патчим _get_postgres_pool() чтобы возвращал патченный пул
-        # Это позволяет использовать транзакцию во всех местах, где используется _get_postgres_pool()
-        from infra.database.postgres_client import _get_postgres_pool
+        # Патчим глобальную переменную _pool чтобы возвращал патченный пул
+        # Это позволяет использовать транзакцию во всех местах, где используется пул
+        from infra.database import postgres_client
 
         class PatchedPool:
             """Обёртка над пулом, которая всегда возвращает транзакционное соединение."""
@@ -427,9 +426,10 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
                 return getattr(self._original_pool, name)
 
         patched_pool = PatchedPool(pool, transaction_conn)
-        # Сохраняем оригинальную функцию для восстановления
-        original_get_pool = _get_postgres_pool
-        monkeypatch.setattr("infra.database.postgres_client._get_postgres_pool", lambda: patched_pool)
+        # Сохраняем оригинальный пул для восстановления
+        original_pool = postgres_client._pool
+        # Патчим глобальную переменную _pool
+        monkeypatch.setattr("infra.database.postgres_client._pool", patched_pool)
 
         yield
     finally:
@@ -440,6 +440,8 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
             # Игнорируем ошибки при rollback (например, если транзакция уже закрыта)
             pass
         finally:
+            # Восстанавливаем оригинальный пул
+            monkeypatch.setattr("infra.database.postgres_client._pool", original_pool)
             # Возвращаем соединение в пул
             await pool.release(transaction_conn)
 

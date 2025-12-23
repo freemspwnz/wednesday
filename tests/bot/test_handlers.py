@@ -872,10 +872,12 @@ async def test_mod_command_success(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
     # Используем реальный AdminsRepo для теста
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
     fake_context.args = ["99999"]
@@ -938,10 +940,12 @@ async def test_unmod_command_success(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
     # Используем реальный AdminsRepo для теста
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     await admins.add_admin(99999)
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
@@ -979,9 +983,11 @@ async def test_unmod_command_no_args_shows_list(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     handler.admins_store = admins
     fake_context.args = []
     fake_update.message.reply_to_message = None
@@ -1025,10 +1031,12 @@ async def test_list_mods_command_success(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
     # Используем реальный AdminsRepo для теста
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     # Делаем пользователя 42 администратором
     await admins.add_admin(fake_update.effective_user.id)
     await admins.add_admin(11111)
@@ -1210,9 +1218,11 @@ async def test_mod_command_non_super_admin_denied(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     await admins.add_admin(fake_update.effective_user.id)  # Делаем пользователя 42 админом, но не супер-админом
     handler.admins_store = admins
     fake_context.args = ["99999"]
@@ -1248,9 +1258,11 @@ async def test_mod_command_with_reply(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     handler.admins_store = admins
     fake_context.args = []
 
@@ -1291,9 +1303,11 @@ async def test_mod_command_with_args(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     handler.admins_store = admins
     fake_context.args = ["54321"]
     fake_update.message.reply_to_message = None
@@ -1330,9 +1344,11 @@ async def test_unmod_command_non_super_admin_denied(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     await admins.add_admin(fake_update.effective_user.id)
     handler.admins_store = admins
     fake_context.args = ["99999"]
@@ -1368,9 +1384,11 @@ async def test_unmod_command_with_reply(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     await admins.add_admin(12345)  # Добавляем админа для удаления
     handler.admins_store = admins
     fake_context.args = []
@@ -1413,9 +1431,11 @@ async def test_unmod_command_with_args(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     await admins.add_admin(54321)
     handler.admins_store = admins
     fake_context.args = ["54321"]
@@ -1453,9 +1473,11 @@ async def test_unmod_command_cannot_remove_super_admin(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     handler.admins_store = admins
     fake_context.args = ["42"]  # Пытаемся удалить самого себя (главного админа)
     fake_update.message.reply_to_message = None
@@ -1491,9 +1513,11 @@ async def test_unmod_command_shows_admin_list_when_no_args(
     handler = AdminHandlers(services=services)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _get_postgres_pool
+    from infra.database.postgres_client import _pool
 
-    admins = AdminsRepo(pool=_get_postgres_pool())  # Используем приватную функцию
+    if _pool is None:
+        pytest.skip("Postgres pool not initialized")
+    admins = AdminsRepo(pool=_pool)
     await admins.add_admin(11111)
     await admins.add_admin(22222)
     handler.admins_store = admins

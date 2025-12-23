@@ -501,14 +501,8 @@ class BotRunner:
                 level="warning",
                 message="Redis недоступен при старте, используется in-memory fallback",
             )
-            # Получаем in-memory fallback через приватную функцию
-            from infra.redis.redis_client import _get_redis
-
-            redis_client = _get_redis()
-            if not isinstance(redis_client, _InMemoryRedis):
-                # Это не должно произойти, но на всякий случай
-                self.logger.warning("Неожиданный тип Redis-клиента, создаём in-memory fallback")
-                redis_client = _InMemoryRedis()
+            # Создаем in-memory fallback напрямую
+            redis_client = _InMemoryRedis()
 
         # Устанавливаем пулы в app.state для healthcheck
         try:

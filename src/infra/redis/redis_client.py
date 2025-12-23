@@ -371,28 +371,6 @@ async def init_redis_pool(
             raise
 
 
-def _get_redis() -> redis.Redis | _InMemoryRedis:
-    """
-    Внутренняя функция для получения Redis-клиента.
-
-    DEPRECATED: Используйте Dependency Injection вместо глобальных функций.
-    Эта функция будет удалена в будущих версиях.
-    Получайте клиент через DI из container.py или main.py.
-
-    Returns:
-        Redis-клиент (реальный или in-memory fallback).
-    """
-    import warnings
-
-    warnings.warn(
-        "_get_redis() is deprecated. Use Dependency Injection instead. "
-        "Get the client through DI from container.py or main.py.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return _redis
-
-
 async def close_redis() -> None:
     """
     Закрывает подключение к Redis, если оно было установлено.
@@ -431,7 +409,8 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
     Параметр `func_name` — имя метода Redis (например, "set", "get", "incr").
     Остальные аргументы передаются как есть в метод клиента.
     """
-    client = _get_redis()  # Используем приватную функцию
+    global _redis, _redis_is_real  # noqa: PLW0603
+    client = _redis
     method = getattr(client, func_name, None)
     if method is None:
         raise AttributeError(f"Redis backend не поддерживает метод {func_name!r}")
@@ -444,12 +423,11 @@ async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> ob
             f"({func_name}) — backend={type(client).__name__}, переходим к in‑memory режиму: {exc!s}",
         )
         # При ошибке реального Redis переключаемся на in‑memory backend.
-        global _redis, _redis_is_real  # noqa: PLW0603
         if isinstance(_redis, redis.Redis):
             _redis = _InMemoryRedis()
             _redis_is_real = False
         # Повторяем операцию уже на in‑memory backend (ошибки пробрасываем).
-        fallback = _get_redis()  # Используем приватную функцию
+        fallback = _redis
         fallback_method = getattr(fallback, func_name, None)
         if fallback_method is None:
             raise

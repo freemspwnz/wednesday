@@ -182,9 +182,9 @@ async def test_command_handlers_start_help(
     from app.frog_requests import FrogRequestService
     from infra.celery.celery_task_queue import CeleryTaskQueue
     from infra.rate_limiting import RateLimiter
-    from infra.redis.redis_client import _get_redis
+    from infra.redis.redis_client import _InMemoryRedis
 
-    redis_client = _get_redis()  # Используем приватную функцию
+    redis_client = _InMemoryRedis()  # Используем in-memory Redis для тестов
     global_limiter = RateLimiter(redis_client=redis_client, prefix="frog:global:", window=60, limit=100)
     user_limiter = RateLimiter(redis_client=redis_client, prefix="frog:user:", window=60, limit=1)
     mock_logger = MagicMock()
