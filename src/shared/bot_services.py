@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import asyncpg
+
 from app.admin_dashboard_service import AdminDashboardService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
@@ -23,6 +25,7 @@ from shared.protocols import IChatsRepo, IMetrics, IUsageTracker
 if TYPE_CHECKING:
     from app.frog_requests import FrogRequestService
     from bot.wednesday_bot import WednesdayBot
+    from infra.redis.redis_client import RedisClient
 
 
 @dataclass
@@ -47,6 +50,10 @@ class BotServices:
     model_management_service: ModelManagementService | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
+
+    # Инфраструктурные зависимости (опционально, для прямого доступа)
+    postgres_pool: asyncpg.Pool | None = None
+    redis_client: RedisClient | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
         """Закрывает все ресурсы (HTTP сессии, соединения).

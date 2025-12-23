@@ -37,6 +37,17 @@
   - Обновлена функция `daily_cleanup` для получения пула из контекста вместо прямого вызова `get_postgres_pool()`
   - Убраны все вызовы `get_postgres_pool()` из Celery задач - теперь пулы получаются из контекста сервисов
 
+- **Добавление пулов в BotServices для прямого доступа**:
+  - Добавлены опциональные поля `postgres_pool` и `redis_client` в `BotServices` для прямого доступа к инфраструктурным зависимостям
+  - Обновлена функция `build_bot_services()` для передачи пулов в `BotServices` при создании
+  - Обновлены методы в `wednesday_bot.py` (`_notify_admins_about_error`, `_handle_fallback_error`, `_send_stop_message`) для использования пула из сервисов
+  - Добавлен fallback на `get_postgres_pool()` с предупреждением для обратной совместимости в методах `wednesday_bot.py`
+
+- **Обновление SupportBot для приема Redis через DI**:
+  - Обновлен конструктор `SupportBot` для приема опционального параметра `redis_client`
+  - Добавлен fallback на `get_redis()` с предупреждением для обратной совместимости
+  - Обновлено создание `SupportBot` в `main.py` для явной передачи `redis_client` и `config`
+
 - **FailedCacheQueue для управления очередью непересозданных кэшей в Redis**:
   - Создан новый сервис `src/infra/storage/failed_cache_queue.py` для персистентного хранения операций пересоздания кэша
   - Реализован dataclass `FailedCacheOperation` для сериализации операций пересоздания кэша

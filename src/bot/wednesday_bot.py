@@ -372,10 +372,21 @@ class WednesdayBot:
             - Автоматически обрезает длинные сообщения до безопасного размера.
             - Логирует ошибки при отправке.
         """
-        from infra.database.postgres_client import get_postgres_pool
         from infra.repos import AdminsRepo
 
-        admins_store = AdminsRepo(pool=get_postgres_pool())
+        # Используем пул из сервисов, если доступен
+        if self.services.postgres_pool is not None:
+            pool = self.services.postgres_pool
+        else:
+            # Fallback для обратной совместимости (deprecated)
+            from infra.database.postgres_client import get_postgres_pool
+
+            pool = get_postgres_pool()
+            self.logger.warning(
+                "Использование get_postgres_pool() напрямую устарело. Используйте pool из BotServices.",
+            )
+
+        admins_store = AdminsRepo(pool=pool)
         all_admins = await admins_store.list_all_admins()
 
         if not all_admins:
@@ -635,10 +646,22 @@ class WednesdayBot:
                     else:
                         # Если ADMIN_CHAT_ID не задан, разошлем всем админам из хранилища (без дубля с CHAT_ID)
                         try:
-                            from infra.database.postgres_client import get_postgres_pool
                             from infra.repos import AdminsRepo
 
-                            admins = await AdminsRepo(pool=get_postgres_pool()).list_all_admins()
+                            # Используем пул из сервисов, если доступен
+                            if self.services.postgres_pool is not None:
+                                pool = self.services.postgres_pool
+                            else:
+                                # Fallback для обратной совместимости (deprecated)
+                                from infra.database.postgres_client import get_postgres_pool
+
+                                pool = get_postgres_pool()
+                                self.logger.warning(
+                                    "Использование get_postgres_pool() напрямую устарело. "
+                                    "Используйте pool из BotServices.",
+                                )
+
+                            admins = await AdminsRepo(pool=pool).list_all_admins()
                             for admin_id in admins:
                                 try:
                                     chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None
@@ -1030,9 +1053,21 @@ class WednesdayBot:
                     except Exception:
                         pass
                 else:
-                    from infra.database.postgres_client import get_postgres_pool
+                    from infra.repos import AdminsRepo
 
-                    admins = await AdminsRepo(pool=get_postgres_pool()).list_all_admins()
+                    # Используем пул из сервисов, если доступен
+                    if self.services.postgres_pool is not None:
+                        pool = self.services.postgres_pool
+                    else:
+                        # Fallback для обратной совместимости (deprecated)
+                        from infra.database.postgres_client import get_postgres_pool
+
+                        pool = get_postgres_pool()
+                        self.logger.warning(
+                            "Использование get_postgres_pool() напрямую устарело. Используйте pool из BotServices.",
+                        )
+
+                    admins = await AdminsRepo(pool=pool).list_all_admins()
                     for admin_id in admins:
                         try:
                             chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None

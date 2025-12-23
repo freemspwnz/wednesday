@@ -452,6 +452,8 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         dispatch_service=dispatch_service,
         admin_dashboard_service=admin_dashboard_service,
         model_management_service=model_management_service,
+        postgres_pool=db_pool,
+        redis_client=redis_client,
     )
 
 
