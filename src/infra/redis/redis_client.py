@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, cast
+from typing import Any, TypeAlias, cast
 
 import redis.asyncio as redis
 from redis.exceptions import RedisError
@@ -306,6 +306,10 @@ class _InMemoryRedis:
         """
         # Для in‑memory варианта ничего закрывать не нужно.
         return
+
+
+# Публичный тип для использования в DI
+RedisClient: TypeAlias = redis.Redis | _InMemoryRedis
 
 
 _redis: redis.Redis | _InMemoryRedis = _InMemoryRedis()
