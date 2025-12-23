@@ -106,8 +106,6 @@ class ImageGenerationService:
         Raises:
             ImageGenerationError: При невалидном промпте или критических ошибках генерации.
         """
-        user_id_str = str(user_id) if user_id is not None else None
-
         # Нормализация промпта
         normalized_prompt = self._normalize_prompt(prompt)
 
@@ -118,6 +116,7 @@ class ImageGenerationService:
             raise ImageGenerationError(f"Невалидный промпт: {e}") from e
 
         try:
+            user_id_str = str(user_id) if user_id is not None else None
             image_data = await self._image_client.generate(normalized_prompt, user_id=user_id_str)
             return image_data
 
