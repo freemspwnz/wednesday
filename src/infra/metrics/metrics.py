@@ -305,26 +305,6 @@ class Metrics(BaseService, IMetrics):
                 error_message=str(e),
             )
 
-    async def increment_generation_retry(self, connection: asyncpg.Connection | None = None) -> None:
-        """Увеличивает счётчик повторных попыток генерации изображений.
-
-        Args:
-            connection: Соединение БД для использования в транзакции (опционально).
-
-        Raises:
-            Exception: При ошибке доступа к базе данных PostgreSQL.
-        """
-        await self._ensure_row()
-        if connection is not None:
-            await connection.execute(
-                "UPDATE metrics SET generations_retries = generations_retries + 1 WHERE id = 1;",
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE metrics SET generations_retries = generations_retries + 1 WHERE id = 1;",
-                )
-
     async def add_generation_time(self, seconds: float, connection: asyncpg.Connection | None = None) -> None:
         """Добавляет время генерации к общему времени генераций.
 
@@ -332,21 +312,37 @@ class Metrics(BaseService, IMetrics):
             seconds: Время генерации в секундах для добавления.
             connection: Соединение БД для использования в транзакции (опционально).
 
-        Raises:
-            Exception: При ошибке доступа к базе данных PostgreSQL.
+        Note:
+            Метод используется в тестах для проверки расчета среднего времени генерации.
+            Использует best-effort семантику: ошибки логируются, но не пробрасываются.
         """
-        await self._ensure_row()
-        if connection is not None:
-            await connection.execute(
-                "UPDATE metrics SET generations_total_time = generations_total_time + $1 WHERE id = 1;",
-                float(seconds),
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
+        try:
+            await self._ensure_row()
+            if connection is not None:
+                await connection.execute(
                     "UPDATE metrics SET generations_total_time = generations_total_time + $1 WHERE id = 1;",
                     float(seconds),
                 )
+            else:
+                async with self._pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE metrics SET generations_total_time = generations_total_time + $1 WHERE id = 1;",
+                        float(seconds),
+                    )
+            self.logger.debug(
+                "Записана метрика: add_generation_time",
+                event="metric_recorded",
+                status="success",
+                seconds=seconds,
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики add_generation_time: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def increment_dispatch_success(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик успешных отправок сообщений.
@@ -416,25 +412,40 @@ class Metrics(BaseService, IMetrics):
                 error_message=str(e),
             )
 
-    async def increment_circuit_breaker_trip(self, connection: asyncpg.Connection | None = None) -> None:
-        """Увеличивает счётчик срабатываний circuit breaker.
+    async def _increment_circuit_breaker_trip(self, connection: asyncpg.Connection | None = None) -> None:
+        """Увеличивает счётчик срабатываний circuit breaker (внутренний метод).
 
         Args:
             connection: Соединение БД для использования в транзакции (опционально).
 
-        Raises:
-            Exception: При ошибке доступа к базе данных PostgreSQL.
+        Note:
+            Внутренний метод, используется только внутри record_circuit_breaker_trip().
+            Использует best-effort семантику: ошибки логируются, но не пробрасываются.
         """
-        await self._ensure_row()
-        if connection is not None:
-            await connection.execute(
-                "UPDATE metrics SET circuit_breaker_trips = circuit_breaker_trips + 1 WHERE id = 1;",
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
+        try:
+            await self._ensure_row()
+            if connection is not None:
+                await connection.execute(
                     "UPDATE metrics SET circuit_breaker_trips = circuit_breaker_trips + 1 WHERE id = 1;",
                 )
+            else:
+                async with self._pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE metrics SET circuit_breaker_trips = circuit_breaker_trips + 1 WHERE id = 1;",
+                    )
+            self.logger.debug(
+                "Записана метрика: increment_circuit_breaker_trip",
+                event="metric_recorded",
+                status="circuit_breaker_trip",
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"Ошибка при записи метрики increment_circuit_breaker_trip: {e}",
+                event="metric_record_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
 
     async def increment_cache_hit(self) -> None:
         """Увеличивает счётчик попаданий в кэш.
@@ -466,26 +477,14 @@ class Metrics(BaseService, IMetrics):
     async def record_circuit_breaker_trip(self) -> None:
         """Увеличивает счётчик срабатываний circuit breaker.
 
-        Алиас для increment_circuit_breaker_trip() для совместимости с протоколом IMetrics.
+        Реализация метода протокола IMetrics. Использует внутренний метод
+        _increment_circuit_breaker_trip() для фактической записи метрики.
 
-        Raises:
-            Exception: При ошибке доступа к базе данных PostgreSQL.
+        Note:
+            Метод использует best-effort семантику: ошибки логируются, но не пробрасываются.
+            Это гарантирует, что сбои метрик не влияют на основную бизнес-логику.
         """
-        try:
-            await self.increment_circuit_breaker_trip()
-            self.logger.debug(
-                "Записана метрика: record_circuit_breaker_trip",
-                event="metric_recorded",
-                status="circuit_breaker_trip",
-            )
-        except Exception as e:
-            self.logger.warning(
-                f"Ошибка при записи метрики record_circuit_breaker_trip: {e}",
-                event="metric_record_error",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
+        await self._increment_circuit_breaker_trip()
 
     async def get_summary(self) -> dict[str, Any]:
         """Возвращает сводку всех метрик производительности.

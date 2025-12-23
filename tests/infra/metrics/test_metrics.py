@@ -72,7 +72,8 @@ async def test_metrics_add_generation_time(cleanup_tables: Any, async_postgres_p
 async def test_metrics_increment_circuit_breaker_trip(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
-    await metrics.increment_circuit_breaker_trip()
+    # Тестируем через публичный метод протокола IMetrics
+    await metrics.record_circuit_breaker_trip()
 
     summary = await metrics.get_summary()
     assert summary["circuit_breaker_trips"] == 1

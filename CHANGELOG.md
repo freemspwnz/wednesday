@@ -14,7 +14,11 @@
   - Обновлен `container.py`: удален импорт и использование `MetricsRecorder`, все сервисы теперь используют `Metrics` напрямую
   - Обновлен `__init__.py` в `infra/metrics`: удален экспорт `MetricsRecorder`, добавлены экспорты `Metrics`, `record_metric`, `get_daily_generation_stats`, `get_top_prompts`
   - Обновлены все тесты: добавлена передача `logger` в конструктор `Metrics`
-  - Методы вне протокола (`increment_generation_retry`, `add_generation_time`, `increment_circuit_breaker_trip`) оставлены без изменений для обратной совместимости
+  - Удален метод `increment_generation_retry` - не использовался в коде
+  - Метод `add_generation_time` обернут в `try/except` с обработкой ошибок (используется в тестах)
+  - Метод `increment_circuit_breaker_trip` переименован в приватный `_increment_circuit_breaker_trip` и обернут в `try/except` с обработкой ошибок
+  - Метод `record_circuit_breaker_trip` теперь использует приватный `_increment_circuit_breaker_trip` вместо публичного метода
+  - Обновлен тест `test_metrics_increment_circuit_breaker_trip` для использования публичного метода протокола `record_circuit_breaker_trip`
   - Функция `record_metric` оставлена как отдельная функция для прямого использования в других модулях
 
 ### Добавлено
