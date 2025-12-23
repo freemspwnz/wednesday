@@ -160,7 +160,7 @@ class BotRunner:
 
             # === Инициализация и валидация инфраструктуры ===
             postgres_pool, redis_client = await self._init_and_validate_infrastructure()
-            await ensure_schema()
+            await ensure_schema(pool=postgres_pool)
 
             # Общий цикл: сначала пробуем запускать основной бот; при остановке — включаем SupportBot
             self.logger.info("Настройка обработчиков сигналов в event loop")

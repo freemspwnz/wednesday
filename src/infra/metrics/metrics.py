@@ -27,6 +27,7 @@ class _SupportsExecute(Protocol):
 async def record_metric(  # noqa: PLR0913
     db: _SupportsExecute | None = None,
     *,
+    pool: asyncpg.Pool | None = None,
     event_type: str,
     user_id: str | None = None,
     prompt_hash: str | None = None,
@@ -43,6 +44,8 @@ async def record_metric(  # noqa: PLR0913
         db: Необязательный объект с методом execute (asyncpg.Connection или пул).
             Если не указан, может использоваться как fallback для прямой
             записи в Postgres при недоступности очереди.
+        pool: Необязательный пул подключений PostgreSQL. Если не указан,
+            используется глобальный пул через _get_postgres_pool() (для обратной совместимости).
         event_type: Тип события ('error', 'generation', 'cache_hit', 'cache_miss' и т.п.).
         user_id: Идентификатор пользователя (например, Telegram user_id).
         prompt_hash: Хэш промпта (sha256, 64-символьное hex-представление).
@@ -79,9 +82,31 @@ async def record_metric(  # noqa: PLR0913
         # Это делает события наблюдаемыми через SQL (в том числе в тестах и админских
         # diagnostics), при этом ошибка записи в БД не должна влиять на горячий путь.
         try:
-            pool = _get_postgres_pool()  # Используем приватную функцию
-            async with pool.acquire() as conn:
-                await conn.execute(
+            # Используем переданный пул или глобальный (для обратной совместимости)
+            if pool is not None:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO metrics_events (
+                            event_type,
+                            user_id,
+                            prompt_hash,
+                            image_hash,
+                            latency_ms,
+                            status
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6);
+                        """,
+                        event_type,
+                        user_id,
+                        prompt_hash,
+                        image_hash,
+                        latency_ms,
+                        status,
+                    )
+            elif db is not None:
+                # Используем переданный db (connection или pool)
+                await db.execute(
                     """
                     INSERT INTO metrics_events (
                         event_type,
@@ -100,6 +125,29 @@ async def record_metric(  # noqa: PLR0913
                     latency_ms,
                     status,
                 )
+            else:
+                # Fallback на глобальный пул (для обратной совместимости)
+                pool_fallback = _get_postgres_pool()
+                async with pool_fallback.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO metrics_events (
+                            event_type,
+                            user_id,
+                            prompt_hash,
+                            image_hash,
+                            latency_ms,
+                            status
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6);
+                        """,
+                        event_type,
+                        user_id,
+                        prompt_hash,
+                        image_hash,
+                        latency_ms,
+                        status,
+                    )
         except Exception as db_exc:  # pragma: no cover - best-effort запись в БД
             _logger.warning(
                 f"record_metric: не удалось синхронно сохранить событие метрики в Postgres: {db_exc}",
@@ -117,9 +165,31 @@ async def record_metric(  # noqa: PLR0913
         )
         # Fallback: при недоступности очереди можем (опционально) писать напрямую в Postgres.
         try:
-            pool = _get_postgres_pool()  # Используем приватную функцию
-            async with pool.acquire() as conn:
-                await conn.execute(
+            # Используем переданный пул или глобальный (для обратной совместимости)
+            if pool is not None:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO metrics_events (
+                            event_type,
+                            user_id,
+                            prompt_hash,
+                            image_hash,
+                            latency_ms,
+                            status
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6);
+                        """,
+                        event_type,
+                        user_id,
+                        prompt_hash,
+                        image_hash,
+                        latency_ms,
+                        status,
+                    )
+            elif db is not None:
+                # Используем переданный db (connection или pool)
+                await db.execute(
                     """
                     INSERT INTO metrics_events (
                         event_type,
@@ -138,6 +208,29 @@ async def record_metric(  # noqa: PLR0913
                     latency_ms,
                     status,
                 )
+            else:
+                # Fallback на глобальный пул (для обратной совместимости)
+                pool_fallback = _get_postgres_pool()
+                async with pool_fallback.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO metrics_events (
+                            event_type,
+                            user_id,
+                            prompt_hash,
+                            image_hash,
+                            latency_ms,
+                            status
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6);
+                        """,
+                        event_type,
+                        user_id,
+                        prompt_hash,
+                        image_hash,
+                        latency_ms,
+                        status,
+                    )
             _logger.info("Событие метрики сохранено напрямую в Postgres (fall back, Redis недоступен)")
         except Exception as db_exc:  # pragma: no cover - двойной защитный контур
             _logger.error(
@@ -322,7 +415,7 @@ class Metrics:
                     "UPDATE metrics SET circuit_breaker_trips = circuit_breaker_trips + 1 WHERE id = 1;",
                 )
 
-    async def increment_cache_hit(self) -> None:  # noqa: PLR6301
+    async def increment_cache_hit(self) -> None:
         """Увеличивает счётчик попаданий в кэш.
 
         В текущей реализации используется record_metric для записи события в Redis Stream.
@@ -332,8 +425,8 @@ class Metrics:
         Raises:
             Exception: При ошибке доступа к базе данных или Redis.
         """
-        # Используем record_metric для записи события cache_hit
-        await record_metric(event_type="cache_hit", status="hit")
+        # Используем record_metric для записи события cache_hit, передавая пул явно
+        await record_metric(pool=self._pool, event_type="cache_hit", status="hit")
 
     async def record_circuit_breaker_trip(self) -> None:
         """Увеличивает счётчик срабатываний circuit breaker.
@@ -414,7 +507,7 @@ class Metrics:
         }
 
 
-async def get_daily_generation_stats(days: int = 7) -> list[dict[str, Any]]:
+async def get_daily_generation_stats(days: int = 7, pool: asyncpg.Pool | None = None) -> list[dict[str, Any]]:
     """Возвращает агрегированную статистику генераций по дням.
 
     Для каждого дня рассчитываются:
@@ -423,6 +516,8 @@ async def get_daily_generation_stats(days: int = 7) -> list[dict[str, Any]]:
 
     Args:
         days: Количество дней для анализа (по умолчанию 7).
+        pool: Пул подключений PostgreSQL. Если не указан, используется
+            глобальный пул через _get_postgres_pool() (для обратной совместимости).
 
     Returns:
         Список словарей с ключами:
@@ -433,7 +528,10 @@ async def get_daily_generation_stats(days: int = 7) -> list[dict[str, Any]]:
     Raises:
         Exception: При ошибке доступа к базе данных PostgreSQL.
     """
-    pool = _get_postgres_pool()  # Используем приватную функцию
+    # Используем переданный пул или глобальный (для обратной совместимости)
+    if pool is None:
+        pool = _get_postgres_pool()
+
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
@@ -467,11 +565,13 @@ async def get_daily_generation_stats(days: int = 7) -> list[dict[str, Any]]:
     return result
 
 
-async def get_top_prompts(limit: int = 10) -> list[dict[str, Any]]:
+async def get_top_prompts(limit: int = 10, pool: asyncpg.Pool | None = None) -> list[dict[str, Any]]:
     """Возвращает топ промптов по количеству успешных генераций.
 
     Args:
         limit: Максимальное количество строк в выдаче (по умолчанию 10).
+        pool: Пул подключений PostgreSQL. Если не указан, используется
+            глобальный пул через _get_postgres_pool() (для обратной совместимости).
 
     Returns:
         Список словарей с ключами:
@@ -482,7 +582,10 @@ async def get_top_prompts(limit: int = 10) -> list[dict[str, Any]]:
     Raises:
         Exception: При ошибке доступа к базе данных PostgreSQL.
     """
-    pool = _get_postgres_pool()  # Используем приватную функцию
+    # Используем переданный пул или глобальный (для обратной совместимости)
+    if pool is None:
+        pool = _get_postgres_pool()
+
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """

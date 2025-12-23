@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+import asyncpg
+
 from infra.database.postgres_client import _get_postgres_pool
 from infra.logging.logger import get_logger
 
@@ -145,17 +147,24 @@ _DDL_STATEMENTS: list[str] = [
 ]
 
 
-async def ensure_schema() -> None:
+async def ensure_schema(pool: asyncpg.Pool | None = None) -> None:
     """Гарантирует наличие всех необходимых таблиц в базе Postgres.
 
     Создаёт все необходимые таблицы, если их ещё нет, используя
     CREATE TABLE IF NOT EXISTS. Функция идемпотентна и может вызываться
     при каждом запуске приложения.
 
+    Args:
+        pool: Пул подключений PostgreSQL. Если не указан, используется
+            глобальный пул через _get_postgres_pool() (для обратной совместимости).
+
     Raises:
         Exception: При ошибке выполнения DDL-запросов в PostgreSQL.
     """
-    pool = _get_postgres_pool()  # Используем приватную функцию
+    # Используем переданный пул или глобальный (для обратной совместимости)
+    if pool is None:
+        pool = _get_postgres_pool()
+
     logger.info("Проверяю инициализацию схемы Postgres (создание таблиц при необходимости)")
 
     async with pool.acquire() as conn:
@@ -176,8 +185,8 @@ if __name__ == "__main__":
 
     async def _main() -> None:
         # Инициализируем пул соединений на основе переменных окружения
-        await init_postgres_pool(min_size=1, max_size=2)
-        await ensure_schema()
+        pool = await init_postgres_pool(min_size=1, max_size=2)
+        await ensure_schema(pool=pool)
         await close_postgres_pool()
 
     asyncio.run(_main())

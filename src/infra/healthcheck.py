@@ -94,11 +94,12 @@ async def _check_redis() -> dict[str, Any]:
     started = time.monotonic()
 
     # Если main() уже прокинул клиент в app.state, используем его;
-    # иначе — глобальный singleton через приватную функцию.
+    # иначе — fallback на глобальный singleton через приватную функцию
+    # (для обратной совместимости и случаев, когда healthcheck вызывается до полной инициализации).
     client = getattr(app.state, "redis", None)
     if client is None:
         try:
-            client = _get_redis()  # Используем приватную функцию
+            client = _get_redis()  # Fallback на глобальный singleton (для обратной совместимости)
         except RuntimeError:
             # Если Redis не инициализирован, возвращаем dict с ошибкой
             return {
@@ -165,11 +166,13 @@ async def _check_postgres() -> dict[str, Any]:
     """
     started = time.monotonic()
 
-    # Сначала пробуем взять пул из app.state, если main() его туда прокинул.
+    # Сначала пробуем взять пул из app.state, если main() его туда прокинул;
+    # иначе — fallback на глобальный singleton через приватную функцию
+    # (для обратной совместимости и случаев, когда healthcheck вызывается до полной инициализации).
     pool = getattr(app.state, "postgres_pool", None)
     if pool is None:
         try:
-            pool = _get_postgres_pool()  # Используем приватную функцию
+            pool = _get_postgres_pool()  # Fallback на глобальный singleton (для обратной совместимости)
         except RuntimeError:
             # Если пул не инициализирован, возвращаем dict с ошибкой
             return {
@@ -270,10 +273,13 @@ async def _check_metrics_stream() -> dict[str, Any]:
     started = time.monotonic()
 
     # Для очереди метрик важен именно реальный Redis, а не in‑memory fallback.
+    # Сначала пробуем взять клиент из app.state, если main() его туда прокинул;
+    # иначе — fallback на глобальный singleton через приватную функцию
+    # (для обратной совместимости и случаев, когда healthcheck вызывается до полной инициализации).
     client = getattr(app.state, "redis", None)
     if client is None:
         try:
-            client = _get_redis()  # Используем приватную функцию
+            client = _get_redis()  # Fallback на глобальный singleton (для обратной совместимости)
         except RuntimeError:
             # Если Redis не инициализирован, возвращаем dict с ошибкой
             return {

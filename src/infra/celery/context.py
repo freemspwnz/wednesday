@@ -78,8 +78,8 @@ async def _ensure_pools_initialized(config_obj: Config | None = None) -> None:
                 db=config_obj.redis_db,
                 password=config_obj.redis_password,
             )
-        await init_postgres_pool(min_size=1, max_size=10, config=config_obj)
-        await ensure_schema()
+        postgres_pool = await init_postgres_pool(min_size=1, max_size=10, config=config_obj)
+        await ensure_schema(pool=postgres_pool)
 
         logger.info("Celery pools initialized in worker process")
 
