@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from infra.clients.models.status import SetModelResult
 from shared.base.base_service import BaseService
+from shared.models import SetModelResult
 from shared.protocols import ILogger, IModelsRepo, ITextToImageClient, ITextToTextClient
 
 

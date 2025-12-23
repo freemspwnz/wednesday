@@ -38,18 +38,17 @@ from PIL import Image
 
 from infra.clients.base import BaseHTTPClient
 from infra.clients.models import (
-    APIStatusResult,
     KandinskyGenerationParams,
     KandinskyGenerationRequest,
     KandinskyGenerationStartResponse,
     KandinskyPipelineResponse,
     KandinskyStatus,
     KandinskyStatusResponse,
-    SetModelResult,
 )
 from infra.clients.sber_clients_exceptions import map_client_errors
 from shared.base.exceptions import APIError, NetworkError
 from shared.config import KandinskyConfig
+from shared.models import APIStatusResult, SetModelResult
 from shared.protocols import IModelsRepo, ITextToImageClient
 
 HTTP_STATUS_OK: Final[int] = 200

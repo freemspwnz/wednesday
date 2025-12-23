@@ -8,8 +8,8 @@ import pytest
 
 from infra.clients.client_manager import ClientManagementService
 from infra.clients.image_client_container import ImageClientContainer
-from infra.clients.models.status import APIStatusResult, SetModelResult
 from shared.config import KandinskyConfig
+from shared.models import APIStatusResult, SetModelResult
 from shared.protocols import ITextToImageClient
 
 

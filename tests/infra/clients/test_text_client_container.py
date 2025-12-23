@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from infra.clients.client_manager import ClientManagementService
-from infra.clients.models.status import APIStatusResult, SetModelResult
 from infra.clients.text_client_container import TextClientContainer
 from shared.config import GigaChatConfig
+from shared.models import APIStatusResult, SetModelResult
 from shared.protocols import ITextToTextClient
 
 

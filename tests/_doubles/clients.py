@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from infra.clients import ITextToImageClient, ITextToTextClient
-from infra.clients.models.status import APIStatusResult, SetModelResult
+from shared.models import APIStatusResult, SetModelResult
 
 
 @dataclass

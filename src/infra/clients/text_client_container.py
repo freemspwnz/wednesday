@@ -22,9 +22,9 @@ import asyncio
 from functools import lru_cache
 
 from infra.clients.client_manager import ClientManagementService
-from infra.clients.models.status import APIStatusResult, SetModelResult
 from infra.logging.logger import get_logger
 from shared.config import GigaChatConfig
+from shared.models import APIStatusResult, SetModelResult
 from shared.protocols import IModelsRepo, ITextToTextClient
 
 logger = get_logger(__name__)

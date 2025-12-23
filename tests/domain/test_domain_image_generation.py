@@ -6,8 +6,8 @@ import pytest
 
 from domain.image_generation import ImageGenerationService
 from domain.value_objects import MAX_PROMPT_LENGTH, MIN_PROMPT_LENGTH, Prompt
-from infra.clients.models.status import APIStatusResult, SetModelResult
 from shared.base.exceptions import ImageGenerationError
+from shared.models import APIStatusResult, SetModelResult
 from shared.protocols import ITextToImageClient
 
 

@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 if TYPE_CHECKING:
     import asyncpg
 
-    from infra.clients.models.status import APIStatusResult, SetModelResult
     from infra.repos import ImageRecord, PromptRecord
+    from shared.models import APIStatusResult, SetModelResult
 else:
     import asyncpg
 
