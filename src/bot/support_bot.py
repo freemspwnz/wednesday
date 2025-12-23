@@ -65,7 +65,7 @@ class SupportBot(BaseHandlers):
     def __init__(
         self,
         redis_client: "RedisClient",
-        postgres_pool: asyncpg.Pool | None = None,
+        postgres_pool: asyncpg.Pool,
         request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
         config: Config | None = None,
     ) -> None:
@@ -81,11 +81,10 @@ class SupportBot(BaseHandlers):
                 сообщения. Если None, запуск основного бота через /start будет недоступен.
             config: Экземпляр Config. Если None, используется глобальный config.
             redis_client: Redis-клиент для rate limiter (ОБЯЗАТЕЛЬНЫЙ).
-            postgres_pool: Пул подключений PostgreSQL (опциональный, для BotServices).
-                Если None, будет попытка получить через приватную функцию.
+            postgres_pool: Пул подключений PostgreSQL (ОБЯЗАТЕЛЬНЫЙ, для BotServices).
 
         Raises:
-            ValueError: Если redis_client равен None.
+            ValueError: Если redis_client или postgres_pool равны None.
         """
         # Сначала создаем все необходимые компоненты для BotServices
         request: HTTPXRequest = HTTPXRequest(
@@ -164,19 +163,9 @@ class SupportBot(BaseHandlers):
         task_queue = CeleryTaskQueue()
         frog_request_service = FrogRequestService(task_queue=task_queue, logger=app_logger)
         # SupportBot не использует postgres_pool напрямую, но BotServices требует его
-        # Используем переданный пул или пытаемся получить через приватную функцию
+        # Пул передаётся через Dependency Injection
         if postgres_pool is None:
-            from infra.database.postgres_client import _get_postgres_pool
-
-            try:
-                postgres_pool = _get_postgres_pool()  # Используем приватную функцию
-            except RuntimeError:
-                # Если пул не инициализирован, выбрасываем ошибку
-                # SupportBot требует postgres_pool для BotServices
-                raise RuntimeError(
-                    "postgres_pool не инициализирован. "
-                    "Передайте пул через Dependency Injection или убедитесь, что он инициализирован."
-                ) from None
+            raise ValueError("postgres_pool не может быть None. Передайте пул через Dependency Injection.")
 
         services: BotServices = BotServices(
             postgres_pool=postgres_pool,

@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 
 import asyncpg
 
-from infra.database.postgres_client import _get_postgres_pool
 from infra.logging.logger import get_logger, log_all_methods
 
 
@@ -97,6 +96,7 @@ class DispatchRegistry:
             slot_time: Время слота в формате HH:MM.
             chat_id: Идентификатор чата для пометки.
             connection: Соединение БД для использования в транзакции (опционально).
+                Если None, используется пул из конструктора (self._pool).
 
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
@@ -107,7 +107,7 @@ class DispatchRegistry:
         # Преобразуем строку в date объект для asyncpg
         slot_date_obj = date_type.fromisoformat(slot_date) if isinstance(slot_date, str) else slot_date
 
-        # Используем переданное соединение или получаем новое
+        # Используем переданное соединение или получаем новое из пула
         if connection is not None:
             try:
                 await connection.execute(
@@ -127,8 +127,8 @@ class DispatchRegistry:
                 )
                 raise
         else:
-            pool = _get_postgres_pool()  # Используем приватную функцию как fallback
-            async with pool.acquire() as conn:
+            # Используем пул из конструктора (передан через DI)
+            async with self._pool.acquire() as conn:
                 try:
                     await conn.execute(
                         """

@@ -25,13 +25,16 @@ class MetricsRecorder(BaseService, IMetrics):
         """Инициализирует сервис записи метрик.
 
         Args:
-            metrics: Экземпляр Metrics для записи метрик. Если None, создаётся новый.
+            metrics: Экземпляр Metrics для записи метрик (ОБЯЗАТЕЛЬНЫЙ).
             logger: Экземпляр логгера для использования в сервисе.
-        """
-        from infra.database.postgres_client import _get_postgres_pool
 
+        Raises:
+            ValueError: Если metrics равен None.
+        """
+        if metrics is None:
+            raise ValueError("metrics не может быть None. Передайте экземпляр Metrics через Dependency Injection.")
         super().__init__(logger)
-        self._metrics = metrics or Metrics(pool=_get_postgres_pool())  # Используем приватную функцию
+        self._metrics = metrics
 
     async def increment_generation_success(self, connection: asyncpg.Connection | None = None) -> None:
         """Увеличивает счётчик успешных генераций изображений."""

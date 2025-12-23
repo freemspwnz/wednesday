@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncpg
 
-from infra.database.postgres_client import _get_postgres_pool
 from shared.base.base_service import BaseService
 from shared.protocols import ILogger
 
@@ -22,15 +21,20 @@ class DatabaseUnitOfWork(BaseService):
     - Защита от повторного коммита/отката
     """
 
-    def __init__(self, pool: asyncpg.Pool | None = None, *, logger: ILogger) -> None:
+    def __init__(self, pool: asyncpg.Pool, *, logger: ILogger) -> None:
         """Инициализирует Unit of Work.
 
         Args:
-            pool: Пул подключений PostgreSQL. Если не указан, используется глобальный пул.
+            pool: Пул подключений PostgreSQL (ОБЯЗАТЕЛЬНЫЙ).
             logger: Экземпляр логгера для использования в сервисе.
+
+        Raises:
+            ValueError: Если pool равен None.
         """
+        if pool is None:
+            raise ValueError("pool не может быть None. Передайте пул подключений через Dependency Injection.")
         super().__init__(logger)
-        self._pool = pool or _get_postgres_pool()  # Используем приватную функцию как fallback
+        self._pool = pool
         self._connection: asyncpg.Connection | None = None
         self._transaction: asyncpg.Transaction | None = None
         self._is_committed = False

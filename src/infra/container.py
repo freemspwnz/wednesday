@@ -213,7 +213,8 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
         window=cb_config.window,
         cooldown=cb_config.cooldown,
     )
-    metrics = MetricsRecorder(logger=app_logger)
+    # Создаём Metrics для передачи в ImageService
+    metrics = Metrics(pool=db_pool)
 
     # Application‑сервисы
     prompt_service = PromptService(
@@ -370,6 +371,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
 
     chats = ChatsRepo(pool=db_pool)
     dispatch_registry = DispatchRegistry(pool=db_pool)
+    # Создаём Metrics для передачи в MetricsRecorder
     metrics = Metrics(pool=db_pool)
 
     prompt_cache = PromptCache(redis_client=redis_client)
