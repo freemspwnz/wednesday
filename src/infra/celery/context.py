@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+import asyncpg
 from celery.signals import worker_shutdown
 
 from infra.database.postgres_client import init_postgres_pool
@@ -20,6 +21,7 @@ from shared.config import Config
 
 if TYPE_CHECKING:
     from app.cleanup_service import CleanupService
+    from infra.redis.redis_client import RedisClient
 
 # Создаём экземпляр Config при импорте модуля
 config: Config = Config()
@@ -33,7 +35,9 @@ _cleanup_service: CleanupService | None = None
 _init_lock = asyncio.Lock()
 
 
-async def _ensure_pools_initialized(config_obj: Config | None = None) -> None:
+async def _ensure_pools_initialized(
+    config_obj: Config | None = None,
+) -> tuple[asyncpg.Pool, RedisClient]:
     """Инициализирует пулы подключений Redis и Postgres.
 
     Инициализация происходит внутри задач, после fork worker процесса, что гарантирует:
@@ -43,20 +47,16 @@ async def _ensure_pools_initialized(config_obj: Config | None = None) -> None:
     Args:
         config_obj: Экземпляр Config. Если None, используется глобальный config.
 
+    Returns:
+        Кортеж (postgres_pool, redis_client) с инициализированными пулами.
+
     Raises:
         RuntimeError: Если не удалось инициализировать пулы подключений.
     """
-    # Проверяем, инициализирован ли контекст (только чтение, без global)
-    if _services_context is not None:
-        return
-
     if config_obj is None:
         config_obj = config
 
     async with _init_lock:
-        if _services_context is not None:
-            return
-
         # Инициализируем Redis и Postgres (async)
         # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
         if isinstance(config_obj, Config):
@@ -81,7 +81,13 @@ async def _ensure_pools_initialized(config_obj: Config | None = None) -> None:
         postgres_pool = await init_postgres_pool(min_size=1, max_size=10, config=config_obj)
         await ensure_schema(pool=postgres_pool)
 
+        # Получаем redis_client через приватную функцию (после явной инициализации)
+        from infra.redis.redis_client import _get_redis
+
+        redis_client = _get_redis()
+
         logger.info("Celery pools initialized in worker process")
+        return (postgres_pool, redis_client)
 
 
 async def get_services_context(config_obj: Config | None = None) -> dict[str, object]:
@@ -110,103 +116,90 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
     if config_obj is None:
         config_obj = config
 
-    await _ensure_pools_initialized(config_obj=config_obj)
+    # Проверяем, инициализирован ли контекст (только чтение, без global)
+    if _services_context is not None:
+        return _services_context
 
-    if _services_context is None:
-        async with _init_lock:
-            if _services_context is None:
-                # Ленивый импорт для избежания циклических зависимостей
-                from infra.container import build_bot
-                from infra.database.postgres_client import _get_postgres_pool  # Приватная функция
-                from infra.redis.redis_client import _get_redis  # Приватная функция
+    async with _init_lock:
+        if _services_context is not None:
+            return _services_context
 
-                # Получаем пулы (они уже инициализированы в _ensure_pools_initialized)
-                try:
-                    postgres_pool = _get_postgres_pool()
-                except RuntimeError as e:
-                    logger.error(f"Не удалось получить postgres_pool: {e}")
-                    raise RuntimeError(
-                        "Postgres pool не инициализирован. Убедитесь, что _ensure_pools_initialized() был вызван."
-                    ) from e
+        # Инициализируем пулы и получаем их явно (без использования приватных функций)
+        postgres_pool, redis_client = await _ensure_pools_initialized(config_obj=config_obj)
 
-                try:
-                    redis_client = _get_redis()
-                except RuntimeError as e:
-                    logger.error(f"Не удалось получить redis_client: {e}")
-                    raise RuntimeError(
-                        "Redis client не инициализирован. Убедитесь, что _ensure_pools_initialized() был вызван."
-                    ) from e
+        # Ленивый импорт для избежания циклических зависимостей
+        from infra.container import build_bot
 
-                # Convert to Config if needed
-                if not isinstance(config_obj, Config):
-                    config_obj = Config()
+        # Convert to Config if needed
+        if not isinstance(config_obj, Config):
+            config_obj = Config()
 
-                # Создаём сервисы через DI-контейнер (без зависимости от bot.services)
-                from infra.container import (
-                    build_admin_notification_service,
-                    build_frog_processing_service,
-                    build_image_stack,
-                )
-                from infra.messaging.ptb import PTBMessagingService
-                from infra.repos import AdminsRepo
-                from infra.repos.usage_tracker import UsageTracker
+        # Создаём сервисы через DI-контейнер (без зависимости от bot.services)
+        from infra.container import (
+            build_admin_notification_service,
+            build_frog_processing_service,
+            build_image_stack,
+        )
+        from infra.messaging.ptb import PTBMessagingService
+        from infra.repos import AdminsRepo
+        from infra.repos.usage_tracker import UsageTracker
 
-                # Создаём image_service через DI-контейнер
-                image_service = build_image_stack(
-                    config=config_obj,
-                    db_pool=postgres_pool,
-                    redis_client=redis_client,
-                )
+        # Создаём image_service через DI-контейнер
+        image_service = build_image_stack(
+            config=config_obj,
+            db_pool=postgres_pool,
+            redis_client=redis_client,
+        )
 
-                # Создаём usage_tracker через DI
-                usage_tracker = UsageTracker(
-                    pool=postgres_pool,
-                    monthly_quota=100,
-                    frog_threshold=70,
-                )
+        # Создаём usage_tracker через DI
+        usage_tracker = UsageTracker(
+            pool=postgres_pool,
+            monthly_quota=100,
+            frog_threshold=70,
+        )
 
-                # Передаём пулы явно в build_bot (bot нужен для некоторых задач)
-                bot = build_bot(
-                    config=config_obj,
-                    db_pool=postgres_pool,
-                    redis_client=redis_client,
-                )
+        # Передаём пулы явно в build_bot (bot нужен для некоторых задач)
+        bot = build_bot(
+            config=config_obj,
+            db_pool=postgres_pool,
+            redis_client=redis_client,
+        )
 
-                # Создаём messaging service
-                messaging_service = PTBMessagingService(bot=bot.application.bot)
+        # Создаём messaging service
+        messaging_service = PTBMessagingService(bot=bot.application.bot)
 
-                # Создаём admin notifier
-                admins_repo = AdminsRepo(pool=postgres_pool)
-                admin_notifier = build_admin_notification_service(
-                    messaging_service=messaging_service,
-                    admins_repo=admins_repo,
-                    logger=logger,
-                )
+        # Создаём admin notifier
+        admins_repo = AdminsRepo(pool=postgres_pool)
+        admin_notifier = build_admin_notification_service(
+            messaging_service=messaging_service,
+            admins_repo=admins_repo,
+            logger=logger,
+        )
 
-                # Создаём frog processing service через DI (без зависимости от bot.services)
-                frog_processing = build_frog_processing_service(
-                    image_service=image_service,
-                    messaging_service=messaging_service,
-                    usage_tracker=usage_tracker,
-                    admin_notifier=admin_notifier,
-                    logger=logger,
-                )
+        # Создаём frog processing service через DI (без зависимости от bot.services)
+        frog_processing = build_frog_processing_service(
+            image_service=image_service,
+            messaging_service=messaging_service,
+            usage_tracker=usage_tracker,
+            admin_notifier=admin_notifier,
+            logger=logger,
+        )
 
-                # Создаём cleanup service для graceful shutdown
-                from infra.container import build_cleanup_service
+        # Создаём cleanup service для graceful shutdown
+        from infra.container import build_cleanup_service
 
-                global _cleanup_service  # noqa: PLW0603
-                _cleanup_service = build_cleanup_service(logger=logger)
+        global _cleanup_service  # noqa: PLW0603
+        _cleanup_service = build_cleanup_service(logger=logger)
 
-                _services_context = {
-                    "bot": bot,
-                    "postgres_pool": postgres_pool,  # Добавляем в контекст
-                    "redis_client": redis_client,  # Добавляем в контекст
-                    "image_service": image_service,  # Добавляем в контекст
-                    "usage_tracker": usage_tracker,  # Добавляем в контекст
-                    "frog_processing": frog_processing,  # Добавляем в контекст
-                }
-                logger.info("Celery services context created in worker process")
+        _services_context = {
+            "bot": bot,
+            "postgres_pool": postgres_pool,  # Добавляем в контекст
+            "redis_client": redis_client,  # Добавляем в контекст
+            "image_service": image_service,  # Добавляем в контекст
+            "usage_tracker": usage_tracker,  # Добавляем в контекст
+            "frog_processing": frog_processing,  # Добавляем в контекст
+        }
+        logger.info("Celery services context created in worker process")
 
     return _services_context
 

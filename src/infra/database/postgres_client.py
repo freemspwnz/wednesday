@@ -200,20 +200,20 @@ class PoolMetrics:
     active_connections: int  # Активные соединения (size - idle_size)
 
 
-def get_pool_metrics(pool: asyncpg.Pool | None = None) -> PoolMetrics | None:
+def get_pool_metrics(pool: asyncpg.Pool) -> PoolMetrics:
     """Возвращает метрики пула подключений.
 
     Args:
-        pool: Пул подключений. Если None, используется глобальный пул.
+        pool: Пул подключений PostgreSQL (обязательный параметр).
 
     Returns:
-        PoolMetrics или None, если пул не инициализирован.
+        PoolMetrics с метриками пула.
+
+    Raises:
+        ValueError: Если pool равен None.
     """
     if pool is None:
-        try:
-            pool = _get_postgres_pool()  # Используем приватную функцию
-        except RuntimeError:
-            return None
+        raise ValueError("pool не может быть None. Используйте Dependency Injection для передачи пула.")
 
     return PoolMetrics(
         size=pool.get_size(),

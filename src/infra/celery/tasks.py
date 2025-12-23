@@ -454,7 +454,8 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
     """
     try:
         # Инициализируем пулы подключений (для доступа к сервисам)
-        await _ensure_pools_initialized()
+        # Возвращаемые значения не используются, так как пулы не нужны в этой задаче
+        _ = await _ensure_pools_initialized()
 
         # Здесь можно добавить логику сбора статистики
         # Например, агрегация метрик из metrics_events

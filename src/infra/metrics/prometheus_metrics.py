@@ -203,17 +203,23 @@ CIRCUIT_BREAKER_FAILURES: Final[Gauge] = Gauge(
 )
 
 
-def update_pool_metrics(pool: asyncpg.Pool | None = None) -> None:
+def update_pool_metrics(pool: asyncpg.Pool) -> None:
     """Обновляет метрики пула подключений PostgreSQL.
 
     Args:
-        pool: Пул подключений PostgreSQL. Если None, используется глобальный пул.
+        pool: Пул подключений PostgreSQL (обязательный параметр).
     """
     from infra.database.postgres_client import get_pool_metrics
 
-    metrics = get_pool_metrics(pool)
-    if metrics:
+    try:
+        metrics = get_pool_metrics(pool)
         POSTGRES_POOL_SIZE.set(float(metrics.size))
         POSTGRES_POOL_IDLE.set(float(metrics.idle_size))
         POSTGRES_POOL_ACTIVE.set(float(metrics.active_connections))
         POSTGRES_POOL_MAX.set(float(metrics.max_size))
+    except Exception as e:
+        # Логируем ошибку, но не прерываем выполнение (best-effort)
+        from infra.logging.logger import get_logger
+
+        logger = get_logger(__name__)
+        logger.warning(f"Не удалось обновить метрики пула: {e}")

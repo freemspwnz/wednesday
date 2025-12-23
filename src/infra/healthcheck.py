@@ -186,27 +186,26 @@ async def _check_postgres() -> dict[str, Any]:
         try:
             update_pool_metrics(pool)
             metrics = get_pool_metrics(pool)
-            if metrics:
-                # Логируем предупреждение при высоком использовании пула (>90%)
-                usage_ratio = metrics.active_connections / metrics.max_size if metrics.max_size > 0 else 0.0
-                if usage_ratio > _POOL_HIGH_USAGE_THRESHOLD:
-                    logger.warning(
-                        f"Пул подключений PostgreSQL почти заполнен: "
-                        f"{metrics.active_connections}/{metrics.max_size} активных соединений "
-                        f"({usage_ratio * 100:.1f}% использования)",
-                    )
+            # Логируем предупреждение при высоком использовании пула (>90%)
+            usage_ratio = metrics.active_connections / metrics.max_size if metrics.max_size > 0 else 0.0
+            if usage_ratio > _POOL_HIGH_USAGE_THRESHOLD:
+                logger.warning(
+                    f"Пул подключений PostgreSQL почти заполнен: "
+                    f"{metrics.active_connections}/{metrics.max_size} активных соединений "
+                    f"({usage_ratio * 100:.1f}% использования)",
+                )
 
-                return {
-                    "status": "up",
-                    "latency_ms": latency_ms,
-                    "details": None,
-                    "pool_metrics": {
-                        "size": metrics.size,
-                        "idle_size": metrics.idle_size,
-                        "active_connections": metrics.active_connections,
-                        "max_size": metrics.max_size,
-                    },
-                }
+            return {
+                "status": "up",
+                "latency_ms": latency_ms,
+                "details": None,
+                "pool_metrics": {
+                    "size": metrics.size,
+                    "idle_size": metrics.idle_size,
+                    "active_connections": metrics.active_connections,
+                    "max_size": metrics.max_size,
+                },
+            }
         except Exception as metrics_exc:
             # Ошибка обновления метрик не должна влиять на статус healthcheck
             logger.debug(f"Не удалось обновить метрики пула: {metrics_exc}")
