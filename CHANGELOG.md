@@ -21,6 +21,14 @@
   - Обновлена функция `build_image_stack()` для приема `redis_client` вместо использования `get_redis()`
   - Убраны вызовы `get_redis()` из `build_bot_services()` и `build_image_stack()` - теперь Redis-клиент передается явно через параметры
 
+- **Рефакторинг передачи пулов через DI в container.py**:
+  - Обновлена функция `_create_clients()` для приема обязательного параметра `db_pool` вместо использования `get_postgres_pool()`
+  - Обновлена функция `build_image_stack()` для передачи `db_pool` в `_create_clients()`
+  - Обновлена функция `build_admin_dashboard_service()` для приема обязательного параметра `db_pool` вместо использования `get_postgres_pool()`
+  - Обновлена функция `build_bot_services()` для передачи `db_pool` в `_create_clients()` и `build_admin_dashboard_service()`
+  - Убраны вызовы `get_postgres_pool()` из функций сборки зависимостей - теперь пул передается явно через параметры
+  - Добавлен импорт `_InMemoryRedis` в `TYPE_CHECKING` для поддержки типизации
+
 - **FailedCacheQueue для управления очередью непересозданных кэшей в Redis**:
   - Создан новый сервис `src/infra/storage/failed_cache_queue.py` для персистентного хранения операций пересоздания кэша
   - Реализован dataclass `FailedCacheOperation` для сериализации операций пересоздания кэша

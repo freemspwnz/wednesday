@@ -67,6 +67,7 @@ from shared.protocols import (
 
 def _create_clients(
     config: Config,
+    db_pool: asyncpg.Pool,
     models_repo: IModelsRepo | None = None,
 ) -> tuple[ITextToImageClient, ITextToTextClient | None]:
     """Создаёт клиенты для внешних ML‑сервисов через Dependency Injection.
@@ -76,8 +77,9 @@ def _create_clients(
 
     Args:
         config: Экземпляр Config для создания конфигураций клиентов.
+        db_pool: Пул подключений PostgreSQL (обязательный параметр).
         models_repo: Репозиторий моделей для передачи в клиенты через DI.
-            Если None, создаётся новый ModelsRepo с пулом из get_postgres_pool().
+            Если None, создаётся новый ModelsRepo с переданным пулом.
 
     Returns:
         Кортеж (image_client_container, text_client_container | None).
@@ -86,10 +88,9 @@ def _create_clients(
     """
     # Создаём models_repo, если не передан
     if models_repo is None:
-        from infra.database.postgres_client import get_postgres_pool
         from infra.repos import ModelsRepo
 
-        models_repo = ModelsRepo(pool=get_postgres_pool())
+        models_repo = ModelsRepo(pool=db_pool)
 
     # Создаём сервис управления клиентами
     client_manager = ClientManagementService(models_repo=models_repo)
@@ -151,7 +152,11 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
     # Инфраструктура и клиенты
     if image_client is None or text_client is None:
         # Используем _create_clients() вместо дублирования логики
-        created_image_client, created_text_client = _create_clients(config, models_repo=models_repo)
+        created_image_client, created_text_client = _create_clients(
+            config,
+            db_pool=db_pool,
+            models_repo=models_repo,
+        )
         if image_client is None:
             image_client = created_image_client
         if text_client is None:
@@ -239,6 +244,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     metrics: IMetrics,
     image_client: ITextToImageClient,
     text_client: ITextToTextClient | None,
+    db_pool: asyncpg.Pool,
     models_repo: IModelsRepo | None = None,
 ) -> AdminDashboardService:
     """Собирает AdminDashboardService с зависимостями.
@@ -249,14 +255,13 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
         metrics: Метрики производительности.
         image_client: Клиент для генерации изображений.
         text_client: Клиент для генерации текста.
+        db_pool: Пул подключений PostgreSQL (обязательный параметр).
         models_repo: Репозиторий моделей для передачи в APIStatusService через DI.
 
     Returns:
         Экземпляр AdminDashboardService с внедрёнными зависимостями.
     """
-    from infra.database.postgres_client import get_postgres_pool
-
-    models_store = models_repo if models_repo is not None else ModelsRepo(pool=get_postgres_pool())
+    models_store = models_repo if models_repo is not None else ModelsRepo(pool=db_pool)
 
     # Создаём общий логгер для всех сервисов
     app_logger = get_logger("app")
@@ -306,7 +311,11 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     models_repo = ModelsRepo(pool=db_pool)
 
     # Создаём клиенты один раз для переиспользования во всех сервисах
-    image_client, text_client = _create_clients(config, models_repo=models_repo)
+    image_client, text_client = _create_clients(
+        config,
+        db_pool=db_pool,
+        models_repo=models_repo,
+    )
 
     # Создаём image_service с переиспользованием клиентов
     image_service = build_image_stack(
@@ -416,6 +425,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         metrics=metrics_recorder,
         image_client=image_client,
         text_client=text_client,
+        db_pool=db_pool,
         models_repo=models_repo,
     )
 
