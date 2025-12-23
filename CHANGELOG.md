@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Рефакторинг PromptGenerationService: устранение нарушения DIP**:
+  - Метод `get_fallback_prompt()` больше не создает экземпляр `PromptFallbackConfig` внутри метода
+  - Метод теперь требует явную передачу `fallback_config` при инициализации и бросает `ValueError`, если конфигурация не предоставлена
+  - Обновлен docstring конструктора для уточнения поведения при отсутствии конфигурации
+  - Обновлен docstring метода `get_fallback_prompt()` с указанием возможного исключения
+
 - **Рефакторинг Metrics: объединение Metrics и MetricsRecorder**:
   - Класс `Metrics` теперь наследуется от `BaseService` и явно реализует протокол `IMetrics`
   - Удален декоратор `@log_all_methods()` - логирование теперь через `BaseService`
