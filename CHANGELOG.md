@@ -5,10 +5,12 @@
 ### Изменено
 
 - **Разделение DTO между слоями app и infra**:
-  - Создан общий модуль `shared.models` для DTO `APIStatusResult` и `SetModelResult`
+  - Создан общий модуль `shared.models` для DTO `APIStatusResult`, `SetModelResult`, `ImageRecordDTO` и `PromptRecordDTO`
   - Определения DTO перенесены в общую точку без изменения поведения и типов
   - Протоколы `ITextToImageClient` и `ITextToTextClient` в `shared.protocols` обновлены для использования DTO из `shared.models` вместо `infra.clients.models.status`
   - Удалён модуль `infra.clients.models.status`, все импорты обновлены на использование `shared.models`
+  - Протоколы `IImageRepo` и `IPromptRepo` в `shared.protocols` обновлены для использования `ImageRecordDTO` и `PromptRecordDTO` из `shared.models` вместо прямого импорта `ImageRecord`/`PromptRecord` из `infra.repos`
+  - Репозитории `ImagesRepo` и `PromptsRepo` обновлены для возврата DTO из `shared.models`, что устраняет архитектурную зависимость `shared → infra`
 
 - **Рефакторинг PromptGenerationService: унификация обработки ошибок и упрощение API**:
   - Удалены `PromptGenerationResult` и `PromptSource` как избыточные абстракции

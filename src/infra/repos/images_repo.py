@@ -30,6 +30,7 @@ import asyncpg
 from asyncpg import UniqueViolationError
 
 from infra.logging.logger import get_logger, log_all_methods
+from shared.models import ImageRecordDTO
 from shared.paths import FROGS_DIR
 
 logger = get_logger(__name__)
@@ -96,6 +97,24 @@ class ImagesRepo:
         )
 
     @staticmethod
+    def _to_dto(record: ImageRecord) -> ImageRecordDTO:
+        """Конвертирует внутренний ImageRecord в ImageRecordDTO.
+
+        Args:
+            record: Внутренний объект ImageRecord.
+
+        Returns:
+            ImageRecordDTO для использования в протоколах.
+        """
+        return ImageRecordDTO(
+            id=record.id,
+            image_hash=record.image_hash,
+            prompt_hash=record.prompt_hash,
+            path=record.path,
+            created_at=record.created_at,
+        )
+
+    @staticmethod
     def _compute_hash(image_bytes: bytes) -> str:
         """Вычисляет SHA256-хеш содержимого изображения.
 
@@ -146,7 +165,7 @@ class ImagesRepo:
 
         path.parent.mkdir(parents=True, exist_ok=True)
 
-    async def get_by_prompt_hash(self, prompt_hash: str) -> ImageRecord | None:
+    async def get_by_prompt_hash(self, prompt_hash: str) -> ImageRecordDTO | None:
         """Возвращает изображение по prompt_hash.
 
         Ищет изображение, связанное с указанным промптом через prompt_hash.
@@ -156,7 +175,7 @@ class ImagesRepo:
             prompt_hash: SHA256-хеш нормализованного промпта.
 
         Returns:
-            ImageRecord если изображение найдено, None иначе.
+            ImageRecordDTO если изображение найдено, None иначе.
         """
 
         async with self._pool.acquire() as conn:
@@ -178,16 +197,16 @@ class ImagesRepo:
             "Изображение загружено из кеша: "
             f"prompt_hash={record.prompt_hash} image_hash={record.image_hash} path={record.path}",
         )
-        return record
+        return self._to_dto(record)
 
-    async def load_image_bytes(self, record: ImageRecord) -> bytes:
+    async def load_image_bytes(self, image_record: ImageRecordDTO) -> bytes:
         """Загружает байты изображения по записи из БД (асинхронно).
 
         Для надёжности путь на файловой системе вычисляется по image_hash,
         а не по полю path (path используется как канонический относительный путь для БД).
 
         Args:
-            record: Запись ImageRecord с метаданными изображения.
+            image_record: Запись ImageRecordDTO с метаданными изображения.
 
         Returns:
             Байты изображения из файла.
@@ -196,11 +215,11 @@ class ImagesRepo:
             FileNotFoundError: Если файл изображения не найден на диске.
             OSError: При ошибке чтения файла.
         """
-        fs_path = self._filesystem_path_for_hash(record.image_hash)
+        fs_path = self._filesystem_path_for_hash(image_record.image_hash)
         # Используем asyncio.to_thread для чтения файла
         return await asyncio.to_thread(fs_path.read_bytes)
 
-    async def get_or_create_image(self, prompt_hash: str, image_bytes: bytes) -> ImageRecord:
+    async def get_or_create_image(self, prompt_hash: str, image_bytes: bytes) -> ImageRecordDTO:
         """Гарантированно возвращает запись об изображении для данного prompt_hash.
 
         Алгоритм:
@@ -215,7 +234,7 @@ class ImagesRepo:
             image_bytes: Байты изображения для сохранения.
 
         Returns:
-            ImageRecord с метаданными изображения (существующая или новая запись).
+            ImageRecordDTO с метаданными изображения (существующая или новая запись).
 
         Raises:
             RuntimeError: При крайне маловероятной ошибке конкурентной вставки.
@@ -281,7 +300,7 @@ class ImagesRepo:
                         "Добавлена запись об изображении: "
                         f"prompt_hash={record.prompt_hash} image_hash={record.image_hash}",
                     )
-                    return record
+                    return self._to_dto(record)
             except UniqueViolationError:
                 # Гонка: другая транзакция успела вставить запись.
                 # Просто логируем и переходим к чтению уже существующей записи.
@@ -310,4 +329,4 @@ class ImagesRepo:
             raise RuntimeError("Failed to upsert image metadata: concurrent insert lost")
 
         record = self._row_to_record(row)
-        return record
+        return self._to_dto(record)

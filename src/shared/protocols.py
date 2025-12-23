@@ -8,8 +8,12 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 if TYPE_CHECKING:
     import asyncpg
 
-    from infra.repos import ImageRecord, PromptRecord
-    from shared.models import APIStatusResult, SetModelResult
+    from shared.models import (
+        APIStatusResult,
+        ImageRecordDTO,
+        PromptRecordDTO,
+        SetModelResult,
+    )
 else:
     import asyncpg
 
@@ -213,22 +217,22 @@ class ITaskQueue(Protocol):
 class IImageRepo(Protocol):
     """Протокол для репозитория изображений в БД."""
 
-    async def get_by_prompt_hash(self, prompt_hash: str) -> ImageRecord | None:
+    async def get_by_prompt_hash(self, prompt_hash: str) -> ImageRecordDTO | None:
         """Получает изображение по prompt_hash.
 
         Args:
             prompt_hash: SHA256-хеш нормализованного промпта.
 
         Returns:
-            ImageRecord если изображение найдено, None иначе.
+            ImageRecordDTO если изображение найдено, None иначе.
         """
         ...
 
-    async def load_image_bytes(self, image_record: ImageRecord) -> bytes:
-        """Загружает байты изображения из файла по ImageRecord (асинхронно).
+    async def load_image_bytes(self, image_record: ImageRecordDTO) -> bytes:
+        """Загружает байты изображения из файла по ImageRecordDTO (асинхронно).
 
         Args:
-            image_record: Запись ImageRecord с метаданными изображения.
+            image_record: Запись ImageRecordDTO с метаданными изображения.
 
         Returns:
             Байты изображения из файла.
@@ -243,7 +247,7 @@ class IImageRepo(Protocol):
         self,
         prompt_hash: str,
         image_bytes: bytes,
-    ) -> ImageRecord:
+    ) -> ImageRecordDTO:
         """Создает или получает существующее изображение.
 
         Args:
@@ -251,7 +255,7 @@ class IImageRepo(Protocol):
             image_bytes: Байты изображения для сохранения.
 
         Returns:
-            ImageRecord с метаданными изображения (существующая или новая запись).
+            ImageRecordDTO с метаданными изображения (существующая или новая запись).
 
         Raises:
             RuntimeError: При крайне маловероятной ошибке конкурентной вставки.
@@ -264,14 +268,14 @@ class IImageRepo(Protocol):
 class IPromptRepo(Protocol):
     """Протокол для репозитория промптов в БД."""
 
-    async def get_or_create_prompt(self, prompt_text: str) -> PromptRecord:
+    async def get_or_create_prompt(self, prompt_text: str) -> PromptRecordDTO:
         """Создает или получает существующий промпт.
 
         Args:
             prompt_text: Исходный текст промпта.
 
         Returns:
-            PromptRecord с метаданными промпта (существующая или новая запись).
+            PromptRecordDTO с метаданными промпта (существующая или новая запись).
 
         Raises:
             RuntimeError: При крайне маловероятной ошибке конкурентной вставки.
@@ -279,14 +283,14 @@ class IPromptRepo(Protocol):
         """
         ...
 
-    async def get_prompt_by_hash(self, prompt_hash: str) -> PromptRecord | None:
+    async def get_prompt_by_hash(self, prompt_hash: str) -> PromptRecordDTO | None:
         """Получает промпт по prompt_hash.
 
         Args:
             prompt_hash: SHA256-хеш нормализованного промпта.
 
         Returns:
-            PromptRecord если промпт найден, None иначе.
+            PromptRecordDTO если промпт найден, None иначе.
         """
         ...
 

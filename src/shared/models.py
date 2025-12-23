@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -54,3 +55,34 @@ class SetModelResult:
     def error(cls, message: str) -> SetModelResult:
         """Создаёт результат ошибки установки модели."""
         return cls(success=False, message=message, model_id=None, model_name=None)
+
+
+@dataclass(frozen=True)
+class ImageRecordDTO:
+    """DTO записи изображения для использования в протоколах и сервисах.
+
+    Используется как общий контракт между слоями app/shared и infra
+    без привязки к конкретной реализации репозитория.
+    """
+
+    id: int
+    image_hash: str
+    prompt_hash: str
+    path: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class PromptRecordDTO:
+    """DTO записи промпта для использования в протоколах и сервисах.
+
+    Используется как общий контракт между слоями app/shared и infra
+    без привязки к конкретной реализации репозитория.
+    """
+
+    id: int
+    raw_text: str
+    normalized_text: str
+    prompt_hash: str
+    created_at: datetime
+    ab_group: str | None

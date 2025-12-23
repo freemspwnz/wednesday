@@ -23,6 +23,7 @@ from hashlib import sha256
 import asyncpg
 
 from infra.logging.logger import get_logger, log_all_methods
+from shared.models import PromptRecordDTO
 
 logger = get_logger(__name__)
 
@@ -115,7 +116,26 @@ class PromptsRepo:
             ab_group=row["ab_group"],  # type: ignore[index]
         )
 
-    async def get_or_create_prompt(self, prompt_text: str) -> PromptRecord:
+    @staticmethod
+    def _to_dto(record: PromptRecord) -> PromptRecordDTO:
+        """Конвертирует внутренний PromptRecord в PromptRecordDTO.
+
+        Args:
+            record: Внутренний объект PromptRecord.
+
+        Returns:
+            PromptRecordDTO для использования в протоколах.
+        """
+        return PromptRecordDTO(
+            id=record.id,
+            raw_text=record.raw_text,
+            normalized_text=record.normalized_text,
+            prompt_hash=record.prompt_hash,
+            created_at=record.created_at,
+            ab_group=record.ab_group,
+        )
+
+    async def get_or_create_prompt(self, prompt_text: str) -> PromptRecordDTO:
         """Возвращает существующий или создаёт новый промпт.
 
         Алгоритм:
@@ -128,7 +148,7 @@ class PromptsRepo:
             prompt_text: Исходный текст промпта.
 
         Returns:
-            PromptRecord с метаданными промпта (существующая или новая запись).
+            PromptRecordDTO с метаданными промпта (существующая или новая запись).
 
         Raises:
             RuntimeError: При крайне маловероятной ошибке конкурентной вставки.
@@ -151,7 +171,7 @@ class PromptsRepo:
             if row is not None:
                 record = self._row_to_record(row)
                 self.logger.info(f"Prompt exists: {prompt_hash} (id={record.id})")
-                return record
+                return self._to_dto(record)
 
             # 2. Создаём новую запись. ab_group пока всегда NULL,
             #    в будущем сюда может добавиться логика A/B‑распределения.
@@ -183,16 +203,16 @@ class PromptsRepo:
 
             record = self._row_to_record(row)
             self.logger.info(f"Prompt created: {prompt_hash} (id={record.id})")
-            return record
+            return self._to_dto(record)
 
-    async def get_prompt_by_hash(self, prompt_hash: str) -> PromptRecord | None:
+    async def get_prompt_by_hash(self, prompt_hash: str) -> PromptRecordDTO | None:
         """Возвращает промпт по prompt_hash.
 
         Args:
             prompt_hash: SHA256-хеш нормализованного промпта.
 
         Returns:
-            PromptRecord если промпт найден, None иначе.
+            PromptRecordDTO если промпт найден, None иначе.
         """
 
         async with self._pool.acquire() as conn:
@@ -210,7 +230,7 @@ class PromptsRepo:
 
         record = self._row_to_record(row)
         self.logger.info(f"Prompt loaded by hash: {prompt_hash} (id={record.id})")
-        return record
+        return self._to_dto(record)
 
     async def get_random_prompt(self) -> PromptRecord | None:
         """Возвращает случайный промпт из таблицы.
