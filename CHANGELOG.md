@@ -28,6 +28,12 @@
   - Добавлена функция `build_frog_processing_service` в `src/infra/container.py` для создания `FrogProcessingService` с зависимостями
   - Добавлены импорты `AdminsRepo`, `ILogger` и `IMessagingService` для поддержки новых функций сборки
 
+- **Рефакторинг Celery-таски send_frog_manual**:
+  - Упрощена функция `send_frog_manual` в `src/infra/celery/tasks.py` - вся бизнес-логика перенесена в `FrogProcessingService`
+  - Добавлены импорты для `AdminNotificationService`, `FrogProcessingService`, `PTBMessagingService` и `AdminsRepo`
+  - Функция теперь только создает сервисы через DI и вызывает `frog_processing.process_frog_request()`
+  - Обработка ошибок и retry логика остается на уровне Celery-задачи
+
 - **Полный отказ от обратной совместимости через fallback-механизмы**:
   - Удалены все fallback-механизмы для полного соответствия принципам Dependency Injection
   - Все инфраструктурные зависимости теперь передаются явно через параметры конструкторов

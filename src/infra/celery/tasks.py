@@ -17,16 +17,20 @@ from celery import Task
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 
+from app.admin_notification_service import AdminNotificationService
+from app.frog_processing_service import FrogProcessingService
 from app.image_service import ImageService
 from infra.celery.app import celery_app
 from infra.celery.context import _ensure_pools_initialized, get_services_context
 from infra.logging.logger import get_logger, log_event
+from infra.messaging.ptb import PTBMessagingService
 from infra.metrics.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,
     CELERY_TASK_FAILURES_TOTAL,
     CELERY_TASK_RETRIES_TOTAL,
     CELERY_TASKS_TOTAL,
 )
+from infra.repos import AdminsRepo
 
 R = TypeVar("R")
 
@@ -339,294 +343,66 @@ async def send_frog_manual(
 ) -> dict[str, Any]:
     """Celery задача для отправки изображения жабы по ручной команде /frog.
 
-    Выполняет генерацию и отправку изображения жабы конкретному пользователю.
-    Использует dependency injection через get_services_context().
+    Теперь только оркестрирует выполнение, вся бизнес-логика в FrogProcessingService.
 
     Args:
         self: Экземпляр Celery Task.
         chat_id: ID чата для отправки изображения.
-        user_id: ID пользователя (для генерации и логирования).
+        user_id: ID пользователя.
         status_message_id: ID статусного сообщения для удаления (опционально).
 
     Returns:
-        Словарь с результатом выполнения, содержащий:
-        - status: Статус выполнения ("success" или "failed").
+        dict с результатом выполнения.
 
     Raises:
-        Exception: При ошибке генерации, отправки или инициализации сервисов.
+        Exception: При ошибке обработки.
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
-    # Константы для сообщений
-    MAX_TRACE_LENGTH = 1500
-    MAX_MESSAGE_LENGTH = 4000
-    MAX_ERROR_DETAILS_LENGTH = 500
-
     try:
-        # Получаем контекст сервисов (инициализация происходит внутри, после fork)
+        # Получаем контекст сервисов
         context = await get_services_context()
         bot_instance = _get_wednesday_bot(context)
 
+        # Создаём messaging service
+        messaging_service = PTBMessagingService(bot=bot_instance.application.bot)
+
+        # Создаём admin notifier
+        admins_repo = AdminsRepo(pool=context["postgres_pool"])
+        admin_notifier = AdminNotificationService(
+            messaging_service=messaging_service,
+            admins_repo=admins_repo,
+            logger=logger,
+        )
+
+        # Создаём frog processing service
         image_service: ImageService | None = bot_instance.services.image_service
         if image_service is None:
             raise RuntimeError("ImageService is not available in BotServices")
 
-        # Генерируем изображение
-        result = await image_service.generate_frog_image(user_id=user_id)
+        frog_processing = FrogProcessingService(
+            image_service=image_service,
+            messaging_service=messaging_service,
+            usage_tracker=bot_instance.services.usage,
+            admin_notifier=admin_notifier,
+            logger=logger,
+        )
 
-        if result:
-            image_data, caption = result
+        # Выполняем обработку запроса
+        result = await frog_processing.process_frog_request(
+            chat_id=chat_id,
+            user_id=user_id,
+            status_message_id=status_message_id,
+        )
 
-            # Отправляем изображение
-            await bot_instance.application.bot.send_photo(
-                chat_id=chat_id,
-                photo=image_data,
-                caption=caption,
-            )
-
-            # Сохраняем локально и обновляем usage через BotServices
-            try:
-                if bot_instance.services.usage:
-                    await bot_instance.services.usage.increment(1)
-            except Exception:
-                # Ошибка обновления счётчика не критична для отправки
-                pass
-
-            # Удаляем статусное сообщение
-            if status_message_id:
-                try:
-                    await bot_instance.application.bot.delete_message(
-                        chat_id=chat_id,
-                        message_id=status_message_id,
-                    )
-                except Exception:
-                    # Игнорируем ошибки удаления статуса
-                    pass
-
-            logger.info(f"Изображение жабы успешно отправлено пользователю {user_id} в чат {chat_id}")
-            return {"status": "success"}
-
-        else:
-            # Генерация не удалась - fallback логика
-            error_details = f"Не удалось сгенерировать изображение для пользователя {user_id}"
-            logger.error(error_details)
-
-            # Удаляем статусное сообщение
-            if status_message_id:
-                try:
-                    await bot_instance.application.bot.delete_message(
-                        chat_id=chat_id,
-                        message_id=status_message_id,
-                    )
-                except Exception:
-                    pass
-
-            # Отправляем дружелюбное сообщение пользователю
-            friendly_message = (
-                "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
-                "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
-            )
-            try:
-                await bot_instance.application.bot.send_message(
-                    chat_id=chat_id,
-                    text=friendly_message,
-                )
-            except Exception as e:
-                logger.error(f"Не удалось отправить дружелюбное сообщение: {e}")
-
-            # Отправляем случайное изображение из сохраненных через application-сервис изображений
-            image_service = bot_instance.services.image_service
-            fallback_image = await image_service.get_random_saved_image() if image_service is not None else None
-            if fallback_image:
-                fallback_image_data, fallback_caption = fallback_image
-                try:
-                    await bot_instance.application.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=fallback_image_data,
-                        caption=fallback_caption,
-                    )
-                    logger.info(f"Случайное изображение отправлено пользователю {user_id} как fallback")
-                except Exception as e:
-                    logger.error(f"Не удалось отправить fallback изображение: {e}")
-            else:
-                logger.warning("Нет сохраненных изображений для отправки как fallback")
-
-            # Уведомляем администраторов
-            from infra.repos import AdminsRepo
-
-            context = await get_services_context()
-            postgres_pool = context["postgres_pool"]
-            admins_store = AdminsRepo(pool=postgres_pool)
-            all_admins = await admins_store.list_all_admins()
-            if all_admins:
-                admin_message = (
-                    "🔴 Ошибка генерации изображения по команде /frog\n\n"
-                    f"Пользователь: {user_id}\n"
-                    f"Детали: {error_details}\n"
-                    "Возможные причины: достигнут лимит API, circuit breaker активен, ошибка генерации\n\n"
-                    "Пользователю отправлено дружелюбное сообщение и случайное изображение из архива."
-                )
-                for admin_id in all_admins:
-                    try:
-                        await bot_instance.application.bot.send_message(
-                            chat_id=admin_id,
-                            text=admin_message,
-                        )
-                    except Exception as admin_error:
-                        logger.error(
-                            f"Не удалось отправить сообщение об ошибке админу {admin_id}: {admin_error}",
-                        )
-
-            return {"status": "failed", "error": "Генерация вернула None"}
+        return result
 
     except Exception as e:
-        error_type = type(e).__name__
-        error_str = str(e)
-
-        # Определяем тип ошибки для более информативного сообщения
-        if "ConnectError" in error_type or "ConnectionError" in error_type or "Connection" in error_str:
-            error_details = (
-                f"Ошибка подключения к API при обработке команды /frog для пользователя {user_id}.\n"
-                f"Тип: {error_type}\n"
-                f"Детали: {error_str[:200]}\n\n"
-                "Возможные причины:\n"
-                "- Проблемы с интернет-соединением\n"
-                "- Kandinsky API временно недоступен\n"
-                "- Проблемы с прокси (если используется)\n"
-                "- Блокировка доступа на стороне провайдера"
-            )
-        else:
-            error_details = (
-                f"Произошла ошибка при обработке команды /frog для пользователя {user_id}.\n"
-                f"Тип: {error_type}\nДетали: {error_str[:200]}"
-            )
-
-        logger.error(f"Ошибка при обработке /frog: {error_type} - {error_str}", exc_info=True)
-
-        # Удаляем статусное сообщение
-        if status_message_id:
-            try:
-                context = await get_services_context()
-                bot_instance = _get_wednesday_bot(context)
-                await bot_instance.application.bot.delete_message(
-                    chat_id=chat_id,
-                    message_id=status_message_id,
-                )
-            except Exception:
-                pass
-
-        # Отправляем дружелюбное сообщение пользователю
-        try:
-            context = await get_services_context()
-            bot_instance = _get_wednesday_bot(context)
-            friendly_message = (
-                "🐸 К сожалению, произошла ошибка при генерации.\n"
-                "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
-            )
-            await bot_instance.application.bot.send_message(
-                chat_id=chat_id,
-                text=friendly_message,
-            )
-
-            # Отправляем случайное изображение из сохраненных через application-сервис изображений
-            image_service = bot_instance.services.image_service
-            fallback_image = await image_service.get_random_saved_image() if image_service is not None else None
-            if fallback_image:
-                fallback_image_data, fallback_caption = fallback_image
-                await bot_instance.application.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=fallback_image_data,
-                    caption=fallback_caption,
-                )
-                logger.info(f"Случайное изображение отправлено пользователю {user_id} как fallback")
-        except Exception as send_error:
-            logger.error(f"Не удалось отправить fallback сообщение/изображение: {send_error}")
-
-        # Сохраняем оригинальную ошибку перед обработкой уведомлений админам
-        original_error = e
-
-        # Уведомляем администраторов
-        try:
-            context = await get_services_context()
-            bot_instance = _get_wednesday_bot(context)
-            import traceback
-
-            from infra.repos import AdminsRepo
-
-            postgres_pool = context["postgres_pool"]
-            admins_store = AdminsRepo(pool=postgres_pool)
-            all_admins = await admins_store.list_all_admins()
-            if all_admins:
-                full_error = traceback.format_exc()
-                # Обрезаем трейс до последних MAX_TRACE_LENGTH символов
-                if len(full_error) > MAX_TRACE_LENGTH:
-                    full_error = "..." + full_error[-MAX_TRACE_LENGTH:]
-
-                admin_message = (
-                    "🔴 Ошибка при обработке команды /frog\n\n"
-                    f"Пользователь: {user_id}\n"
-                    f"Детали: {error_details}\n\n"
-                    f"Трейс (последние {MAX_TRACE_LENGTH} символов):\n{full_error}\n\n"
-                    "Пользователю отправлено дружелюбное сообщение и случайное изображение из архива."
-                )
-
-                # Разбиваем длинные сообщения на части
-                for admin_id in all_admins:
-                    try:
-                        if len(admin_message) > MAX_MESSAGE_LENGTH:
-                            # Отправляем короткую версию без полного трейса
-                            short_message = (
-                                "🔴 Ошибка при обработке команды /frog\n\n"
-                                f"Пользователь: {user_id}\n"
-                                f"Детали: {error_details[:MAX_ERROR_DETAILS_LENGTH]}\n\n"
-                                "⚠️ Полный трейс слишком длинный, смотрите логи.\n\n"
-                                "Пользователю отправлено дружелюбное сообщение и случайное изображение из архива."
-                            )
-                            await bot_instance.application.bot.send_message(
-                                chat_id=admin_id,
-                                text=short_message,
-                            )
-                        else:
-                            await bot_instance.application.bot.send_message(
-                                chat_id=admin_id,
-                                text=admin_message,
-                            )
-                    except Exception as admin_error:
-                        error_str = str(admin_error)
-                        # Если ошибка "Message is too long", отправляем сокращенную версию
-                        if "too long" in error_str.lower():
-                            try:
-                                short_message = (
-                                    "🔴 Ошибка при обработке команды /frog\n\n"
-                                    f"Пользователь: {user_id}\n"
-                                    f"Детали: {error_details[:MAX_ERROR_DETAILS_LENGTH]}\n\n"
-                                    "⚠️ Полный трейс слишком длинный для отправки, смотрите логи.\n\n"
-                                    "Пользователю отправлено дружелюбное сообщение и "
-                                    "случайное изображение из архива."
-                                )
-                                await bot_instance.application.bot.send_message(
-                                    chat_id=admin_id,
-                                    text=short_message,
-                                )
-                            except Exception as retry_error:
-                                logger.error(
-                                    f"Не удалось отправить даже сокращенное сообщение админу {admin_id}: {retry_error}",
-                                )
-                        else:
-                            logger.error(
-                                f"Не удалось отправить сообщение об ошибке админу {admin_id}: {admin_error}",
-                            )
-        except Exception as admin_notification_error:
-            logger.error(f"Ошибка при отправке сообщений админам: {admin_notification_error}")
-
-        # ⚠️ ВАЖНО: Кастомная фильтрация retryable ошибок
-        if is_retryable_error(original_error):
-            # Обновляем метрики retry
+        # Обработка ошибок и retry логика остается здесь
+        if is_retryable_error(e):
             CELERY_TASK_RETRIES_TOTAL.labels(task_name="send_frog_manual").inc()
-            # Retry только для сетевых ошибок
-            raise self.retry(exc=original_error) from original_error
+            raise self.retry(exc=e) from e
         else:
-            # Бизнес-логические ошибки не retry, сразу падаем
-            # После max_retries задача уйдёт в DLQ
+            # Бизнес-логические ошибки не retry
             raise
 
 
