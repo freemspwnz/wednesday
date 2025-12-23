@@ -17,20 +17,17 @@ from celery import Task
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 
-from app.admin_notification_service import AdminNotificationService
 from app.frog_processing_service import FrogProcessingService
 from app.image_service import ImageService
 from infra.celery.app import celery_app
 from infra.celery.context import _ensure_pools_initialized, get_services_context
 from infra.logging.logger import get_logger, log_event
-from infra.messaging.ptb import PTBMessagingService
 from infra.metrics.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,
     CELERY_TASK_FAILURES_TOTAL,
     CELERY_TASK_RETRIES_TOTAL,
     CELERY_TASKS_TOTAL,
 )
-from infra.repos import AdminsRepo
 
 R = TypeVar("R")
 
@@ -361,31 +358,11 @@ async def send_frog_manual(
     try:
         # Получаем контекст сервисов
         context = await get_services_context()
-        bot_instance = _get_wednesday_bot(context)
 
-        # Создаём messaging service
-        messaging_service = PTBMessagingService(bot=bot_instance.application.bot)
-
-        # Создаём admin notifier
-        admins_repo = AdminsRepo(pool=context["postgres_pool"])
-        admin_notifier = AdminNotificationService(
-            messaging_service=messaging_service,
-            admins_repo=admins_repo,
-            logger=logger,
-        )
-
-        # Создаём frog processing service
-        image_service: ImageService | None = bot_instance.services.image_service
-        if image_service is None:
-            raise RuntimeError("ImageService is not available in BotServices")
-
-        frog_processing = FrogProcessingService(
-            image_service=image_service,
-            messaging_service=messaging_service,
-            usage_tracker=bot_instance.services.usage,
-            admin_notifier=admin_notifier,
-            logger=logger,
-        )
+        # Получаем FrogProcessingService из контекста (создан через DI)
+        frog_processing = context.get("frog_processing")
+        if not isinstance(frog_processing, FrogProcessingService):
+            raise RuntimeError("FrogProcessingService is not available in context")
 
         # Выполняем обработку запроса
         result = await frog_processing.process_frog_request(

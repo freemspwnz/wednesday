@@ -98,6 +98,7 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
         - bot: Экземпляр WednesdayBot
         - postgres_pool: Пул подключений PostgreSQL (для прямого использования в задачах)
         - redis_client: Redis-клиент (для прямого использования в задачах)
+        - frog_processing: Экземпляр FrogProcessingService для обработки запросов /frog
 
     Raises:
         RuntimeError: Если не удалось инициализировать сервисы.
@@ -145,10 +146,43 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
                     redis_client=redis_client,
                 )
 
+                # Создаём FrogProcessingService через DI для использования в Celery задачах
+                from infra.container import (
+                    build_admin_notification_service,
+                    build_frog_processing_service,
+                )
+                from infra.messaging.ptb import PTBMessagingService
+                from infra.repos import AdminsRepo
+
+                # Создаём messaging service
+                messaging_service = PTBMessagingService(bot=bot.application.bot)
+
+                # Создаём admin notifier
+                admins_repo = AdminsRepo(pool=postgres_pool)
+                admin_notifier = build_admin_notification_service(
+                    messaging_service=messaging_service,
+                    admins_repo=admins_repo,
+                    logger=logger,
+                )
+
+                # Создаём frog processing service
+                image_service = bot.services.image_service
+                if image_service is None:
+                    raise RuntimeError("ImageService is not available in BotServices")
+
+                frog_processing = build_frog_processing_service(
+                    image_service=image_service,
+                    messaging_service=messaging_service,
+                    usage_tracker=bot.services.usage,
+                    admin_notifier=admin_notifier,
+                    logger=logger,
+                )
+
                 _services_context = {
                     "bot": bot,
                     "postgres_pool": postgres_pool,  # Добавляем в контекст
                     "redis_client": redis_client,  # Добавляем в контекст
+                    "frog_processing": frog_processing,  # Добавляем в контекст
                 }
                 logger.info("Celery services context created in worker process")
 
