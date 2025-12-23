@@ -21,7 +21,7 @@ class MetricsRecorder(BaseService, IMetrics):
     Добавляет логирование всех записей метрик.
     """
 
-    def __init__(self, metrics: Metrics | None = None, *, logger: ILogger) -> None:
+    def __init__(self, metrics: Metrics, *, logger: ILogger) -> None:
         """Инициализирует сервис записи метрик.
 
         Args:
