@@ -451,10 +451,11 @@ async def send_frog_manual(
                 logger.warning("Нет сохраненных изображений для отправки как fallback")
 
             # Уведомляем администраторов
-            from infra.database.postgres_client import get_postgres_pool
             from infra.repos import AdminsRepo
 
-            admins_store = AdminsRepo(pool=get_postgres_pool())
+            context = await get_services_context()
+            postgres_pool = context["postgres_pool"]
+            admins_store = AdminsRepo(pool=postgres_pool)
             all_admins = await admins_store.list_all_admins()
             if all_admins:
                 admin_message = (
@@ -549,10 +550,10 @@ async def send_frog_manual(
             bot_instance = _get_wednesday_bot(context)
             import traceback
 
-            from infra.database.postgres_client import get_postgres_pool
             from infra.repos import AdminsRepo
 
-            admins_store = AdminsRepo(pool=get_postgres_pool())
+            postgres_pool = context["postgres_pool"]
+            admins_store = AdminsRepo(pool=postgres_pool)
             all_admins = await admins_store.list_all_admins()
             if all_admins:
                 full_error = traceback.format_exc()
@@ -655,14 +656,15 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
         Exception: При ошибке выполнения очистки.
     """
     try:
-        # Инициализируем пулы подключений (для доступа к сервисам)
-        await _ensure_pools_initialized()
-
-        # Очистка старых записей dispatch_registry
-        from infra.database.postgres_client import get_postgres_pool
+        # Получаем контекст сервисов (инициализирует пулы подключений)
+        from infra.celery.context import get_services_context
         from infra.repos.dispatch_registry import DispatchRegistry
 
-        registry = DispatchRegistry(pool=get_postgres_pool())
+        context = await get_services_context()
+        postgres_pool = context["postgres_pool"]
+
+        # Очистка старых записей dispatch_registry
+        registry = DispatchRegistry(pool=postgres_pool)
         await registry.cleanup_old()
 
         logger.info("Daily cleanup task completed successfully")
