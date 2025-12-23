@@ -5,7 +5,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from telegram import Update
 from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
@@ -25,6 +25,9 @@ from infra.logging.logger import get_logger, log_all_methods
 from infra.rate_limiting import RateLimiter
 from shared.config import AppSettings, Config
 from shared.protocols import IRateLimiter
+
+if TYPE_CHECKING:
+    from infra.redis.redis_client import RedisClient
 
 # Создаём экземпляр Config при импорте модуля
 config: Config = Config()
@@ -58,7 +61,12 @@ class SupportBot(BaseHandlers):
     Использует минимальный BotServices (только с settings и rate_limiter).
     """
 
-    def __init__(self, request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None) -> None:
+    def __init__(
+        self,
+        request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+        config: Config | None = None,
+        redis_client: "RedisClient | None" = None,
+    ) -> None:
         """Инициализирует SupportBot.
 
         Создает экземпляр резервного бота, который работает когда основной бот остановлен.
@@ -69,6 +77,8 @@ class SupportBot(BaseHandlers):
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
                 Принимает словарь с метаданными (chat_id, message_id) для редактирования статусного
                 сообщения. Если None, запуск основного бота через /start будет недоступен.
+            config: Экземпляр Config. Если None, используется глобальный config.
+            redis_client: Redis-клиент для rate limiter. Если None, используется get_redis().
         """
         # Сначала создаем все необходимые компоненты для BotServices
         request: HTTPXRequest = HTTPXRequest(
@@ -77,8 +87,15 @@ class SupportBot(BaseHandlers):
             read_timeout=READ_TIMEOUT_SECONDS,
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
-        # config.telegram_token проверяется в _validate_required_vars, поэтому не может быть None
-        telegram_token: str = config.telegram_token or ""
+        # Используем переданный config или глобальный
+        if config is None:
+            # Используем глобальный config из модуля (импортирован в начале файла)
+            config_obj = globals()["config"]
+        else:
+            config_obj = config  # Используем переданный config
+
+        # config_obj.telegram_token проверяется в _validate_required_vars, поэтому не может быть None
+        telegram_token: str = config_obj.telegram_token or ""
         assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
         self.request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = request_start_main
@@ -87,15 +104,28 @@ class SupportBot(BaseHandlers):
         self.pending_shutdown_edit: dict[str, Any] | None = None
         # Данные для цепочки запуска основного: сообщение "Запускаю..."
         self.pending_startup_edit: dict[str, Any] | None = None
+
         # Лимитер на основе Redis для административных команд SupportBot
         # (например, /log), чтобы избежать случайного "забивания" лог‑канала.
         # В случае недоступности Redis лимитер автоматически работает в in‑memory
         # режиме и не блокирует админа.
-        from infra.redis.redis_client import get_redis
+        if redis_client is not None:
+            redis_client_for_limiter = redis_client
+        else:
+            # Fallback для обратной совместимости (deprecated)
+            from infra.redis.redis_client import get_redis
 
-        redis_client = get_redis()
+            redis_client_for_limiter = get_redis()
+            logger = get_logger(__name__)
+            logger.warning(
+                "Использование get_redis() напрямую в SupportBot устарело. Передавайте redis_client через конструктор.",
+            )
+
         self.rate_limiter: RateLimiter = RateLimiter(
-            redis_client=redis_client, prefix="rate:support:", window=60, limit=20
+            redis_client=redis_client_for_limiter,
+            prefix="rate:support:",
+            window=60,
+            limit=20,
         )
         # Настройки приложения для доступа к конфигурации через DI
         self.settings: AppSettings = AppSettings()
@@ -109,15 +139,17 @@ class SupportBot(BaseHandlers):
         app_logger = get_logger("app")
 
         # Создаём rate limiters для команды /frog
+        # Используем redis_client из rate_limiter или получаем новый
+        redis_client_for_limiter = redis_client if redis_client is not None else get_redis()
         SECONDS_PER_MINUTE = 60
         global_limiter: IRateLimiter = RateLimiter(
-            redis_client=redis_client,
+            redis_client=redis_client_for_limiter,
             prefix="frog:global:",
             window=self.settings.frog_rate_limit_window_seconds,
             limit=self.settings.frog_rate_limit_max_requests,
         )
         user_limiter: IRateLimiter = RateLimiter(
-            redis_client=redis_client,
+            redis_client=redis_client_for_limiter,
             prefix="frog:user:",
             window=self.settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
             limit=1,

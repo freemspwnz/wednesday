@@ -195,7 +195,11 @@ class BotRunner:
                     await asyncio.sleep(0)
 
                 self.logger.info("Создание экземпляра SupportBot")
-                self.support_bot = SupportBot(request_start_main=request_start_main)
+                self.support_bot = SupportBot(
+                    request_start_main=request_start_main,
+                    config=config,
+                    redis_client=redis_client,
+                )
                 # Если есть отложенное редактирование для статуса остановки основного — передадим SupportBot
                 try:
                     if isinstance(self.pending_shutdown_edit, dict):
