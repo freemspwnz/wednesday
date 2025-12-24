@@ -108,30 +108,21 @@ class PromptService(BaseService):
                 )
             except PromptGenerationError as fallback_error:
                 # Ошибка при получении fallback промпта
-                unexpected_error = UnexpectedPromptError(
-                    f"Failed to get fallback prompt: {fallback_error}",
-                    original_error=fallback_error,
-                )
-                self.logger.error(
-                    f"Ошибка при получении fallback промпта: {unexpected_error}",
-                    event="prompt_fallback_failed",
-                    status="error",
-                    error_type=type(unexpected_error).__name__,
-                    error_message=str(unexpected_error),
+                self.handle_unexpected_error(
+                    fallback_error,
+                    UnexpectedPromptError,
+                    message=f"Failed to get fallback prompt: {fallback_error}",
+                    context={"event": "prompt_fallback_failed"},
                 )
                 return None
-        except Exception as e:
+        except BaseException as e:
             # Другие неожиданные ошибки
-            unexpected_error = UnexpectedPromptError(
-                f"Unexpected error while generating prompt: {e}",
-                original_error=e,
-            )
-            self.logger.error(
-                f"Неожиданная ошибка при генерации промпта через domain сервис: {unexpected_error}",
-                event="prompt_generation_failed",
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
+            unexpected_error = self.handle_unexpected_error(
+                e,
+                UnexpectedPromptError,
+                message=f"Unexpected error while generating prompt: {e}",
+                context={"event": "prompt_generation_failed"},
             )
             raise unexpected_error from e
 

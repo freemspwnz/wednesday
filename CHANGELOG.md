@@ -4,6 +4,28 @@
 
 ### Изменено
 
+- **Централизация обработки ошибок в BaseService и улучшение обработки исключений в app-слое**:
+  - Добавлен метод `handle_unexpected_error()` в `BaseService` для централизованной обработки неожиданных ошибок с логированием и оборачиванием в специфичные исключения
+  - Добавлен метод `_safe_log_error()` в `BaseService` для безопасного логирования ошибок в критических блоках (например, внутри транзакций), предотвращающий скрытие оригинальных исключений
+  - Заменены широкие `except Exception` блоки на `except BaseException` с явной обработкой системных ошибок (MemoryError, SystemExit, KeyboardInterrupt) во всех сервисах app-слоя
+  - Системные ошибки теперь явно пробрасываются выше без оборачивания, что соответствует best practices
+  - Обновлены все сервисы app-слоя для использования нового централизованного механизма обработки ошибок: `DispatchExecutionService`, `FallbackService`, `ImageService`, `APIStatusService`, `PromptService`, `DispatchService`, `DatabaseOperationsService`, `FrogProcessingService`, `AdminNotificationService`
+  - Устранено дублирование логики обработки системных ошибок между `BaseService.handle_unexpected_error()` и вызывающими блоками
+
+- **Исправление потенциальной утечки транзакций в DatabaseOperationsService**:
+  - Использован метод `_safe_log_error()` для безопасного логирования ошибок внутри блока транзакции в `record_dispatch_success()`
+  - Обеспечено, что ошибки логирования не скрывают оригинальные исключения базы данных, что предотвращает нелогированные откаты транзакций
+  - Соответствие принципам безопасного логирования в критических блоках
+
+- **Рефакторинг ImageService: явная обработка CircuitBreakerOpen вместо возврата None**:
+  - Метод `generate_frog_image()` теперь возвращает `tuple[bytes, str]` вместо `tuple[bytes, str] | None`
+  - Вместо возврата `None` при открытом circuit breaker выбрасывается исключение `CircuitBreakerOpen` для явной обработки координаторами
+  - При ошибках генерации выбрасывается `ImageGenerationError` вместо возврата `None`
+  - При отсутствии промпта или пустом результате генерации выбрасывается `ImageGenerationError` вместо возврата `None`
+  - Обновлены координаторы `FrogProcessingService` и `DispatchService` для явной обработки `CircuitBreakerOpen` и `ImageGenerationError` с использованием fallback-стратегии
+  - Обновлены `infra/celery/tasks.py` и `bot/handlers_admin.py` для корректной обработки новых исключений
+  - Улучшена явность обработки ошибок и соответствие принципам Clean Architecture через использование исключений вместо магических значений
+
 - **Разделение DTO между слоями app и infra**:
   - Создан общий модуль `shared.models` для DTO `APIStatusResult`, `SetModelResult`, `ImageRecordDTO` и `PromptRecordDTO`
   - Определения DTO перенесены в общую точку без изменения поведения и типов

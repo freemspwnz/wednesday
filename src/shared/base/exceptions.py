@@ -81,7 +81,7 @@ class UnexpectedAppError(AppError):
     инфраструктурным сбоям.
     """
 
-    def __init__(self, message: str, original_error: Exception | None = None) -> None:
+    def __init__(self, message: str, original_error: Exception | BaseException | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.original_error = original_error

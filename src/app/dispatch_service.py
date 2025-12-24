@@ -20,7 +20,7 @@ from app.fallback_service import FallbackService
 from app.image_service import ImageService
 from app.target_preparation_service import TargetPreparationService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import ServiceError, UnexpectedDispatchError
+from shared.base.exceptions import CircuitBreakerOpen, ImageGenerationError, ServiceError, UnexpectedDispatchError
 from shared.protocols import ILogger
 
 
@@ -130,25 +130,8 @@ class DispatchService(BaseService):
                 return result
 
             # 3. Генерация изображения
-            image_result = None
-            if self._image_service:
-                image_result = await self._image_service.generate_frog_image()
-
-            # 4. Отправка
-            if image_result:
-                image_data, caption = image_result
-                return await self._dispatch_execution_service.send_to_targets(
-                    targets=targets,
-                    slot_date=slot_date,
-                    slot_time=slot_time,
-                    image_data=image_data,
-                    caption=caption,
-                    send_error_message=send_error_message,
-                    send_image=send_image,
-                    result=result,
-                )
-            else:
-                # Fallback
+            if not self._image_service:
+                # Если сервис генерации не настроен, используем fallback
                 return await self._fallback_service.handle_generation_failure(
                     slot_date=slot_date,
                     slot_time=slot_time,
@@ -159,6 +142,54 @@ class DispatchService(BaseService):
                     result=result,
                 )
 
+            try:
+                image_data, caption = await self._image_service.generate_frog_image()
+            except CircuitBreakerOpen as e:
+                # Явная обработка открытого circuit breaker
+                # Координатор решает стратегию - используем fallback
+                self.logger.warning(
+                    f"Circuit breaker открыт при рассылке, используем fallback: {e}",
+                    event="dispatch_circuit_breaker_open",
+                    status="circuit_breaker",
+                )
+                return await self._fallback_service.handle_generation_failure(
+                    slot_date=slot_date,
+                    slot_time=slot_time,
+                    targets=targets,
+                    send_admin_error=send_admin_error,
+                    send_user_friendly_error=send_user_friendly_error,
+                    send_fallback_image=send_fallback_image,
+                    result=result,
+                )
+            except ImageGenerationError as e:
+                # Ожидаемая ошибка генерации - используем fallback
+                self.logger.warning(
+                    f"Ошибка генерации при рассылке, используем fallback: {e}",
+                    event="dispatch_generation_error",
+                    status="error",
+                )
+                return await self._fallback_service.handle_generation_failure(
+                    slot_date=slot_date,
+                    slot_time=slot_time,
+                    targets=targets,
+                    send_admin_error=send_admin_error,
+                    send_user_friendly_error=send_user_friendly_error,
+                    send_fallback_image=send_fallback_image,
+                    result=result,
+                )
+
+            # 4. Отправка успешно сгенерированного изображения
+            return await self._dispatch_execution_service.send_to_targets(
+                targets=targets,
+                slot_date=slot_date,
+                slot_time=slot_time,
+                image_data=image_data,
+                caption=caption,
+                send_error_message=send_error_message,
+                send_image=send_image,
+                result=result,
+            )
+
         except ServiceError as e:
             # Ожидаемые ошибки сервисов (доменные/инфраструктурные) обрабатываем через fallback
             if "targets" not in locals():
@@ -168,7 +199,7 @@ class DispatchService(BaseService):
                 )
                 result["total_targets"] = len(targets)
 
-            return await self._fallback_service.handle_unexpected_error(
+            return await self._fallback_service.handle_dispatch_unexpected_error(
                 error=e,
                 slot_date=slot_date,
                 slot_time=slot_time,
@@ -178,10 +209,9 @@ class DispatchService(BaseService):
                 send_fallback_image=send_fallback_image,
                 result=result,
             )
-        except Exception as e:
-            import traceback
-
+        except BaseException as e:
             # Получаем targets для fallback, если они еще не получены
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
             if "targets" not in locals():
                 targets = await self._target_preparation_service.prepare_targets(
                     main_chat_id=main_chat_id,
@@ -189,22 +219,15 @@ class DispatchService(BaseService):
                 )
                 result["total_targets"] = len(targets)
 
-            unexpected_error = UnexpectedDispatchError(
-                f"Unexpected error during dispatch execution: {e}",
-                original_error=e,
-            )
-
             # Логируем действительно неожиданную ошибку
-            self.logger.error(
-                f"Неожиданная ошибка при выполнении рассылки: {unexpected_error}",
-                event="unexpected_dispatch_error",
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-                traceback=traceback.format_exc(),
+            unexpected_error = self.handle_unexpected_error(
+                e,
+                UnexpectedDispatchError,
+                message=f"Unexpected error during dispatch execution: {e}",
+                context={"event": "unexpected_dispatch_error"},
             )
 
-            return await self._fallback_service.handle_unexpected_error(
+            return await self._fallback_service.handle_dispatch_unexpected_error(
                 error=unexpected_error,
                 slot_date=slot_date,
                 slot_time=slot_time,

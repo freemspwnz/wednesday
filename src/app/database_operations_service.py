@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from shared.base.base_service import BaseService
-from shared.base.exceptions import RepoError, ServiceError
+from shared.base.exceptions import RepoError, ServiceError, UnexpectedAppError
 from shared.protocols import IDatabaseUnitOfWork, IDispatchRegistry, ILogger, IMetrics, IUsageTracker
 
 
@@ -59,7 +59,7 @@ class DatabaseOperationsService(BaseService):
             chat_id: ID чата, в который была отправка.
 
         Raises:
-            Exception: При ошибке выполнения операций (транзакция откатывается).
+            RepoError: При ошибке выполнения операций (транзакция откатывается).
         """
         uow = self._unit_of_work_factory()
 
@@ -86,16 +86,18 @@ class DatabaseOperationsService(BaseService):
 
             except RepoError as e:
                 # Откат происходит автоматически при исключении
-                import traceback
-
-                self.logger.error(
+                # Логируем безопасно, чтобы не скрыть оригинальную ошибку
+                self._safe_log_error(
                     f"Ошибка при регистрации успешной отправки: {e}",
-                    event="repo_error",
-                    status="error",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    traceback=traceback.format_exc(),
+                    e,
+                    context={
+                        "event": "repo_error",
+                        "slot_date": slot_date,
+                        "slot_time": slot_time,
+                        "chat_id": chat_id,
+                    },
                 )
+                # Пробрасываем оригинальную ошибку независимо от результата логирования
                 raise
 
     async def record_dispatch_failure(
@@ -129,15 +131,12 @@ class DatabaseOperationsService(BaseService):
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
-        except Exception as e:
-            # Неожиданные ошибки
-            import traceback
-
-            self.logger.error(
-                f"Неожиданная ошибка при обновлении метрик неуспешной отправки: {e}",
-                event="unexpected_error",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-                traceback=traceback.format_exc(),
+        except BaseException as e:
+            # Неожиданные ошибки (метрики не критичны, только логируем)
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
+            self.handle_unexpected_error(
+                e,
+                UnexpectedAppError,
+                message=f"Неожиданная ошибка при обновлении метрик неуспешной отправки: {e}",
+                context={"event": "unexpected_error"},
             )

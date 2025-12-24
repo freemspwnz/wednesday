@@ -103,7 +103,7 @@ class ImageService(BaseService):
     async def generate_frog_image(
         self,
         user_id: int | None = None,
-    ) -> tuple[bytes, str] | None:
+    ) -> tuple[bytes, str]:
         """Генерирует изображение жабы с полной координацией всех сервисов.
 
         Выполняет следующую последовательность:
@@ -119,11 +119,16 @@ class ImageService(BaseService):
             user_id: Идентификатор пользователя для логирования и метрик (опционально).
 
         Returns:
-            Кортеж (изображение в байтах, случайная подпись) или None при ошибке.
+            Кортеж (изображение в байтах, случайная подпись).
+
+        Raises:
+            CircuitBreakerOpen: Если circuit breaker открыт и генерация заблокирована.
+            ImageGenerationError: При ошибках генерации изображения.
+            UnexpectedImageError: При неожиданных ошибках.
 
         Note:
             При ошибках на любом этапе логирование выполняется, но генерация
-            продолжается (graceful degradation).
+            продолжается (graceful degradation) где возможно.
         """
         start_time = time.perf_counter()
         user_id_str = str(user_id) if user_id is not None else None
@@ -133,8 +138,8 @@ class ImageService(BaseService):
             try:
                 if await self._circuit_breaker.is_open():
                     self.logger.warning(
-                        "Circuit breaker открыт, генерация пропущена",
-                        event="generation_skipped_circuit_breaker",
+                        "Circuit breaker открыт, генерация заблокирована",
+                        event="generation_blocked_circuit_breaker",
                         user_id=user_id_str,
                         status="circuit_breaker_open",
                     )
@@ -149,7 +154,12 @@ class ImageService(BaseService):
                                 error_type=type(e).__name__,
                                 error_message=str(e),
                             )
-                    return None
+                    # Выбрасываем явное исключение вместо возврата None
+                    # Координатор должен явно обработать эту ситуацию
+                    raise CircuitBreakerOpen("Circuit breaker открыт, генерация изображения заблокирована")
+            except CircuitBreakerOpen:
+                # Пробрасываем CircuitBreakerOpen выше для явной обработки координатором
+                raise
             except ServiceError as e:
                 self.logger.warning(
                     f"Ошибка при проверке circuit breaker: {e}",
@@ -158,6 +168,8 @@ class ImageService(BaseService):
                     error_type=type(e).__name__,
                     error_message=str(e),
                 )
+                # При ошибке проверки circuit breaker продолжаем генерацию
+                # (fail-open стратегия для проверки circuit breaker)
 
         self.logger.info(
             "Начинаю генерацию изображения жабы",
@@ -182,7 +194,10 @@ class ImageService(BaseService):
                     user_id=user_id_str,
                     status="ok",
                 )
-            except Exception as e:
+            except (MemoryError, SystemExit, KeyboardInterrupt):
+                # Системные ошибки пробрасываем выше
+                raise
+            except BaseException as e:
                 # Неожиданная ошибка при выборе подписи — логируем как unexpected,
                 # но продолжаем генерацию с пустой подписью (graceful degradation).
                 unexpected_error = UnexpectedImageError(
@@ -210,7 +225,8 @@ class ImageService(BaseService):
                 user_id=user_id_str,
                 status="error",
             )
-            return None
+            # Выбрасываем исключение вместо возврата None для явной обработки
+            raise ImageGenerationError("Не удалось сгенерировать промпт для изображения")
 
         self.logger.info(
             f"Выбран промпт: {prompt[:100]}...",
@@ -294,6 +310,7 @@ class ImageService(BaseService):
                     await self._circuit_breaker.record_failure()
                 except CircuitBreakerOpen:
                     # Circuit breaker открыт после этой ошибки
+                    # Выбрасываем явное исключение для координатора
                     self.logger.warning(
                         "Circuit breaker открыт после ошибки генерации",
                         event="circuit_breaker_opened",
@@ -305,7 +322,8 @@ class ImageService(BaseService):
                             await self._metrics.record_circuit_breaker_trip()
                         except ServiceError:
                             pass
-                    return None
+                    # Пробрасываем CircuitBreakerOpen для явной обработки координатором
+                    raise CircuitBreakerOpen("Circuit breaker открыт после ошибки генерации изображения") from e
                 except ServiceError as cb_err:
                     self.logger.warning(
                         f"Ошибка при записи failure в circuit breaker: {cb_err}",
@@ -316,42 +334,31 @@ class ImageService(BaseService):
                     )
 
             elapsed = time.perf_counter() - start_time
-            self.logger.error(
-                "Генерация изображения не удалась",
-                event="generation_failed",
-                user_id=user_id_str,
-                latency_ms=round(elapsed * 1000),
-                status="error",
-            )
             if self._metrics:
                 try:
                     await self._metrics.increment_generation_failed()
-                except ServiceError as e:
+                except ServiceError as metrics_err:
                     self.logger.warning(
-                        f"Ошибка при записи метрики failed: {e}",
+                        f"Ошибка при записи метрики failed: {metrics_err}",
                         event="metrics_error",
                         status="warning",
-                        error_type=type(e).__name__,
-                        error_message=str(e),
+                        error_type=type(metrics_err).__name__,
+                        error_message=str(metrics_err),
                     )
-            return None
-        except Exception as e:
-            import traceback
-
+            # Выбрасываем исключение вместо возврата None для явной обработки координатором
+            raise
+        except BaseException as e:
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
             elapsed = time.perf_counter() - start_time
-            unexpected_error = UnexpectedImageError(
-                f"Unexpected error while generating image: {e}",
-                original_error=e,
-            )
-            self.logger.error(
-                f"Неожиданная ошибка при генерации изображения: {unexpected_error}",
-                event="unexpected_generation_error",
-                user_id=user_id_str,
-                latency_ms=round(elapsed * 1000),
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-                traceback=traceback.format_exc(),
+            unexpected_error = self.handle_unexpected_error(
+                e,
+                UnexpectedImageError,
+                message=f"Unexpected error while generating image: {e}",
+                context={
+                    "event": "unexpected_generation_error",
+                    "user_id": user_id_str,
+                    "latency_ms": round(elapsed * 1000),
+                },
             )
             if self._metrics:
                 try:
@@ -388,7 +395,8 @@ class ImageService(BaseService):
                         error_type=type(e).__name__,
                         error_message=str(e),
                     )
-            return None
+            # Выбрасываем исключение вместо возврата None для явной обработки
+            raise ImageGenerationError("Генерация изображения вернула пустой результат")
 
         # 5. Сохраняем в кэш и хранилище через UnitOfWork
         image_data = image_data_result

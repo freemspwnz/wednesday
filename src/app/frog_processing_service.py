@@ -9,6 +9,8 @@ from app.admin_notification_service import AdminNotificationService
 from app.image_service import ImageService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import (
+    CircuitBreakerOpen,
+    ImageGenerationError,
     MessagingError,
     UnexpectedImageError,
 )
@@ -71,65 +73,82 @@ class FrogProcessingService(BaseService):
         """
         try:
             # 1. Генерация изображения
-            result = await self._image_service.generate_frog_image(user_id=user_id)
+            image_data, caption = await self._image_service.generate_frog_image(user_id=user_id)
 
-            if result:
-                image_data, caption = result
+            # 2. Отправка изображения
+            await self._messaging.send_image(
+                chat_id=chat_id,
+                image=image_data,
+                caption=caption,
+            )
 
-                # 2. Отправка изображения
-                await self._messaging.send_image(
-                    chat_id=chat_id,
-                    image=image_data,
-                    caption=caption,
-                )
+            # 3. Обновление usage (не критично для успешной отправки)
+            if self._usage_tracker:
+                try:
+                    await self._usage_tracker.increment(1)
+                except (MemoryError, SystemExit, KeyboardInterrupt):
+                    # Системные ошибки пробрасываем выше даже для не критичных операций
+                    raise
+                except BaseException as e:
+                    # Ошибка обновления usage не критична, только логируем
+                    self.logger.warning(
+                        f"Ошибка обновления usage: {e}",
+                        event="usage_update_failed",
+                        status="warning",
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                    )
 
-                # 3. Обновление usage (не критично для успешной отправки)
-                if self._usage_tracker:
-                    try:
-                        await self._usage_tracker.increment(1)
-                    except Exception as e:
-                        self.logger.warning(
-                            f"Ошибка обновления usage: {e}",
-                            event="usage_update_failed",
-                            status="warning",
-                            error_type=type(e).__name__,
-                            error_message=str(e),
-                        )
+            # 4. Удаление статусного сообщения (не критично)
+            if status_message_id:
+                try:
+                    await self._messaging.delete_message(
+                        chat_id=chat_id,
+                        message_id=status_message_id,
+                    )
+                except MessagingError as e:
+                    self.logger.warning(
+                        f"Не удалось удалить статусное сообщение: {e}",
+                        event="status_message_delete_failed",
+                        status="warning",
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                    )
 
-                # 4. Удаление статусного сообщения (не критично)
-                if status_message_id:
-                    try:
-                        await self._messaging.delete_message(
-                            chat_id=chat_id,
-                            message_id=status_message_id,
-                        )
-                    except MessagingError as e:
-                        self.logger.warning(
-                            f"Не удалось удалить статусное сообщение: {e}",
-                            event="status_message_delete_failed",
-                            status="warning",
-                            error_type=type(e).__name__,
-                            error_message=str(e),
-                        )
+            self.logger.info(
+                f"Изображение жабы успешно отправлено пользователю {user_id} в чат {chat_id}",
+                event="frog_request_success",
+                status="ok",
+                user_id=user_id,
+                chat_id=chat_id,
+            )
 
-                self.logger.info(
-                    f"Изображение жабы успешно отправлено пользователю {user_id} в чат {chat_id}",
-                    event="frog_request_success",
-                    status="ok",
-                    user_id=user_id,
-                    chat_id=chat_id,
-                )
+            return {"status": "success"}
 
-                return {"status": "success"}
-            else:
-                # Генерация не удалась - fallback
-                return await self._handle_generation_failure(
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    status_message_id=status_message_id,
-                    error_details="Не удалось сгенерировать изображение",
-                )
-
+        except CircuitBreakerOpen as e:
+            # Явная обработка открытого circuit breaker
+            # Координатор решает стратегию - используем fallback
+            self.logger.warning(
+                f"Circuit breaker открыт, используем fallback: {e}",
+                event="circuit_breaker_open",
+                status="circuit_breaker",
+                user_id=user_id,
+                chat_id=chat_id,
+            )
+            return await self._handle_generation_failure(
+                chat_id=chat_id,
+                user_id=user_id,
+                status_message_id=status_message_id,
+                error_details=f"Circuit breaker открыт: {e}",
+            )
+        except ImageGenerationError as e:
+            # Ожидаемая ошибка генерации - используем fallback
+            return await self._handle_generation_failure(
+                chat_id=chat_id,
+                user_id=user_id,
+                status_message_id=status_message_id,
+                error_details=f"Ошибка генерации изображения: {e}",
+            )
         except UnexpectedImageError as e:
             # Неожиданная ошибка генерации
             return await self._handle_unexpected_error(
@@ -156,10 +175,17 @@ class FrogProcessingService(BaseService):
                         chat_id=chat_id,
                         message_id=status_message_id,
                     )
-                except Exception:
+                except (MemoryError, SystemExit, KeyboardInterrupt):
+                    # Системные ошибки пробрасываем выше даже при попытке удаления сообщения
+                    raise
+                except BaseException:
+                    # Игнорируем другие ошибки при удалении статусного сообщения (не критично)
                     pass
             raise
-        except Exception as e:
+        except (MemoryError, SystemExit, KeyboardInterrupt):
+            # Системные ошибки пробрасываем выше без обёртки
+            raise
+        except BaseException as e:
             # Любая другая неожиданная ошибка
             return await self._handle_unexpected_error(
                 chat_id=chat_id,
@@ -219,7 +245,7 @@ class FrogProcessingService(BaseService):
         chat_id: int,
         user_id: int,
         status_message_id: int | None,
-        error: Exception,
+        error: BaseException,
     ) -> dict[str, Any]:
         """Обрабатывает неожиданную ошибку.
 
@@ -314,7 +340,11 @@ class FrogProcessingService(BaseService):
                     chat_id=chat_id,
                     message_id=status_message_id,
                 )
-            except Exception:
+            except (MemoryError, SystemExit, KeyboardInterrupt):
+                # Системные ошибки пробрасываем выше даже при попытке удаления сообщения
+                raise
+            except BaseException:
+                # Игнорируем другие ошибки при удалении статусного сообщения (не критично)
                 pass
 
         # Отправка дружелюбного сообщения

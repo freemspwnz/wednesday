@@ -502,17 +502,17 @@ class AdminHandlers(BaseHandlers):
         image_service = self.services.image_service
         if can_generate and image_service is not None:
             try:
-                result = await image_service.generate_frog_image(user_id=user_id)
-                if result:
-                    image_data, caption = result
-                    # Увеличиваем счетчик использования
-                    if usage:
-                        await usage.increment(1)
-                else:
-                    use_fallback = True
-                    self.logger.warning("Генерация изображения вернула None, используем fallback")
+                image_data, caption = await image_service.generate_frog_image(user_id=user_id)
+                # Увеличиваем счетчик использования
+                if usage:
+                    await usage.increment(1)
             except Exception as e:
-                self.logger.error(f"Ошибка при генерации изображения: {e}", exc_info=True)
+                # Обрабатываем все ошибки генерации (CircuitBreakerOpen, ImageGenerationError и т.д.)
+                # используем fallback изображение
+                self.logger.warning(
+                    f"Ошибка при генерации изображения, используем fallback: {e}",
+                    exc_info=True,
+                )
                 use_fallback = True
         else:
             use_fallback = True

@@ -138,23 +138,15 @@ class APIStatusService(BaseService):
                 api="kandinsky",
             )
             return ImageAPIStatus.unavailable(error_message)
-        except Exception as e:
-            import traceback
-
-            unexpected_error = UnexpectedAPIError(
-                f"Unexpected error while checking Kandinsky API status: {e}",
-                original_error=e,
+        except BaseException as e:
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
+            unexpected_error = self.handle_unexpected_error(
+                e,
+                UnexpectedAPIError,
+                message=f"Unexpected error while checking Kandinsky API status: {e}",
+                context={"api": "kandinsky"},
             )
             error_message = f"❌ Ошибка: {str(unexpected_error)[: self.MAX_ERROR_DETAILS_LENGTH]}"
-            self.logger.error(
-                f"Неожиданная ошибка при проверке API Kandinsky: {unexpected_error}",
-                event="unexpected_api_error",
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-                traceback=traceback.format_exc(),
-                api="kandinsky",
-            )
             return ImageAPIStatus.unavailable(error_message)
 
     async def check_text_api_status(
@@ -217,23 +209,15 @@ class APIStatusService(BaseService):
                 api="gigachat",
             )
             return TextAPIStatus.unavailable(error_message)
-        except Exception as e:
-            import traceback
-
-            unexpected_error = UnexpectedAPIError(
-                f"Unexpected error while checking GigaChat API status: {e}",
-                original_error=e,
+        except BaseException as e:
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
+            unexpected_error = self.handle_unexpected_error(
+                e,
+                UnexpectedAPIError,
+                message=f"Unexpected error while checking GigaChat API status: {e}",
+                context={"api": "gigachat"},
             )
             error_message = f"❌ Ошибка: {str(unexpected_error)[: self.MAX_ERROR_DETAILS_LENGTH]}"
-            self.logger.error(
-                f"Неожиданная ошибка при проверке GigaChat API: {unexpected_error}",
-                event="unexpected_api_error",
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-                traceback=traceback.format_exc(),
-                api="gigachat",
-            )
             return TextAPIStatus.unavailable(error_message)
 
     async def get_image_models(
@@ -263,21 +247,13 @@ class APIStatusService(BaseService):
                 api="kandinsky",
             )
             return []
-        except Exception as e:
-            import traceback
-
-            unexpected_error = UnexpectedAPIError(
-                f"Unexpected error while getting Kandinsky models: {e}",
-                original_error=e,
-            )
-            self.logger.error(
-                f"Неожиданная ошибка при получении моделей Kandinsky: {unexpected_error}",
-                event="unexpected_api_error",
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-                traceback=traceback.format_exc(),
-                api="kandinsky",
+        except BaseException as e:
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
+            self.handle_unexpected_error(
+                e,
+                UnexpectedAPIError,
+                message=f"Unexpected error while getting Kandinsky models: {e}",
+                context={"api": "kandinsky"},
             )
             return []
 
@@ -308,20 +284,12 @@ class APIStatusService(BaseService):
                 api="gigachat",
             )
             return []
-        except Exception as e:
-            import traceback
-
-            unexpected_error = UnexpectedAPIError(
-                f"Unexpected error while getting GigaChat models: {e}",
-                original_error=e,
-            )
-            self.logger.error(
-                f"Неожиданная ошибка при получении моделей GigaChat: {unexpected_error}",
-                event="unexpected_api_error",
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-                traceback=traceback.format_exc(),
-                api="gigachat",
+        except BaseException as e:
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
+            self.handle_unexpected_error(
+                e,
+                UnexpectedAPIError,
+                message=f"Unexpected error while getting GigaChat models: {e}",
+                context={"api": "gigachat"},
             )
             return []

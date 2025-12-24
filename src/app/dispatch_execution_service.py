@@ -157,23 +157,17 @@ class DispatchExecutionService(BaseService):
                 pass
             result["failed_count"] += 1
             return False
-        except Exception as send_error:
+        except BaseException as send_error:
             # Действительно неожиданные программные ошибки
-            import traceback
-
-            unexpected_error = UnexpectedDispatchError(
-                f"Unexpected error while sending image to chat {target_chat}: {send_error}",
-                original_error=send_error,
-            )
-
-            self.logger.error(
-                f"Неожиданная программная ошибка при отправке изображения в чат {target_chat}: {unexpected_error}",
-                event="unexpected_dispatch_error",
-                status="error",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-                traceback=traceback.format_exc(),
-                chat_id=target_chat,
+            # Системные ошибки обрабатываются внутри handle_unexpected_error
+            unexpected_error = self.handle_unexpected_error(
+                send_error,
+                UnexpectedDispatchError,
+                message=f"Неожиданная ошибка при отправке изображения в чат {target_chat}: {send_error}",
+                context={
+                    "event": "unexpected_dispatch_error",
+                    "chat_id": target_chat,
+                },
             )
             raise unexpected_error from send_error
 

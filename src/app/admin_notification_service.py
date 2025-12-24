@@ -121,7 +121,10 @@ class AdminNotificationService(BaseService):
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
-        except Exception as e:
+        except (MemoryError, SystemExit, KeyboardInterrupt):
+            # Системные ошибки пробрасываем выше без обёртки
+            raise
+        except BaseException as e:
             # Неожиданная ошибка
             self.logger.error(
                 f"Неожиданная ошибка при уведомлении администраторов: {e}",

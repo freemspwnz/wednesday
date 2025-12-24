@@ -114,23 +114,17 @@ class FallbackService(BaseService):
                     chat_id=target_chat,
                 )
                 current_result["failed_count"] += 1
-            except Exception as send_error:
+            except BaseException as send_error:
                 # Действительно неожиданные ошибки при отправке fallback
-                import traceback
-
-                unexpected_error = UnexpectedDispatchError(
-                    f"Unexpected error while sending fallback to chat {target_chat}: {send_error}",
-                    original_error=send_error,
-                )
-
-                self.logger.error(
-                    f"Неожиданная ошибка при отправке fallback в чат {target_chat}: {unexpected_error}",
-                    event="fallback_send_error",
-                    status="error",
-                    error_type=type(unexpected_error).__name__,
-                    error_message=str(unexpected_error),
-                    traceback=traceback.format_exc(),
-                    chat_id=target_chat,
+                # Системные ошибки обрабатываются внутри handle_unexpected_error
+                unexpected_error = self.handle_unexpected_error(
+                    send_error,
+                    UnexpectedDispatchError,
+                    message=f"Unexpected error while sending fallback to chat {target_chat}: {send_error}",
+                    context={
+                        "event": "fallback_send_error",
+                        "chat_id": target_chat,
+                    },
                 )
                 # Не продолжаем немедленно рассылку при неожиданных ошибках,
                 # пусть верхний уровень решит стратегию обработки
@@ -195,9 +189,9 @@ class FallbackService(BaseService):
 
         return result
 
-    async def handle_unexpected_error(  # noqa: PLR0913, PLR0917
+    async def handle_dispatch_unexpected_error(  # noqa: PLR0913, PLR0917
         self,
-        error: Exception,
+        error: BaseException,
         slot_date: str,
         slot_time: str,
         targets: set[int],

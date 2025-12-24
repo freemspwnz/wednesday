@@ -290,16 +290,12 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
         if not isinstance(image_service, ImageService):
             raise RuntimeError("ImageService is not available in context")
 
-        result = await image_service.generate_frog_image(user_id=user_id)
+        image_data, _caption = await image_service.generate_frog_image(user_id=user_id)
 
-        if result:
-            image_data, _caption = result
-            return {
-                "status": "success",
-                "image_size": len(image_data),
-            }
-        else:
-            return {"status": "failed", "error": "Генерация вернула None"}
+        return {
+            "status": "success",
+            "image_size": len(image_data),
+        }
     except Exception as e:
         # ⚠️ ВАЖНО: Кастомная фильтрация retryable ошибок
         if is_retryable_error(e):
