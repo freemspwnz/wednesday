@@ -14,6 +14,7 @@ import asyncpg
 from app.admin_access_service import AdminAccessService
 from app.admin_command_service import AdminCommandService
 from app.admin_dashboard_service import AdminDashboardService
+from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
 from app.image_service import ImageService
@@ -22,7 +23,7 @@ from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.repos.dispatch_registry import DispatchRegistry
 from shared.config import AppSettings
-from shared.protocols import IChatsRepo, IMetrics, IUsageTracker
+from shared.protocols import IAdminsRepo, IChatsRepo, IMessagingService, IMetrics, IUsageTracker
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
@@ -58,6 +59,9 @@ class BotServices:
     admin_command_service: AdminCommandService | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
+    messaging_service: IMessagingService | None = None
+    database_operations: DatabaseOperationsService | None = None
+    admins_repo: IAdminsRepo | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
         """Закрывает все ресурсы (HTTP сессии, соединения).

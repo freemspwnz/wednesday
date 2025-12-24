@@ -4,16 +4,14 @@
 - TargetPreparationService (подготовка целей)
 - DispatchDeliveryService (отправка изображений, включая fallback)
 - ImageService (генерация изображений)
-
-Отправка сообщений в Telegram и форматирование пользовательских текстов
-остаются в `WednesdayBot` и передаются сюда через коллбеки.
+- AdminNotificationService (уведомление администраторов)
 """
 
 from __future__ import annotations
 
 import traceback
-from collections.abc import Awaitable, Callable
 
+from app.admin_notification_service import AdminNotificationService
 from app.dispatch_delivery_service import DispatchDeliveryService
 from app.dispatch_targets_helper import DispatchResult
 from app.image_service import ImageService
@@ -32,12 +30,13 @@ class DispatchService(BaseService):
     - ImageService (генерация изображений)
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         target_preparation_service: TargetPreparationService,
         dispatch_delivery_service: DispatchDeliveryService,
         image_service: ImageService | None,
+        admin_notifier: AdminNotificationService | None = None,
         metrics: IMetrics | None = None,
         logger: ILogger,
     ) -> None:
@@ -47,6 +46,7 @@ class DispatchService(BaseService):
             target_preparation_service: Сервис подготовки целей.
             dispatch_delivery_service: Сервис доставки изображений (основных и fallback).
             image_service: Сервис генерации изображений (опционально).
+            admin_notifier: Сервис уведомления администраторов (опционально).
             metrics: Сервис метрик (опционально).
             logger: Экземпляр логгера для использования в сервисе.
         """
@@ -54,6 +54,7 @@ class DispatchService(BaseService):
         self._target_preparation_service = target_preparation_service
         self._dispatch_delivery_service = dispatch_delivery_service
         self._image_service = image_service
+        self._admin_notifier = admin_notifier
         self._metrics = metrics
 
     @staticmethod
@@ -76,17 +77,12 @@ class DispatchService(BaseService):
             used_fallback=False,
         )
 
-    async def send_wednesday_frog(  # noqa: PLR0913
+    async def send_wednesday_frog(
         self,
         *,
         slot_date: str,
         slot_time: str,
         main_chat_id: str | None,
-        send_error_message: Callable[[str], Awaitable[None]],
-        send_admin_error: Callable[[str], Awaitable[None]],
-        send_user_friendly_error: Callable[[int], Awaitable[None]],
-        send_fallback_image: Callable[[int], Awaitable[bool]],
-        send_image: Callable[..., Awaitable[None]],
     ) -> DispatchResult:
         """Выполняет рассылку жабы в указанный слот.
 
@@ -94,22 +90,17 @@ class DispatchService(BaseService):
             slot_date: Дата слота в формате YYYY-MM-DD.
             slot_time: Время слота в формате HH:MM.
             main_chat_id: Основной чат (строковый ID) для рассылки, если задан.
-            send_error_message: Коллбек для отправки краткого сообщения об ошибке в основной чат.
-            send_admin_error: Коллбек для отправки детального сообщения об ошибке администраторам.
-            send_user_friendly_error: Коллбек для отправки дружелюбного сообщения об ошибке в чат.
-            send_fallback_image: Коллбек для отправки fallback‑изображения в чат.
-            send_image: Коллбек для отправки изображения в Telegram.
 
         Returns:
             DispatchResult с агрегированными счетчиками по рассылке.
         """
         result = DispatchService._init_result(slot_date, slot_time)
+        main_chat_id_int = int(str(main_chat_id)) if main_chat_id else None
 
         try:
             # 1. Подготовка целей
             targets = await self._target_preparation_service.prepare_targets(
                 main_chat_id=main_chat_id,
-                send_error_message=send_error_message,
             )
             result["total_targets"] = len(targets)
 
@@ -134,9 +125,6 @@ class DispatchService(BaseService):
                     slot_date=slot_date,
                     slot_time=slot_time,
                     targets=targets,
-                    send_admin_error=send_admin_error,
-                    send_user_friendly_error=send_user_friendly_error,
-                    send_fallback_image=send_fallback_image,
                     result=result,
                 )
 
@@ -154,9 +142,6 @@ class DispatchService(BaseService):
                     slot_date=slot_date,
                     slot_time=slot_time,
                     targets=targets,
-                    send_admin_error=send_admin_error,
-                    send_user_friendly_error=send_user_friendly_error,
-                    send_fallback_image=send_fallback_image,
                     result=result,
                 )
             except ImageGenerationError as e:
@@ -170,9 +155,6 @@ class DispatchService(BaseService):
                     slot_date=slot_date,
                     slot_time=slot_time,
                     targets=targets,
-                    send_admin_error=send_admin_error,
-                    send_user_friendly_error=send_user_friendly_error,
-                    send_fallback_image=send_fallback_image,
                     result=result,
                 )
 
@@ -183,8 +165,7 @@ class DispatchService(BaseService):
                 slot_time=slot_time,
                 image_data=image_data,
                 caption=caption,
-                send_error_message=send_error_message,
-                send_image=send_image,
+                main_chat_id=main_chat_id_int,
                 result=result,
             )
 
@@ -193,7 +174,6 @@ class DispatchService(BaseService):
             if "targets" not in locals():
                 targets = await self._target_preparation_service.prepare_targets(
                     main_chat_id=main_chat_id,
-                    send_error_message=send_error_message,
                 )
                 result["total_targets"] = len(targets)
 
@@ -202,9 +182,6 @@ class DispatchService(BaseService):
                 slot_date=slot_date,
                 slot_time=slot_time,
                 targets=targets,
-                send_admin_error=send_admin_error,
-                send_user_friendly_error=send_user_friendly_error,
-                send_fallback_image=send_fallback_image,
                 result=result,
             )
         except BaseException as e:
@@ -213,7 +190,6 @@ class DispatchService(BaseService):
             if "targets" not in locals():
                 targets = await self._target_preparation_service.prepare_targets(
                     main_chat_id=main_chat_id,
-                    send_error_message=send_error_message,
                 )
                 result["total_targets"] = len(targets)
 
@@ -230,20 +206,14 @@ class DispatchService(BaseService):
                 slot_date=slot_date,
                 slot_time=slot_time,
                 targets=targets,
-                send_admin_error=send_admin_error,
-                send_user_friendly_error=send_user_friendly_error,
-                send_fallback_image=send_fallback_image,
                 result=result,
             )
 
-    async def _handle_generation_failure(  # noqa: PLR0913, PLR0917
+    async def _handle_generation_failure(
         self,
         slot_date: str,
         slot_time: str,
         targets: set[int],
-        send_admin_error: Callable[[str], Awaitable[None]],
-        send_user_friendly_error: Callable[[int], Awaitable[None]],
-        send_fallback_image: Callable[[int], Awaitable[bool]],
         result: DispatchResult,
     ) -> DispatchResult:
         """Обрабатывает ошибку генерации изображения.
@@ -252,9 +222,6 @@ class DispatchService(BaseService):
             slot_date: Дата слота в формате YYYY-MM-DD.
             slot_time: Время слота в формате HH:MM.
             targets: Множество ID целевых чатов.
-            send_admin_error: Коллбек для отправки детального сообщения об ошибке администраторам.
-            send_user_friendly_error: Коллбек для отправки дружелюбного сообщения об ошибке в чат.
-            send_fallback_image: Коллбек для отправки fallback изображения в чат.
             result: Результат рассылки для обновления.
 
         Returns:
@@ -268,7 +235,12 @@ class DispatchService(BaseService):
         self.logger.error(error_details)
 
         # Отправляем детальное сообщение администратору
-        await send_admin_error(error_details)
+        if self._admin_notifier:
+            await self._admin_notifier.notify_dispatch_failure(
+                slot_date=slot_date,
+                slot_time=slot_time,
+                error_details=error_details,
+            )
 
         result["used_fallback"] = True
 
@@ -277,22 +249,17 @@ class DispatchService(BaseService):
             slot_date=slot_date,
             slot_time=slot_time,
             targets=targets,
-            send_user_friendly_error=send_user_friendly_error,
-            send_fallback_image=send_fallback_image,
             result=result,
         )
 
         return result
 
-    async def _handle_dispatch_unexpected_error(  # noqa: PLR0913, PLR0917
+    async def _handle_dispatch_unexpected_error(
         self,
         error: BaseException,
         slot_date: str,
         slot_time: str,
         targets: set[int],
-        send_admin_error: Callable[[str], Awaitable[None]],
-        send_user_friendly_error: Callable[[int], Awaitable[None]],
-        send_fallback_image: Callable[[int], Awaitable[bool]],
         result: DispatchResult,
     ) -> DispatchResult:
         """Обрабатывает неожиданную ошибку.
@@ -302,9 +269,6 @@ class DispatchService(BaseService):
             slot_date: Дата слота в формате YYYY-MM-DD.
             slot_time: Время слота в формате HH:MM.
             targets: Множество ID целевых чатов.
-            send_admin_error: Коллбек для отправки детального сообщения об ошибке администраторам.
-            send_user_friendly_error: Коллбек для отправки дружелюбного сообщения об ошибке в чат.
-            send_fallback_image: Коллбек для отправки fallback изображения в чат.
             result: Результат рассылки для обновления.
 
         Returns:
@@ -319,9 +283,13 @@ class DispatchService(BaseService):
         max_trace_length = 2000
         if len(full_error) > max_trace_length:
             full_error = "..." + full_error[-max_trace_length:]
-        await send_admin_error(
-            f"{error_details}\n\nТрейс (последние {max_trace_length} символов):\n{full_error}",
-        )
+        if self._admin_notifier:
+            await self._admin_notifier.notify_dispatch_failure(
+                slot_date=slot_date,
+                slot_time=slot_time,
+                error_details=f"{error_details}\n\nТрейс (последние {max_trace_length} символов):\n{full_error}",
+                traceback_str=full_error,
+            )
 
         result["used_fallback"] = True
 
@@ -330,8 +298,6 @@ class DispatchService(BaseService):
             slot_date=slot_date,
             slot_time=slot_time,
             targets=targets,
-            send_user_friendly_error=send_user_friendly_error,
-            send_fallback_image=send_fallback_image,
             result=result,
         )
 

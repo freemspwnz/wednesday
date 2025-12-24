@@ -6,10 +6,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_targets_helper import DispatchResult, process_targets_with_registry_check
+from app.image_service import ImageService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import (
     AppError,
@@ -19,7 +18,7 @@ from shared.base.exceptions import (
     ServiceError,
     UnexpectedDispatchError,
 )
-from shared.protocols import IDispatchRegistry, ILogger, IMetrics
+from shared.protocols import IDispatchRegistry, ILogger, IMessagingService, IMetrics
 from shared.retry import retry_on_connect_error
 
 
@@ -34,10 +33,12 @@ class DispatchDeliveryService(BaseService):
     - Запись метрик
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         dispatch_registry: IDispatchRegistry,
         database_operations: DatabaseOperationsService,
+        messaging_service: IMessagingService,
+        image_service: ImageService | None = None,
         metrics: IMetrics | None = None,
         *,
         logger: ILogger,
@@ -47,12 +48,16 @@ class DispatchDeliveryService(BaseService):
         Args:
             dispatch_registry: Реестр отправок для регистрации.
             database_operations: Сервис для групповых операций БД в транзакциях.
+            messaging_service: Сервис отправки сообщений.
+            image_service: Сервис генерации изображений для получения fallback (опционально).
             metrics: Сервис метрик (опционально).
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
         self._dispatch_registry = dispatch_registry
         self._database_operations = database_operations
+        self._messaging = messaging_service
+        self._image_service = image_service
         self._metrics = metrics
 
     async def send_image_to_targets(  # noqa: PLR0913, PLR0917
@@ -62,9 +67,8 @@ class DispatchDeliveryService(BaseService):
         slot_time: str,
         image_data: bytes,
         caption: str,
-        send_error_message: Callable[[str], Awaitable[None]],
-        send_image: Callable[..., Awaitable[None]],
-        result: DispatchResult,
+        main_chat_id: int | None = None,
+        result: DispatchResult | None = None,
     ) -> DispatchResult:
         """Отправляет основное изображение во все целевые чаты.
 
@@ -74,13 +78,21 @@ class DispatchDeliveryService(BaseService):
             slot_time: Время слота в формате HH:MM.
             image_data: Байты изображения.
             caption: Подпись к изображению.
-            send_error_message: Коллбек для отправки сообщения об ошибке.
-            send_image: Коллбек для отправки изображения в Telegram.
+            main_chat_id: ID основного чата для отправки сообщений об ошибках (опционально).
             result: Результат рассылки для обновления счетчиков.
 
         Returns:
             DispatchResult с обновленными счетчиками.
         """
+        if result is None:
+            result = DispatchResult(
+                slot_date=slot_date,
+                slot_time=slot_time,
+                total_targets=len(targets),
+                success_count=0,
+                failed_count=0,
+                used_fallback=False,
+            )
 
         async def _send_for_single_target(
             target_chat: int,
@@ -92,8 +104,7 @@ class DispatchDeliveryService(BaseService):
                 slot_time=slot_time,
                 image_data=image_data,
                 caption=caption,
-                send_error_message=send_error_message,
-                send_image=send_image,
+                main_chat_id=main_chat_id,
                 result=current_result,
             )
 
@@ -110,14 +121,12 @@ class DispatchDeliveryService(BaseService):
 
         return result
 
-    async def send_fallback_to_targets(  # noqa: PLR0913, PLR0917
+    async def send_fallback_to_targets(
         self,
         slot_date: str,
         slot_time: str,
         targets: set[int],
-        send_user_friendly_error: Callable[[int], Awaitable[None]],
-        send_fallback_image: Callable[[int], Awaitable[bool]],
-        result: DispatchResult,
+        result: DispatchResult | None = None,
     ) -> DispatchResult:
         """Отправляет fallback изображение во все целевые чаты.
 
@@ -125,13 +134,26 @@ class DispatchDeliveryService(BaseService):
             slot_date: Дата слота в формате YYYY-MM-DD.
             slot_time: Время слота в формате HH:MM.
             targets: Множество ID целевых чатов.
-            send_user_friendly_error: Коллбек для отправки дружелюбного сообщения об ошибке в чат.
-            send_fallback_image: Коллбек для отправки fallback изображения в чат.
             result: Результат рассылки для обновления.
 
         Returns:
             DispatchResult с обновленными счетчиками.
         """
+        if result is None:
+            result = DispatchResult(
+                slot_date=slot_date,
+                slot_time=slot_time,
+                total_targets=len(targets),
+                success_count=0,
+                failed_count=0,
+                used_fallback=True,
+            )
+
+        if self._image_service is None:
+            self.logger.warning("ImageService недоступен для отправки fallback изображений")
+            return result
+
+        image_service = self._image_service  # Для type narrowing
 
         async def _send_fallback_for_single_target(
             target_chat: int,
@@ -139,31 +161,46 @@ class DispatchDeliveryService(BaseService):
         ) -> None:
             try:
                 # Отправляем дружелюбное сообщение
-                await send_user_friendly_error(target_chat)
+                await self._messaging.send_user_friendly_error(target_chat)
 
-                # Отправляем случайное изображение
-                if await send_fallback_image(target_chat):
-                    # Используем DatabaseOperationsService для атомарной регистрации
-                    try:
-                        await self._database_operations.record_dispatch_success(
-                            slot_date=slot_date,
-                            slot_time=slot_time,
-                            chat_id=target_chat,
-                        )
-                    except RepoError as e:
-                        self.logger.warning(
-                            f"Ошибка при регистрации fallback отправки: {e}",
-                            event="fallback_registration_error",
-                            status="warning",
-                            error_type=type(e).__name__,
-                            error_message=str(e),
-                            chat_id=target_chat,
-                            slot_date=slot_date,
-                            slot_time=slot_time,
-                        )
-                        # Отправка успешна, но регистрация не удалась
-                        # Это менее критично, чем сама отправка
-                    current_result["success_count"] += 1
+                # Получаем fallback изображение
+                fallback_image = await image_service.get_random_saved_image()
+                if fallback_image:
+                    image_data, caption = fallback_image
+                    # Отправляем случайное изображение
+                    if await self._messaging.send_fallback_image(
+                        chat_id=target_chat,
+                        image_data=image_data,
+                        caption=caption,
+                    ):
+                        # Используем DatabaseOperationsService для атомарной регистрации
+                        try:
+                            await self._database_operations.record_dispatch_success(
+                                slot_date=slot_date,
+                                slot_time=slot_time,
+                                chat_id=target_chat,
+                            )
+                        except RepoError as e:
+                            self.logger.warning(
+                                f"Ошибка при регистрации fallback отправки: {e}",
+                                event="fallback_registration_error",
+                                status="warning",
+                                error_type=type(e).__name__,
+                                error_message=str(e),
+                                chat_id=target_chat,
+                                slot_date=slot_date,
+                                slot_time=slot_time,
+                            )
+                            # Отправка успешна, но регистрация не удалась
+                            # Это менее критично, чем сама отправка
+                        current_result["success_count"] += 1
+                else:
+                    self.logger.warning(
+                        f"Нет сохраненных изображений для fallback в чат {target_chat}",
+                        event="fallback_image_unavailable",
+                        status="warning",
+                        chat_id=target_chat,
+                    )
 
             except AppError as send_error:
                 # Ожидаемые ошибки приложения при отправке fallback сообщений
@@ -212,8 +249,7 @@ class DispatchDeliveryService(BaseService):
         slot_time: str,
         image_data: bytes,
         caption: str,
-        send_error_message: Callable[[str], Awaitable[None]],
-        send_image: Callable[..., Awaitable[None]],
+        main_chat_id: int | None,
         result: DispatchResult,
     ) -> bool:
         """Отправляет одно изображение в целевой чат.
@@ -224,8 +260,7 @@ class DispatchDeliveryService(BaseService):
             slot_time: Время слота в формате HH:MM.
             image_data: Байты изображения.
             caption: Подпись к изображению.
-            send_error_message: Коллбек для отправки сообщения об ошибке.
-            send_image: Коллбек для отправки изображения в Telegram (принимает именованные параметры).
+            main_chat_id: ID основного чата для отправки сообщений об ошибках (опционально).
             result: Результат рассылки для обновления счетчиков.
 
         Returns:
@@ -233,7 +268,7 @@ class DispatchDeliveryService(BaseService):
         """
         try:
             await retry_on_connect_error(
-                send_image,
+                self._messaging.send_image,
                 chat_id=target_chat,
                 image=image_data,
                 caption=caption,
@@ -269,14 +304,14 @@ class DispatchDeliveryService(BaseService):
             return await self._handle_messaging_error(
                 send_error=send_error,
                 target_chat=target_chat,
-                send_error_message=send_error_message,
+                main_chat_id=main_chat_id,
                 result=result,
             )
         except AppError as send_error:
             return await self._handle_app_error(
                 send_error=send_error,
                 target_chat=target_chat,
-                send_error_message=send_error_message,
+                main_chat_id=main_chat_id,
                 result=result,
             )
         except BaseException as send_error:
@@ -297,7 +332,7 @@ class DispatchDeliveryService(BaseService):
         self,
         send_error: MessagingNetworkError | MessagingAPIError,
         target_chat: int,
-        send_error_message: Callable[[str], Awaitable[None]],
+        main_chat_id: int | None,
         result: DispatchResult,
     ) -> bool:
         """Обрабатывает сетевые/Telegram ошибки отправки.
@@ -305,7 +340,7 @@ class DispatchDeliveryService(BaseService):
         Args:
             send_error: Ошибка отправки.
             target_chat: ID целевого чата.
-            send_error_message: Коллбек для отправки сообщения об ошибке.
+            main_chat_id: ID основного чата для отправки сообщений об ошибках (опционально).
             result: Результат рассылки для обновления.
 
         Returns:
@@ -320,7 +355,7 @@ class DispatchDeliveryService(BaseService):
         self.logger.error(log_msg)
 
         await self._notify_error_and_update_metrics(
-            send_error_message=send_error_message,
+            main_chat_id=main_chat_id,
             error_message=f"Не удалось отправить изображение в чат {target_chat}",
             result=result,
         )
@@ -330,7 +365,7 @@ class DispatchDeliveryService(BaseService):
         self,
         send_error: AppError,
         target_chat: int,
-        send_error_message: Callable[[str], Awaitable[None]],
+        main_chat_id: int | None,
         result: DispatchResult,
     ) -> bool:
         """Обрабатывает ожидаемые ошибки приложения.
@@ -338,7 +373,7 @@ class DispatchDeliveryService(BaseService):
         Args:
             send_error: Ошибка приложения.
             target_chat: ID целевого чата.
-            send_error_message: Коллбек для отправки сообщения об ошибке.
+            main_chat_id: ID основного чата для отправки сообщений об ошибках (опционально).
             result: Результат рассылки для обновления.
 
         Returns:
@@ -354,7 +389,7 @@ class DispatchDeliveryService(BaseService):
         )
 
         await self._notify_error_and_update_metrics(
-            send_error_message=send_error_message,
+            main_chat_id=main_chat_id,
             error_message=f"Не удалось отправить изображение в чат {target_chat} из-за ошибки приложения",
             result=result,
         )
@@ -362,21 +397,25 @@ class DispatchDeliveryService(BaseService):
 
     async def _notify_error_and_update_metrics(
         self,
-        send_error_message: Callable[[str], Awaitable[None]],
+        main_chat_id: int | None,
         error_message: str,
         result: DispatchResult,
     ) -> None:
         """Уведомляет об ошибке и обновляет метрики (best-effort).
 
         Args:
-            send_error_message: Коллбек для отправки сообщения об ошибке.
+            main_chat_id: ID основного чата для отправки сообщений об ошибках (опционально).
             error_message: Текст сообщения об ошибке.
             result: Результат рассылки для обновления.
         """
-        try:
-            await send_error_message(error_message)
-        except ServiceError:  # pragma: no cover - уведомление не критично
-            pass
+        if main_chat_id is not None:
+            try:
+                await self._messaging.send_error_message(
+                    main_chat_id=main_chat_id,
+                    message=error_message,
+                )
+            except ServiceError:  # pragma: no cover - уведомление не критично
+                pass
         try:
             if self._metrics:
                 await self._metrics.increment_dispatch_failed()

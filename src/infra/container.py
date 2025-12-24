@@ -553,13 +553,6 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     # Создаём task queue для прямого использования в handlers
     task_queue = CeleryTaskQueue()
 
-    # Создаём сервисы для DispatchService
-    target_preparation_service = TargetPreparationService(
-        chats_repo=chats,
-        dispatch_registry=dispatch_registry,
-        logger=app_logger,
-    )
-
     # Создаём фабрику для Unit of Work
     from infra.database.database_unit_of_work import DatabaseUnitOfWork
 
@@ -575,20 +568,8 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         logger=app_logger,
     )
 
-    dispatch_delivery_service = DispatchDeliveryService(
-        dispatch_registry=dispatch_registry,
-        database_operations=database_operations,
-        metrics=metrics,
-        logger=app_logger,
-    )
-
-    dispatch_service = DispatchService(
-        target_preparation_service=target_preparation_service,
-        dispatch_delivery_service=dispatch_delivery_service,
-        image_service=image_service,
-        metrics=metrics,
-        logger=app_logger,
-    )
+    # Dispatch сервисы будут созданы позже в bot слое, когда будет доступен messaging_service
+    dispatch_service: DispatchService | None = None
 
     admin_dashboard_service = build_admin_dashboard_service(
         usage=usage,
@@ -657,7 +638,71 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         admin_command_service=admin_command_service,
         postgres_pool=db_pool,
         redis_client=redis_client,
+        messaging_service=None,  # будет установлен позже в bot слое
+        database_operations=database_operations,
+        admins_repo=admins_repo,
     )
+
+
+def build_dispatch_services(  # noqa: PLR0913, PLR0917
+    messaging_service: IMessagingService,
+    chats: IChatsRepo,
+    dispatch_registry: DispatchRegistry,
+    database_operations: DatabaseOperationsService,
+    image_service: ImageService,
+    metrics: IMetrics,
+    admins_repo: IAdminsRepo,
+    db_pool: asyncpg.Pool,
+    logger: ILogger,
+) -> tuple[TargetPreparationService, DispatchDeliveryService, DispatchService]:
+    """Создаёт dispatch сервисы с messaging_service.
+
+    Args:
+        messaging_service: Сервис отправки сообщений.
+        chats: Репозиторий чатов.
+        dispatch_registry: Реестр отправок.
+        database_operations: Сервис операций БД.
+        image_service: Сервис генерации изображений.
+        metrics: Сервис метрик.
+        admins_repo: Репозиторий администраторов.
+        db_pool: Пул подключений PostgreSQL.
+        logger: Логгер.
+
+    Returns:
+        Кортеж (target_preparation_service, dispatch_delivery_service, dispatch_service).
+    """
+    target_preparation_service = TargetPreparationService(
+        chats_repo=chats,
+        dispatch_registry=dispatch_registry,
+        messaging_service=messaging_service,
+        logger=logger,
+    )
+
+    dispatch_delivery_service = DispatchDeliveryService(
+        dispatch_registry=dispatch_registry,
+        database_operations=database_operations,
+        messaging_service=messaging_service,
+        image_service=image_service,
+        metrics=metrics,
+        logger=logger,
+    )
+
+    admin_notifier = build_admin_notification_service(
+        messaging_service=messaging_service,
+        admins_repo=admins_repo,
+        logger=logger,
+    )
+
+    dispatch_service = DispatchService(
+        target_preparation_service=target_preparation_service,
+        dispatch_delivery_service=dispatch_delivery_service,
+        image_service=image_service,
+        admin_notifier=admin_notifier,
+        metrics=metrics,
+        logger=logger,
+    )
+
+    return target_preparation_service, dispatch_delivery_service, dispatch_service
 
 
 def build_bot(

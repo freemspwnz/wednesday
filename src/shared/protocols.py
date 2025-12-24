@@ -745,6 +745,65 @@ class IMessagingService(Protocol):
         """
         ...
 
+    async def send_error_message(
+        self,
+        main_chat_id: int,
+        message: str,
+    ) -> None:
+        """Отправляет сообщение об ошибке в основной чат.
+
+        Добавляет стандартный префикс и эмодзи к сообщению об ошибке.
+
+        Args:
+            main_chat_id: ID основного чата для отправки.
+            message: Текст сообщения об ошибке.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
+        """
+        ...
+
+    async def send_user_friendly_error(
+        self,
+        chat_id: int,
+    ) -> None:
+        """Отправляет дружелюбное сообщение об ошибке в указанный чат.
+
+        Отправляет стандартное сообщение об ошибке, которое не раскрывает
+        технических деталей пользователю.
+
+        Args:
+            chat_id: ID чата для отправки сообщения.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
+        """
+        ...
+
+    async def send_fallback_image(
+        self,
+        chat_id: int,
+        image_data: bytes,
+        caption: str,
+    ) -> bool:
+        """Отправляет fallback изображение в указанный чат.
+
+        Args:
+            chat_id: ID чата для отправки изображения.
+            image_data: Байты изображения.
+            caption: Подпись к изображению.
+
+        Returns:
+            True если изображение успешно отправлено, False если произошла ошибка.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
+        """
+        ...
+
 
 @runtime_checkable
 class IDispatchRegistry(Protocol):

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-
 from shared.base.base_service import BaseService
-from shared.protocols import IChatsRepo, IDispatchRegistry, ILogger
+from shared.protocols import IChatsRepo, IDispatchRegistry, ILogger, IMessagingService
 
 
 class TargetPreparationService(BaseService):
@@ -21,6 +19,7 @@ class TargetPreparationService(BaseService):
         self,
         chats_repo: IChatsRepo,
         dispatch_registry: IDispatchRegistry,
+        messaging_service: IMessagingService,
         *,
         logger: ILogger,
     ) -> None:
@@ -29,22 +28,22 @@ class TargetPreparationService(BaseService):
         Args:
             chats_repo: Репозиторий чатов.
             dispatch_registry: Реестр отправок для проверки.
+            messaging_service: Сервис отправки сообщений.
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
         self._chats_repo = chats_repo
         self._dispatch_registry = dispatch_registry
+        self._messaging = messaging_service
 
     async def prepare_targets(
         self,
         main_chat_id: str | None,
-        send_error_message: Callable[[str], Awaitable[None]],
     ) -> set[int]:
         """Подготавливает список целевых чатов для рассылки.
 
         Args:
             main_chat_id: Основной чат (строковый ID) для рассылки, если задан.
-            send_error_message: Коллбек для отправки краткого сообщения об ошибке в основной чат.
 
         Returns:
             Множество ID целевых чатов. Пустое множество, если нет чатов для отправки.
@@ -59,7 +58,15 @@ class TargetPreparationService(BaseService):
 
         if not targets:
             self.logger.warning("Нет целевых чатов для отправки сообщения")
-            await send_error_message("Нет настроенных чатов для отправки")
+            if main_chat_id:
+                try:
+                    main_chat_id_int = int(str(main_chat_id))
+                    await self._messaging.send_error_message(
+                        main_chat_id=main_chat_id_int,
+                        message="Нет настроенных чатов для отправки",
+                    )
+                except (ValueError, TypeError):
+                    pass
 
         return targets
 

@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Рефакторинг app/ слоя: замена Callable коллбеков на протокол IMessagingService**:
+  - Расширен протокол `IMessagingService` методами `send_error_message`, `send_user_friendly_error`, `send_fallback_image`
+  - Реализованы новые методы в `PTBMessagingService`
+  - Обновлены `DispatchService`, `DispatchDeliveryService`, `TargetPreparationService` для использования `IMessagingService` вместо `Callable` коллбеков
+  - Устранено нарушение границ слоёв: `app/` слой больше не зависит от `bot/` слоя через коллбеки
+  - Добавлен `AdminNotificationService` как зависимость в `DispatchService` для отправки уведомлений администраторам
+  - Создана функция `build_dispatch_services` для инициализации dispatch-сервисов с `messaging_service`
+  - Обновлен `BotServices` для хранения `messaging_service`, `database_operations`, `admins_repo`
+  - Улучшена тестируемость: сервисы можно тестировать с моками протокола вместо коллбеков
+  - Соответствие принципу Dependency Rule: зависимости направлены внутрь, от внешних слоёв к внутренним
+
 - **Рефакторинг ImageService: разделение ответственности на координаторы**:
   - Создан `ImageGenerationCoordinator` для координации генерации изображений (circuit breaker, кэш, метрики)
   - Создан `ImageStorageCoordinator` для координации сохранения изображений (UoW, обработка ошибок)
