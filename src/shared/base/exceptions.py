@@ -148,3 +148,9 @@ class APIError(ClientError):
     """Ошибка API (другие HTTP статусы: 4xx, 5xx)."""
 
     pass
+
+
+class AccessDeniedError(AppError):
+    """Ошибка доступа (пользователь не имеет необходимых прав)."""
+
+    pass

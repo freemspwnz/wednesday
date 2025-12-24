@@ -182,7 +182,10 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
         messaging_service = PTBMessagingService(bot=bot.application.bot)
 
         # Создаём admin notifier
-        admins_repo = AdminsRepo(pool=postgres_pool)
+        from shared.config import TelegramConfig
+
+        telegram_config = TelegramConfig()
+        admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config.admin_chat_id)
         admin_notifier = build_admin_notification_service(
             messaging_service=messaging_service,
             admins_repo=admins_repo,

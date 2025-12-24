@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import asyncpg
 
 if TYPE_CHECKING:
+    from app.admin_access_service import AdminAccessService
+    from app.admin_command_service import AdminCommandService
     from app.admin_notification_service import AdminNotificationService
     from app.frog_processing_service import FrogProcessingService
     from bot.wednesday_bot import WednesdayBot
@@ -55,6 +57,7 @@ from shared.config import (
     PromptFallbackConfig,
 )
 from shared.protocols import (
+    IAdminsRepo,
     IChatsRepo,
     ICircuitBreaker,
     ILogger,
@@ -312,9 +315,33 @@ def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
     )
 
 
+def build_admin_access_service(
+    admins_repo: IAdminsRepo,
+    super_admin_id: int | None,
+    logger: ILogger,
+) -> AdminAccessService:
+    """Создаёт AdminAccessService с зависимостями.
+
+    Args:
+        admins_repo: Репозиторий администраторов.
+        super_admin_id: ID главного администратора (из .env).
+        logger: Логгер.
+
+    Returns:
+        Настроенный AdminAccessService.
+    """
+    from app.admin_access_service import AdminAccessService
+
+    return AdminAccessService(
+        admins_repo=admins_repo,
+        super_admin_id=super_admin_id,
+        logger=logger,
+    )
+
+
 def build_admin_notification_service(
     messaging_service: IMessagingService,
-    admins_repo: AdminsRepo,
+    admins_repo: IAdminsRepo,
     logger: ILogger,
 ) -> AdminNotificationService:
     """Создаёт AdminNotificationService с зависимостями.
@@ -332,6 +359,36 @@ def build_admin_notification_service(
     return AdminNotificationService(
         messaging_service=messaging_service,
         admins_repo=admins_repo,
+        logger=logger,
+    )
+
+
+def build_admin_command_service(
+    chats: IChatsRepo | None,
+    usage: IUsageTracker | None,
+    admins_repo: IAdminsRepo,
+    admin_access_service: AdminAccessService,
+    logger: ILogger,
+) -> AdminCommandService:
+    """Создаёт AdminCommandService с зависимостями.
+
+    Args:
+        chats: Репозиторий чатов (опционально).
+        usage: Трекер использования (опционально).
+        admins_repo: Репозиторий администраторов.
+        admin_access_service: Сервис проверки прав администратора.
+        logger: Логгер.
+
+    Returns:
+        Настроенный AdminCommandService.
+    """
+    from app.admin_command_service import AdminCommandService
+
+    return AdminCommandService(
+        chats=chats,
+        usage=usage,
+        admins_repo=admins_repo,
+        admin_access_service=admin_access_service,
         logger=logger,
     )
 
@@ -536,6 +593,36 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         logger=app_logger,
     )
 
+    # Создаём AdminsRepo для admin сервисов
+    # Используем исходное значение из TelegramConfig (str), а не из AppSettings (int)
+    from shared.config import TelegramConfig
+
+    telegram_config = TelegramConfig()
+    admins_repo = AdminsRepo(pool=db_pool, admin_chat_id=telegram_config.admin_chat_id)
+
+    # Создаём AdminAccessService
+    super_admin_id = None
+    if app_settings.admin_chat_id:
+        try:
+            super_admin_id = int(app_settings.admin_chat_id)
+        except (ValueError, TypeError):
+            pass
+
+    admin_access_service = build_admin_access_service(
+        admins_repo=admins_repo,
+        super_admin_id=super_admin_id,
+        logger=app_logger,
+    )
+
+    # Создаём AdminCommandService
+    admin_command_service = build_admin_command_service(
+        chats=chats,
+        usage=usage,
+        admins_repo=admins_repo,
+        admin_access_service=admin_access_service,
+        logger=app_logger,
+    )
+
     return BotServices(
         usage=usage,
         chats=chats,
@@ -551,6 +638,8 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         dispatch_service=dispatch_service,
         admin_dashboard_service=admin_dashboard_service,
         model_management_service=model_management_service,
+        admin_access_service=admin_access_service,
+        admin_command_service=admin_command_service,
         postgres_pool=db_pool,
         redis_client=redis_client,
     )

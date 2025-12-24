@@ -8,6 +8,7 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
+from shared.base.exceptions import AccessDeniedError, ServiceError
 from shared.bot_services import BotServices
 from shared.paths import LOGS_DIR
 
@@ -33,7 +34,13 @@ class AdminHandlers(BaseHandlers):
         super().__init__(services)
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
+        if self.services.admin_access_service is None:
+            raise ValueError("admin_access_service must be provided in BotServices")
+        if self.services.admin_command_service is None:
+            raise ValueError("admin_command_service must be provided in BotServices")
         self._dashboard_service = self.services.admin_dashboard_service
+        self._admin_access = self.services.admin_access_service
+        self._admin_command = self.services.admin_command_service
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.
@@ -64,7 +71,7 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /status от пользователя {user_id}")
 
         # Проверка доступа администратора
-        if not await self.admins_store.is_admin(user_id):
+        if not await self._admin_access.is_admin(user_id):
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
@@ -376,8 +383,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
-        chats = self.services.chats
-        chat_ids = await chats.list_chat_ids()
+        chat_ids = await self._admin_command.list_chat_ids()
         if not chat_ids:
             self.logger.info("Нет активных чатов")
             try:
@@ -671,17 +677,16 @@ class AdminHandlers(BaseHandlers):
 
         try:
             chat_id = int(context.args[0])
-            chats = self.services.chats
-            await chats.add_chat(chat_id, "Manually added")
+            result = await self._admin_command.add_chat(chat_id, "Manually added")
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    f"✅ Чат {chat_id} добавлен в рассылку",
+                    result.message,
                     max_retries=3,
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
         except ValueError:
             try:
                 await self._retry_on_connect_error(
@@ -741,17 +746,16 @@ class AdminHandlers(BaseHandlers):
 
         try:
             chat_id = int(context.args[0])
-            chats = self.services.chats
-            await chats.remove_chat(chat_id)
+            result = await self._admin_command.remove_chat(chat_id)
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    f"✅ Чат {chat_id} удалён из рассылки",
+                    result.message,
                     max_retries=3,
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
         except ValueError:
             try:
                 await self._retry_on_connect_error(
@@ -800,8 +804,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
-        chats = self.services.chats
-        chat_ids = await chats.list_chat_ids()
+        chat_ids = await self._admin_command.list_chat_ids()
         if not chat_ids:
             self.logger.info("Нет активных чатов")
             try:
@@ -893,36 +896,16 @@ class AdminHandlers(BaseHandlers):
             self.logger.info(f"set_frog_limit_command: запрошенный порог: {raw}")
             if raw <= 0:
                 raise ValueError(f"Порог должен быть положительным числом, получено: {raw}")
-            # Ограничим максимумом MAX_FROG_THRESHOLD
-            desired = min(raw, MAX_FROG_THRESHOLD)
-            usage = self.services.usage
-            if usage:
-                new_threshold = await usage.set_frog_threshold(desired)
-                total, _threshold, quota = await usage.get_limits_info()
-                self.logger.info(
-                    f"set_frog_limit_command: порог установлен на {new_threshold}, использование: {total}/{quota}",
+            result = await self._admin_command.set_frog_threshold(raw, max_threshold=MAX_FROG_THRESHOLD)
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    result.message,
+                    max_retries=3,
+                    delay=2,
                 )
-                try:
-                    await self._retry_on_connect_error(
-                        update.message.reply_text,
-                        f"✅ Порог /frog установлен: {new_threshold} (текущее использование: {total}/{quota})",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as e:
-                    self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
-                self.logger.info("set_frog_limit_command: команда выполнена успешно")
-            else:
-                self.logger.error("set_frog_limit_command: хранилище использования не инициализировано")
-                try:
-                    await self._retry_on_connect_error(
-                        update.message.reply_text,
-                        "❌ Хранилище использования не инициализировано",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as e:
-                    self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+            except Exception as e:
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
         except ValueError as e:
             self.logger.error(f"set_frog_limit_command: ошибка валидации параметра: {e}", exc_info=True)
             try:
@@ -987,31 +970,16 @@ class AdminHandlers(BaseHandlers):
             raw = int(context.args[0])
             if raw < 0:
                 raise ValueError
-            usage = self.services.usage
-            if usage:
-                # Ограничим значением квоты
-                capped = min(raw, usage.monthly_quota)
-                await usage.set_month_total(capped)
-                total, threshold, quota = await usage.get_limits_info()
-                try:
-                    await self._retry_on_connect_error(
-                        update.message.reply_text,
-                        f"✅ Текущее использование /frog: {total}/{threshold} (квота: {quota})",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as e:
-                    self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
-            else:
-                try:
-                    await self._retry_on_connect_error(
-                        update.message.reply_text,
-                        "❌ Хранилище использования не инициализировано",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as e:
-                    self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+            result = await self._admin_command.set_frog_used(raw)
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    result.message,
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception as e:
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
         except ValueError:
             try:
                 await self._retry_on_connect_error(
@@ -1051,7 +1019,7 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /mod от пользователя {user_id}")
 
         # Проверка прав: только главный администратор
-        if not self._is_super_admin(user_id):
+        if not await self._admin_access.is_super_admin(user_id):
             self.logger.warning(f"mod_command: пользователь {user_id} не является главным администратором")
             try:
                 await self._retry_on_connect_error(
@@ -1082,30 +1050,32 @@ class AdminHandlers(BaseHandlers):
 
         self.logger.info(f"mod_command: попытка добавить админа {target_user_id} пользователем {user_id}")
 
-        # Добавляем администратора
-        success = await self.admins_store.add_admin(target_user_id)
-        if success:
-            self.logger.info(f"mod_command: пользователь {target_user_id} успешно добавлен как администратор")
+        # Добавляем администратора через AdminCommandService
+        try:
+            result = await self._admin_command.add_admin(
+                target_user_id=target_user_id,
+                requester_user_id=user_id,
+            )
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    f"✅ Пользователь {target_user_id} получил админ‑права",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
-        else:
-            self.logger.info(f"mod_command: пользователь {target_user_id} уже является администратором")
-            try:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"ℹ️ Пользователь {target_user_id} уже является администратором",
+                    result.message,
                     max_retries=3,
                     delay=2,
                 )
             except Exception as e:
                 self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+        except AccessDeniedError:
+            # Должно быть обработано выше, но на всякий случай
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    "❌ Доступно только главному администратору",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass
 
     async def unmod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /unmod.
@@ -1138,7 +1108,7 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /unmod от пользователя {user_id}")
 
         # Проверка прав: только главный администратор
-        if not self._is_super_admin(user_id):
+        if not await self._admin_access.is_super_admin(user_id):
             self.logger.warning(f"unmod_command: пользователь {user_id} не является главным администратором")
             try:
                 await self._retry_on_connect_error(
@@ -1158,7 +1128,7 @@ class AdminHandlers(BaseHandlers):
         if target_user_id is None:
             self.logger.info("unmod_command: target_user_id не определён, показываем список админов")
             try:
-                admins = await self.admins_store.list_all_admins()
+                admins = await self._admin_command.list_all_admins()
                 if not admins:
                     try:
                         await self._retry_on_connect_error(
@@ -1189,12 +1159,12 @@ class AdminHandlers(BaseHandlers):
                             username_text = f" (@{chat.username})"
 
                         # Помечаем главного админа
-                        is_main = " (главный)" if self._is_super_admin(admin_id) else ""
+                        is_main = " (главный)" if await self._admin_access.is_super_admin(admin_id) else ""
 
                         admin_list.append(f"• ID: {admin_id} ({name}{username_text}){is_main}")
                     except Exception as e:
                         self.logger.warning(f"Не удалось получить информацию о чате {admin_id}: {e}")
-                        is_main = " (главный)" if self._is_super_admin(admin_id) else ""
+                        is_main = " (главный)" if await self._admin_access.is_super_admin(admin_id) else ""
                         admin_list.append(f"• ID: {admin_id} (не удалось получить информацию){is_main}")
 
                 message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
@@ -1224,44 +1194,51 @@ class AdminHandlers(BaseHandlers):
         # Ветка удаления админа
         self.logger.info(f"unmod_command: попытка удалить админа {target_user_id} пользователем {user_id}")
 
-        # Проверяем, не пытаются ли удалить главного админа
-        if self._is_super_admin(target_user_id):
-            self.logger.warning(f"unmod_command: попытка удалить главного администратора {target_user_id}")
-            try:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Нельзя удалить главного администратора (из .env)",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
-            return
+        # Удаляем админа через AdminCommandService
+        try:
+            super_admin_id = None
+            if self.services.settings.admin_chat_id:
+                try:
+                    super_admin_id = int(self.services.settings.admin_chat_id)
+                except (ValueError, TypeError):
+                    pass
 
-        # Удаляем админа
-        success = await self.admins_store.remove_admin(target_user_id)
-        if success:
-            self.logger.info(f"unmod_command: пользователь {target_user_id} успешно удалён из админов")
+            result = await self._admin_command.remove_admin(
+                target_user_id=target_user_id,
+                requester_user_id=user_id,
+                super_admin_id=super_admin_id,
+            )
             try:
                 await self._retry_on_connect_error(
                     update.message.reply_text,
-                    f"✅ У пользователя {target_user_id} удалены админ‑права",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об успехе после {3} попыток: {e}")
-        else:
-            self.logger.info(f"unmod_command: пользователь {target_user_id} не является администратором")
-            try:
-                await self._retry_on_connect_error(
-                    update.message.reply_text,
-                    f"ℹ️ Пользователь {target_user_id} не является администратором",
+                    result.message,
                     max_retries=3,
                     delay=2,
                 )
             except Exception as e:
                 self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+        except AccessDeniedError:
+            # Должно быть обработано выше, но на всякий случай
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    "❌ Доступно только главному администратору",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass
+        except ServiceError as e:
+            # Ошибка при попытке удалить главного админа
+            try:
+                await self._retry_on_connect_error(
+                    update.message.reply_text,
+                    f"❌ {str(e)[:200]}",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass
 
     async def list_mods_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_mods.
@@ -1299,7 +1276,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
             return
 
-        all_admins = await self.admins_store.list_all_admins()
+        all_admins = await self._admin_command.list_all_admins()
         if not all_admins:
             self.logger.info("Нет администраторов")
             try:

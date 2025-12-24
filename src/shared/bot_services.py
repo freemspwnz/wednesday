@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 import asyncpg
 
+from app.admin_access_service import AdminAccessService
+from app.admin_command_service import AdminCommandService
 from app.admin_dashboard_service import AdminDashboardService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
@@ -52,6 +54,8 @@ class BotServices:
     task_queue: ITaskQueue
     admin_dashboard_service: AdminDashboardService | None = None
     model_management_service: ModelManagementService | None = None
+    admin_access_service: AdminAccessService | None = None
+    admin_command_service: AdminCommandService | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
 

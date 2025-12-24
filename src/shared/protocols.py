@@ -406,6 +406,52 @@ class IChatsRepo(Protocol):
 
 
 @runtime_checkable
+class IAdminsRepo(Protocol):
+    """Протокол для репозитория администраторов."""
+
+    async def is_admin(self, user_id: int) -> bool:
+        """Проверяет, является ли пользователь администратором.
+
+        Args:
+            user_id: Идентификатор пользователя для проверки.
+
+        Returns:
+            True если пользователь является администратором, False иначе.
+        """
+        ...
+
+    async def add_admin(self, user_id: int) -> bool:
+        """Добавляет администратора.
+
+        Args:
+            user_id: Идентификатор пользователя для добавления в администраторы.
+
+        Returns:
+            True если администратор был добавлен, False если он уже существовал.
+        """
+        ...
+
+    async def remove_admin(self, user_id: int) -> bool:
+        """Удаляет администратора.
+
+        Args:
+            user_id: Идентификатор пользователя для удаления из администраторов.
+
+        Returns:
+            True если администратор был удалён, False если он не был администратором.
+        """
+        ...
+
+    async def list_all_admins(self) -> list[int]:
+        """Возвращает список всех администраторов.
+
+        Returns:
+            Список идентификаторов всех администраторов.
+        """
+        ...
+
+
+@runtime_checkable
 class IModelsRepo(Protocol):
     """Протокол для репозитория моделей Kandinsky и GigaChat."""
 
