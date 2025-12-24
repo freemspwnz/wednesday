@@ -237,26 +237,52 @@ class Metrics(BaseService, IMetrics):
                 """,
             )
 
-    async def increment_generation_success(self, connection: asyncpg.Connection | None = None) -> None:
+    async def increment_generation_success_with_pool(self) -> None:
+        """Увеличивает счётчик успешных генераций, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+        """
+        async with self._pool.acquire() as conn:
+            await self.increment_generation_success(connection=conn)
+
+    async def increment_generation_failed_with_pool(self) -> None:
+        """Увеличивает счётчик неудачных генераций, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+        """
+        async with self._pool.acquire() as conn:
+            await self.increment_generation_failed(connection=conn)
+
+    async def increment_dispatch_success_with_pool(self) -> None:
+        """Увеличивает счётчик успешных отправок, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+        """
+        async with self._pool.acquire() as conn:
+            await self.increment_dispatch_success(connection=conn)
+
+    async def increment_dispatch_failed_with_pool(self) -> None:
+        """Увеличивает счётчик неудачных отправок, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+        """
+        async with self._pool.acquire() as conn:
+            await self.increment_dispatch_failed(connection=conn)
+
+    async def increment_generation_success(self, connection: asyncpg.Connection) -> None:
         """Увеличивает счётчик успешных генераций изображений.
 
         Args:
-            connection: Соединение БД для использования в транзакции (опционально).
+            connection: Соединение БД для использования в транзакции (обязательно).
 
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         try:
             await self._ensure_row()
-            if connection is not None:
-                await connection.execute(
-                    "UPDATE metrics SET generations_success = generations_success + 1 WHERE id = 1;",
-                )
-            else:
-                async with self._pool.acquire() as conn:
-                    await conn.execute(
-                        "UPDATE metrics SET generations_success = generations_success + 1 WHERE id = 1;",
-                    )
+            await connection.execute(
+                "UPDATE metrics SET generations_success = generations_success + 1 WHERE id = 1;",
+            )
             self.logger.debug(
                 "Записана метрика: increment_generation_success",
                 event="metric_recorded",
@@ -271,26 +297,20 @@ class Metrics(BaseService, IMetrics):
                 error_message=str(e),
             )
 
-    async def increment_generation_failed(self, connection: asyncpg.Connection | None = None) -> None:
+    async def increment_generation_failed(self, connection: asyncpg.Connection) -> None:
         """Увеличивает счётчик неудачных генераций изображений.
 
         Args:
-            connection: Соединение БД для использования в транзакции (опционально).
+            connection: Соединение БД для использования в транзакции (обязательно).
 
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         try:
             await self._ensure_row()
-            if connection is not None:
-                await connection.execute(
-                    "UPDATE metrics SET generations_failed = generations_failed + 1 WHERE id = 1;",
-                )
-            else:
-                async with self._pool.acquire() as conn:
-                    await conn.execute(
-                        "UPDATE metrics SET generations_failed = generations_failed + 1 WHERE id = 1;",
-                    )
+            await connection.execute(
+                "UPDATE metrics SET generations_failed = generations_failed + 1 WHERE id = 1;",
+            )
             self.logger.debug(
                 "Записана метрика: increment_generation_failed",
                 event="metric_recorded",
@@ -344,26 +364,20 @@ class Metrics(BaseService, IMetrics):
                 error_message=str(e),
             )
 
-    async def increment_dispatch_success(self, connection: asyncpg.Connection | None = None) -> None:
+    async def increment_dispatch_success(self, connection: asyncpg.Connection) -> None:
         """Увеличивает счётчик успешных отправок сообщений.
 
         Args:
-            connection: Соединение БД для использования в транзакции (опционально).
+            connection: Соединение БД для использования в транзакции (обязательно).
 
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         try:
             await self._ensure_row()
-            if connection is not None:
-                await connection.execute(
-                    "UPDATE metrics SET dispatch_success = dispatch_success + 1 WHERE id = 1;",
-                )
-            else:
-                async with self._pool.acquire() as conn:
-                    await conn.execute(
-                        "UPDATE metrics SET dispatch_success = dispatch_success + 1 WHERE id = 1;",
-                    )
+            await connection.execute(
+                "UPDATE metrics SET dispatch_success = dispatch_success + 1 WHERE id = 1;",
+            )
             self.logger.debug(
                 "Записана метрика: increment_dispatch_success",
                 event="metric_recorded",
@@ -378,26 +392,20 @@ class Metrics(BaseService, IMetrics):
                 error_message=str(e),
             )
 
-    async def increment_dispatch_failed(self, connection: asyncpg.Connection | None = None) -> None:
+    async def increment_dispatch_failed(self, connection: asyncpg.Connection) -> None:
         """Увеличивает счётчик неудачных отправок сообщений.
 
         Args:
-            connection: Соединение БД для использования в транзакции (опционально).
+            connection: Соединение БД для использования в транзакции (обязательно).
 
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
         """
         try:
             await self._ensure_row()
-            if connection is not None:
-                await connection.execute(
-                    "UPDATE metrics SET dispatch_failed = dispatch_failed + 1 WHERE id = 1;",
-                )
-            else:
-                async with self._pool.acquire() as conn:
-                    await conn.execute(
-                        "UPDATE metrics SET dispatch_failed = dispatch_failed + 1 WHERE id = 1;",
-                    )
+            await connection.execute(
+                "UPDATE metrics SET dispatch_failed = dispatch_failed + 1 WHERE id = 1;",
+            )
             self.logger.debug(
                 "Записана метрика: increment_dispatch_failed",
                 event="metric_recorded",

@@ -4,6 +4,16 @@
 
 ### Изменено
 
+- **Строгое требование connection для методов репозиториев: устранение рисков атомарности**:
+  - Обновлены протоколы `IDispatchRegistry`, `IUsageTracker`, `IMetrics` - параметр `connection` теперь обязательный
+  - Обновлены реализации: `DispatchRegistry.mark_dispatched`, `UsageTracker.increment`, `Metrics.increment_*` методы
+  - Убрана опциональность connection - все методы БД теперь требуют явной передачи connection
+  - Добавлены helper-методы `*_with_pool()` в репозиториях для использования вне UoW контекста
+  - Обновлены все места использования: `frog_processing_service`, `dispatch_service`, `dispatch_delivery_service`, `image_generation_coordinator`
+  - Устранен риск выполнения операций вне транзакции: невозможно забыть передать connection
+  - Улучшена атомарность операций: все операции в UoW гарантированно выполняются в одной транзакции
+  - Соответствие best practice: явное требование connection исключает ошибки передачи параметров
+
 - **Рефакторинг фабрики Unit of Work: использование протокола вместо Callable**:
   - Создан протокол `IUnitOfWorkFactory` в `shared/protocols.py` для явного контракта фабрики Unit of Work
   - Обновлен `DatabaseOperationsService` для использования `IUnitOfWorkFactory` вместо `Callable[[], IDatabaseUnitOfWork]`

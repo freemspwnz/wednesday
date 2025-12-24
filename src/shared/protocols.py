@@ -22,24 +22,40 @@ else:
 class IMetrics(Protocol):
     """Протокол для системы метрик."""
 
-    async def increment_generation_success(self, connection: asyncpg.Connection | None = None) -> None:
-        """Увеличивает счётчик успешных генераций изображений."""
+    async def increment_generation_success(self, connection: asyncpg.Connection) -> None:
+        """Увеличивает счётчик успешных генераций изображений.
+
+        Args:
+            connection: Соединение БД для использования в транзакции (обязательно).
+        """
         ...
 
-    async def increment_generation_failed(self, connection: asyncpg.Connection | None = None) -> None:
-        """Увеличивает счётчик неудачных генераций изображений."""
+    async def increment_generation_failed(self, connection: asyncpg.Connection) -> None:
+        """Увеличивает счётчик неудачных генераций изображений.
+
+        Args:
+            connection: Соединение БД для использования в транзакции (обязательно).
+        """
         ...
 
     async def increment_cache_hit(self) -> None:
         """Увеличивает счётчик попаданий в кэш."""
         ...
 
-    async def increment_dispatch_success(self, connection: asyncpg.Connection | None = None) -> None:
-        """Увеличивает счётчик успешных отправок сообщений."""
+    async def increment_dispatch_success(self, connection: asyncpg.Connection) -> None:
+        """Увеличивает счётчик успешных отправок сообщений.
+
+        Args:
+            connection: Соединение БД для использования в транзакции (обязательно).
+        """
         ...
 
-    async def increment_dispatch_failed(self, connection: asyncpg.Connection | None = None) -> None:
-        """Увеличивает счётчик неудачных отправок сообщений."""
+    async def increment_dispatch_failed(self, connection: asyncpg.Connection) -> None:
+        """Увеличивает счётчик неудачных отправок сообщений.
+
+        Args:
+            connection: Соединение БД для использования в транзакции (обязательно).
+        """
         ...
 
     async def record_circuit_breaker_trip(self) -> None:
@@ -301,16 +317,16 @@ class IUsageTracker(Protocol):
 
     async def increment(
         self,
+        connection: asyncpg.Connection,
         count: int = 1,
         when: datetime | None = None,
-        connection: asyncpg.Connection | None = None,
     ) -> int:
         """Увеличивает счётчик генераций за месяц и возвращает новое значение.
 
         Args:
+            connection: Соединение БД для использования в транзакции (обязательно).
             count: Количество генераций для добавления (по умолчанию 1).
             when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
-            connection: Соединение БД для использования в транзакции (опционально).
 
         Returns:
             Новое значение счётчика генераций за месяц.
@@ -827,7 +843,7 @@ class IDispatchRegistry(Protocol):
         slot_date: str,
         slot_time: str,
         chat_id: int,
-        connection: asyncpg.Connection | None = None,
+        connection: asyncpg.Connection,
     ) -> None:
         """Помечает сочетание (дата, время, чат) как уже отправленное.
 
@@ -835,7 +851,7 @@ class IDispatchRegistry(Protocol):
             slot_date: Дата слота в формате YYYY-MM-DD.
             slot_time: Время слота в формате HH:MM.
             chat_id: Идентификатор чата для пометки.
-            connection: Соединение БД для использования в транзакции (опционально).
+            connection: Соединение БД для использования в транзакции (обязательно).
         """
         ...
 

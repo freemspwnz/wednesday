@@ -97,7 +97,19 @@ class FrogProcessingService(BaseService):
             # 3. Обновление usage (не критично для успешной отправки)
             if self._usage_tracker:
                 try:
-                    await self._usage_tracker.increment(1)
+                    # Используем helper-метод для получения connection из pool (вне UoW контекста)
+                    if hasattr(self._usage_tracker, 'increment_with_pool'):
+                        await self._usage_tracker.increment_with_pool(1)
+                    else:
+                        # Fallback для совместимости: если helper недоступен, используем pool напрямую
+                        import asyncpg
+
+                        if hasattr(self._usage_tracker, '_pool'):
+                            pool: asyncpg.Pool = self._usage_tracker._pool  # type: ignore[attr-defined]
+                            async with pool.acquire() as conn:
+                                await self._usage_tracker.increment(connection=conn, count=1)
+                        else:
+                            self.logger.warning("UsageTracker pool недоступен, пропускаем обновление usage")
                 except (MemoryError, SystemExit, KeyboardInterrupt):
                     # Системные ошибки пробрасываем выше даже для не критичных операций
                     raise

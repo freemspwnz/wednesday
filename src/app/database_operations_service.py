@@ -80,7 +80,7 @@ class DatabaseOperationsService(BaseService):
                 )
 
                 # 2. Инкрементируем счётчик
-                await self._usage_tracker.increment(1, connection=connection)
+                await self._usage_tracker.increment(connection=connection, count=1)
 
                 # 3. Обновляем метрики (если доступны)
                 if self._metrics:
@@ -124,8 +124,17 @@ class DatabaseOperationsService(BaseService):
 
         try:
             # Метрики не критичны, можно выполнить без транзакции
-            # или в отдельной транзакции
-            await self._metrics.increment_dispatch_failed()
+            # Используем helper-метод для получения connection из pool (вне UoW контекста)
+            if hasattr(self._metrics, 'increment_dispatch_failed_with_pool'):
+                await self._metrics.increment_dispatch_failed_with_pool()
+            else:
+                # Fallback для совместимости
+                import asyncpg
+
+                if hasattr(self._metrics, '_pool'):
+                    pool: asyncpg.Pool = self._metrics._pool  # type: ignore[attr-defined]
+                    async with pool.acquire() as conn:
+                        await self._metrics.increment_dispatch_failed(connection=conn)
         except ServiceError as e:
             # Метрики не критичны, только логируем
             self.logger.warning(

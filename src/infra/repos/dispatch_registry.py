@@ -84,7 +84,7 @@ class DispatchRegistry:
         slot_date: str,
         slot_time: str,
         chat_id: int,
-        connection: asyncpg.Connection | None = None,
+        connection: asyncpg.Connection,
     ) -> None:
         """Помечает сочетание (дата, время, чат) как уже отправленное.
 
@@ -95,8 +95,7 @@ class DispatchRegistry:
             slot_date: Дата слота в формате YYYY-MM-DD.
             slot_time: Время слота в формате HH:MM.
             chat_id: Идентификатор чата для пометки.
-            connection: Соединение БД для использования в транзакции (опционально).
-                Если None, используется пул из конструктора (self._pool).
+            connection: Соединение БД для использования в транзакции (обязательно).
 
         Raises:
             Exception: При ошибке доступа к базе данных PostgreSQL.
@@ -107,45 +106,23 @@ class DispatchRegistry:
         # Преобразуем строку в date объект для asyncpg
         slot_date_obj = date_type.fromisoformat(slot_date) if isinstance(slot_date, str) else slot_date
 
-        # Используем переданное соединение или получаем новое из пула
-        if connection is not None:
-            try:
-                await connection.execute(
-                    """
-                    INSERT INTO dispatch_registry (key, slot_date, slot_time, chat_id, created_at)
-                    VALUES ($1, $2, $3, $4, NOW())
-                    ON CONFLICT (key) DO NOTHING;
-                    """,
-                    key,
-                    slot_date_obj,
-                    slot_time,
-                    int(chat_id),
-                )
-            except Exception as exc:
-                self.logger.error(
-                    f"Ошибка при записи dispatch_registry (key={key}) в Postgres: {exc}",
-                )
-                raise
-        else:
-            # Используем пул из конструктора (передан через DI)
-            async with self._pool.acquire() as conn:
-                try:
-                    await conn.execute(
-                        """
-                        INSERT INTO dispatch_registry (key, slot_date, slot_time, chat_id, created_at)
-                        VALUES ($1, $2, $3, $4, NOW())
-                        ON CONFLICT (key) DO NOTHING;
-                        """,
-                        key,
-                        slot_date_obj,
-                        slot_time,
-                        int(chat_id),
-                    )
-                except Exception as exc:
-                    self.logger.error(
-                        f"Ошибка при записи dispatch_registry (key={key}) в Postgres: {exc}",
-                    )
-                    raise
+        try:
+            await connection.execute(
+                """
+                INSERT INTO dispatch_registry (key, slot_date, slot_time, chat_id, created_at)
+                VALUES ($1, $2, $3, $4, NOW())
+                ON CONFLICT (key) DO NOTHING;
+                """,
+                key,
+                slot_date_obj,
+                slot_time,
+                int(chat_id),
+            )
+        except Exception as exc:
+            self.logger.error(
+                f"Ошибка при записи dispatch_registry (key={key}) в Postgres: {exc}",
+            )
+            raise
 
     async def cleanup_old(self) -> None:
         """Удаляет старые записи реестра старше retention_days.

@@ -74,16 +74,16 @@ class UsageTracker:
 
     async def increment(
         self,
+        connection: asyncpg.Connection,
         count: int = 1,
         when: datetime | None = None,
-        connection: asyncpg.Connection | None = None,
     ) -> int:
         """Увеличивает счётчик генераций за месяц и возвращает новое значение.
 
         Args:
+            connection: Соединение БД для использования в транзакции (обязательно).
             count: Количество генераций для добавления (по умолчанию 1).
             when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
-            connection: Соединение БД для использования в транзакции (опционально).
 
         Returns:
             Новое значение счётчика генераций за месяц.
@@ -95,43 +95,45 @@ class UsageTracker:
         dt = when or datetime.utcnow()
         key = self._month_key(dt)
 
-        # Используем переданное соединение или получаем новое
-        if connection is not None:
-            row = await connection.fetchrow(
-                "SELECT count FROM usage_stats WHERE month = $1;",
-                key,
-            )
-            current = int(row["count"]) if row is not None else 0
-            new_value = current + int(count)
-            await connection.execute(
-                """
-                INSERT INTO usage_stats (month, count)
-                VALUES ($1, $2)
-                ON CONFLICT (month) DO UPDATE
-                SET count = EXCLUDED.count;
-                """,
-                key,
-                new_value,
-            )
-        else:
-            async with self._pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    "SELECT count FROM usage_stats WHERE month = $1;",
-                    key,
-                )
-                current = int(row["count"]) if row is not None else 0
-                new_value = current + int(count)
-                await conn.execute(
-                    """
-                    INSERT INTO usage_stats (month, count)
-                    VALUES ($1, $2)
-                    ON CONFLICT (month) DO UPDATE
-                    SET count = EXCLUDED.count;
-                    """,
-                    key,
-                    new_value,
-                )
+        row = await connection.fetchrow(
+            "SELECT count FROM usage_stats WHERE month = $1;",
+            key,
+        )
+        current = int(row["count"]) if row is not None else 0
+        new_value = current + int(count)
+        await connection.execute(
+            """
+            INSERT INTO usage_stats (month, count)
+            VALUES ($1, $2)
+            ON CONFLICT (month) DO UPDATE
+            SET count = EXCLUDED.count;
+            """,
+            key,
+            new_value,
+        )
         return new_value
+
+    async def increment_with_pool(
+        self,
+        count: int = 1,
+        when: datetime | None = None,
+    ) -> int:
+        """Увеличивает счётчик генераций за месяц, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+
+        Args:
+            count: Количество генераций для добавления (по умолчанию 1).
+            when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Новое значение счётчика генераций за месяц.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
+        async with self._pool.acquire() as conn:
+            return await self.increment(connection=conn, count=count, when=when)
 
     async def get_month_total(self, when: datetime | None = None) -> int:
         """Возвращает общее количество генераций за месяц.
