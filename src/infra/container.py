@@ -27,7 +27,9 @@ from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_delivery_service import DispatchDeliveryService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
+from app.image_generation_coordinator import ImageGenerationCoordinator
 from app.image_service import ImageService
+from app.image_storage_coordinator import ImageStorageCoordinator
 from app.image_storage_unit_of_work import ImageStorageUnitOfWork
 from app.model_management_service import ModelManagementService
 from app.prompt_service import PromptService
@@ -242,15 +244,28 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
         logger=app_logger,
     )
 
-    return ImageService(
-        image_generation_service=image_generation,
-        prompt_service=prompt_service,
-        storage_unit_of_work=image_storage_uow,
-        caption_service=caption_service,
-        image_cache=image_cache,
-        image_storage=image_storage,
+    # Создаём координаторы
+    generation_coordinator = ImageGenerationCoordinator(
+        generation_service=image_generation,
         circuit_breaker=circuit_breaker,
+        image_cache=image_cache,
         metrics=metrics,
+        logger=app_logger,
+    )
+
+    storage_coordinator = ImageStorageCoordinator(
+        storage_unit_of_work=image_storage_uow,
+        metrics=metrics,
+        logger=app_logger,
+    )
+
+    # Создаём главный сервис
+    return ImageService(
+        prompt_service=prompt_service,
+        generation_coordinator=generation_coordinator,
+        storage_coordinator=storage_coordinator,
+        caption_service=caption_service,
+        image_storage=image_storage,
         logger=app_logger,
     )
 
