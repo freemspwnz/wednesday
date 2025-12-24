@@ -2,8 +2,7 @@
 
 Координирует работу:
 - TargetPreparationService (подготовка целей)
-- DispatchExecutionService (выполнение отправки)
-- FallbackService (обработка fallback)
+- DispatchDeliveryService (отправка изображений, включая fallback)
 - ImageService (генерация изображений)
 
 Отправка сообщений в Telegram и форматирование пользовательских текстов
@@ -12,16 +11,16 @@
 
 from __future__ import annotations
 
+import traceback
 from collections.abc import Awaitable, Callable
 
-from app.dispatch_execution_service import DispatchExecutionService
+from app.dispatch_delivery_service import DispatchDeliveryService
 from app.dispatch_result import DispatchResult
-from app.fallback_service import FallbackService
 from app.image_service import ImageService
 from app.target_preparation_service import TargetPreparationService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CircuitBreakerOpen, ImageGenerationError, ServiceError, UnexpectedDispatchError
-from shared.protocols import ILogger
+from shared.protocols import ILogger, IMetrics
 
 
 class DispatchService(BaseService):
@@ -29,8 +28,7 @@ class DispatchService(BaseService):
 
     Координирует работу:
     - TargetPreparationService (подготовка целей)
-    - DispatchExecutionService (выполнение отправки)
-    - FallbackService (обработка fallback)
+    - DispatchDeliveryService (отправка изображений, включая fallback)
     - ImageService (генерация изображений)
     """
 
@@ -38,25 +36,25 @@ class DispatchService(BaseService):
         self,
         *,
         target_preparation_service: TargetPreparationService,
-        dispatch_execution_service: DispatchExecutionService,
-        fallback_service: FallbackService,
+        dispatch_delivery_service: DispatchDeliveryService,
         image_service: ImageService | None,
+        metrics: IMetrics | None = None,
         logger: ILogger,
     ) -> None:
         """Инициализирует сервис рассылки.
 
         Args:
             target_preparation_service: Сервис подготовки целей.
-            dispatch_execution_service: Сервис выполнения отправки.
-            fallback_service: Сервис обработки fallback.
+            dispatch_delivery_service: Сервис доставки изображений (основных и fallback).
             image_service: Сервис генерации изображений (опционально).
+            metrics: Сервис метрик (опционально).
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
         self._target_preparation_service = target_preparation_service
-        self._dispatch_execution_service = dispatch_execution_service
-        self._fallback_service = fallback_service
+        self._dispatch_delivery_service = dispatch_delivery_service
         self._image_service = image_service
+        self._metrics = metrics
 
     @staticmethod
     def _init_result(slot_date: str, slot_time: str) -> DispatchResult:
@@ -132,7 +130,7 @@ class DispatchService(BaseService):
             # 3. Генерация изображения
             if not self._image_service:
                 # Если сервис генерации не настроен, используем fallback
-                return await self._fallback_service.handle_generation_failure(
+                return await self._handle_generation_failure(
                     slot_date=slot_date,
                     slot_time=slot_time,
                     targets=targets,
@@ -152,7 +150,7 @@ class DispatchService(BaseService):
                     event="dispatch_circuit_breaker_open",
                     status="circuit_breaker",
                 )
-                return await self._fallback_service.handle_generation_failure(
+                return await self._handle_generation_failure(
                     slot_date=slot_date,
                     slot_time=slot_time,
                     targets=targets,
@@ -168,7 +166,7 @@ class DispatchService(BaseService):
                     event="dispatch_generation_error",
                     status="error",
                 )
-                return await self._fallback_service.handle_generation_failure(
+                return await self._handle_generation_failure(
                     slot_date=slot_date,
                     slot_time=slot_time,
                     targets=targets,
@@ -179,7 +177,7 @@ class DispatchService(BaseService):
                 )
 
             # 4. Отправка успешно сгенерированного изображения
-            return await self._dispatch_execution_service.send_to_targets(
+            return await self._dispatch_delivery_service.send_image_to_targets(
                 targets=targets,
                 slot_date=slot_date,
                 slot_time=slot_time,
@@ -199,7 +197,7 @@ class DispatchService(BaseService):
                 )
                 result["total_targets"] = len(targets)
 
-            return await self._fallback_service.handle_dispatch_unexpected_error(
+            return await self._handle_dispatch_unexpected_error(
                 error=e,
                 slot_date=slot_date,
                 slot_time=slot_time,
@@ -227,7 +225,7 @@ class DispatchService(BaseService):
                 context={"event": "unexpected_dispatch_error"},
             )
 
-            return await self._fallback_service.handle_dispatch_unexpected_error(
+            return await self._handle_dispatch_unexpected_error(
                 error=unexpected_error,
                 slot_date=slot_date,
                 slot_time=slot_time,
@@ -237,3 +235,110 @@ class DispatchService(BaseService):
                 send_fallback_image=send_fallback_image,
                 result=result,
             )
+
+    async def _handle_generation_failure(  # noqa: PLR0913, PLR0917
+        self,
+        slot_date: str,
+        slot_time: str,
+        targets: set[int],
+        send_admin_error: Callable[[str], Awaitable[None]],
+        send_user_friendly_error: Callable[[int], Awaitable[None]],
+        send_fallback_image: Callable[[int], Awaitable[bool]],
+        result: DispatchResult,
+    ) -> DispatchResult:
+        """Обрабатывает ошибку генерации изображения.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            targets: Множество ID целевых чатов.
+            send_admin_error: Коллбек для отправки детального сообщения об ошибке администраторам.
+            send_user_friendly_error: Коллбек для отправки дружелюбного сообщения об ошибке в чат.
+            send_fallback_image: Коллбек для отправки fallback изображения в чат.
+            result: Результат рассылки для обновления.
+
+        Returns:
+            DispatchResult с обновленными счетчиками.
+        """
+        error_details = (
+            "Не удалось сгенерировать изображение жабы для среды. "
+            "API вернул None (возможные причины: лимит API, circuit breaker, "
+            "ошибка генерации)"
+        )
+        self.logger.error(error_details)
+
+        # Отправляем детальное сообщение администратору
+        await send_admin_error(error_details)
+
+        result["used_fallback"] = True
+
+        # Пытаемся отправить fallback
+        await self._dispatch_delivery_service.send_fallback_to_targets(
+            slot_date=slot_date,
+            slot_time=slot_time,
+            targets=targets,
+            send_user_friendly_error=send_user_friendly_error,
+            send_fallback_image=send_fallback_image,
+            result=result,
+        )
+
+        return result
+
+    async def _handle_dispatch_unexpected_error(  # noqa: PLR0913, PLR0917
+        self,
+        error: BaseException,
+        slot_date: str,
+        slot_time: str,
+        targets: set[int],
+        send_admin_error: Callable[[str], Awaitable[None]],
+        send_user_friendly_error: Callable[[int], Awaitable[None]],
+        send_fallback_image: Callable[[int], Awaitable[bool]],
+        result: DispatchResult,
+    ) -> DispatchResult:
+        """Обрабатывает неожиданную ошибку.
+
+        Args:
+            error: Исключение, которое произошло.
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            targets: Множество ID целевых чатов.
+            send_admin_error: Коллбек для отправки детального сообщения об ошибке администраторам.
+            send_user_friendly_error: Коллбек для отправки дружелюбного сообщения об ошибке в чат.
+            send_fallback_image: Коллбек для отправки fallback изображения в чат.
+            result: Результат рассылки для обновления.
+
+        Returns:
+            DispatchResult с обновленными счетчиками.
+        """
+        error_details = f"Произошла ошибка при отправке жабы: {error!s}"
+        self.logger.error(error_details, exc_info=True)
+
+        # Отправляем детальное сообщение администратору с трейсом
+        full_error = traceback.format_exc()
+        # Обрезаем трейс до последних 2000 символов (важная информация обычно в конце)
+        max_trace_length = 2000
+        if len(full_error) > max_trace_length:
+            full_error = "..." + full_error[-max_trace_length:]
+        await send_admin_error(
+            f"{error_details}\n\nТрейс (последние {max_trace_length} символов):\n{full_error}",
+        )
+
+        result["used_fallback"] = True
+
+        # Пытаемся отправить fallback
+        await self._dispatch_delivery_service.send_fallback_to_targets(
+            slot_date=slot_date,
+            slot_time=slot_time,
+            targets=targets,
+            send_user_friendly_error=send_user_friendly_error,
+            send_fallback_image=send_fallback_image,
+            result=result,
+        )
+
+        if self._metrics:
+            try:
+                await self._metrics.increment_dispatch_failed()
+            except ServiceError:  # pragma: no cover
+                pass
+
+        return result

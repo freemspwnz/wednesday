@@ -22,9 +22,8 @@ if TYPE_CHECKING:
 from app.admin_dashboard_service import AdminDashboardService
 from app.api_status_service import APIStatusService
 from app.database_operations_service import DatabaseOperationsService
-from app.dispatch_execution_service import DispatchExecutionService
+from app.dispatch_delivery_service import DispatchDeliveryService
 from app.dispatch_service import DispatchService
-from app.fallback_service import FallbackService
 from app.frog_limit_service import FrogRateLimiterService
 from app.image_service import ImageService
 from app.image_storage_unit_of_work import ImageStorageUnitOfWork
@@ -500,17 +499,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         logger=app_logger,
     )
 
-    dispatch_execution_service = DispatchExecutionService(
-        dispatch_registry=dispatch_registry,
-        metrics=metrics,
-        usage_tracker=usage,
-        database_operations=database_operations,
-        logger=app_logger,
-    )
-
-    fallback_service = FallbackService(
-        image_service=image_service,
-        dispatch_execution_service=dispatch_execution_service,
+    dispatch_delivery_service = DispatchDeliveryService(
         dispatch_registry=dispatch_registry,
         database_operations=database_operations,
         metrics=metrics,
@@ -519,9 +508,9 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
 
     dispatch_service = DispatchService(
         target_preparation_service=target_preparation_service,
-        dispatch_execution_service=dispatch_execution_service,
-        fallback_service=fallback_service,
+        dispatch_delivery_service=dispatch_delivery_service,
         image_service=image_service,
+        metrics=metrics,
         logger=app_logger,
     )
 
