@@ -871,6 +871,19 @@ class IDatabaseUnitOfWork(Protocol):
 
 
 @runtime_checkable
+class IUnitOfWorkFactory(Protocol):
+    """Протокол для фабрики создания экземпляров Unit of Work."""
+
+    def __call__(self) -> IDatabaseUnitOfWork:
+        """Создает новый экземпляр Unit of Work.
+
+        Returns:
+            Новый экземпляр IDatabaseUnitOfWork для использования в транзакции.
+        """
+        ...
+
+
+@runtime_checkable
 class IImageStorageUnitOfWork(Protocol):
     """Протокол для Unit of Work управления сохранением изображений."""
 

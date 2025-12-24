@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError, UnexpectedAppError
-from shared.protocols import IDatabaseUnitOfWork, IDispatchRegistry, ILogger, IMetrics, IUsageTracker
+from shared.protocols import (
+    IDispatchRegistry,
+    ILogger,
+    IMetrics,
+    IUnitOfWorkFactory,
+    IUsageTracker,
+)
 
 
 class DatabaseOperationsService(BaseService):
@@ -20,7 +24,7 @@ class DatabaseOperationsService(BaseService):
         self,
         dispatch_registry: IDispatchRegistry,
         usage_tracker: IUsageTracker,
-        unit_of_work_factory: Callable[[], IDatabaseUnitOfWork],
+        unit_of_work_factory: IUnitOfWorkFactory,
         metrics: IMetrics | None = None,
         *,
         logger: ILogger,

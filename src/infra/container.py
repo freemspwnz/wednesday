@@ -69,6 +69,7 @@ from shared.protocols import (
     IRateLimiter,
     ITextToImageClient,
     ITextToTextClient,
+    IUnitOfWorkFactory,
     IUsageTracker,
 )
 
@@ -559,12 +560,15 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     def create_unit_of_work() -> DatabaseUnitOfWork:
         return DatabaseUnitOfWork(pool=db_pool, logger=app_logger)
 
+    # Аннотируем для явности соответствия протоколу
+    uow_factory: IUnitOfWorkFactory = create_unit_of_work
+
     # Создаём DatabaseOperationsService для атомарных операций БД
     database_operations = DatabaseOperationsService(
         dispatch_registry=dispatch_registry,
         usage_tracker=usage,
         metrics=metrics,
-        unit_of_work_factory=create_unit_of_work,
+        unit_of_work_factory=uow_factory,
         logger=app_logger,
     )
 

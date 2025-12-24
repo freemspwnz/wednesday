@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Рефакторинг фабрики Unit of Work: использование протокола вместо Callable**:
+  - Создан протокол `IUnitOfWorkFactory` в `shared/protocols.py` для явного контракта фабрики Unit of Work
+  - Обновлен `DatabaseOperationsService` для использования `IUnitOfWorkFactory` вместо `Callable[[], IDatabaseUnitOfWork]`
+  - Улучшена консистентность архитектуры: все зависимости используют Protocol вместо Callable
+  - Улучшена тестируемость: фабрику можно мокировать через протокол
+  - Соответствие принципу Dependency Inversion: явный контракт для фабрики
+
 - **Рефакторинг app/ слоя: замена Callable коллбеков на протокол IMessagingService**:
   - Расширен протокол `IMessagingService` методами `send_error_message`, `send_user_friendly_error`, `send_fallback_image`
   - Реализованы новые методы в `PTBMessagingService`
