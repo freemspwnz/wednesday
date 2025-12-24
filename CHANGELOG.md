@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Рефакторинг frog-сервисов: выделение FrogDeliveryService и упрощение архитектуры**:
+  - Создан `FrogDeliveryService` по аналогии с `DispatchDeliveryService` для унификации логики доставки
+  - Упрощен `FrogProcessingService` до координатора, делегирующего доставку в `FrogDeliveryService`
+  - Устранено дублирование fallback-логики между `FrogProcessingService` и `DispatchService`
+  - Удален избыточный `FrogRequestService` - используется `ITaskQueue` напрямую в handlers
+  - Обновлен `build_frog_processing_service` для использования нового `FrogDeliveryService`
+  - Обновлен `BotServices` для использования `ITaskQueue` вместо `FrogRequestService`
+  - Обновлены handlers для прямого использования `ITaskQueue`
+  - Соответствие принципам SOLID: улучшено разделение ответственности, упрощены зависимости
+  - Архитектура frog-сервисов теперь аналогична dispatch-сервисам
+
 - **Упрощение структуры dispatch: перенос DispatchResult в dispatch_service.py**:
   - Перенесен `DispatchResult` из отдельного файла `dispatch_result.py` в `dispatch_service.py`
   - Устранена избыточность: удален отдельный файл для одного TypedDict

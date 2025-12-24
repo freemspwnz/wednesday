@@ -23,9 +23,9 @@ from shared.config import AppSettings
 from shared.protocols import IChatsRepo, IMetrics, IUsageTracker
 
 if TYPE_CHECKING:
-    from app.frog_requests import FrogRequestService
     from bot.wednesday_bot import WednesdayBot
     from infra.redis.redis_client import RedisClient
+    from shared.protocols import ITaskQueue
 
 
 @dataclass
@@ -49,7 +49,7 @@ class BotServices:
     settings: AppSettings
     image_service: ImageService
     frog_rate_limiter: FrogRateLimiterService
-    frog_request_service: FrogRequestService
+    task_queue: ITaskQueue
     admin_dashboard_service: AdminDashboardService | None = None
     model_management_service: ModelManagementService | None = None
     bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop

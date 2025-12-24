@@ -164,7 +164,7 @@ class UserHandlers(BaseHandlers):
             - Проверяет глобальный и per-user rate limits через FrogRateLimiterService.
             - Проверяет месячный лимит генераций через usage.can_use_frog().
             - Отправляет статусное сообщение пользователю.
-            - Ставит Celery-задачу через FrogRequestService.
+            - Ставит Celery-задачу через ITaskQueue.
         """
         if not update.message or not update.effective_user:
             return
@@ -231,9 +231,9 @@ class UserHandlers(BaseHandlers):
             )
             # Продолжаем даже если не удалось отправить статус
 
-        # Ставим задачу в очередь Celery через application service
+        # Ставим задачу в очередь Celery напрямую
         try:
-            await self.services.frog_request_service.request_manual_frog(
+            await self.services.task_queue.send_frog_manual_task(
                 chat_id=chat_id,
                 user_id=user_id,
                 status_message_id=status_message.message_id if status_message else None,

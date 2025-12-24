@@ -130,7 +130,7 @@ def wednesday_bot(monkeypatch: Any) -> Any:
         metrics=DummyMetrics(),
         settings=SimpleNamespace(scheduler_send_times=["10:00"], time_format_length=5),
         frog_rate_limiter=SimpleNamespace(),
-        frog_request_service=SimpleNamespace(),
+        task_queue=SimpleNamespace(),
         bot_controller=None,
     )
 

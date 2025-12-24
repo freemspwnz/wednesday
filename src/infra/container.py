@@ -355,11 +355,17 @@ def build_frog_processing_service(
     Returns:
         Настроенный FrogProcessingService.
     """
+    from app.frog_delivery_service import FrogDeliveryService
     from app.frog_processing_service import FrogProcessingService
+
+    delivery_service = FrogDeliveryService(
+        messaging_service=messaging_service,
+        logger=logger,
+    )
 
     return FrogProcessingService(
         image_service=image_service,
-        messaging_service=messaging_service,
+        delivery_service=delivery_service,
         usage_tracker=usage_tracker,
         admin_notifier=admin_notifier,
         logger=logger,
@@ -470,12 +476,10 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         logger=app_logger,
     )
     # Ленивые импорты для избежания циклических зависимостей
-    from app.frog_requests import FrogRequestService
     from infra.celery.celery_task_queue import CeleryTaskQueue
 
-    # Создаём task queue и передаём в FrogRequestService
+    # Создаём task queue для прямого использования в handlers
     task_queue = CeleryTaskQueue()
-    frog_request_service = FrogRequestService(task_queue=task_queue, logger=app_logger)
 
     # Создаём сервисы для DispatchService
     target_preparation_service = TargetPreparationService(
@@ -542,7 +546,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         settings=app_settings,
         image_service=image_service,
         frog_rate_limiter=frog_rate_limiter,
-        frog_request_service=frog_request_service,
+        task_queue=task_queue,
         bot_controller=None,
         dispatch_service=dispatch_service,
         admin_dashboard_service=admin_dashboard_service,

@@ -179,7 +179,6 @@ async def test_command_handlers_start_help(
 
     monkeypatch.setattr("infra.repos.admins_repo.AdminsRepo", _AdminNo)
     from app.frog_limit_service import FrogRateLimiterService
-    from app.frog_requests import FrogRequestService
     from infra.celery.celery_task_queue import CeleryTaskQueue
     from infra.rate_limiting import RateLimiter
     from infra.redis.redis_client import _InMemoryRedis
@@ -196,7 +195,6 @@ async def test_command_handlers_start_help(
         logger=mock_logger,
     )
     task_queue = CeleryTaskQueue()
-    frog_request_service = FrogRequestService(task_queue=task_queue, logger=mock_logger)
     services = BotServices(
         postgres_pool=MagicMock(),  # Mock для тестов
         redis_client=redis_client,
@@ -209,7 +207,7 @@ async def test_command_handlers_start_help(
         settings=MagicMock(),
         image_service=MagicMock(),
         frog_rate_limiter=frog_rate_limiter,
-        frog_request_service=frog_request_service,
+        task_queue=task_queue,
     )
     handler = UserHandlers(services=services)
     async_retry_stub(handler)

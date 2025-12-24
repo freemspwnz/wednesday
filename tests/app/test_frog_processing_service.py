@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.frog_processing_service import FrogProcessingService
-from shared.base.exceptions import MessagingError, UnexpectedImageError
-from shared.protocols import ILogger, IMessagingService, IUsageTracker
+from shared.base.exceptions import UnexpectedImageError
+from shared.protocols import ILogger, IUsageTracker
 
 pytestmark = [pytest.mark.unit]
 
@@ -21,12 +21,11 @@ def mock_image_service() -> MagicMock:
 
 
 @pytest.fixture
-def mock_messaging_service() -> MagicMock:
-    """Создаёт мок IMessagingService."""
-    service = MagicMock(spec=IMessagingService)
-    service.send_image = AsyncMock()
-    service.send_message = AsyncMock()
-    service.delete_message = AsyncMock()
+def mock_delivery_service() -> MagicMock:
+    """Создаёт мок FrogDeliveryService."""
+    service = MagicMock()
+    service.send_image_to_user = AsyncMock(return_value=True)
+    service.send_fallback_to_user = AsyncMock()
     return service
 
 
@@ -59,7 +58,7 @@ def mock_logger() -> MagicMock:
 @pytest.fixture
 def frog_processing_service(
     mock_image_service: MagicMock,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
     mock_usage_tracker: MagicMock,
     mock_admin_notifier: MagicMock,
     mock_logger: MagicMock,
@@ -67,7 +66,7 @@ def frog_processing_service(
     """Создаёт экземпляр FrogProcessingService с моками."""
     return FrogProcessingService(
         image_service=mock_image_service,
-        messaging_service=mock_messaging_service,
+        delivery_service=mock_delivery_service,
         usage_tracker=mock_usage_tracker,
         admin_notifier=mock_admin_notifier,
         logger=mock_logger,
@@ -78,7 +77,7 @@ def frog_processing_service(
 async def test_process_frog_request_success(
     frog_processing_service: FrogProcessingService,
     mock_image_service: MagicMock,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
     mock_usage_tracker: MagicMock,
 ) -> None:
     """Тест успешной обработки запроса."""
@@ -90,24 +89,27 @@ async def test_process_frog_request_success(
 
     assert result["status"] == "success"
     mock_image_service.generate_frog_image.assert_called_once_with(user_id=456)
-    mock_messaging_service.send_image.assert_called_once_with(
+    mock_delivery_service.send_image_to_user.assert_called_once_with(
         chat_id=123,
-        image=b"image_data",
+        user_id=456,
+        image_data=b"image_data",
         caption="caption",
+        status_message_id=789,
     )
     mock_usage_tracker.increment.assert_called_once_with(1)
-    mock_messaging_service.delete_message.assert_called_once_with(chat_id=123, message_id=789)
 
 
 @pytest.mark.asyncio
 async def test_process_frog_request_generation_failure(
     frog_processing_service: FrogProcessingService,
     mock_image_service: MagicMock,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
     mock_admin_notifier: MagicMock,
 ) -> None:
     """Тест обработки ошибки генерации."""
-    mock_image_service.generate_frog_image.return_value = None
+    from shared.base.exceptions import ImageGenerationError
+
+    mock_image_service.generate_frog_image.side_effect = ImageGenerationError("Generation failed")
 
     result = await frog_processing_service.process_frog_request(
         chat_id=123,
@@ -117,8 +119,7 @@ async def test_process_frog_request_generation_failure(
 
     assert result["status"] == "failed"
     assert "error" in result
-    mock_messaging_service.send_message.assert_called_once()
-    mock_messaging_service.send_image.assert_called_once()
+    mock_delivery_service.send_fallback_to_user.assert_called_once()
     mock_admin_notifier.notify_generation_failure.assert_called_once()
 
 
@@ -126,7 +127,7 @@ async def test_process_frog_request_generation_failure(
 async def test_process_frog_request_unexpected_error(
     frog_processing_service: FrogProcessingService,
     mock_image_service: MagicMock,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
     mock_admin_notifier: MagicMock,
 ) -> None:
     """Тест обработки неожиданной ошибки."""
@@ -140,8 +141,7 @@ async def test_process_frog_request_unexpected_error(
 
     assert result["status"] == "failed"
     assert "error" in result
-    mock_messaging_service.send_message.assert_called_once()
-    mock_messaging_service.send_image.assert_called_once()
+    mock_delivery_service.send_fallback_to_user.assert_called_once()
     mock_admin_notifier.notify_generation_failure.assert_called_once()
 
 
@@ -149,23 +149,25 @@ async def test_process_frog_request_unexpected_error(
 async def test_process_frog_request_messaging_error(
     frog_processing_service: FrogProcessingService,
     mock_image_service: MagicMock,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
 ) -> None:
     """Тест обработки ошибки отправки сообщения."""
-    mock_messaging_service.send_image.side_effect = MessagingError("Send failed")
+    mock_delivery_service.send_image_to_user.return_value = False
 
-    with pytest.raises(MessagingError):
-        await frog_processing_service.process_frog_request(
-            chat_id=123,
-            user_id=456,
-            status_message_id=789,
-        )
+    result = await frog_processing_service.process_frog_request(
+        chat_id=123,
+        user_id=456,
+        status_message_id=789,
+    )
+
+    assert result["status"] == "failed"
+    assert "error" in result
 
 
 @pytest.mark.asyncio
 async def test_process_frog_request_no_status_message(
     frog_processing_service: FrogProcessingService,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
 ) -> None:
     """Тест обработки запроса без статусного сообщения."""
     result = await frog_processing_service.process_frog_request(
@@ -175,20 +177,26 @@ async def test_process_frog_request_no_status_message(
     )
 
     assert result["status"] == "success"
-    mock_messaging_service.delete_message.assert_not_called()
+    mock_delivery_service.send_image_to_user.assert_called_once_with(
+        chat_id=123,
+        user_id=456,
+        image_data=b"image_data",
+        caption="caption",
+        status_message_id=None,
+    )
 
 
 @pytest.mark.asyncio
 async def test_process_frog_request_no_usage_tracker(
     mock_image_service: MagicMock,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
     mock_admin_notifier: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
     """Тест обработки запроса без usage_tracker."""
     service = FrogProcessingService(
         image_service=mock_image_service,
-        messaging_service=mock_messaging_service,
+        delivery_service=mock_delivery_service,
         usage_tracker=None,
         admin_notifier=mock_admin_notifier,
         logger=mock_logger,
@@ -205,20 +213,22 @@ async def test_process_frog_request_no_usage_tracker(
 @pytest.mark.asyncio
 async def test_process_frog_request_no_admin_notifier(
     mock_image_service: MagicMock,
-    mock_messaging_service: MagicMock,
+    mock_delivery_service: MagicMock,
     mock_usage_tracker: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
     """Тест обработки запроса без admin_notifier."""
+    from shared.base.exceptions import ImageGenerationError
+
     service = FrogProcessingService(
         image_service=mock_image_service,
-        messaging_service=mock_messaging_service,
+        delivery_service=mock_delivery_service,
         usage_tracker=mock_usage_tracker,
         admin_notifier=None,
         logger=mock_logger,
     )
 
-    mock_image_service.generate_frog_image.return_value = None
+    mock_image_service.generate_frog_image.side_effect = ImageGenerationError("Generation failed")
 
     result = await service.process_frog_request(
         chat_id=123,
@@ -228,45 +238,3 @@ async def test_process_frog_request_no_admin_notifier(
     assert result["status"] == "failed"
     # Уведомление админов не должно быть вызвано
     assert not hasattr(service, "_admin_notifier") or service._admin_notifier is None
-
-
-@pytest.mark.asyncio
-async def test_send_fallback_response(
-    frog_processing_service: FrogProcessingService,
-    mock_messaging_service: MagicMock,
-    mock_image_service: MagicMock,
-) -> None:
-    """Тест отправки fallback-ответа."""
-    await frog_processing_service._send_fallback_response(
-        chat_id=123,
-        user_id=456,
-        status_message_id=789,
-        friendly_message="Test message",
-    )
-
-    mock_messaging_service.delete_message.assert_called_once_with(chat_id=123, message_id=789)
-    mock_messaging_service.send_message.assert_called_once_with(chat_id=123, text="Test message")
-    mock_image_service.get_random_saved_image.assert_called_once()
-    mock_messaging_service.send_image.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_send_fallback_response_no_image(
-    frog_processing_service: FrogProcessingService,
-    mock_messaging_service: MagicMock,
-    mock_image_service: MagicMock,
-    mock_logger: MagicMock,
-) -> None:
-    """Тест fallback-ответа без доступных изображений."""
-    mock_image_service.get_random_saved_image.return_value = None
-
-    await frog_processing_service._send_fallback_response(
-        chat_id=123,
-        user_id=456,
-        status_message_id=None,
-        friendly_message="Test message",
-    )
-
-    mock_messaging_service.send_message.assert_called_once()
-    mock_messaging_service.send_image.assert_not_called()
-    mock_logger.warning.assert_called_once()

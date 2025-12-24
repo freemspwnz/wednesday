@@ -1,4 +1,11 @@
-"""Application service для обработки запросов генерации жабы по команде /frog."""
+"""Application service для координации обработки запросов генерации жабы по команде /frog.
+
+Координирует работу:
+- ImageService (генерация изображений)
+- FrogDeliveryService (доставка изображений, включая fallback)
+- IUsageTracker (обновление usage)
+- AdminNotificationService (уведомление администраторов)
+"""
 
 from __future__ import annotations
 
@@ -6,6 +13,7 @@ import traceback
 from typing import Any
 
 from app.admin_notification_service import AdminNotificationService
+from app.frog_delivery_service import FrogDeliveryService
 from app.image_service import ImageService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import (
@@ -14,42 +22,40 @@ from shared.base.exceptions import (
     MessagingError,
     UnexpectedImageError,
 )
-from shared.protocols import ILogger, IMessagingService, IUsageTracker
+from shared.protocols import ILogger, IUsageTracker
 
 
 class FrogProcessingService(BaseService):
-    """Application service для обработки запросов генерации жабы.
+    """Application service для координации обработки запросов генерации жабы.
 
-    Инкапсулирует всю бизнес-логику обработки команды /frog:
-    - Генерация изображения
-    - Отправка пользователю
-    - Обновление usage
-    - Удаление статусного сообщения
-    - Fallback логика при ошибках
-    - Уведомление администраторов
+    Координирует работу:
+    - ImageService (генерация изображений)
+    - FrogDeliveryService (доставка изображений, включая fallback)
+    - IUsageTracker (обновление usage)
+    - AdminNotificationService (уведомление администраторов)
     """
 
     def __init__(
         self,
         image_service: ImageService,
-        messaging_service: IMessagingService,
+        delivery_service: FrogDeliveryService,
         usage_tracker: IUsageTracker | None = None,
         admin_notifier: AdminNotificationService | None = None,
         *,
         logger: ILogger,
     ) -> None:
-        """Инициализирует сервис обработки запросов.
+        """Инициализирует сервис координации.
 
         Args:
             image_service: Сервис генерации изображений.
-            messaging_service: Сервис отправки сообщений.
+            delivery_service: Сервис доставки изображений (основных и fallback).
             usage_tracker: Трекер использования (опционально).
             admin_notifier: Сервис уведомления администраторов (опционально).
             logger: Экземпляр логгера.
         """
         super().__init__(logger)
         self._image_service = image_service
-        self._messaging = messaging_service
+        self._delivery_service = delivery_service
         self._usage_tracker = usage_tracker
         self._admin_notifier = admin_notifier
 
@@ -75,12 +81,18 @@ class FrogProcessingService(BaseService):
             # 1. Генерация изображения
             image_data, caption = await self._image_service.generate_frog_image(user_id=user_id)
 
-            # 2. Отправка изображения
-            await self._messaging.send_image(
+            # 2. Отправка изображения через delivery service
+            success = await self._delivery_service.send_image_to_user(
                 chat_id=chat_id,
-                image=image_data,
+                user_id=user_id,
+                image_data=image_data,
                 caption=caption,
+                status_message_id=status_message_id,
             )
+
+            if not success:
+                # Ошибка отправки - MessagingError уже обработан в delivery service
+                return {"status": "failed", "error": "Не удалось отправить изображение"}
 
             # 3. Обновление usage (не критично для успешной отправки)
             if self._usage_tracker:
@@ -98,30 +110,6 @@ class FrogProcessingService(BaseService):
                         error_type=type(e).__name__,
                         error_message=str(e),
                     )
-
-            # 4. Удаление статусного сообщения (не критично)
-            if status_message_id:
-                try:
-                    await self._messaging.delete_message(
-                        chat_id=chat_id,
-                        message_id=status_message_id,
-                    )
-                except MessagingError as e:
-                    self.logger.warning(
-                        f"Не удалось удалить статусное сообщение: {e}",
-                        event="status_message_delete_failed",
-                        status="warning",
-                        error_type=type(e).__name__,
-                        error_message=str(e),
-                    )
-
-            self.logger.info(
-                f"Изображение жабы успешно отправлено пользователю {user_id} в чат {chat_id}",
-                event="frog_request_success",
-                status="ok",
-                user_id=user_id,
-                chat_id=chat_id,
-            )
 
             return {"status": "success"}
 
@@ -157,30 +145,9 @@ class FrogProcessingService(BaseService):
                 status_message_id=status_message_id,
                 error=e,
             )
-        except MessagingError as e:
-            # Ошибка отправки сообщения
-            self.logger.error(
-                f"Ошибка отправки изображения пользователю {user_id}: {e}",
-                event="frog_request_messaging_error",
-                status="error",
-                user_id=user_id,
-                chat_id=chat_id,
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-            # Удаляем статусное сообщение даже при ошибке отправки
-            if status_message_id:
-                try:
-                    await self._messaging.delete_message(
-                        chat_id=chat_id,
-                        message_id=status_message_id,
-                    )
-                except (MemoryError, SystemExit, KeyboardInterrupt):
-                    # Системные ошибки пробрасываем выше даже при попытке удаления сообщения
-                    raise
-                except BaseException:
-                    # Игнорируем другие ошибки при удалении статусного сообщения (не критично)
-                    pass
+        except MessagingError:
+            # Ошибка отправки уже обработана в delivery service
+            # Пробрасываем для верхнего уровня
             raise
         except (MemoryError, SystemExit, KeyboardInterrupt):
             # Системные ошибки пробрасываем выше без обёртки
@@ -220,10 +187,11 @@ class FrogProcessingService(BaseService):
             chat_id=chat_id,
         )
 
-        # Используем общую логику fallback
-        await self._send_fallback_response(
+        # Используем delivery service для fallback
+        await self._delivery_service.send_fallback_to_user(
             chat_id=chat_id,
             user_id=user_id,
+            image_service=self._image_service,
             status_message_id=status_message_id,
             friendly_message=(
                 "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
@@ -291,10 +259,11 @@ class FrogProcessingService(BaseService):
             exc_info=True,
         )
 
-        # Используем общую логику fallback
-        await self._send_fallback_response(
+        # Используем delivery service для fallback
+        await self._delivery_service.send_fallback_to_user(
             chat_id=chat_id,
             user_id=user_id,
+            image_service=self._image_service,
             status_message_id=status_message_id,
             friendly_message=(
                 "🐸 К сожалению, произошла ошибка при генерации.\n"
@@ -312,84 +281,3 @@ class FrogProcessingService(BaseService):
             )
 
         return {"status": "failed", "error": error_details}
-
-    async def _send_fallback_response(
-        self,
-        chat_id: int,
-        user_id: int,
-        status_message_id: int | None,
-        friendly_message: str,
-    ) -> None:
-        """Отправляет fallback-ответ при ошибке генерации.
-
-        Выполняет:
-        - Удаление статусного сообщения (если указано)
-        - Отправку дружелюбного сообщения
-        - Отправку случайного изображения из архива (если доступно)
-
-        Args:
-            chat_id: ID чата.
-            user_id: ID пользователя.
-            status_message_id: ID статусного сообщения для удаления (опционально).
-            friendly_message: Текст дружелюбного сообщения.
-        """
-        # Удаление статусного сообщения
-        if status_message_id:
-            try:
-                await self._messaging.delete_message(
-                    chat_id=chat_id,
-                    message_id=status_message_id,
-                )
-            except (MemoryError, SystemExit, KeyboardInterrupt):
-                # Системные ошибки пробрасываем выше даже при попытке удаления сообщения
-                raise
-            except BaseException:
-                # Игнорируем другие ошибки при удалении статусного сообщения (не критично)
-                pass
-
-        # Отправка дружелюбного сообщения
-        try:
-            await self._messaging.send_message(
-                chat_id=chat_id,
-                text=friendly_message,
-            )
-        except MessagingError as e:
-            self.logger.error(
-                f"Не удалось отправить дружелюбное сообщение: {e}",
-                event="friendly_message_send_failed",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-
-        # Отправка случайного изображения
-        fallback_image = await self._image_service.get_random_saved_image()
-        if fallback_image:
-            fallback_image_data, fallback_caption = fallback_image
-            try:
-                await self._messaging.send_image(
-                    chat_id=chat_id,
-                    image=fallback_image_data,
-                    caption=fallback_caption,
-                )
-                self.logger.info(
-                    f"Случайное изображение отправлено пользователю {user_id} как fallback",
-                    event="fallback_image_sent",
-                    status="ok",
-                    user_id=user_id,
-                )
-            except MessagingError as e:
-                self.logger.error(
-                    f"Не удалось отправить fallback изображение: {e}",
-                    event="fallback_image_send_failed",
-                    status="error",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                )
-        else:
-            self.logger.warning(
-                "Нет сохраненных изображений для отправки как fallback",
-                event="fallback_image_unavailable",
-                status="warning",
-                user_id=user_id,
-            )

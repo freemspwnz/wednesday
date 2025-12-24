@@ -130,7 +130,6 @@ class SupportBot(BaseHandlers):
         # Создаем минимальный BotServices только с settings для использования BaseHandlers
         # SupportBot не использует остальные сервисы, поэтому передаем заглушки для обязательных полей
         from app.frog_limit_service import FrogRateLimiterService
-        from app.frog_requests import FrogRequestService
         from shared.bot_services import BotServices
 
         # Создаём общий логгер для всех сервисов
@@ -161,7 +160,6 @@ class SupportBot(BaseHandlers):
         from infra.celery.celery_task_queue import CeleryTaskQueue
 
         task_queue = CeleryTaskQueue()
-        frog_request_service = FrogRequestService(task_queue=task_queue, logger=app_logger)
         # SupportBot не использует postgres_pool напрямую, но BotServices требует его
         # Пул передаётся через Dependency Injection
         if postgres_pool is None:
@@ -179,7 +177,7 @@ class SupportBot(BaseHandlers):
             settings=self.settings,
             image_service=None,  # type: ignore[arg-type]
             frog_rate_limiter=frog_rate_limiter,
-            frog_request_service=frog_request_service,
+            task_queue=task_queue,
             bot_controller=None,
         )
         # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)
