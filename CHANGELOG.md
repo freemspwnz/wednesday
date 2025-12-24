@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Упрощение структуры dispatch: перенос DispatchResult в dispatch_service.py**:
+  - Перенесен `DispatchResult` из отдельного файла `dispatch_result.py` в `dispatch_service.py`
+  - Устранена избыточность: удален отдельный файл для одного TypedDict
+  - Обновлены импорты в `dispatch_delivery_service.py` и `dispatch_targets_helper.py`
+  - Соответствие принципу локализации связанного кода
+
 - **Рефакторинг dispatch сервисов: объединение DispatchExecutionService и FallbackService**:
   - Создан единый `DispatchDeliveryService`, объединяющий функциональность отправки основного и fallback изображений
   - Устранено дублирование логики между `DispatchExecutionService` и `FallbackService`

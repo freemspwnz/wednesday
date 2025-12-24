@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from app.dispatch_result import DispatchResult
+from app.dispatch_service import DispatchResult
 from shared.protocols import IDispatchRegistry, ILogger
 
 
