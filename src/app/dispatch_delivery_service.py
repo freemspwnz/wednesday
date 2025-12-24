@@ -9,8 +9,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from app.database_operations_service import DatabaseOperationsService
-from app.dispatch_service import DispatchResult
-from app.dispatch_targets_helper import process_targets_with_registry_check
+from app.dispatch_targets_helper import DispatchResult, process_targets_with_registry_check
 from shared.base.base_service import BaseService
 from shared.base.exceptions import (
     AppError,

@@ -7,9 +7,29 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import TypedDict
 
-from app.dispatch_service import DispatchResult
 from shared.protocols import IDispatchRegistry, ILogger
+
+
+class DispatchResult(TypedDict):
+    """Типизированный контейнер результата отправки.
+
+    Ключи:
+        - slot_date: дата слота (YYYY-MM-DD)
+        - slot_time: время слота (HH:MM)
+        - total_targets: всего целевых чатов
+        - success_count: количество успешных отправок
+        - failed_count: количество неуспешных отправок (по Telegram/программным ошибкам)
+        - used_fallback: использован ли fallback‑сценарий вместо свежей генерации
+    """
+
+    slot_date: str
+    slot_time: str
+    total_targets: int
+    success_count: int
+    failed_count: int
+    used_fallback: bool
 
 
 async def process_targets_with_registry_check(  # noqa: PLR0913

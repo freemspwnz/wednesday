@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Устранение циклических зависимостей в dispatch-сервисах**:
+  - Перенесен `DispatchResult` из `dispatch_service.py` в `dispatch_targets_helper.py`
+  - Устранена циклическая зависимость между `dispatch_service.py` и `dispatch_delivery_service.py`
+  - Обновлены импорты в `dispatch_service.py` и `dispatch_delivery_service.py` для использования `DispatchResult` из helper-модуля
+  - Улучшена тестируемость и изоляция модулей
+  - Соответствие принципу Dependency Inversion: устранение взаимных зависимостей между сервисами
+
 - **Улучшение архитектуры admin-сервисов: использование протоколов вместо конкретных реализаций**:
   - Протокол `IAdminsRepo` вынесен в `shared/protocols.py` для единообразия с другими протоколами
   - Удалены дублирующиеся определения протокола из `admin_notification_service.py`, `admin_access_service.py`, `admin_command_service.py`
