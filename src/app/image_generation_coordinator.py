@@ -12,6 +12,7 @@ from __future__ import annotations
 from time import perf_counter
 
 from domain.image_generation import ImageGenerationService
+from domain.value_objects import UserID
 from shared.base.base_service import BaseService
 from shared.base.exceptions import (
     CacheError,
@@ -114,7 +115,9 @@ class ImageGenerationCoordinator(BaseService):
         )
 
         try:
-            image_data = await self._generation_service.generate(prompt, user_id=user_id)
+            # Конвертируем доменный тип (int) в Value Object UserID
+            user_id_vo = UserID(user_id) if user_id is not None else None
+            image_data = await self._generation_service.generate(prompt, user_id=user_id_vo)
             self.logger.info(
                 "Изображение успешно сгенерировано",
                 event="image_generation_success",

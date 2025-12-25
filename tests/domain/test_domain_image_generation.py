@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from domain.image_generation import ImageGenerationService
-from domain.value_objects import MAX_PROMPT_LENGTH, MIN_PROMPT_LENGTH, Prompt
+from domain.value_objects import MAX_PROMPT_LENGTH, MIN_PROMPT_LENGTH, Prompt, UserID
 from shared.base.exceptions import ImageGenerationError
 from shared.models import APIStatusResult, SetModelResult
 from shared.protocols import ITextToImageClient
@@ -121,7 +121,7 @@ class TestGenerate:
         mock_client = MockImageClient()
         service = ImageGenerationService(mock_client)
 
-        await service.generate("  test   prompt  ", user_id=42)
+        await service.generate("  test   prompt  ", user_id=UserID(42))
 
         # Проверяем, что клиент вызван с нормализованным промптом
         assert len(mock_client.calls) == 1
@@ -159,7 +159,7 @@ class TestGenerate:
         mock_client = MockImageClient(response=b"image-data")
         service = ImageGenerationService(mock_client)
 
-        result = await service.generate("valid prompt", user_id=123)
+        result = await service.generate("valid prompt", user_id=UserID(123))
 
         assert result == b"image-data"
         assert len(mock_client.calls) == 1

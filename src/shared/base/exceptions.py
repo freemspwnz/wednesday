@@ -43,6 +43,12 @@ class PromptGenerationError(AppError):
     pass
 
 
+class UnexpectedPromptGenerationError(PromptGenerationError):
+    """Неожиданная ошибка при генерации промпта (баг или нестандартный сценарий)."""
+
+    pass
+
+
 class StorageError(AppError):
     """Ошибки файлового хранилища."""
 

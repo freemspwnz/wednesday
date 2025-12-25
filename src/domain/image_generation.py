@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from domain.value_objects import Prompt
+from domain.value_objects import Prompt, UserID
 from shared.base.exceptions import (
     APIError,
     AuthenticationError,
@@ -39,7 +39,7 @@ class ImageGenerationService:
     async def generate(
         self,
         prompt: str,
-        user_id: int | None = None,
+        user_id: UserID | None = None,
     ) -> bytes:
         """Генерирует изображение по промпту.
 
@@ -65,8 +65,10 @@ class ImageGenerationService:
             raise ImageGenerationError(f"Невалидный промпт: {e}") from e
 
         try:
-            user_id_str = str(user_id) if user_id is not None else None
-            image_data = await self._image_client.generate(validated_prompt.value, user_id=user_id_str)
+            # Адаптация доменного типа UserID к протоколу (str)
+            # Протокол ожидает строку для совместимости с различными системами логирования
+            user_id_for_client = user_id.for_logging() if user_id else None
+            image_data = await self._image_client.generate(validated_prompt.value, user_id=user_id_for_client)
             return image_data
 
         except AuthenticationError as exc:

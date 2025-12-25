@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from domain.fallback_prompt_builder import FallbackPromptBuilder
 from domain.value_objects import Prompt
 from shared.base.exceptions import (
@@ -14,9 +16,12 @@ from shared.base.exceptions import (
     ClientError,
     NetworkError,
     PromptGenerationError,
+    UnexpectedPromptGenerationError,
 )
-from shared.config import PromptFallbackConfig
 from shared.protocols import ITextToTextClient
+
+if TYPE_CHECKING:
+    from shared.config import PromptFallbackConfig
 
 
 class PromptGenerationService:
@@ -73,7 +78,7 @@ class PromptGenerationService:
             raise
         except Exception as exc:
             # Неожиданные ошибки → оборачиваем в доменное исключение
-            raise PromptGenerationError(f"Неожиданная ошибка при генерации промпта: {exc}") from exc
+            raise UnexpectedPromptGenerationError(f"Неожиданная ошибка при генерации промпта: {exc}") from exc
 
     def get_fallback_prompt(self) -> Prompt:
         """Возвращает статический промпт из конфигурации (fallback).

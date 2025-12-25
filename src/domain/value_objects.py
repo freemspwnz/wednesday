@@ -90,3 +90,76 @@ class Prompt:
     def __hash__(self) -> int:
         """Возвращает хеш промпта для использования в множествах и словарях."""
         return hash(self._value)
+
+
+class UserID:
+    """Value Object для идентификатора пользователя.
+
+    Инкапсулирует конвертацию между доменным типом (int для Telegram ID)
+    и форматом протоколов инфраструктуры (str для логирования).
+    """
+
+    def __init__(self, value: int | None) -> None:
+        """Создает UserID из доменного типа.
+
+        Args:
+            value: Идентификатор пользователя как int (Telegram ID) или None.
+        """
+        self._value = value
+
+    @property
+    def value(self) -> int | None:
+        """Возвращает доменное значение (int).
+
+        Returns:
+            Идентификатор пользователя как int или None.
+        """
+        return self._value
+
+    def for_logging(self) -> str | None:
+        """Возвращает значение для логирования (str).
+
+        Используется при передаче в протоколы инфраструктуры,
+        где требуется строковое представление user_id.
+
+        Returns:
+            Строковое представление user_id или None.
+        """
+        return str(self._value) if self._value is not None else None
+
+    def __bool__(self) -> bool:
+        """Проверяет, задан ли user_id.
+
+        Returns:
+            True если user_id не None, False иначе.
+        """
+        return self._value is not None
+
+    def __eq__(self, other: object) -> bool:
+        """Проверяет равенство двух UserID.
+
+        Args:
+            other: Объект для сравнения.
+
+        Returns:
+            True если значения равны, False иначе.
+        """
+        if not isinstance(other, UserID):
+            return False
+        return self._value == other._value
+
+    def __hash__(self) -> int:
+        """Возвращает хеш UserID для использования в множествах и словарях.
+
+        Returns:
+            Хеш значения user_id или 0 для None.
+        """
+        return hash(self._value) if self._value is not None else 0
+
+    def __repr__(self) -> str:
+        """Возвращает представление объекта для отладки.
+
+        Returns:
+            Строковое представление UserID.
+        """
+        return f"UserID(value={self._value})"
