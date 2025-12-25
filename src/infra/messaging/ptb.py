@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from infra.messaging.ptb_exceptions import map_telegram_exceptions
 
 if TYPE_CHECKING:
-    from telegram import Bot
+    from telegram import Bot, Chat
 
 
 class PTBMessagingService:
@@ -159,3 +160,59 @@ class PTBMessagingService:
             caption=caption,
         )
         return True
+
+    async def get_chat_info(
+        self,
+        chat_id: int,
+        timeout: float = 5.0,
+    ) -> tuple[int, str]:
+        """Получает информацию о чате (ID и название).
+
+        Args:
+            chat_id: ID чата для получения информации.
+            timeout: Таймаут для запроса в секундах.
+
+        Returns:
+            Кортеж (chat_id, title), где title - название чата
+            или сообщение об ошибке при неудаче.
+        """
+        from telegram.error import NetworkError, TelegramError, TimedOut
+
+        try:
+            chat_info = await asyncio.wait_for(
+                self._bot.get_chat(chat_id),
+                timeout=timeout,
+            )
+            title = getattr(chat_info, "title", getattr(chat_info, "first_name", "Unknown"))
+            return (chat_id, title)
+        except (TelegramError, NetworkError, TimedOut) as e:
+            return (chat_id, f"не удалось получить информацию: {type(e).__name__}")
+        except TimeoutError:
+            return (chat_id, "таймаут при получении информации")
+        except (ValueError, TypeError, AttributeError) as e:
+            return (chat_id, f"ошибка валидации данных: {type(e).__name__}")
+
+    async def get_chat(
+        self,
+        chat_id: int,
+        timeout: float = 10.0,
+    ) -> Chat | None:
+        """Получает полный объект чата.
+
+        Args:
+            chat_id: ID чата для получения информации.
+            timeout: Таймаут для запроса в секундах.
+
+        Returns:
+            Объект чата или None в случае ошибки.
+        """
+        from telegram.error import NetworkError, TelegramError, TimedOut
+
+        try:
+            chat_info = await asyncio.wait_for(
+                self._bot.get_chat(chat_id),
+                timeout=timeout,
+            )
+            return chat_info
+        except (TelegramError, NetworkError, TimedOut, TimeoutError, ValueError, TypeError, AttributeError):
+            return None

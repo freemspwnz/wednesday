@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from shared.base.base_service import BaseService
-from shared.protocols import ILogger
+from shared.protocols import ILogger, IMessagingService
 
 if TYPE_CHECKING:
-    from telegram import Bot, Chat
+    from telegram import Chat
 
 # Константы для таймаутов
 DEFAULT_CHAT_INFO_TIMEOUT = 5.0
@@ -26,18 +25,18 @@ class ChatInfoService(BaseService):
 
     def __init__(
         self,
-        bot: Bot,
+        messaging_service: IMessagingService,
         *,
         logger: ILogger,
     ) -> None:
         """Инициализирует сервис получения информации о чатах.
 
         Args:
-            bot: Экземпляр Telegram Bot для получения информации о чатах.
+            messaging_service: Сервис для работы с мессенджером (реализует IMessagingService).
             logger: Экземпляр логгера.
         """
         super().__init__(logger)
-        self._bot = bot
+        self._messaging = messaging_service
 
     async def get_chat_info_safe(
         self,
@@ -53,25 +52,11 @@ class ChatInfoService(BaseService):
         Returns:
             Кортеж (chat_id, title), где title - название чата или сообщение об ошибке.
         """
-        from telegram.error import NetworkError, TelegramError, TimedOut
-
-        try:
-            chat_info = await asyncio.wait_for(
-                self._bot.get_chat(chat_id),
-                timeout=timeout,
-            )
-            title = getattr(chat_info, "title", getattr(chat_info, "first_name", "Unknown"))
-            return (chat_id, title)
-        except (TelegramError, NetworkError, TimedOut) as e:
-            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
-            return (chat_id, f"не удалось получить информацию: {type(e).__name__}")
-        except TimeoutError:
-            self.logger.warning(f"Таймаут при получении информации о чате {chat_id}")
-            return (chat_id, "таймаут при получении информации")
-        except (ValueError, TypeError, AttributeError) as e:
-            # Ошибки валидации данных из getattr или других операций
-            self.logger.warning(f"Ошибка валидации данных для чата {chat_id}: {e}")
-            return (chat_id, "ошибка валидации данных")
+        result = await self._messaging.get_chat_info(chat_id=chat_id, timeout=timeout)
+        # Логируем предупреждение, если получена ошибка
+        if result[1].startswith("не удалось") or result[1].startswith("таймаут") or result[1].startswith("ошибка"):
+            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {result[1]}")
+        return result
 
     async def get_chat_safe(
         self,
@@ -87,21 +72,8 @@ class ChatInfoService(BaseService):
         Returns:
             Объект чата или None в случае ошибки.
         """
-        from telegram.error import NetworkError, TelegramError, TimedOut
-
-        try:
-            chat_info = await asyncio.wait_for(
-                self._bot.get_chat(chat_id),
-                timeout=timeout,
-            )
-            return chat_info
-        except (TelegramError, NetworkError, TimedOut) as e:
-            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
-            return None
-        except TimeoutError:
-            self.logger.warning(f"Таймаут при получении информации о чате {chat_id}")
-            return None
-        except (ValueError, TypeError, AttributeError) as e:
-            # Ошибки валидации данных
-            self.logger.warning(f"Ошибка валидации данных для чата {chat_id}: {e}")
-            return None
+        result = await self._messaging.get_chat(chat_id=chat_id, timeout=timeout)
+        # Логируем предупреждение, если результат None (ошибка)
+        if result is None:
+            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}")
+        return result

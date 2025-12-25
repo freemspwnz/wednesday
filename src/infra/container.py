@@ -1083,11 +1083,11 @@ def build_bot(
     messaging_service = PTBMessagingService(bot=application.bot)
     services.messaging_service = messaging_service
 
-    # Создаём chat_info_service после создания бота, так как нужен bot.application.bot
+    # Создаём chat_info_service с messaging_service для соблюдения границ слоёв
     from app.chat_info_service import ChatInfoService
 
     app_logger = get_logger("app")
-    chat_info_service = ChatInfoService(bot=application.bot, logger=app_logger)
+    chat_info_service = ChatInfoService(messaging_service=messaging_service, logger=app_logger)
     services.chat_info_service = chat_info_service
 
     # Создаём dispatch сервисы с messaging_service

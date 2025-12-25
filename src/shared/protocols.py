@@ -863,6 +863,47 @@ class IMessagingService(Protocol):
         """
         ...
 
+    async def get_chat_info(
+        self,
+        chat_id: int,
+        timeout: float = 5.0,
+    ) -> tuple[int, str]:
+        """Получает информацию о чате (ID и название).
+
+        Args:
+            chat_id: ID чата для получения информации.
+            timeout: Таймаут для запроса в секундах.
+
+        Returns:
+            Кортеж (chat_id, title), где title - название чата
+            или сообщение об ошибке при неудаче.
+
+        Note:
+            При ошибках возвращает (chat_id, "ошибка: <тип>")
+            вместо проброса исключения для graceful degradation.
+        """
+        ...
+
+    async def get_chat(
+        self,
+        chat_id: int,
+        timeout: float = 10.0,
+    ) -> object | None:
+        """Получает полный объект чата.
+
+        Args:
+            chat_id: ID чата для получения информации.
+            timeout: Таймаут для запроса в секундах.
+
+        Returns:
+            Объект чата или None в случае ошибки.
+
+        Note:
+            Тип возвращаемого объекта зависит от реализации мессенджера.
+            Для graceful degradation возвращает None при ошибках.
+        """
+        ...
+
 
 @runtime_checkable
 class IFallbackImageProvider(Protocol):
