@@ -86,8 +86,7 @@ class WednesdayBot:
 
         # Сервисы внедряются через конструктор (DI)
         self.services = services
-        # Устанавливаем обратную ссылку для команд управления
-        self.services.bot_controller = self
+        # bot_controller устанавливается в composition root (container.py) для избежания циклической зависимости
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
         self.pending_startup_edit: dict[str, Any] | None = None
         # Данные для пост-остановки (например, редактирование сообщения об остановке)

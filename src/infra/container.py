@@ -841,8 +841,8 @@ def build_bot(
     # Создаём бот с внедрёнными зависимостями
     bot = WednesdayBot(services=services, telegram_config=bot_telegram_config)
 
-    # Обратная ссылка уже установлена в конструкторе бота,
-    # но убеждаемся, что она корректна
+    # Устанавливаем обратную ссылку в composition root для избежания циклической зависимости
+    # bot_controller должен быть установлен здесь, а не в конструкторе WednesdayBot
     services.bot_controller = bot
 
     # Создаём messaging_service после создания бота, так как нужен bot.application.bot
