@@ -427,6 +427,7 @@ class AppSettings(BaseSettings):
     frog_rate_limit_minutes: int = Field(default=5)
     frog_rate_limit_window_seconds: int = Field(default=60)
     frog_rate_limit_max_requests: int = Field(default=10)
+    telegram_api_max_parallel_requests: int = Field(default=10)
     scheduler_tz: str = Field(default="Europe/Amsterdam")
     time_format_length: int = Field(default=5)
 

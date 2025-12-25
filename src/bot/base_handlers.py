@@ -61,11 +61,12 @@ class BaseHandlers:
         else:
             self.admins_store = services.admins_repo
 
-    async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:  # noqa: PLR6301
+    async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.
 
         Чтение файла выполняется в отдельном потоке через run_in_executor,
         чтобы избежать блокировки event loop при работе с файловой системой.
+        Использует rate limiting для защиты от превышения лимитов Telegram API.
         """
         import asyncio
 
@@ -75,15 +76,26 @@ class BaseHandlers:
             return p.read_bytes()
 
         data = await loop.run_in_executor(None, _read_bytes, path)
-        await retry_on_connect_error(
-            bot.send_document,
-            chat_id=chat_id,
-            document=data,
-            filename=path.name,
-            max_retries=3,
-            delay=2,
-            handle_rate_limit=True,
-        )
+
+        # Получаем rate limiter через services (если доступен)
+        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+        async def _send_document() -> None:
+            await retry_on_connect_error(
+                bot.send_document,
+                chat_id=chat_id,
+                document=data,
+                filename=path.name,
+                max_retries=3,
+                delay=2,
+                handle_rate_limit=True,
+            )
+
+        if rate_limiter:
+            await rate_limiter.execute_with_rate_limit(_send_document)
+        else:
+            # Fallback без rate limiting (для обратной совместимости)
+            await _send_document()
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
@@ -151,23 +163,34 @@ class BaseHandlers:
 
         Обрабатывает ошибки и не пробрасывает исключения - это безопасный метод,
         который не должен прерывать выполнение обработчика.
+        Использует rate limiting для защиты от превышения лимитов Telegram API.
 
         Args:
             message: Сообщение для ответа.
             text: Текст для отправки.
 
         Side Effects:
-            - Отправляет сообщение с retry-логикой.
+            - Отправляет сообщение с retry-логикой и rate limiting.
             - Логирует только неожиданные ошибки (не сетевые/Telegram).
             - retry_on_connect_error() уже логирует сетевые ошибки через log_event().
         """
         try:
-            await retry_on_connect_error(
-                message.reply_text,
-                text,
-                max_retries=MAX_RETRIES_DEFAULT,
-                delay=RETRY_DELAY_DEFAULT,
-            )
+            # Получаем rate limiter через services (если доступен)
+            rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+            async def _reply() -> None:
+                await retry_on_connect_error(
+                    message.reply_text,
+                    text,
+                    max_retries=MAX_RETRIES_DEFAULT,
+                    delay=RETRY_DELAY_DEFAULT,
+                )
+
+            if rate_limiter:
+                await rate_limiter.execute_with_rate_limit(_reply)
+            else:
+                # Fallback без rate limiting (для обратной совместимости)
+                await _reply()
         except Exception as e:
             # retry_on_connect_error уже залогировал сетевые ошибки через log_event
             # Логируем только если это не сетевая ошибка (неожиданная ошибка)
@@ -189,6 +212,7 @@ class BaseHandlers:
         Отправляет сообщение с retry-логикой. При ошибке логирует её и
         при необходимости отправляет fallback-сообщение. Не пробрасывает
         исключения - позволяет централизованному обработчику перехватить их.
+        Использует rate limiting для защиты от превышения лимитов Telegram API.
 
         Args:
             message: Message объект для отправки ответа.
@@ -199,17 +223,27 @@ class BaseHandlers:
             True если сообщение отправлено успешно, False иначе.
 
         Side Effects:
-            - Отправляет сообщение с retry-логикой.
+            - Отправляет сообщение с retry-логикой и rate limiting.
             - Логирует только неожиданные ошибки (не сетевые/Telegram).
             - retry_on_connect_error() уже логирует сетевые ошибки через log_event().
         """
         try:
-            await retry_on_connect_error(
-                message.reply_text,
-                text,
-                max_retries=MAX_RETRIES_DEFAULT,
-                delay=RETRY_DELAY_DEFAULT,
-            )
+            # Получаем rate limiter через services (если доступен)
+            rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+            async def _reply() -> None:
+                await retry_on_connect_error(
+                    message.reply_text,
+                    text,
+                    max_retries=MAX_RETRIES_DEFAULT,
+                    delay=RETRY_DELAY_DEFAULT,
+                )
+
+            if rate_limiter:
+                await rate_limiter.execute_with_rate_limit(_reply)
+            else:
+                # Fallback без rate limiting (для обратной совместимости)
+                await _reply()
             return True
         except Exception as e:
             # retry_on_connect_error уже залогировал сетевые ошибки через log_event
@@ -223,12 +257,21 @@ class BaseHandlers:
             # Если указан fallback текст, пытаемся отправить его
             if fallback_text:
                 try:
-                    await retry_on_connect_error(
-                        message.reply_text,
-                        fallback_text,
-                        max_retries=MAX_RETRIES_DEFAULT,
-                        delay=RETRY_DELAY_DEFAULT,
-                    )
+                    rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+                    async def _reply_fallback() -> None:
+                        await retry_on_connect_error(
+                            message.reply_text,
+                            fallback_text,
+                            max_retries=MAX_RETRIES_DEFAULT,
+                            delay=RETRY_DELAY_DEFAULT,
+                        )
+
+                    if rate_limiter:
+                        await rate_limiter.execute_with_rate_limit(_reply_fallback)
+                    else:
+                        # Fallback без rate limiting (для обратной совместимости)
+                        await _reply_fallback()
                 except Exception as fallback_error:
                     # retry_on_connect_error уже залогировал сетевые ошибки
                     # Логируем только неожиданные ошибки
@@ -277,6 +320,7 @@ class BaseHandlers:
         (exc_info=True). Используется в местах, где нужно гарантировать, что
         ошибка отправки не сломает обработчик команды, но нужно логировать
         с полной информацией для диагностики.
+        Использует rate limiting для защиты от превышения лимитов Telegram API.
 
         Args:
             message: Message объект для отправки ответа.
@@ -289,12 +333,22 @@ class BaseHandlers:
             True если сообщение отправлено успешно, False иначе.
         """
         try:
-            await retry_on_connect_error(
-                message.reply_text,
-                text,
-                max_retries=max_retries,
-                delay=delay,
-            )
+            # Получаем rate limiter через services (если доступен)
+            rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+            async def _reply() -> None:
+                await retry_on_connect_error(
+                    message.reply_text,
+                    text,
+                    max_retries=max_retries,
+                    delay=delay,
+                )
+
+            if rate_limiter:
+                await rate_limiter.execute_with_rate_limit(_reply)
+            else:
+                # Fallback без rate limiting (для обратной совместимости)
+                await _reply()
             return True
         except Exception as e:
             # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик

@@ -19,6 +19,7 @@ from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
 from app.image_service import ImageService
 from app.model_management_service import ModelManagementService
+from app.telegram_api_rate_limiter_service import TelegramAPIRateLimiterService
 from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.repos.dispatch_registry import DispatchRegistry
@@ -120,6 +121,7 @@ class BotServices:
     messaging_service: IMessagingService | None = None
     database_operations: DatabaseOperationsService | None = None
     admins_repo: IAdminsRepo | None = None
+    telegram_api_rate_limiter: TelegramAPIRateLimiterService | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
         """Закрывает все ресурсы (HTTP сессии, соединения).

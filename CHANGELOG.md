@@ -4,6 +4,20 @@
 
 ### Изменено
 
+- **Добавлена проактивная защита от rate limiting Telegram API**:
+  - Создан `TelegramAPIRateLimiterService` в слое `app/` для управления rate limiting Telegram API
+  - Реализовано ограничение частоты запросов (30 запросов/сек) через `IRateLimiter` из infra слоя
+  - Добавлено ограничение параллелизма (максимум 10 параллельных запросов) через asyncio.Semaphore
+  - Интегрирован rate limiter в `BotServices` для использования в обработчиках
+  - Обновлены методы в `BaseHandlers` для автоматического использования rate limiting: `_safe_reply_text`, `_safe_reply_with_fallback`, `_safe_reply_text_with_error_logging`, `_send_log_file`
+  - Обновлены методы в `AdminHandlers` для rate limiting: `_get_chat_info_safe`, `_get_chat_safe`, отправка фото
+  - Обновлен `ChatEventHandler` для использования rate limiting при отправке приветственных сообщений
+  - Добавлена настройка `telegram_api_max_parallel_requests` в `AppSettings` для конфигурации параллелизма
+  - Сохранена обратная совместимость: rate limiter опционален, есть fallback без rate limiting
+  - Улучшена защита от превышения лимитов Telegram API: проактивная защита дополняет реактивную через `retry_on_connect_error`
+  - Соблюдены границы слоев: bot-слой использует только application service через DI, не зависит от infra напрямую
+  - Улучшена отказоустойчивость: предотвращение 429 ошибок до их возникновения, снижение нагрузки на Telegram API
+
 - **Устранено нарушение SRP в SupportBot через вынос обработчиков команд в отдельный модуль**:
   - Создан класс `SupportBotHandlers`, который наследует `BaseHandlers` и инкапсулирует команды SupportBot
   - Перенесены методы команд (`log_command`, `start_main_command`, `help_command`, `maintenance_message`) из `SupportBot` в `SupportBotHandlers`

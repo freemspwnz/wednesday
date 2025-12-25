@@ -809,6 +809,28 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         user_limiter=user_limiter,
         logger=app_logger,
     )
+
+    # Создаём rate limiter для Telegram API
+    from app.telegram_api_rate_limiter_service import (
+        TELEGRAM_API_MAX_REQUESTS_PER_SECOND,
+        TELEGRAM_API_WINDOW_SECONDS,
+        TelegramAPIRateLimiterService,
+    )
+
+    telegram_api_limiter: IRateLimiter = RateLimiter(
+        redis_client=redis_client,
+        prefix="telegram_api:",
+        window=TELEGRAM_API_WINDOW_SECONDS,
+        limit=TELEGRAM_API_MAX_REQUESTS_PER_SECOND,
+    )
+
+    telegram_api_rate_limiter = TelegramAPIRateLimiterService(
+        settings=app_settings,
+        api_limiter=telegram_api_limiter,
+        logger=app_logger,
+        max_parallel=app_settings.telegram_api_max_parallel_requests,
+    )
+
     # Ленивые импорты для избежания циклических зависимостей
     from infra.celery.celery_task_queue import CeleryTaskQueue
 
@@ -904,6 +926,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         messaging_service=None,  # будет установлен позже в bot слое
         database_operations=database_operations,
         admins_repo=admins_repo,
+        telegram_api_rate_limiter=telegram_api_rate_limiter,
     )
 
 

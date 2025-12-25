@@ -86,7 +86,26 @@ class ChatEventHandler:
                         "• /frog — сгенерировать жабу сейчас\n"
                     )
                     try:
-                        await self.bot.send_message(chat_id=chat_id, text=welcome)
+                        # Используем rate limiting для защиты от превышения лимитов Telegram API
+                        from shared.retry import retry_on_connect_error
+
+                        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+                        async def _send_welcome() -> None:
+                            await retry_on_connect_error(
+                                self.bot.send_message,
+                                chat_id=chat_id,
+                                text=welcome,
+                                max_retries=3,
+                                delay=2.0,
+                                handle_rate_limit=True,
+                            )
+
+                        if rate_limiter:
+                            await rate_limiter.execute_with_rate_limit(_send_welcome)
+                        else:
+                            # Fallback без rate limiting (для обратной совместимости)
+                            await _send_welcome()
                     except (TelegramError, NetworkError, TimedOut) as send_error:
                         # Временные сетевые ошибки - можно повторить позже
                         self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {send_error}")

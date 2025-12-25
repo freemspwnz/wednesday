@@ -60,9 +60,10 @@ class AdminHandlers(BaseHandlers):
         chat_id: int,
         timeout: float = 5.0,
     ) -> tuple[int, str]:
-        """Безопасно получает информацию о чате с обработкой ошибок.
+        """Безопасно получает информацию о чате с обработкой ошибок и rate limiting.
 
         Делегирует выполнение в ChatInfoService для соблюдения архитектурных границ.
+        Использует rate limiting для защиты от превышения лимитов Telegram API.
 
         Args:
             bot: Экземпляр Telegram бота (не используется, оставлен для обратной совместимости).
@@ -72,7 +73,20 @@ class AdminHandlers(BaseHandlers):
         Returns:
             Кортеж (chat_id, title), где title - название чата или сообщение об ошибке.
         """
-        return await self._chat_info_service.get_chat_info_safe(chat_id, timeout)
+        # Получаем rate limiter через services (если доступен)
+        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+        if rate_limiter:
+            # Используем проактивную защиту через rate limiter
+            async def _get_info() -> tuple[int, str]:
+                result = await self._chat_info_service.get_chat_info_safe(chat_id, timeout)
+                return result
+
+            result: tuple[int, str] = await rate_limiter.execute_with_rate_limit(_get_info)
+            return result
+        else:
+            # Fallback без rate limiting (для обратной совместимости)
+            return await self._chat_info_service.get_chat_info_safe(chat_id, timeout)
 
     async def _get_chat_safe(
         self,
@@ -80,9 +94,10 @@ class AdminHandlers(BaseHandlers):
         chat_id: int,
         timeout: float = 10.0,
     ) -> Chat | None:
-        """Безопасно получает полный объект чата с обработкой ошибок и таймаутом.
+        """Безопасно получает полный объект чата с обработкой ошибок и rate limiting.
 
         Делегирует выполнение в ChatInfoService для соблюдения архитектурных границ.
+        Использует rate limiting для защиты от превышения лимитов Telegram API.
 
         Args:
             bot: Экземпляр Telegram бота (не используется, оставлен для обратной совместимости).
@@ -92,7 +107,20 @@ class AdminHandlers(BaseHandlers):
         Returns:
             Объект чата или None в случае ошибки.
         """
-        return await self._chat_info_service.get_chat_safe(chat_id, timeout)
+        # Получаем rate limiter через services (если доступен)
+        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+        if rate_limiter:
+            # Используем проактивную защиту через rate limiter
+            async def _get_chat() -> Chat | None:
+                result = await self._chat_info_service.get_chat_safe(chat_id, timeout)
+                return result
+
+            result: Chat | None = await rate_limiter.execute_with_rate_limit(_get_chat)
+            return result
+        else:
+            # Fallback без rate limiting (для обратной совместимости)
+            return await self._chat_info_service.get_chat_safe(chat_id, timeout)
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.
@@ -198,6 +226,9 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
+        # Сохраняем message для использования в замыкании
+        message = update.message
+
         async def _execute_stop() -> None:
             # Получаем экземпляр основного бота через DI и останавливаем его
             bot_controller = self.services.bot_controller
@@ -205,10 +236,11 @@ class AdminHandlers(BaseHandlers):
                 await bot_controller.stop()
             else:
                 self.logger.error("bot_controller не доступен, невозможно остановить бота")
-                await self._safe_reply_with_fallback(
-                    update.message,
-                    "❌ Ошибка: невозможно остановить бота (bot_controller недоступен)",
-                )
+                if message:
+                    await self._safe_reply_with_fallback(
+                        message,
+                        "❌ Ошибка: невозможно остановить бота (bot_controller недоступен)",
+                    )
 
         await self._handle_command_errors(update, _execute_stop)
 
@@ -407,14 +439,22 @@ class AdminHandlers(BaseHandlers):
         admin_chat_id = self.services.settings.admin_chat_id
         if admin_chat_id:
             try:
-                await retry_on_connect_error(
-                    context.bot.send_photo,
-                    chat_id=admin_chat_id,
-                    photo=image_data,
-                    caption=f"🐸 Принудительная отправка (команда /force_send)\n\n{caption}",
-                    max_retries=3,
-                    delay=2,
-                )
+                rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
+                async def _send_to_admin() -> None:
+                    await retry_on_connect_error(
+                        context.bot.send_photo,
+                        chat_id=admin_chat_id,
+                        photo=image_data,
+                        caption=f"🐸 Принудительная отправка (команда /force_send)\n\n{caption}",
+                        max_retries=3,
+                        delay=2,
+                    )
+
+                if rate_limiter:
+                    await rate_limiter.execute_with_rate_limit(_send_to_admin)
+                else:
+                    await _send_to_admin()
                 self.logger.info(f"Изображение отправлено главному админу {admin_chat_id}")
             except (TelegramError, NetworkError, TimedOut) as e:
                 # Сетевые ошибки - отправка админу не критична, продолжаем работу
@@ -430,16 +470,25 @@ class AdminHandlers(BaseHandlers):
         # Отправляем изображение в целевые чаты
         success_count = 0
         failed_count = 0
+        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
+
         for target_chat_id in target_chat_ids:
             try:
-                await retry_on_connect_error(
-                    context.bot.send_photo,
-                    chat_id=target_chat_id,
-                    photo=image_data,
-                    caption=caption,
-                    max_retries=3,
-                    delay=2,
-                )
+
+                async def _send_photo(chat_id: int) -> None:
+                    await retry_on_connect_error(
+                        context.bot.send_photo,
+                        chat_id=chat_id,
+                        photo=image_data,
+                        caption=caption,
+                        max_retries=3,
+                        delay=2,
+                    )
+
+                if rate_limiter:
+                    await rate_limiter.execute_with_rate_limit(lambda cid=target_chat_id: _send_photo(cid))
+                else:
+                    await _send_photo(target_chat_id)
                 success_count += 1
                 self.logger.info(f"Изображение отправлено в чат {target_chat_id}")
             except (TelegramError, NetworkError, TimedOut) as e:
@@ -669,12 +718,16 @@ class AdminHandlers(BaseHandlers):
                 chat_id, title = result
                 chat_list.append(f"• {title} (ID: {chat_id})")
 
+        # Сохраняем message для использования в замыкании
+        reply_message = update.message
+
         async def _execute_list_chats() -> None:
-            message = "📋 Активные чаты:\n\n" + "\n".join(chat_list)
-            success = await self._safe_reply_with_fallback(
-                update.message,
-                message,
-            )
+            message_text = "📋 Активные чаты:\n\n" + "\n".join(chat_list)
+            if reply_message:
+                success = await self._safe_reply_with_fallback(
+                    reply_message,
+                    message_text,
+                )
             if success:
                 self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
 
