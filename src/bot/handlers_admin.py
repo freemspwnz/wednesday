@@ -232,25 +232,25 @@ class AdminHandlers(BaseHandlers):
             if bot_controller is not None:
                 await bot_controller.stop()
             else:
-                # Фоллбек: попытаться аккуратно остановить приложение
-                try:
-                    if hasattr(context.application, "updater") and context.application.updater:
-                        await context.application.updater.stop()
-                except Exception as e:
-                    # Exception оправдан для fallback логики - нужно гарантировать, что ошибка не сломает обработчик
-                    self.logger.warning(f"Ошибка при остановке updater через фоллбек: {e}", exc_info=True)
-                try:
-                    await context.application.stop()
-                except Exception as e:
-                    # Exception оправдан для fallback логики - нужно гарантировать, что ошибка не сломает обработчик
-                    self.logger.warning(f"Ошибка при остановке application через фоллбек: {e}", exc_info=True)
+                self.logger.error("bot_controller не доступен, невозможно остановить бота")
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    "❌ Ошибка: невозможно остановить бота (bot_controller недоступен)",
+                )
         except (ValueError, TypeError, AttributeError) as e:
             # Ошибки валидации данных или доступа к атрибутам
             self.logger.error(f"Ошибка валидации при попытке остановить бота: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Ошибка валидации при попытке остановить бота",
+            )
         except Exception as e:
             # Неожиданные ошибки - логируем с полным стеком
-            # Exception оправдан здесь, так как нужно гарантировать, что ошибка не сломает обработчик команды
             self.logger.error(f"Неожиданная ошибка при попытке остановить бота через /stop: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Произошла неожиданная ошибка при остановке бота",
+            )
 
     async def admin_force_send_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /force_send.
