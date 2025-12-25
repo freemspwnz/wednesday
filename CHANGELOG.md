@@ -4,6 +4,18 @@
 
 ### Исправлено
 
+- **Устранение дублирования логики уведомлений админов: использование AdminNotificationService вместо _send_admin_error**:
+  - Добавлен `AdminNotificationService` в `BotServices` для доступа из bot слоя через DI
+  - Изменен `build_dispatch_services`: теперь возвращает `admin_notification_service` вместе с dispatch сервисами
+  - Обновлен `wednesday_bot.py`: `admin_notification_service` сохраняется в `BotServices` после создания
+  - Удален метод `_send_admin_error()` из `wednesday_bot.py`, который дублировал функциональность `AdminNotificationService.notify_generation_failure()`
+  - Улучшена архитектурная чистота: bot-слой использует сервис из app-слоя вместо дублирования логики
+  - Улучшена консистентность: единая точка отправки уведомлений админам через `AdminNotificationService`
+  - Улучшена функциональность: использование билдеров для форматирования сообщений и структурированного логирования
+  - Соответствие принципу DRY: устранено дублирование логики уведомлений админам
+  - Соответствие границам слоев: bot-слой делегирует уведомления админам в app-слой через сервис
+  - Исправление проблемы из архитектурного аудита bot-слоя (нарушение SRP в WednesdayBot)
+
 - **Устранение дублирования логики retry: удаление обёртки _retry_on_connect_error из BaseHandlers**:
   - Удален метод `_retry_on_connect_error` из `BaseHandlers`, который был тонкой обёрткой над глобальной функцией
   - Заменены все использования `self._retry_on_connect_error(...)` на прямые вызовы `retry_on_connect_error(...)` из `shared.retry`

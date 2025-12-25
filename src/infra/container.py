@@ -676,7 +676,7 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
     admins_repo: IAdminsRepo,
     db_pool: asyncpg.Pool,
     logger: ILogger,
-) -> tuple[TargetPreparationService, DispatchDeliveryService, DispatchService]:
+) -> tuple[TargetPreparationService, DispatchDeliveryService, DispatchService, AdminNotificationService]:
     """Создаёт dispatch сервисы с messaging_service.
 
     Args:
@@ -691,7 +691,7 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
         logger: Логгер.
 
     Returns:
-        Кортеж (target_preparation_service, dispatch_delivery_service, dispatch_service).
+        Кортеж (target_preparation_service, dispatch_delivery_service, dispatch_service, admin_notification_service).
     """
     target_preparation_service = TargetPreparationService(
         chats_repo=chats,
@@ -733,7 +733,7 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
         logger=logger,
     )
 
-    return target_preparation_service, dispatch_delivery_service, dispatch_service
+    return target_preparation_service, dispatch_delivery_service, dispatch_service, admin_notifier
 
 
 def build_bot(

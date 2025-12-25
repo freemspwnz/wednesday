@@ -99,7 +99,7 @@ class WednesdayBot:
 
         # Обновляем dispatch сервисы с messaging_service
         if self.services.database_operations is not None and self.services.admins_repo is not None:
-            _target_prep, _dispatch_delivery, dispatch = build_dispatch_services(
+            _target_prep, _dispatch_delivery, dispatch, admin_notifier = build_dispatch_services(
                 messaging_service=messaging_service,
                 chats=self.services.chats,
                 dispatch_registry=self.services.dispatch_registry,
@@ -112,6 +112,7 @@ class WednesdayBot:
             )
             # Обновляем services
             self.services.dispatch_service = dispatch
+            self.services.admin_notification_service = admin_notifier
         else:
             self.logger.warning("database_operations или admins_repo не доступны, dispatch_service не будет создан")
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
@@ -370,95 +371,6 @@ class WednesdayBot:
                 send_error,
                 exc_info=True,
             )
-
-    async def _send_admin_error(self, error_details: str) -> None:
-        """Отправляет детальное сообщение об ошибке всем администраторам.
-
-        Вспомогательная функция для отправки технического сообщения об ошибке
-        всем администраторам бота. Сообщения автоматически обрезаются, если
-        превышают лимит Telegram (4096 символов).
-
-        Args:
-            error_details: Детальная техническая информация об ошибке,
-                включающая типы ошибок, трейсы и возможные причины.
-
-        Side Effects:
-            - Получает список всех администраторов через AdminsStore.
-            - Отправляет детальное сообщение каждому администратору через bot.send_message().
-            - Автоматически обрезает длинные сообщения до безопасного размера.
-            - Логирует ошибки при отправке.
-        """
-        # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
-        if self.services.admins_repo is None:
-            self.logger.error(
-                "admins_repo недоступен в BotServices. "
-                "Убедитесь, что репозиторий передаётся через Dependency Injection."
-            )
-            raise RuntimeError("admins_repo не инициализирован в BotServices")
-
-        all_admins = await self.services.admins_repo.list_all_admins()
-
-        if not all_admins:
-            self.logger.warning("Нет администраторов для отправки ошибки")
-            return
-
-        admin_message = f"⚠️ Ошибка генерации изображения:\n\n{error_details}"
-
-        # Разбиваем длинные сообщения на части (лимит Telegram: 4096 символов)
-        max_message_length = 4000  # Оставляем запас
-
-        for admin_id in all_admins:
-            try:
-                if len(admin_message) > max_message_length:
-                    # Отправляем короткую версию
-                    short_message = error_details[:3000] + "\n\n⚠️ Сообщение обрезано, полный текст в логах."
-                    await self.application.bot.send_message(
-                        chat_id=admin_id,
-                        text=short_message,
-                    )
-                else:
-                    await self.application.bot.send_message(
-                        chat_id=admin_id,
-                        text=admin_message,
-                    )
-                self.logger.info(f"Отправлено сообщение об ошибке админу {admin_id}")
-            except TelegramError as send_error:
-                error_str = str(send_error)
-                # Если ошибка "Message is too long", отправляем сокращенную версию
-                if "too long" in error_str.lower():
-                    try:
-                        short_message = error_details[:2000] + "\n\n⚠️ Полное сообщение слишком длинное, смотрите логи."
-                        await self.application.bot.send_message(
-                            chat_id=admin_id,
-                            text=short_message,
-                        )
-                        self.logger.info(f"Отправлено сокращенное сообщение об ошибке админу {admin_id}")
-                    except TelegramError as retry_error:
-                        self.logger.error(
-                            "Не удалось отправить даже сокращенное сообщение админу %s (TelegramError): %s",
-                            admin_id,
-                            retry_error,
-                        )
-                    except Exception as retry_error:
-                        self.logger.error(
-                            "Неожиданная ошибка при отправке сокращённого сообщения админу %s: %s",
-                            admin_id,
-                            retry_error,
-                            exc_info=True,
-                        )
-                else:
-                    self.logger.error(
-                        "Не удалось отправить сообщение об ошибке админу %s (TelegramError): %s",
-                        admin_id,
-                        send_error,
-                    )
-            except Exception as send_error:
-                self.logger.error(
-                    "Неожиданная программная ошибка при отправке сообщения об ошибке админу %s: %s",
-                    admin_id,
-                    send_error,
-                    exc_info=True,
-                )
 
     async def _send_fallback_image(self, chat_id: int) -> bool:
         """Отправляет случайное изображение из сохраненных в случае ошибки генерации.
