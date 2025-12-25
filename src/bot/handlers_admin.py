@@ -75,6 +75,38 @@ class AdminHandlers(BaseHandlers):
             self.logger.warning(f"Неожиданная ошибка при получении информации о чате {chat_id}: {e}")
             return (chat_id, f"не удалось получить информацию: {type(e).__name__}")
 
+    async def _get_chat_safe(
+        self,
+        bot: object,
+        chat_id: int,
+        timeout: float = 10.0,
+    ) -> object | None:
+        """Безопасно получает полный объект чата с обработкой ошибок и таймаутом.
+
+        Args:
+            bot: Экземпляр Telegram бота.
+            chat_id: ID чата для получения информации.
+            timeout: Таймаут для запроса в секундах (по умолчанию 10 секунд).
+
+        Returns:
+            Объект чата или None в случае ошибки.
+        """
+        try:
+            chat_info = await asyncio.wait_for(
+                bot.get_chat(chat_id),  # type: ignore[attr-defined]
+                timeout=timeout,
+            )
+            return chat_info  # type: ignore[no-any-return]
+        except (TelegramError, NetworkError, TimedOut) as e:
+            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
+            return None
+        except TimeoutError:
+            self.logger.warning(f"Таймаут при получении информации о чате {chat_id}")
+            return None
+        except Exception as e:
+            self.logger.warning(f"Неожиданная ошибка при получении информации о чате {chat_id}: {e}")
+            return None
+
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.
 
@@ -968,31 +1000,37 @@ class AdminHandlers(BaseHandlers):
                         self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
                     return
 
+                # Получаем информацию об администраторах параллельно для улучшения производительности
+                tasks = [self._get_chat_safe(context.bot, admin_id) for admin_id in admins]
+                chat_results: list[object | None | BaseException] = await asyncio.gather(
+                    *tasks,
+                    return_exceptions=True,
+                )
+
                 admin_list = []
-                for admin_id in admins:
-                    try:
-                        chat = await context.bot.get_chat(admin_id)
-                        # Формируем имя с разумным fallback
-                        name_parts = []
-                        if hasattr(chat, "full_name") and chat.full_name:
-                            name_parts.append(chat.full_name)
-                        elif hasattr(chat, "first_name") and chat.first_name:
-                            name_parts.append(chat.first_name)
-                        name = " ".join(name_parts) if name_parts else "Unknown"
+                for admin_id, chat in zip(admins, chat_results, strict=True):
+                    # Помечаем главного админа (нужно получить независимо от результата запроса)
+                    is_main = " (главный)" if await self._admin_access.is_super_admin(admin_id) else ""
 
-                        # Добавляем username если есть
-                        username_text = ""
-                        if hasattr(chat, "username") and chat.username:
-                            username_text = f" (@{chat.username})"
-
-                        # Помечаем главного админа
-                        is_main = " (главный)" if await self._admin_access.is_super_admin(admin_id) else ""
-
-                        admin_list.append(f"• ID: {admin_id} ({name}{username_text}){is_main}")
-                    except Exception as e:
-                        self.logger.warning(f"Не удалось получить информацию о чате {admin_id}: {e}")
-                        is_main = " (главный)" if await self._admin_access.is_super_admin(admin_id) else ""
+                    if isinstance(chat, BaseException) or chat is None:
+                        self.logger.warning(f"Не удалось получить информацию об администраторе {admin_id}")
                         admin_list.append(f"• ID: {admin_id} (не удалось получить информацию){is_main}")
+                        continue
+
+                    # Формируем имя с разумным fallback
+                    name_parts = []
+                    if hasattr(chat, "full_name") and chat.full_name:
+                        name_parts.append(chat.full_name)
+                    elif hasattr(chat, "first_name") and chat.first_name:
+                        name_parts.append(chat.first_name)
+                    name = " ".join(name_parts) if name_parts else "Unknown"
+
+                    # Добавляем username если есть
+                    username_text = ""
+                    if hasattr(chat, "username") and chat.username:
+                        username_text = f" (@{chat.username})"
+
+                    admin_list.append(f"• ID: {admin_id} ({name}{username_text}){is_main}")
 
                 message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
                 try:
