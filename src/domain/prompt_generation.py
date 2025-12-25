@@ -69,6 +69,9 @@ class PromptGenerationService:
         except ValueError as exc:
             # Ошибка валидации промпта
             raise PromptGenerationError(f"Невалидный промпт от клиента: {exc}") from exc
+        except (MemoryError, SystemExit, KeyboardInterrupt):
+            # Системные ошибки пробрасываем без обработки
+            raise
         except Exception as exc:
             # Неожиданные ошибки → оборачиваем в доменное исключение
             raise PromptGenerationError(f"Неожиданная ошибка при генерации промпта: {exc}") from exc

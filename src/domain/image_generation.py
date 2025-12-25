@@ -77,6 +77,9 @@ class ImageGenerationService:
             raise ImageGenerationError(f"Ошибка API при генерации изображения: {exc}") from exc
         except ClientError as exc:
             raise ImageGenerationError("Ошибка клиента при генерации изображения") from exc
+        except (MemoryError, SystemExit, KeyboardInterrupt):
+            # Системные ошибки пробрасываем без обработки
+            raise
         except Exception as exc:
             # Явно помечаем как неожиданный сценарий
             raise UnexpectedImageGenerationError(f"Неожиданная ошибка при генерации изображения: {exc}") from exc
