@@ -148,24 +148,11 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         await self.lifecycle_manager.start_application(self.application)
 
         # Отправляем уведомление о запуске
-        if self.services.admin_notification_service:
-            try:
-                startup_message = BotLifecycleNotificationBuilder.build_support_startup_message()
-                chat_id_int = int(self.chat_id) if self.chat_id else None
-                admin_chat_id_str = (
-                    str(self.services.settings.admin_chat_id)
-                    if self.services.settings and self.services.settings.admin_chat_id
-                    else None
-                )
-                await self.services.admin_notification_service.notify_lifecycle_event(
-                    message=startup_message,
-                    chat_id=chat_id_int,
-                    admin_chat_id=admin_chat_id_str,
-                    exclude_chat_id=chat_id_int,
-                )
-            except Exception as send_error:
-                self.logger.warning(f"Не удалось отправить сообщение о запуске: {send_error}")
-                self.logger.info("SupportBot запущен, но не удалось отправить уведомление")
+        await self._send_lifecycle_notification(
+            BotLifecycleNotificationBuilder.build_support_startup_message,
+            self.chat_id,
+            log_context="запуске",
+        )
 
         # Инициализируем состояние жизненного цикла
         await self._initialize_lifecycle_state()
@@ -197,25 +184,11 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
             await self._stop_lifecycle()
 
             # Отправляем уведомление об остановке
-            if self.services.admin_notification_service:
-                try:
-                    shutdown_message = BotLifecycleNotificationBuilder.build_support_shutdown_message()
-                    chat_id_int = int(self.chat_id) if self.chat_id else None
-                    admin_chat_id_str = (
-                        str(self.services.settings.admin_chat_id)
-                        if self.services.settings and self.services.settings.admin_chat_id
-                        else None
-                    )
-                    await self.services.admin_notification_service.notify_lifecycle_event(
-                        message=shutdown_message,
-                        chat_id=chat_id_int,
-                        admin_chat_id=admin_chat_id_str,
-                        exclude_chat_id=chat_id_int,
-                    )
-                except Exception as send_error:
-                    self.logger.debug(
-                        f"Не удалось отправить сообщение об остановке (возможно, соединение уже закрыто): {send_error}",
-                    )
+            await self._send_lifecycle_notification(
+                BotLifecycleNotificationBuilder.build_support_shutdown_message,
+                self.chat_id,
+                log_context="остановке",
+            )
 
             self.logger.info("SupportBot успешно остановлен")
 

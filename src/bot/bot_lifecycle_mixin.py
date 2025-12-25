@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from shared.protocols import ILogger
@@ -90,3 +91,45 @@ class BotLifecycleMixin:
             self.logger.info("Все ресурсы закрыты")
         except Exception as cleanup_error:
             self.logger.warning(f"Ошибка при cleanup ресурсов: {cleanup_error}")
+
+    async def _send_lifecycle_notification(
+        self,
+        message_builder: Callable[[], str],
+        chat_id: str | int | None,
+        log_context: str = "жизненном цикле",
+    ) -> None:
+        """Отправляет уведомление о жизненном цикле бота.
+
+        Унифицированный метод для отправки уведомлений о запуске/остановке бота.
+        Используется в WednesdayBot и SupportBot для соблюдения принципа DRY.
+
+        Args:
+            message_builder: Функция, которая возвращает текст сообщения для отправки.
+            chat_id: ID чата для отправки уведомления (может быть str, int или None).
+            log_context: Контекст для логирования (например, "запуске", "остановке").
+
+        Side Effects:
+            - Вызывает message_builder() для получения текста сообщения.
+            - Отправляет уведомление через admin_notification_service.notify_lifecycle_event().
+            - Логирует ошибки отправки, но не прерывает выполнение.
+        """
+        if not self.services.admin_notification_service:
+            return
+
+        try:
+            message = message_builder()
+            chat_id_int = int(chat_id) if chat_id else None
+            admin_chat_id_str = (
+                str(self.services.settings.admin_chat_id)
+                if self.services.settings and self.services.settings.admin_chat_id
+                else None
+            )
+
+            await self.services.admin_notification_service.notify_lifecycle_event(
+                message=message,
+                chat_id=chat_id_int,
+                admin_chat_id=admin_chat_id_str,
+                exclude_chat_id=chat_id_int,
+            )
+        except Exception as send_error:
+            self.logger.warning(f"Не удалось отправить сообщение о {log_context}: {send_error}")
