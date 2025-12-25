@@ -17,7 +17,7 @@ from telegram.ext import ContextTypes
 from infra.logging.logger import get_logger
 from shared.bot_services import BotServices, SupportBotServices
 from shared.paths import LOGS_DIR
-from shared.retry import retry_on_connect_error, retry_telegram
+from shared.retry import retry_on_connect_error
 
 # Константы
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
@@ -126,15 +126,38 @@ class BaseHandlers:
 
         return admin_chat_id == user_id
 
-    @retry_telegram(max_retries=MAX_RETRIES_DEFAULT, delay=RETRY_DELAY_DEFAULT)
-    async def _safe_reply_text(self, message: Message, text: str) -> None:  # noqa: PLR6301
+    async def _safe_reply_text(self, message: Message, text: str) -> None:
         """Безопасная отправка текста с retry для Telegram/сетевых ошибок.
 
         Используется как сокращённая запись для типичного паттерна
         `retry_on_connect_error(message.reply_text, ...)` в местах, где
         не требуется гибкая настройка retry-параметров.
+
+        Обрабатывает ошибки и не пробрасывает исключения - это безопасный метод,
+        который не должен прерывать выполнение обработчика.
+
+        Args:
+            message: Сообщение для ответа.
+            text: Текст для отправки.
+
+        Side Effects:
+            - Отправляет сообщение с retry-логикой.
+            - Логирует ошибки, но не пробрасывает исключения.
         """
-        await message.reply_text(text)
+        try:
+            await retry_on_connect_error(
+                message.reply_text,
+                text,
+                max_retries=MAX_RETRIES_DEFAULT,
+                delay=RETRY_DELAY_DEFAULT,
+            )
+        except Exception as e:
+            # Логируем, но не пробрасываем - это безопасный метод
+            self.logger.warning(
+                f"Не удалось отправить сообщение после {MAX_RETRIES_DEFAULT} попыток: {e}",
+                exc_info=True,
+            )
+            # Централизованный обработчик перехватит, если это критично
 
     async def _safe_reply_with_fallback(
         self,
