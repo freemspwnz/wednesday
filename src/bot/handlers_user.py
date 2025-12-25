@@ -244,11 +244,7 @@ class UserHandlers(BaseHandlers):
         except Exception as e:
             self.logger.error(f"Не удалось поставить задачу в очередь Celery: {e}")
             # Удаляем статусное сообщение
-            if status_message:
-                try:
-                    await status_message.delete()
-                except Exception:
-                    pass
+            await self._safe_delete_message(status_message)
             # Отправляем сообщение пользователю об ошибке
             try:
                 await retry_on_connect_error(

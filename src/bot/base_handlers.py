@@ -184,6 +184,66 @@ class BaseHandlers:
 
             return False
 
+    async def _safe_delete_message(self, message: Message | None) -> None:  # noqa: PLR6301
+        """Безопасно удаляет сообщение, игнорируя ошибки.
+
+        Используется для удаления статусных сообщений, где ошибка удаления
+        не критична и не должна прерывать выполнение команды.
+
+        Args:
+            message: Сообщение для удаления (может быть None).
+        """
+        if message is None:
+            return
+
+        try:
+            await message.delete()
+        except Exception:
+            # Exception с pass оправдан - удаление статусного сообщения не критично
+            # Централизованный обработчик перехватит, если это критично
+            pass
+
+    async def _safe_reply_text_with_error_logging(
+        self,
+        message: Message,
+        text: str,
+        error_context: str = "сообщение",
+        max_retries: int = MAX_RETRIES_DEFAULT,
+        delay: float = RETRY_DELAY_DEFAULT,
+    ) -> bool:
+        """Безопасная отправка сообщения с логированием ошибок.
+
+        Отправляет сообщение с retry-логикой и логирует ошибки с полным стеком
+        (exc_info=True). Используется в местах, где нужно гарантировать, что
+        ошибка отправки не сломает обработчик команды, но нужно логировать
+        с полной информацией для диагностики.
+
+        Args:
+            message: Message объект для отправки ответа.
+            text: Текст сообщения для отправки.
+            error_context: Контекст для сообщения об ошибке (например, "об ограничении доступа").
+            max_retries: Максимальное количество попыток.
+            delay: Задержка между попытками.
+
+        Returns:
+            True если сообщение отправлено успешно, False иначе.
+        """
+        try:
+            await retry_on_connect_error(
+                message.reply_text,
+                text,
+                max_retries=max_retries,
+                delay=delay,
+            )
+            return True
+        except Exception as e:
+            # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+            self.logger.error(
+                f"Не удалось отправить {error_context} после {max_retries} попыток: {e}",
+                exc_info=True,
+            )
+            return False
+
     async def _send_logs_command(
         self,
         update: Update,

@@ -475,42 +475,26 @@ class AdminHandlers(BaseHandlers):
                 self.logger.info("Используется случайное изображение из архива")
             else:
                 self.logger.warning("Нет сохраненных изображений для отправки")
-                try:
-                    await retry_on_connect_error(
-                        update.message.reply_text,
-                        "❌ Не удалось получить изображение (лимит исчерпан и нет сохраненных изображений)",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as e:
-                    # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                    self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}", exc_info=True)
-                if status_msg:
-                    try:
-                        await status_msg.delete()
-                    except Exception:
-                        # Exception с pass оправдан - удаление статусного сообщения не критично
-                        pass
+                await self._safe_reply_text_with_error_logging(
+                    update.message,
+                    "❌ Не удалось получить изображение (лимит исчерпан и нет сохраненных изображений)",
+                    error_context="сообщение об ошибке",
+                    max_retries=3,
+                    delay=2,
+                )
+                await self._safe_delete_message(status_msg)
                 return
 
         if not image_data:
             self.logger.error("Не удалось получить изображение для отправки")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Не удалось получить изображение для отправки",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}", exc_info=True)
-            if status_msg:
-                try:
-                    await status_msg.delete()
-                except Exception:
-                    # Exception с pass оправдан - удаление статусного сообщения не критично
-                    pass
+            await self._safe_reply_text_with_error_logging(
+                update.message,
+                "❌ Не удалось получить изображение для отправки",
+                error_context="сообщение об ошибке",
+                max_retries=3,
+                delay=2,
+            )
+            await self._safe_delete_message(status_msg)
             return
 
         # Отправляем изображение главному админу
@@ -551,12 +535,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.warning(f"Не удалось отправить изображение в чат {target_chat_id}: {e}", exc_info=True)
 
         # Удаляем статусное сообщение и отправляем итоговое
-        if status_msg:
-            try:
-                await status_msg.delete()
-            except Exception:
-                # Exception с pass оправдан - удаление статусного сообщения не критично
-                pass
+        await self._safe_delete_message(status_msg)
 
         result_message = (
             f"✅ Отправка выполнена:\n"
@@ -564,17 +543,14 @@ class AdminHandlers(BaseHandlers):
             f"• Ошибок: {failed_count}\n"
             f"• Использован: {'fallback (лимит исчерпан)' if use_fallback else 'новая генерация'}"
         )
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                result_message,
-                max_retries=3,
-                delay=2,
-            )
+        if await self._safe_reply_text_with_error_logging(
+            update.message,
+            result_message,
+            error_context="итоговое сообщение",
+            max_retries=3,
+            delay=2,
+        ):
             self.logger.info(f"Команда /force_send выполнена: {success_count} успешных отправок")
-        except Exception as e:
-            # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-            self.logger.error(f"Не удалось отправить итоговое сообщение после {3} попыток: {e}", exc_info=True)
 
     async def admin_add_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /add_chat.
@@ -701,33 +677,27 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /list_chats от пользователя {user_id}")
 
         if not await self.admins_store.is_admin(user_id):
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Доступно только администратору",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(
-                    f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}", exc_info=True
-                )
+            if not await self._safe_reply_text_with_error_logging(
+                update.message,
+                "❌ Доступно только администратору",
+                error_context="сообщение об ограничении доступа",
+                max_retries=3,
+                delay=2,
+            ):
+                return
             return
 
         chat_ids = await self._admin_command.list_chat_ids()
         if not chat_ids:
             self.logger.info("Нет активных чатов")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📭 Нет активных чатов",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
+            if not await self._safe_reply_text_with_error_logging(
+                update.message,
+                "📭 Нет активных чатов",
+                error_context="сообщение",
+                max_retries=3,
+                delay=2,
+            ):
+                return
             return
 
         # Получаем информацию о чатах параллельно для улучшения производительности
@@ -833,16 +803,13 @@ class AdminHandlers(BaseHandlers):
             # Неожиданные ошибки - логируем с полным стеком
             # Exception оправдан здесь, так как нужно гарантировать, что ошибка не сломает обработчик команды
             self.logger.error(f"set_frog_limit_command: неожиданная ошибка: {e}", exc_info=True)
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Произошла неожиданная ошибка при изменении лимита",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception:
-                # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
-                pass  # Если не удалось отправить, централизованный обработчик перехватит
+            await self._safe_reply_text_with_error_logging(
+                update.message,
+                "❌ Произошла неожиданная ошибка при изменении лимита",
+                error_context="сообщение об ошибке",
+                max_retries=3,
+                delay=2,
+            )  # Если не удалось отправить, централизованный обработчик перехватит
 
     async def set_frog_used_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_used.
@@ -868,18 +835,14 @@ class AdminHandlers(BaseHandlers):
 
         user_id = update.effective_user.id
         if not await self.admins_store.is_admin(user_id):
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Доступно только администратору",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(
-                    f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}", exc_info=True
-                )
+            if not await self._safe_reply_text_with_error_logging(
+                update.message,
+                "❌ Доступно только администратору",
+                error_context="сообщение об ограничении доступа",
+                max_retries=3,
+                delay=2,
+            ):
+                return
             return
         if not context.args or len(context.args) < 1:
             await self._safe_reply_with_fallback(
