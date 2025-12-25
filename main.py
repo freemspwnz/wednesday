@@ -210,6 +210,21 @@ class BotRunner:
                     telegram_config=bot_telegram_config,
                     request_start_main=request_start_main,
                 )
+
+                # Создаём admin_notification_service после создания бота, так как нужен bot.application.bot
+                from infra.container import build_admin_notification_service
+                from infra.logging.logger import get_logger
+                from infra.messaging.ptb import PTBMessagingService
+
+                messaging_service = PTBMessagingService(bot=self.support_bot.application.bot)
+                app_logger = get_logger("app")
+                admin_notification_service = build_admin_notification_service(
+                    messaging_service=messaging_service,
+                    admins_repo=support_services.admins_repo,
+                    logger=app_logger,
+                )
+                support_services.admin_notification_service = admin_notification_service
+
                 self.logger.info("Запуск SupportBot в фоновой задаче")
                 support_task = asyncio.create_task(self.support_bot.start())
                 self.logger.info("SupportBot запущен в фоновой задаче")

@@ -12,6 +12,7 @@ from bot.bot_application_factory import create_telegram_application
 from bot.bot_chat_access_validator import BotChatAccessValidator
 from bot.bot_error_handler import BotErrorHandler
 from bot.bot_lifecycle_manager import BotLifecycleManager
+from bot.bot_lifecycle_mixin import BotLifecycleMixin
 from bot.chat_event_handler import ChatEventHandler
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
@@ -25,7 +26,7 @@ TIMEOUT_MEDIUM_SECONDS = 30.0
 
 
 @log_all_methods()
-class WednesdayBot:
+class WednesdayBot(BotLifecycleMixin):
     """Основной класс Telegram бота для отправки изображений жабы каждую среду.
 
     WednesdayBot - это полнофункциональный Telegram бот, который:
@@ -223,7 +224,8 @@ class WednesdayBot:
             - DispatchService координирует генерацию изображения, отправку в чаты,
               использование fallback при ошибках и уведомление администраторов.
         """
-        dispatch_service = self.services.dispatch_service
+        # Проверяем наличие dispatch_service (доступен только в BotServices, не в SupportBotServices)
+        dispatch_service = getattr(self.services, "dispatch_service", None)
         if dispatch_service is None:
             self.logger.error("DispatchService недоступен, пропускаю рассылку")
             return
@@ -339,17 +341,11 @@ class WednesdayBot:
             # Celery используется для планирования задач
             self.logger.info("Celery используется для планирования задач")
 
-            # Устанавливаем флаг запуска и сбрасываем event для нового цикла
-            self.is_running = True
-            self._stop_event.clear()
+            # Инициализируем состояние жизненного цикла
+            await self._initialize_lifecycle_state()
 
-            # Ожидаем сигнала остановки через Event (эффективнее, чем busy-wait цикл)
-            # Event.wait() блокируется до вызова set() в методе stop()
-            try:
-                await self._stop_event.wait()
-            except asyncio.CancelledError:
-                self.logger.info("Получен сигнал отмены для основного цикла бота")
-                self.is_running = False
+            # Ожидаем сигнала остановки через Event
+            await self._wait_for_stop_signal()
 
         except Exception as e:
             self.logger.error(f"Ошибка при запуске бота: {e}")
@@ -376,12 +372,8 @@ class WednesdayBot:
         self.logger.info("Останавливаю Wednesday Bot")
 
         try:
-            # Устанавливаем флаг остановки и разблокируем ожидание в start()
-            self.is_running = False
-            self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
-
-            # Останавливаем PTB Application через lifecycle manager
-            await self.lifecycle_manager.stop_application(self.application)
+            # Останавливаем жизненный цикл
+            await self._stop_lifecycle()
 
             # Отправляем уведомление об остановке
             if self.services.admin_notification_service and not self._stop_message_sent:
@@ -413,11 +405,7 @@ class WednesdayBot:
             self.logger.error(f"Ошибка при остановке бота: {e}")
         finally:
             # Гарантированное закрытие ресурсов (всегда выполняется)
-            try:
-                await self.services.cleanup()
-                self.logger.info("Все ресурсы BotServices закрыты")
-            except Exception as cleanup_error:
-                self.logger.warning(f"Ошибка при cleanup ресурсов: {cleanup_error}")
+            await self._cleanup_resources()
 
             # Дополнительно защитимся от повторных отправок в жизненном цикле объекта
             self._stop_message_sent = True

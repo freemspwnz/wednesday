@@ -47,6 +47,7 @@ class SupportBotServices:
     - admins_repo для проверки прав администратора
     - chats для обработки событий чата
     - settings для конфигурации
+    - admin_notification_service для уведомлений администраторов
     - postgres_pool и redis_client для cleanup ресурсов
 
     Используется вместо полного BotServices для соблюдения принципа YAGNI
@@ -58,6 +59,7 @@ class SupportBotServices:
     settings: AppSettings
     postgres_pool: asyncpg.Pool
     redis_client: RedisClient
+    admin_notification_service: AdminNotificationService | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
         """Закрывает ресурсы (если нужно).
