@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes
 
-from infra.logging.logger import log_event
 from shared.protocols import ILogger
 
 if TYPE_CHECKING:
@@ -43,7 +42,7 @@ class BotErrorHandler:
             - Логирует ошибку с полным стеком через logger.error().
             - Отправляет исключение в Sentry через sentry_sdk.capture_exception()
               (если SDK инициализирован).
-            - Записывает структурированное событие через log_event() для анализа.
+            - Записывает структурированное событие через logger.error() с дополнительными полями для анализа.
         """
         error = getattr(context, "error", None)
         self.logger.error(f"Необработанное исключение в обработчике PTB: {error!r}", exc_info=True)
@@ -60,17 +59,16 @@ class BotErrorHandler:
                 self.logger.warning(f"Ошибка при отправке в Sentry: {sentry_error}", exc_info=False)
 
         # Логируем структурированное событие для унифицированного JSON‑логирования.
+        # Используем ILogger протокол вместо прямого импорта из infra.logging.logger
+        # для соблюдения архитектурных границ
         try:
-            log_event(
+            self.logger.error(
+                "Необработанное исключение в обработчике PTB",
                 event="unhandled_exception",
                 status="error",
-                extra={
-                    "where": "ptb_error_handler",
-                    "error": repr(error),
-                    "update_repr": repr(update),
-                },
-                level="error",
-                message="Необработанное исключение в обработчике PTB",
+                where="ptb_error_handler",
+                error=repr(error),
+                update_repr=repr(update),
             )
         except Exception as log_error:
             # Критическая ошибка - не можем даже залогировать
