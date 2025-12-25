@@ -73,9 +73,10 @@ class AdminHandlers(BaseHandlers):
         except TimeoutError:
             self.logger.warning(f"Таймаут при получении информации о чате {chat_id}")
             return (chat_id, "таймаут при получении информации")
-        except Exception as e:
-            self.logger.warning(f"Неожиданная ошибка при получении информации о чате {chat_id}: {e}")
-            return (chat_id, f"не удалось получить информацию: {type(e).__name__}")
+        except (ValueError, TypeError, AttributeError) as e:
+            # Ошибки валидации данных из getattr или других операций
+            self.logger.warning(f"Ошибка валидации данных для чата {chat_id}: {e}")
+            return (chat_id, "ошибка валидации данных")
 
     async def _get_chat_safe(
         self,
@@ -105,8 +106,9 @@ class AdminHandlers(BaseHandlers):
         except TimeoutError:
             self.logger.warning(f"Таймаут при получении информации о чате {chat_id}")
             return None
-        except Exception as e:
-            self.logger.warning(f"Неожиданная ошибка при получении информации о чате {chat_id}: {e}")
+        except (ValueError, TypeError, AttributeError) as e:
+            # Ошибки валидации данных
+            self.logger.warning(f"Ошибка валидации данных для чата {chat_id}: {e}")
             return None
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -158,11 +160,19 @@ class AdminHandlers(BaseHandlers):
             )
             if success:
                 self.logger.info("Отправлен статус бота")
-        except Exception as e:
-            self.logger.error(f"Ошибка при получении статуса: {e}")
+        except (ValueError, TypeError, AttributeError) as e:
+            # Ошибки валидации данных или доступа к атрибутам
+            self.logger.error(f"Ошибка валидации при получении статуса: {e}", exc_info=True)
             await self._safe_reply_with_fallback(
                 update.message,
-                f"❌ Ошибка при получении статуса: {str(e)[:200]}",
+                "❌ Ошибка при получении статуса",
+            )
+        except Exception as e:
+            # Неожиданные ошибки - логируем с полным стеком и отправляем общее сообщение
+            self.logger.error(f"Неожиданная ошибка при получении статуса: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Произошла неожиданная ошибка при получении статуса",
             )
 
     async def admin_log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -257,13 +267,20 @@ class AdminHandlers(BaseHandlers):
                     if hasattr(context.application, "updater") and context.application.updater:
                         await context.application.updater.stop()
                 except Exception as e:
+                    # Exception оправдан для fallback логики - нужно гарантировать, что ошибка не сломает обработчик
                     self.logger.warning(f"Ошибка при остановке updater через фоллбек: {e}", exc_info=True)
                 try:
                     await context.application.stop()
                 except Exception as e:
+                    # Exception оправдан для fallback логики - нужно гарантировать, что ошибка не сломает обработчик
                     self.logger.warning(f"Ошибка при остановке application через фоллбек: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Ошибки валидации данных или доступа к атрибутам
+            self.logger.error(f"Ошибка валидации при попытке остановить бота: {e}", exc_info=True)
         except Exception as e:
-            self.logger.error(f"Ошибка при попытке остановить бота через /stop: {e}", exc_info=True)
+            # Неожиданные ошибки - логируем с полным стеком
+            # Exception оправдан здесь, так как нужно гарантировать, что ошибка не сломает обработчик команды
+            self.logger.error(f"Неожиданная ошибка при попытке остановить бота через /stop: {e}", exc_info=True)
 
     async def admin_force_send_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /force_send.
@@ -466,11 +483,13 @@ class AdminHandlers(BaseHandlers):
                         delay=2,
                     )
                 except Exception as e:
-                    self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+                    # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                    self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}", exc_info=True)
                 if status_msg:
                     try:
                         await status_msg.delete()
                     except Exception:
+                        # Exception с pass оправдан - удаление статусного сообщения не критично
                         pass
                 return
 
@@ -484,11 +503,13 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}", exc_info=True)
             if status_msg:
                 try:
                     await status_msg.delete()
                 except Exception:
+                    # Exception с pass оправдан - удаление статусного сообщения не критично
                     pass
             return
 
@@ -506,7 +527,8 @@ class AdminHandlers(BaseHandlers):
                 )
                 self.logger.info(f"Изображение отправлено главному админу {admin_chat_id}")
             except Exception as e:
-                self.logger.warning(f"Не удалось отправить изображение главному админу: {e}")
+                # Exception оправдан - отправка админу не критична, нужно продолжить работу
+                self.logger.warning(f"Не удалось отправить изображение главному админу: {e}", exc_info=True)
 
         # Отправляем изображение в целевые чаты
         success_count = 0
@@ -524,14 +546,16 @@ class AdminHandlers(BaseHandlers):
                 success_count += 1
                 self.logger.info(f"Изображение отправлено в чат {target_chat_id}")
             except Exception as e:
+                # Exception оправдан - ошибка отправки в один чат не должна прерывать отправку в другие
                 failed_count += 1
-                self.logger.warning(f"Не удалось отправить изображение в чат {target_chat_id}: {e}")
+                self.logger.warning(f"Не удалось отправить изображение в чат {target_chat_id}: {e}", exc_info=True)
 
         # Удаляем статусное сообщение и отправляем итоговое
         if status_msg:
             try:
                 await status_msg.delete()
             except Exception:
+                # Exception с pass оправдан - удаление статусного сообщения не критично
                 pass
 
         result_message = (
@@ -549,7 +573,8 @@ class AdminHandlers(BaseHandlers):
             )
             self.logger.info(f"Команда /force_send выполнена: {success_count} успешных отправок")
         except Exception as e:
-            self.logger.error(f"Не удалось отправить итоговое сообщение после {3} попыток: {e}")
+            # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+            self.logger.error(f"Не удалось отправить итоговое сообщение после {3} попыток: {e}", exc_info=True)
 
     async def admin_add_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /add_chat.
@@ -684,7 +709,10 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(
+                    f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}", exc_info=True
+                )
             return
 
         chat_ids = await self._admin_command.list_chat_ids()
@@ -698,7 +726,8 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
             return
 
         # Получаем информацию о чатах параллельно для улучшения производительности
@@ -727,7 +756,8 @@ class AdminHandlers(BaseHandlers):
             )
             self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
         except Exception as e:
-            self.logger.error(f"Не удалось отправить список чатов после {3} попыток: {e}")
+            # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+            self.logger.error(f"Не удалось отправить список чатов после {3} попыток: {e}", exc_info=True)
 
     async def set_frog_limit_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_limit.
@@ -783,7 +813,8 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
         except ValueError as e:
             self.logger.error(f"set_frog_limit_command: ошибка валидации параметра: {e}", exc_info=True)
             try:
@@ -794,8 +825,13 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as send_error:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {send_error}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(
+                    f"Не удалось отправить сообщение об ошибке после {3} попыток: {send_error}", exc_info=True
+                )
         except Exception as e:
+            # Неожиданные ошибки - логируем с полным стеком
+            # Exception оправдан здесь, так как нужно гарантировать, что ошибка не сломает обработчик команды
             self.logger.error(f"set_frog_limit_command: неожиданная ошибка: {e}", exc_info=True)
             try:
                 await retry_on_connect_error(
@@ -805,6 +841,7 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception:
+                # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
                 pass  # Если не удалось отправить, централизованный обработчик перехватит
 
     async def set_frog_used_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -839,7 +876,10 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(
+                    f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}", exc_info=True
+                )
             return
         if not context.args or len(context.args) < 1:
             await self._safe_reply_with_fallback(
@@ -860,7 +900,8 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
         except ValueError:
             try:
                 await retry_on_connect_error(
@@ -870,7 +911,8 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}", exc_info=True)
 
     async def mod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /mod.
@@ -935,7 +977,8 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
         except AccessDeniedError:
             # Должно быть обработано выше, но на всякий случай
             await self._safe_reply_with_fallback(
@@ -999,7 +1042,8 @@ class AdminHandlers(BaseHandlers):
                             delay=2,
                         )
                     except Exception as e:
-                        self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                        # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                        self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
                     return
 
                 # Получаем информацию об администраторах параллельно для улучшения производительности
@@ -1044,7 +1088,8 @@ class AdminHandlers(BaseHandlers):
                     )
                     self.logger.info(f"Отправлен список из {len(admins)} администраторов пользователю {user_id}")
                 except Exception as e:
-                    self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}")
+                    # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                    self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}", exc_info=True)
                     try:
                         await retry_on_connect_error(
                             update.message.reply_text,
@@ -1053,8 +1098,10 @@ class AdminHandlers(BaseHandlers):
                             delay=2,
                         )
                     except Exception:
-                        pass  # Если не удалось отправить, централизованный обработчик перехватит
+                        # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
+                        pass
             except Exception as e:
+                # Неожиданные ошибки при получении списка админов
                 self.logger.error(f"Ошибка при получении списка админов: {e}", exc_info=True)
                 try:
                     await retry_on_connect_error(
@@ -1064,6 +1111,7 @@ class AdminHandlers(BaseHandlers):
                         delay=2,
                     )
                 except Exception:
+                    # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
                     pass
             return
 
@@ -1092,7 +1140,8 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
         except AccessDeniedError:
             # Должно быть обработано выше, но на всякий случай
             await self._safe_reply_with_fallback(
@@ -1109,6 +1158,7 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception:
+                # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
                 pass
 
     async def list_mods_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1144,7 +1194,9 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
+                self.logger.error(
+                    f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}", exc_info=True
+                )
             return
 
         all_admins = await self._admin_command.list_all_admins()
@@ -1158,7 +1210,8 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
             return
 
         admin_list = []
@@ -1177,7 +1230,8 @@ class AdminHandlers(BaseHandlers):
             )
             self.logger.info(f"Отправлен список из {len(all_admins)} администраторов пользователю {user_id}")
         except Exception as e:
-            self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}")
+            # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
+            self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}", exc_info=True)
             try:
                 await retry_on_connect_error(
                     update.message.reply_text,
@@ -1186,4 +1240,5 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
             except Exception:
+                # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
                 pass  # Если не удалось отправить, централизованный обработчик перехватит
