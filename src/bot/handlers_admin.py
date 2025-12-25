@@ -806,7 +806,15 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {send_error}")
         except Exception as e:
             self.logger.error(f"set_frog_limit_command: неожиданная ошибка: {e}", exc_info=True)
-            raise
+            try:
+                await retry_on_connect_error(
+                    update.message.reply_text,
+                    "❌ Произошла неожиданная ошибка при изменении лимита",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass  # Если не удалось отправить, централизованный обработчик перехватит
 
     async def set_frog_used_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_used.
@@ -1065,6 +1073,15 @@ class AdminHandlers(BaseHandlers):
                     self.logger.info(f"Отправлен список из {len(admins)} администраторов пользователю {user_id}")
                 except Exception as e:
                     self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}")
+                    try:
+                        await retry_on_connect_error(
+                            update.message.reply_text,
+                            "❌ Ошибка при отправке списка администраторов",
+                            max_retries=3,
+                            delay=2,
+                        )
+                    except Exception:
+                        pass  # Если не удалось отправить, централизованный обработчик перехватит
             except Exception as e:
                 self.logger.error(f"Ошибка при получении списка админов: {e}", exc_info=True)
                 try:
@@ -1194,4 +1211,12 @@ class AdminHandlers(BaseHandlers):
             self.logger.info(f"Отправлен список из {len(all_admins)} администраторов пользователю {user_id}")
         except Exception as e:
             self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}")
-            raise
+            try:
+                await retry_on_connect_error(
+                    update.message.reply_text,
+                    "❌ Ошибка при отправке списка администраторов",
+                    max_retries=3,
+                    delay=2,
+                )
+            except Exception:
+                pass  # Если не удалось отправить, централизованный обработчик перехватит
