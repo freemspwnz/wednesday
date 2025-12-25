@@ -911,6 +911,31 @@ class IDispatchRegistry(Protocol):
         """
         ...
 
+    async def are_dispatched_batch(
+        self,
+        slot_date: str,
+        slot_time: str,
+        chat_ids: set[int],
+    ) -> dict[int, bool]:
+        """Проверяет статус отправки для нескольких чатов за один запрос.
+
+        Оптимизированная batch-версия проверки для множества чатов.
+        Выполняет один SQL-запрос вместо N отдельных запросов.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_ids: Множество ID чатов для проверки.
+
+        Returns:
+            Словарь {chat_id: bool} - True если отправлено, False иначе.
+            Если chat_ids пусто, возвращает пустой словарь.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
+        ...
+
     async def try_reserve_dispatch(
         self,
         slot_date: str,

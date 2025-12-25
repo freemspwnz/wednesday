@@ -79,6 +79,56 @@ class DispatchRegistry:
                 )
                 raise
 
+    async def are_dispatched_batch(
+        self,
+        slot_date: str,
+        slot_time: str,
+        chat_ids: set[int],
+    ) -> dict[int, bool]:
+        """Проверяет статус отправки для нескольких чатов за один запрос.
+
+        Оптимизированная batch-версия проверки для множества чатов.
+        Выполняет один SQL-запрос вместо N отдельных запросов.
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_ids: Множество ID чатов для проверки.
+
+        Returns:
+            Словарь {chat_id: bool} - True если отправлено, False иначе.
+            Если chat_ids пусто, возвращает пустой словарь.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
+        if not chat_ids:
+            return {}
+
+        keys = [self._key(slot_date, slot_time, chat_id) for chat_id in chat_ids]
+
+        async with self._pool.acquire() as conn:
+            try:
+                # Один batch-запрос для всех ключей
+                rows = await conn.fetch(
+                    "SELECT key FROM dispatch_registry WHERE key = ANY($1::text[]);",
+                    keys,
+                )
+                dispatched_keys = {row["key"] for row in rows}
+
+                # Формируем результат: для каждого chat_id проверяем наличие ключа
+                result = {}
+                for chat_id in chat_ids:
+                    key = self._key(slot_date, slot_time, chat_id)
+                    result[chat_id] = key in dispatched_keys
+
+                return result
+            except Exception as exc:
+                self.logger.error(
+                    f"Ошибка при batch-проверке dispatch_registry в Postgres: {exc}",
+                )
+                raise
+
     async def mark_dispatched(
         self,
         slot_date: str,

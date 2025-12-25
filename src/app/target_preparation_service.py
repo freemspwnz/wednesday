@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.dispatch_targets_helper import are_all_dispatched, check_dispatch_status_batch
 from shared.base.base_service import BaseService
 from shared.protocols import IChatsRepo, IDispatchRegistry, ILogger, IMessagingService
 
@@ -78,6 +79,8 @@ class TargetPreparationService(BaseService):
     ) -> bool:
         """Проверяет, отправляли ли уже в этот слот во все целевые чаты.
 
+        Использует batch-проверку для оптимизации (один запрос вместо N).
+
         Args:
             slot_date: Дата слота в формате YYYY-MM-DD.
             slot_time: Время слота в формате HH:MM.
@@ -86,11 +89,14 @@ class TargetPreparationService(BaseService):
         Returns:
             True, если уже отправлено во все чаты, иначе False.
         """
-        for target_chat in targets:
-            if not await self._dispatch_registry.is_dispatched(
-                slot_date,
-                slot_time,
-                target_chat,
-            ):
-                return False
-        return True
+        if not targets:
+            return True  # Пустое множество считается "все отправлено"
+
+        status_map = await check_dispatch_status_batch(
+            dispatch_registry=self._dispatch_registry,
+            slot_date=slot_date,
+            slot_time=slot_time,
+            chat_ids=targets,
+        )
+
+        return are_all_dispatched(status_map)

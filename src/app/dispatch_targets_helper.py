@@ -12,6 +12,64 @@ from typing import TypedDict
 from shared.protocols import IDispatchRegistry, ILogger
 
 
+async def check_dispatch_status_batch(
+    dispatch_registry: IDispatchRegistry,
+    slot_date: str,
+    slot_time: str,
+    chat_ids: set[int],
+) -> dict[int, bool]:
+    """Проверяет статус отправки для множества чатов (batch).
+
+    Унифицированная функция для проверки статуса отправки для нескольких чатов
+    за один запрос к БД. Используется для оптимизации вместо N отдельных запросов.
+
+    Args:
+        dispatch_registry: Реестр отправок.
+        slot_date: Дата слота в формате YYYY-MM-DD.
+        slot_time: Время слота в формате HH:MM.
+        chat_ids: Множество ID чатов для проверки.
+
+    Returns:
+        Словарь {chat_id: bool} - True если отправлено, False иначе.
+    """
+    return await dispatch_registry.are_dispatched_batch(
+        slot_date=slot_date,
+        slot_time=slot_time,
+        chat_ids=chat_ids,
+    )
+
+
+def are_all_dispatched(status_map: dict[int, bool]) -> bool:
+    """Проверяет, отправлено ли во все чаты.
+
+    Args:
+        status_map: Словарь {chat_id: bool} из check_dispatch_status_batch.
+
+    Returns:
+        True если все чаты отправлены, False иначе.
+        Если status_map пуст, возвращает True (нет чатов для проверки).
+    """
+    if not status_map:
+        return True
+    return all(status_map.values())
+
+
+def get_undispatched_chats(
+    targets: set[int],
+    status_map: dict[int, bool],
+) -> set[int]:
+    """Возвращает множество чатов, которые еще не отправлены.
+
+    Args:
+        targets: Множество всех целевых чатов.
+        status_map: Словарь {chat_id: bool} из check_dispatch_status_batch.
+
+    Returns:
+        Множество ID чатов, которые еще не отправлены.
+    """
+    return {chat_id for chat_id in targets if not status_map.get(chat_id, False)}
+
+
 class DispatchResult(TypedDict):
     """Типизированный контейнер результата отправки.
 
@@ -45,6 +103,8 @@ async def process_targets_with_registry_check(  # noqa: PLR0913
 ) -> None:
     """Общий helper для обхода таргетов с проверкой реестра отправок.
 
+    Использует batch-проверку для оптимизации (один запрос вместо N).
+
     Args:
         dispatch_registry: Реестр отправок для проверки уже обработанных слотов.
         logger: Логгер для вывода диагностических сообщений.
@@ -55,13 +115,20 @@ async def process_targets_with_registry_check(  # noqa: PLR0913
         per_target_sender: Коллбек, выполняющий всю работу по отправке для одного чата.
         skip_log_event: Имя события для логирования пропущенных отправок.
     """
+    if not targets:
+        return
+
+    # Batch-проверка всех чатов за один запрос
+    status_map = await check_dispatch_status_batch(
+        dispatch_registry=dispatch_registry,
+        slot_date=slot_date,
+        slot_time=slot_time,
+        chat_ids=targets,
+    )
+
+    # Обрабатываем только неотправленные чаты
     for target_chat in targets:
-        # Проверяем, не было ли уже отправлено в этот чат в этот тайм-слот
-        if await dispatch_registry.is_dispatched(
-            slot_date,
-            slot_time,
-            target_chat,
-        ):
+        if status_map.get(target_chat, False):
             logger.info(
                 (f"Пропускаем отправку в чат {target_chat} - уже отправлено в слот {slot_date}_{slot_time}"),
                 event=skip_log_event,
