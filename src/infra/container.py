@@ -54,6 +54,7 @@ from infra.storage.failed_cache_queue import FailedCacheQueue
 from infra.storage.image_storage import ImageStorageService
 from shared.bot_services import BotServices
 from shared.config import (
+    AppSettings,
     Config,
     ImageConfig,
     PromptFallbackConfig,
@@ -675,6 +676,7 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
     metrics: IMetrics,
     admins_repo: IAdminsRepo,
     logger: ILogger,
+    settings: AppSettings | None = None,
 ) -> tuple[TargetPreparationService, DispatchDeliveryService, DispatchService, AdminNotificationService]:
     """Создаёт dispatch сервисы с messaging_service.
 
@@ -687,6 +689,7 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
         metrics: Сервис метрик.
         admins_repo: Репозиторий администраторов.
         logger: Логгер.
+        settings: Настройки приложения для определения временных слотов (опционально).
 
     Returns:
         Кортеж (target_preparation_service, dispatch_delivery_service, dispatch_service, admin_notification_service).
@@ -728,6 +731,7 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
         image_service=image_service,
         admin_notifier=admin_notifier,
         metrics=metrics,
+        settings=settings,
         logger=logger,
     )
 

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import traceback
+from datetime import datetime
 
 from app.admin_notification_service import AdminNotificationService
 from app.dispatch_delivery_service import DispatchDeliveryService
@@ -18,6 +19,7 @@ from app.image_service import ImageService
 from app.target_preparation_service import TargetPreparationService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CircuitBreakerOpen, ImageGenerationError, ServiceError, UnexpectedDispatchError
+from shared.config import AppSettings
 from shared.protocols import ILogger, IMetrics
 
 
@@ -38,6 +40,7 @@ class DispatchService(BaseService):
         image_service: ImageService | None,
         admin_notifier: AdminNotificationService | None = None,
         metrics: IMetrics | None = None,
+        settings: AppSettings | None = None,
         logger: ILogger,
     ) -> None:
         """Инициализирует сервис рассылки.
@@ -48,6 +51,7 @@ class DispatchService(BaseService):
             image_service: Сервис генерации изображений (опционально).
             admin_notifier: Сервис уведомления администраторов (опционально).
             metrics: Сервис метрик (опционально).
+            settings: Настройки приложения для определения временных слотов (опционально).
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
@@ -56,6 +60,7 @@ class DispatchService(BaseService):
         self._image_service = image_service
         self._admin_notifier = admin_notifier
         self._metrics = metrics
+        self._settings = settings or AppSettings()
 
     @staticmethod
     def _init_result(slot_date: str, slot_time: str) -> DispatchResult:
@@ -253,6 +258,78 @@ class DispatchService(BaseService):
         )
 
         return result
+
+    def _resolve_slot_time(self, slot_time: str | None) -> str:
+        """Определяет время слота автоматически, если не указано.
+
+        Если slot_time не передан, определяет ближайший прошедший слот
+        на основе настроек приложения.
+
+        Args:
+            slot_time: Опциональное время слота в формате "HH:MM".
+
+        Returns:
+            Время слота в формате "HH:MM".
+        """
+        if slot_time is not None:
+            return slot_time
+
+        now = datetime.now()
+        try:
+            configured_times: list[str] = list(self._settings.scheduler_send_times or [])
+        except Exception:
+            configured_times = []
+
+        resolved_slot: str | None = None
+        if configured_times:
+            try:
+                candidates: list[tuple[datetime, str]] = []
+                for t in configured_times:
+                    time_format_length = self._settings.time_format_length
+
+                    if len(t) == time_format_length and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit():
+                        h, m = int(t[:2]), int(t[3:])
+                        candidate_dt = now.replace(hour=h, minute=m, second=0, microsecond=0)
+                        if candidate_dt <= now:
+                            candidates.append((candidate_dt, t))
+                if candidates:
+                    candidates.sort(key=lambda x: x[0])
+                    resolved_slot = candidates[-1][1]
+            except Exception:
+                resolved_slot = None
+
+        return resolved_slot or now.strftime("%H:%M")
+
+    async def send_wednesday_frog_with_auto_slot(
+        self,
+        *,
+        slot_time: str | None = None,
+        main_chat_id: str | None,
+    ) -> DispatchResult:
+        """Выполняет рассылку жабы с автоматическим определением слота.
+
+        Если slot_time не указан, автоматически определяет ближайший прошедший слот
+        на основе настроек приложения.
+
+        Args:
+            slot_time: Опциональное время слота в формате "HH:MM". Если None,
+                определяется автоматически на основе текущего времени и настроенных времен отправки.
+            main_chat_id: Основной чат (строковый ID) для рассылки, если задан.
+
+        Returns:
+            DispatchResult с агрегированными счетчиками по рассылке.
+        """
+        now = datetime.now()
+        slot_date = now.strftime("%Y-%m-%d")
+        resolved_slot_time = self._resolve_slot_time(slot_time)
+
+        self.logger.info(f"Выполняю запланированную отправку жабы (слот: {slot_date} {resolved_slot_time})")
+
+        return await self.send_wednesday_frog(
+            slot_date=slot_date,
+            slot_time=resolved_slot_time,
+            main_chat_id=main_chat_id,
+        )
 
     async def _handle_dispatch_unexpected_error(
         self,

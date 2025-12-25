@@ -4,6 +4,17 @@
 
 ### Рефакторинг
 
+- **Вынос логики определения временного слота из bot-слоя в app-слой**:
+  - Добавлен метод `send_wednesday_frog_with_auto_slot()` в `DispatchService` для автоматического определения слота
+  - Добавлен приватный метод `_resolve_slot_time()` в `DispatchService` с логикой определения ближайшего прошедшего слота
+  - Добавлен параметр `settings: AppSettings` в конструктор `DispatchService` для доступа к настройкам планировщика
+  - Упрощен метод `WednesdayBot.send_wednesday_frog()`: теперь только делегирует вызов в `DispatchService`
+  - Удалена бизнес-логика определения слота из `WednesdayBot` (перенесена в app-слой)
+  - Обновлен `build_dispatch_services()` для передачи `settings` в `DispatchService`
+  - Улучшено соблюдение границ слоев: бизнес-логика определения слотов находится в app-слое
+  - Улучшено соблюдение SRP: `WednesdayBot` больше не содержит бизнес-логику определения временных слотов
+  - Улучшена тестируемость: логику определения слотов можно тестировать независимо от bot-слоя
+
 - **Оптимизация основного цикла SupportBot: замена busy-wait на asyncio.Event**:
   - Заменен цикл `while self.is_running: await asyncio.sleep(0.1)` на использование `asyncio.Event` в `support_bot.py`
   - Добавлен `self._stop_event = asyncio.Event()` в `__init__()` для ожидания сигнала остановки

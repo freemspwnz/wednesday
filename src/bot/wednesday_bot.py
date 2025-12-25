@@ -109,6 +109,7 @@ class WednesdayBot:
                 metrics=self.services.metrics,
                 admins_repo=self.services.admins_repo,
                 logger=self.logger,
+                settings=self.services.settings,
             )
             # Обновляем services
             self.services.dispatch_service = dispatch
@@ -265,64 +266,25 @@ class WednesdayBot:
     async def send_wednesday_frog(self, slot_time: str | None = None) -> None:
         """Основная функция для отправки изображения жабы по расписанию.
 
-        Генерирует изображение жабы и отправляет его во все настроенные чаты.
-        Использует dispatch registry для предотвращения дублирования отправок
-        в один и тот же тайм-слот. При ошибках генерации использует fallback
-        из случайных сохраненных изображений.
+        Делегирует выполнение рассылки в DispatchService, который автоматически
+        определяет слот времени, если он не указан.
 
         Args:
             slot_time: Опциональное время слота в формате "HH:MM" для идентификации
-                отправки. Если None, определяется автоматически на основе текущего
-                времени и настроенных времен отправки.
+                отправки. Если None, определяется автоматически в DispatchService
+                на основе текущего времени и настроенных времен отправки.
 
         Side Effects:
-            - Вызывает image_generator.generate_frog_image() для генерации изображения.
-            - Сохраняет изображение локально через image_generator.save_image_locally().
-            - Отправляет изображение во все активные чаты через bot.send_image().
-            - Использует dispatch_registry для отслеживания отправленных слотов.
-            - Вызывает usage.increment() для увеличения счетчика использования.
-            - Вызывает metrics.increment_dispatch_success/failed() для метрик.
-            - При ошибках отправляет fallback изображения и уведомления администраторам.
+            - Вызывает DispatchService.send_wednesday_frog_with_auto_slot() для выполнения рассылки.
+            - DispatchService координирует генерацию изображения, отправку в чаты,
+              использование fallback при ошибках и уведомление администраторов.
         """
-        from datetime import datetime
-
-        now = datetime.now()
-        slot_date = now.strftime("%Y-%m-%d")
-        # Если слот не передан планировщиком — сопоставим ближайший (<= now)
-        if slot_time is None:
-            # Используем конфигурацию из настроек приложения, а не внутреннее состояние планировщика
-            try:
-                configured_times: list[str] = list(self.services.settings.scheduler_send_times or [])
-            except Exception:
-                configured_times = []
-            resolved_slot: str | None = None
-            if configured_times:
-                try:
-                    candidates: list[tuple[datetime, str]] = []
-                    for t in configured_times:
-                        time_format_length = self.services.settings.time_format_length
-
-                        if len(t) == time_format_length and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit():
-                            h, m = int(t[:2]), int(t[3:])
-                            candidate_dt = now.replace(hour=h, minute=m, second=0, microsecond=0)
-                            if candidate_dt <= now:
-                                candidates.append((candidate_dt, t))
-                    if candidates:
-                        candidates.sort(key=lambda x: x[0])
-                        resolved_slot = candidates[-1][1]
-                except Exception:
-                    resolved_slot = None
-            slot_time = resolved_slot or now.strftime("%H:%M")
-
-        self.logger.info("Выполняю запланированную отправку жабы")
-
         dispatch_service = self.services.dispatch_service
         if dispatch_service is None:
             self.logger.error("DispatchService недоступен, пропускаю рассылку")
             return
 
-        await dispatch_service.send_wednesday_frog(
-            slot_date=slot_date,
+        await dispatch_service.send_wednesday_frog_with_auto_slot(
             slot_time=slot_time,
             main_chat_id=self.chat_id,
         )
