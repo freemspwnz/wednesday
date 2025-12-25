@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import asyncpg
 from celery.signals import worker_shutdown
@@ -20,13 +20,36 @@ from infra.redis.redis_client import init_redis_pool
 from shared.config import Config
 
 if TYPE_CHECKING:
+    from app.frog_processing_service import FrogProcessingService
+    from app.image_service import ImageService
+    from bot.wednesday_bot import WednesdayBot
     from infra.cleanup_service import CleanupService
     from infra.redis.redis_client import RedisClient
+    from infra.repos.usage_tracker import UsageTracker
 
 # Создаём экземпляр Config при импорте модуля
 config: Config = Config()
 
 logger = get_logger(__name__)
+
+
+class ServicesContext(TypedDict, total=False):
+    """Типизированный словарь контекста сервисов Celery.
+
+    Определяет структуру контекста, возвращаемого get_services_context().
+    Используется для типизации контекста сервисов в Celery задачах.
+
+    Note:
+        Все зависимости используют TYPE_CHECKING для избежания циклических зависимостей.
+        total=False означает, что все поля опциональны (для совместимости с dict[str, object]).
+    """
+
+    bot: WednesdayBot
+    postgres_pool: asyncpg.Pool
+    redis_client: RedisClient
+    image_service: ImageService
+    usage_tracker: UsageTracker
+    frog_processing: FrogProcessingService
 
 
 # Context для хранения инициализированных сервисов в worker процессе
@@ -103,7 +126,7 @@ async def _ensure_pools_initialized(
         return (postgres_pool, redis_client)
 
 
-async def get_services_context(config_obj: Config | None = None) -> dict[str, object]:
+async def get_services_context(config_obj: Config | None = None) -> ServicesContext:
     """Получает контекст сервисов для использования в Celery задачах.
 
     Инициализирует пулы подключений и создаёт экземпляры сервисов при первом вызове.
@@ -131,11 +154,11 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
 
     # Проверяем, инициализирован ли контекст (только чтение, без global)
     if _services_context is not None:
-        return _services_context
+        return cast("ServicesContext", _services_context)
 
     async with _init_lock:
         if _services_context is not None:
-            return _services_context
+            return cast("ServicesContext", _services_context)
 
         # Инициализируем пулы и получаем их явно (без использования приватных функций)
         postgres_pool, redis_client = await _ensure_pools_initialized(config_obj=config_obj)
@@ -221,7 +244,7 @@ async def get_services_context(config_obj: Config | None = None) -> dict[str, ob
             status="success",
         )
 
-    return _services_context
+    return cast("ServicesContext", _services_context)
 
 
 async def shutdown_services() -> None:

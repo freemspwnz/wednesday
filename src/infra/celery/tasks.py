@@ -16,6 +16,7 @@ from celery import Task
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
+    from infra.celery.context import ServicesContext
 
 from app.frog_processing_service import FrogProcessingService, FrogRequestResult
 from app.image_service import ImageService
@@ -34,7 +35,7 @@ R = TypeVar("R")
 logger = get_logger(__name__)
 
 
-def _get_wednesday_bot(context: dict[str, object]) -> WednesdayBot:
+def _get_wednesday_bot(context: ServicesContext) -> WednesdayBot:
     """Получает WednesdayBot из контекста с проверкой типа.
 
     Использует ленивый импорт для избежания циклических зависимостей.

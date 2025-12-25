@@ -16,6 +16,15 @@
   - Улучшена тестируемость: можно легко передать моки компонентов без зависимости от infra-контейнера
   - Улучшена поддерживаемость: изменения в инфраструктурном слое не требуют изменений в bot-слое
 
+- **Исправлена типизация контекста сервисов Celery**:
+  - Переделан `IServicesContext` из `Protocol` в `TypedDict` (Protocol не подходит для типизации словарей)
+  - Перенесен `ServicesContext` из отдельного модуля `services_context.py` в `context.py` рядом с функцией `get_services_context()`
+  - Удален избыточный модуль `services_context.py` (типизация теперь рядом с использованием)
+  - Удален неправильный протокол из `shared.protocols.py`
+  - Обновлена сигнатура `get_services_context()` для использования `ServicesContext` вместо `dict[str, object]`
+  - Улучшена типизация: теперь правильно типизирован словарь контекста сервисов
+  - Использован `total=False` для совместимости с опциональными полями
+
 - **Устранено нарушение SRP в WednesdayBot и SupportBot через вынос создания компонентов в фабрики**:
   - Создан dataclass `BotComponents` и фабрика `build_bot_components()` в `container.py` для создания всех компонентов WednesdayBot
   - Создан dataclass `SupportBotComponents` и фабрика `build_support_bot_components()` в `container.py` для создания всех компонентов SupportBot
