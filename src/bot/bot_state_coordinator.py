@@ -36,6 +36,29 @@ class BotStateCoordinator:
         self._logger = logger
         self._admin_chat_id = admin_chat_id
 
+    @staticmethod
+    def is_admin_chat(chat_id: str | int | None, admin_chat_id: int | None) -> bool:
+        """Проверяет, является ли чат админским.
+
+        Безопасно сравнивает chat_id с admin_chat_id, обрабатывая
+        различные типы (str, int, None) и ошибки преобразования.
+
+        Args:
+            chat_id: ID чата для проверки (может быть str, int или None).
+            admin_chat_id: ID админ-чата из настроек (int | None).
+
+        Returns:
+            True если chat_id совпадает с admin_chat_id, False иначе.
+        """
+        if admin_chat_id is None or chat_id is None:
+            return False
+
+        try:
+            chat_id_int = int(str(chat_id))
+            return chat_id_int == admin_chat_id
+        except (ValueError, TypeError, AttributeError):
+            return False
+
     async def handle_startup_edit(
         self,
         bot: Bot,
@@ -55,14 +78,9 @@ class BotStateCoordinator:
 
         try:
             # Не редактируем сообщение в админском чате
-            if self._admin_chat_id is not None:
-                try:
-                    state_chat_id_int = int(str(state_data.chat_id))
-                    if state_chat_id_int == self._admin_chat_id:
-                        self._logger.info("Пропускаю редактирование статусного сообщения в админском чате")
-                        return
-                except (ValueError, TypeError):
-                    pass
+            if self.is_admin_chat(state_data.chat_id, self._admin_chat_id):
+                self._logger.info("Пропускаю редактирование статусного сообщения в админском чате")
+                return
 
             # Редактируем сообщение с финальным состоянием
             final_text = "🛑 Support Bot остановлен\n✅ Wednesday Frog Bot запущен"
@@ -94,16 +112,11 @@ class BotStateCoordinator:
 
         try:
             # Не редактируем сообщение в админском чате
-            if self._admin_chat_id is not None:
-                try:
-                    state_chat_id_int = int(str(state_data.chat_id))
-                    if state_chat_id_int == self._admin_chat_id:
-                        self._logger.info(
-                            "Пропускаю редактирование статусного сообщения в админском чате (остановка основного)",
-                        )
-                        return
-                except (ValueError, TypeError):
-                    pass
+            if self.is_admin_chat(state_data.chat_id, self._admin_chat_id):
+                self._logger.info(
+                    "Пропускаю редактирование статусного сообщения в админском чате (остановка основного)",
+                )
+                return
 
             # Редактируем сообщение с финальным состоянием
             await bot.edit_message_text(
@@ -135,14 +148,9 @@ class BotStateCoordinator:
 
         try:
             # Не редактируем сообщение в админском чате
-            if self._admin_chat_id is not None:
-                try:
-                    state_chat_id_int = int(str(state_data.chat_id))
-                    if state_chat_id_int == self._admin_chat_id:
-                        self._logger.info("SupportBot: пропускаю редактирование статусного сообщения в админском чате")
-                        return
-                except (ValueError, TypeError):
-                    pass
+            if self.is_admin_chat(state_data.chat_id, self._admin_chat_id):
+                self._logger.info("SupportBot: пропускаю редактирование статусного сообщения в админском чате")
+                return
 
             # Редактируем сообщение с финальным состоянием для SupportBot
             final_text = "🛑  Wednesday Frog Bot остановлен\n✅ Резервный бот запущен"
@@ -180,13 +188,8 @@ class BotStateCoordinator:
 
         try:
             # Не редактируем сообщение в админском чате
-            if self._admin_chat_id is not None:
-                try:
-                    state_chat_id_int = int(str(state_data.chat_id))
-                    if state_chat_id_int == self._admin_chat_id:
-                        return  # Пропускаем для админского чата
-                except (ValueError, TypeError):
-                    pass
+            if self.is_admin_chat(state_data.chat_id, self._admin_chat_id):
+                return  # Пропускаем для админского чата
 
             # Редактируем сообщение с промежуточным состоянием
             interim_text = "🚀 Запускаю основной бот...\n🛑 Support Bot остановлен"

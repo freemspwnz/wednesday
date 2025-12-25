@@ -5,6 +5,7 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
+from bot.bot_state_coordinator import BotStateCoordinator
 from shared.base.exceptions import AccessDeniedError, ServiceError
 from shared.bot_services import BotServices
 from shared.retry import retry_on_connect_error
@@ -148,16 +149,9 @@ class AdminHandlers(BaseHandlers):
             return
 
         # В админ-чате НЕ отправляем короткое статусное сообщение (только полные сообщения об остановке)
-        is_admin_chat = False
-        try:
-            admin_chat_id = self.services.settings.admin_chat_id
-            if admin_chat_id and update.effective_chat and update.effective_chat.id is not None:
-                try:
-                    is_admin_chat = admin_chat_id == update.effective_chat.id
-                except (ValueError, TypeError, AttributeError):
-                    is_admin_chat = False
-        except (ValueError, TypeError, AttributeError):
-            is_admin_chat = False
+        admin_chat_id = self.services.settings.admin_chat_id if self.services.settings else None
+        chat_id = update.effective_chat.id if update.effective_chat else None
+        is_admin_chat = BotStateCoordinator.is_admin_chat(chat_id, admin_chat_id)
 
         # Отправляем статус только если это НЕ админ-чат
         status_msg = None

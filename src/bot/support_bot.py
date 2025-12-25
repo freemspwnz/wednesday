@@ -531,15 +531,8 @@ class SupportBot(BaseHandlers):
             return
 
         # В админ-чате не отправляем изменяемое статусное сообщение
-        is_admin_chat = False
-        try:
-            if self.settings.admin_chat_id and chat_id is not None:
-                try:
-                    is_admin_chat = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
-                except (ValueError, TypeError, AttributeError):
-                    is_admin_chat = False
-        except (ValueError, TypeError, AttributeError):
-            is_admin_chat = False
+        admin_chat_id = self.settings.admin_chat_id if self.settings else None
+        is_admin_chat = BotStateCoordinator.is_admin_chat(chat_id, admin_chat_id)
 
         # Отправляем статусное сообщение только если это не админ-чат
         status_msg = None

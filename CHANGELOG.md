@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Рефакторинг
+
+- **Устранение дублирования проверки админ-чата**:
+  - Добавлен статический метод `BotStateCoordinator.is_admin_chat()` для централизованной проверки админ-чата
+  - Упрощена логика проверки в 4 методах `BotStateCoordinator`: `handle_startup_edit()`, `handle_shutdown_edit()`, `handle_support_startup_edit()`, `handle_support_shutdown_edit()`
+  - Заменена дублирующаяся проверка в `handlers_admin.py.stop_command()` на использование `BotStateCoordinator.is_admin_chat()`
+  - Заменена дублирующаяся проверка в `support_bot.py.start_main_command()` на использование `BotStateCoordinator.is_admin_chat()`
+  - Улучшена поддерживаемость: изменение логики проверки админ-чата теперь в одном месте
+  - Соблюдение принципов SOLID (SRP, OCP), DRY и Clean Architecture (композиция вместо наследования)
+  - Исправление проблемы из `BOT_LAYER_AUDIT_REPORT.md` (дублирование кода между WednesdayBot и SupportBot, строки 378-406)
+
 ### Исправлено
 
 - **Исправлена потенциальная утечка ресурсов при ошибках остановки бота**:
