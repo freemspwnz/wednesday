@@ -11,7 +11,7 @@ from shared.protocols import ILogger
 
 if TYPE_CHECKING:
     from bot.bot_error_handler import BotErrorHandler
-    from bot.support_bot import SupportBot
+    from bot.handlers_support import SupportBotHandlers
 
 
 class SupportBotHandlersRegistry:
@@ -27,7 +27,7 @@ class SupportBotHandlersRegistry:
     def __init__(
         self,
         application: Application,
-        support_bot: SupportBot,
+        support_handlers: SupportBotHandlers,
         chat_event_handler: ChatEventHandler,
         error_handler: BotErrorHandler,
         logger: ILogger,
@@ -36,13 +36,13 @@ class SupportBotHandlersRegistry:
 
         Args:
             application: PTB Application для регистрации обработчиков.
-            support_bot: Экземпляр SupportBot для доступа к методам обработчиков.
+            support_handlers: Экземпляр SupportBotHandlers с методами обработчиков команд.
             chat_event_handler: Обработчик событий чата.
             error_handler: Глобальный обработчик ошибок.
             logger: Экземпляр логгера.
         """
         self.application = application
-        self.support_bot = support_bot
+        self.support_handlers = support_handlers
         self.chat_event_handler = chat_event_handler
         self.error_handler = error_handler
         self.logger = logger
@@ -73,14 +73,14 @@ class SupportBotHandlersRegistry:
 
     def _register_support_handlers(self) -> None:
         """Регистрирует команды SupportBot."""
-        self.application.add_handler(CommandHandler("start", self.support_bot.start_main_command))
-        self.application.add_handler(CommandHandler("help", self.support_bot.help_command))
-        self.application.add_handler(CommandHandler("log", self.support_bot.log_command))
+        self.application.add_handler(CommandHandler("start", self.support_handlers.start_main_command))
+        self.application.add_handler(CommandHandler("help", self.support_handlers.help_command))
+        self.application.add_handler(CommandHandler("log", self.support_handlers.log_command))
 
     def _register_unknown_command_handler(self) -> None:
         """Регистрирует обработчик неизвестных команд."""
         self.application.add_handler(
-            MessageHandler(filters.COMMAND, self.support_bot.maintenance_message),
+            MessageHandler(filters.COMMAND, self.support_handlers.maintenance_message),
         )
 
     def _register_chat_event_handler(self) -> None:

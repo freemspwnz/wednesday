@@ -650,7 +650,7 @@ def build_support_bot_components(
     services: SupportBotServices,
     application: Application,
     logger: ILogger,
-) -> tuple[SupportBotComponents, Callable[[object], SupportBotHandlersRegistry]]:
+) -> tuple[SupportBotComponents, Callable[[Callable], SupportBotHandlersRegistry]]:
     """Создает все компоненты для SupportBot.
 
     Фабрика компонентов для соблюдения принципа Dependency Injection.
@@ -658,7 +658,7 @@ def build_support_bot_components(
 
     Note:
         handlers_registry создается отдельно после создания SupportBot из-за
-        циклической зависимости (SupportBotHandlersRegistry требует support_bot).
+        того, что требуется request_start_main callback.
 
     Args:
         services: Контейнер сервисов для SupportBot.
@@ -687,17 +687,21 @@ def build_support_bot_components(
     )
 
     # Функция для создания handlers_registry после создания SupportBot
-    def create_handlers_registry(support_bot: object) -> SupportBotHandlersRegistry:
-        """Создает handlers_registry с переданным support_bot."""
-        from bot.support_bot import SupportBot
+    def create_handlers_registry(request_start_main: Callable | None = None) -> SupportBotHandlersRegistry:
+        """Создает handlers_registry с переданным request_start_main callback."""
+        from bot.handlers_support import SupportBotHandlers
         from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
 
-        if not isinstance(support_bot, SupportBot):
-            raise TypeError(f"support_bot должен быть SupportBot, получен {type(support_bot).__name__}")
+        # Создаем обработчики команд
+        support_handlers = SupportBotHandlers(
+            services=services,
+            logger=logger,
+            request_start_main=request_start_main,
+        )
 
         return SupportBotHandlersRegistry(
             application=application,
-            support_bot=support_bot,
+            support_handlers=support_handlers,
             chat_event_handler=chat_event_handler,
             error_handler=error_handler,
             logger=logger,

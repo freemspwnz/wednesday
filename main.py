@@ -228,11 +228,10 @@ class BotRunner:
                     telegram_config=bot_telegram_config,
                     logger=support_bot_logger,
                     components=support_components,
-                    request_start_main=request_start_main,
                 )
 
-                # Создаём handlers_registry после создания бота (из-за циклической зависимости)
-                handlers_registry = create_handlers_registry(self.support_bot)
+                # Создаём handlers_registry после создания бота (request_start_main передается в handlers)
+                handlers_registry = create_handlers_registry(request_start_main)
                 self.support_bot.set_handlers_registry(handlers_registry)
 
                 # Создаём admin_notification_service после создания бота, так как нужен bot.application.bot
