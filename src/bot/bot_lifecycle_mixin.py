@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from shared.protocols import ILogger
+from shared.protocols import IChatValidator, IHandlersRegistry, ILogger
 
 if TYPE_CHECKING:
     from telegram.ext import Application
@@ -34,6 +34,9 @@ class BotLifecycleMixin:
     is_running: bool
     _stop_event: asyncio.Event
     services: BotServices | SupportBotServices
+    handlers_registry: IHandlersRegistry
+    chat_validator: IChatValidator
+    chat_id: str | int | None
 
     async def _wait_for_stop_signal(self) -> None:
         """Ожидает сигнала остановки через Event.
@@ -133,3 +136,60 @@ class BotLifecycleMixin:
             )
         except Exception as send_error:
             self.logger.warning(f"Не удалось отправить сообщение о {log_context}: {send_error}")
+
+    async def _execute_startup_sequence(
+        self,
+        notification_builder: Callable[[], str],
+        log_context: str = "запуске",
+    ) -> None:
+        """Выполняет общую последовательность запуска бота.
+
+        Унифицированный метод для выполнения общей последовательности запуска,
+        используемый в WednesdayBot и SupportBot для соблюдения принципа DRY.
+
+        Последовательность:
+        1. Регистрация обработчиков
+        2. Валидация доступа к чату (если chat_id задан)
+        3. Запуск PTB Application
+        4. Отправка уведомления о запуске
+        5. Инициализация состояния жизненного цикла
+        6. Ожидание сигнала остановки
+
+        Args:
+            notification_builder: Функция, которая возвращает текст сообщения для отправки.
+            log_context: Контекст для логирования (например, "запуске").
+
+        Side Effects:
+            - Регистрирует все обработчики через handlers_registry.register_all()
+            - Проверяет доступность чата через chat_validator.validate_chat_access()
+            - Запускает PTB Application через lifecycle_manager.start_application()
+            - Отправляет уведомление о запуске через _send_lifecycle_notification()
+            - Инициализирует состояние жизненного цикла через _initialize_lifecycle_state()
+            - Ожидает сигнала остановки через _wait_for_stop_signal()
+
+        Raises:
+            Exception: Если не удалось выполнить какой-либо шаг последовательности.
+        """
+        # 1. Регистрация обработчиков
+        self.handlers_registry.register_all()
+
+        # 2. Валидация доступа к чату (если chat_id задан)
+        if self.chat_id:
+            chat_id_str = str(self.chat_id) if isinstance(self.chat_id, int) else self.chat_id
+            await self.chat_validator.validate_chat_access(self.application.bot, chat_id_str)
+
+        # 3. Запуск PTB Application
+        await self.lifecycle_manager.start_application(self.application)
+
+        # 4. Отправка уведомления о запуске
+        await self._send_lifecycle_notification(
+            notification_builder,
+            self.chat_id,
+            log_context=log_context,
+        )
+
+        # 5. Инициализация состояния жизненного цикла
+        await self._initialize_lifecycle_state()
+
+        # 6. Ожидание сигнала остановки
+        await self._wait_for_stop_signal()

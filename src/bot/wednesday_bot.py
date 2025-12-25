@@ -212,33 +212,14 @@ class WednesdayBot(BotLifecycleMixin):
             self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
 
         try:
-            # Настраиваем обработчики
-            self.handlers_registry.register_all()
-
-            # Настраиваем и запускаем планировщик (только если используется старый планировщик)
-
-            # Проверяем доступность чата перед отправкой сообщения
-            if self.chat_id:
-                await self.chat_validator.validate_chat_access(self.application.bot, self.chat_id)
-
-            # Запускаем PTB Application через lifecycle manager
-            await self.lifecycle_manager.start_application(self.application)
-
-            # Отправляем уведомление о запуске
-            await self._send_lifecycle_notification(
-                BotLifecycleNotificationBuilder.build_startup_message,
-                self.chat_id,
-                log_context="запуске",
-            )
-
             # Celery используется для планирования задач
             self.logger.info("Celery используется для планирования задач")
 
-            # Инициализируем состояние жизненного цикла
-            await self._initialize_lifecycle_state()
-
-            # Ожидаем сигнала остановки через Event
-            await self._wait_for_stop_signal()
+            # Выполняем общую последовательность запуска через миксин
+            await self._execute_startup_sequence(
+                notification_builder=BotLifecycleNotificationBuilder.build_startup_message,
+                log_context="запуске",
+            )
 
         except Exception as e:
             self.logger.error(f"Ошибка при запуске бота: {e}")

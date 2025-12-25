@@ -139,27 +139,12 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
             Exception: Если не удалось запустить приложение после всех попыток.
         """
         self.logger.info("Запуск бота-поддержки (SupportBot)")
-        self.handlers_registry.register_all()
 
-        # Проверяем доступность чата перед отправкой сообщения
-        if self.chat_id:
-            await self.chat_validator.validate_chat_access(self.application.bot, self.chat_id)
-
-        # Запускаем PTB Application через lifecycle manager
-        await self.lifecycle_manager.start_application(self.application)
-
-        # Отправляем уведомление о запуске
-        await self._send_lifecycle_notification(
-            BotLifecycleNotificationBuilder.build_support_startup_message,
-            self.chat_id,
+        # Выполняем общую последовательность запуска через миксин
+        await self._execute_startup_sequence(
+            notification_builder=BotLifecycleNotificationBuilder.build_support_startup_message,
             log_context="запуске",
         )
-
-        # Инициализируем состояние жизненного цикла
-        await self._initialize_lifecycle_state()
-
-        # Ожидаем сигнала остановки через Event
-        await self._wait_for_stop_signal()
 
         self.logger.info("SupportBot основной цикл завершен")
 
