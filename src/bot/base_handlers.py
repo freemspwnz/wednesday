@@ -145,7 +145,8 @@ class BaseHandlers:
 
         Side Effects:
             - Отправляет сообщение с retry-логикой.
-            - Логирует ошибки, но не пробрасывает исключения.
+            - Логирует только неожиданные ошибки (не сетевые/Telegram).
+            - retry_on_connect_error() уже логирует сетевые ошибки через log_event().
         """
         try:
             await retry_on_connect_error(
@@ -155,11 +156,13 @@ class BaseHandlers:
                 delay=RETRY_DELAY_DEFAULT,
             )
         except Exception as e:
-            # Логируем, но не пробрасываем - это безопасный метод
-            self.logger.warning(
-                f"Не удалось отправить сообщение после {MAX_RETRIES_DEFAULT} попыток: {e}",
-                exc_info=True,
-            )
+            # retry_on_connect_error уже залогировал сетевые ошибки через log_event
+            # Логируем только если это не сетевая ошибка (неожиданная ошибка)
+            if not isinstance(e, TelegramError | NetworkError | TimedOut):
+                self.logger.warning(
+                    f"Неожиданная ошибка при отправке сообщения: {e}",
+                    exc_info=True,
+                )
             # Централизованный обработчик перехватит, если это критично
 
     async def _safe_reply_with_fallback(
@@ -181,6 +184,11 @@ class BaseHandlers:
 
         Returns:
             True если сообщение отправлено успешно, False иначе.
+
+        Side Effects:
+            - Отправляет сообщение с retry-логикой.
+            - Логирует только неожиданные ошибки (не сетевые/Telegram).
+            - retry_on_connect_error() уже логирует сетевые ошибки через log_event().
         """
         try:
             await retry_on_connect_error(
@@ -191,9 +199,13 @@ class BaseHandlers:
             )
             return True
         except Exception as e:
-            self.logger.error(
-                f"Не удалось отправить сообщение после {MAX_RETRIES_DEFAULT} попыток: {e}",
-            )
+            # retry_on_connect_error уже залогировал сетевые ошибки через log_event
+            # Логируем только если это не сетевая ошибка (неожиданная ошибка)
+            if not isinstance(e, TelegramError | NetworkError | TimedOut):
+                self.logger.warning(
+                    f"Неожиданная ошибка при отправке сообщения: {e}",
+                    exc_info=True,
+                )
 
             # Если указан fallback текст, пытаемся отправить его
             if fallback_text:
@@ -205,11 +217,13 @@ class BaseHandlers:
                         delay=RETRY_DELAY_DEFAULT,
                     )
                 except Exception as fallback_error:
-                    # Логируем, но не пробрасываем, так как это fallback
-                    self.logger.warning(
-                        f"Не удалось отправить fallback сообщение: {fallback_error}",
-                        exc_info=True,
-                    )
+                    # retry_on_connect_error уже залогировал сетевые ошибки
+                    # Логируем только неожиданные ошибки
+                    if not isinstance(fallback_error, TelegramError | NetworkError | TimedOut):
+                        self.logger.warning(
+                            f"Неожиданная ошибка при отправке fallback сообщения: {fallback_error}",
+                            exc_info=True,
+                        )
                     # Централизованный обработчик перехватит, если это критично
 
             return False
