@@ -24,10 +24,16 @@ from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.repos.dispatch_registry import DispatchRegistry
 from shared.config import AppSettings
-from shared.protocols import IAdminsRepo, IChatsRepo, IMessagingService, IMetrics, IUsageTracker
+from shared.protocols import (
+    IAdminsRepo,
+    IBotController,
+    IChatsRepo,
+    IMessagingService,
+    IMetrics,
+    IUsageTracker,
+)
 
 if TYPE_CHECKING:
-    from bot.wednesday_bot import WednesdayBot
     from infra.redis.redis_client import RedisClient
     from shared.protocols import ITaskQueue
 
@@ -59,7 +65,7 @@ class BotServices:
     admin_access_service: AdminAccessService | None = None
     admin_command_service: AdminCommandService | None = None
     admin_notification_service: AdminNotificationService | None = None
-    bot_controller: WednesdayBot | None = None  # для команд управления ботом, например /stop
+    bot_controller: IBotController | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
     messaging_service: IMessagingService | None = None
     database_operations: DatabaseOperationsService | None = None

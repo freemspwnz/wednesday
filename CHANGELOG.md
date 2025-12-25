@@ -4,6 +4,14 @@
 
 ### Рефакторинг
 
+- **Устранение циклической зависимости через интерфейс IBotController**:
+  - Создан протокол `IBotController` в `shared/protocols.py` для управления жизненным циклом бота
+  - Обновлен `BotServices`: `bot_controller` теперь использует `IBotController` вместо `WednesdayBot`
+  - Устранена циклическая зависимость между `BotServices` и `WednesdayBot`
+  - Улучшено соблюдение принципа Dependency Inversion: зависимости зависят от абстракций, а не от конкретных классов
+  - Улучшена тестируемость: можно легко подменить `bot_controller` в тестах через mock-объект
+  - Улучшено соблюдение границ слоёв: `shared` слой не зависит от `bot` слоя
+
 - **Вынос создания сервисов из bot-слоя в composition root**:
   - Убрано создание `messaging_service` и `dispatch_services` из конструктора `WednesdayBot`
   - Создание сервисов перенесено в `build_bot()` в `infra.container` для соблюдения границ слоёв
