@@ -136,6 +136,8 @@ class WednesdayBot:
 
         # Флаг состояния бота
         self.is_running: bool = False
+        # Event для ожидания сигнала остановки (вместо busy-wait цикла)
+        self._stop_event = asyncio.Event()
 
         # Задача планировщика (инициализируется при старте)
 
@@ -521,20 +523,17 @@ class WednesdayBot:
             # Celery используется для планирования задач
             self.logger.info("Celery используется для планирования задач")
 
-            # Устанавливаем флаг запуска
+            # Устанавливаем флаг запуска и сбрасываем event для нового цикла
             self.is_running = True
+            self._stop_event.clear()
 
-            # Бесконечный цикл для поддержания работы бота
-            # Он будет работать до получения сигнала остановки
-            while self.is_running:
-                try:
-                    # Используем await asyncio.sleep вместо обычного sleep
-                    # Это позволяет корректно обрабатывать прерывания
-                    await asyncio.sleep(0.1)
-                except asyncio.CancelledError:
-                    self.logger.info("Получен сигнал отмены для основного цикла бота")
-                    self.is_running = False
-                    break
+            # Ожидаем сигнала остановки через Event (эффективнее, чем busy-wait цикл)
+            # Event.wait() блокируется до вызова set() в методе stop()
+            try:
+                await self._stop_event.wait()
+            except asyncio.CancelledError:
+                self.logger.info("Получен сигнал отмены для основного цикла бота")
+                self.is_running = False
 
         except Exception as e:
             self.logger.error(f"Ошибка при запуске бота: {e}")
@@ -701,8 +700,9 @@ class WednesdayBot:
         self.logger.info("Останавливаю Wednesday Bot")
 
         try:
-            # Устанавливаем флаг остановки
+            # Устанавливаем флаг остановки и разблокируем ожидание в start()
             self.is_running = False
+            self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
 
             # Безопасная остановка updater'а
             try:
