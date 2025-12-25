@@ -517,15 +517,24 @@ class AdminHandlers(BaseHandlers):
 
         try:
             chat_id = int(context.args[0])
+            # Валидация диапазона: Telegram chat_id может быть положительным (пользователи)
+            # или отрицательным (группы/каналы, начинаются с -100)
+            # Максимальное значение для int64: 2**63 - 1, минимальное: -2**63
+            if chat_id < -(2**63) or chat_id > 2**63 - 1:
+                raise ValueError("chat_id выходит за допустимый диапазон")
+            if chat_id == 0:
+                raise ValueError("chat_id не может быть нулем")
+
             result = await self._admin_command.add_chat(chat_id, "Manually added")
             await self._safe_reply_with_fallback(
                 update.message,
                 result.message,
             )
-        except ValueError:
+        except ValueError as e:
+            error_msg = str(e) if str(e) else "Неверный chat_id (должен быть числом в допустимом диапазоне)"
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Неверный chat_id (должен быть числом)",
+                f"❌ {error_msg}",
             )
 
     async def admin_remove_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -566,15 +575,24 @@ class AdminHandlers(BaseHandlers):
 
         try:
             chat_id = int(context.args[0])
+            # Валидация диапазона: Telegram chat_id может быть положительным (пользователи)
+            # или отрицательным (группы/каналы, начинаются с -100)
+            # Максимальное значение для int64: 2**63 - 1, минимальное: -2**63
+            if chat_id < -(2**63) or chat_id > 2**63 - 1:
+                raise ValueError("chat_id выходит за допустимый диапазон")
+            if chat_id == 0:
+                raise ValueError("chat_id не может быть нулем")
+
             result = await self._admin_command.remove_chat(chat_id)
             await self._safe_reply_with_fallback(
                 update.message,
                 result.message,
             )
-        except ValueError:
+        except ValueError as e:
+            error_msg = str(e) if str(e) else "Неверный chat_id (должен быть числом в допустимом диапазоне)"
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Неверный chat_id (должен быть числом)",
+                f"❌ {error_msg}",
             )
 
     async def list_chats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
