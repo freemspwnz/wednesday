@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from telegram import Update
+from telegram import Bot, Chat, Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
@@ -47,7 +47,7 @@ class AdminHandlers(BaseHandlers):
 
     async def _get_chat_info_safe(
         self,
-        bot: object,
+        bot: Bot,
         chat_id: int,
         timeout: float = 5.0,
     ) -> tuple[int, str]:
@@ -63,7 +63,7 @@ class AdminHandlers(BaseHandlers):
         """
         try:
             chat_info = await asyncio.wait_for(
-                bot.get_chat(chat_id),  # type: ignore[attr-defined]
+                bot.get_chat(chat_id),
                 timeout=timeout,
             )
             title = getattr(chat_info, "title", getattr(chat_info, "first_name", "Unknown"))
@@ -80,10 +80,10 @@ class AdminHandlers(BaseHandlers):
 
     async def _get_chat_safe(
         self,
-        bot: object,
+        bot: Bot,
         chat_id: int,
         timeout: float = 10.0,
-    ) -> object | None:
+    ) -> Chat | None:
         """Безопасно получает полный объект чата с обработкой ошибок и таймаутом.
 
         Args:
@@ -96,10 +96,10 @@ class AdminHandlers(BaseHandlers):
         """
         try:
             chat_info = await asyncio.wait_for(
-                bot.get_chat(chat_id),  # type: ignore[attr-defined]
+                bot.get_chat(chat_id),
                 timeout=timeout,
             )
-            return chat_info  # type: ignore[no-any-return]
+            return chat_info
         except (TelegramError, NetworkError, TimedOut) as e:
             self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
             return None
