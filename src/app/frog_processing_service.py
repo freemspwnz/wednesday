@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Literal, TypedDict
 
 from app.admin_notification_service import AdminNotificationService
 from app.frog_delivery_service import FrogDeliveryService
@@ -24,6 +24,18 @@ from shared.base.exceptions import (
     UnexpectedImageError,
 )
 from shared.protocols import ILogger, IUsageTracker
+
+
+class FrogRequestResult(TypedDict):
+    """Типизированный результат обработки запроса генерации жабы.
+
+    Attributes:
+        status: Статус обработки запроса ("success" или "failed").
+        error: Описание ошибки, если status="failed", иначе None.
+    """
+
+    status: Literal["success", "failed"]
+    error: str | None
 
 
 class FrogProcessingService(BaseService):
@@ -65,7 +77,7 @@ class FrogProcessingService(BaseService):
         chat_id: int,
         user_id: int,
         status_message_id: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> FrogRequestResult:
         """Обрабатывает запрос на генерацию и отправку жабы.
 
         Args:
@@ -74,7 +86,7 @@ class FrogProcessingService(BaseService):
             status_message_id: ID статусного сообщения для удаления (опционально).
 
         Returns:
-            dict с ключами:
+            FrogRequestResult с ключами:
             - status: "success" | "failed"
             - error: описание ошибки (если status="failed")
         """
@@ -93,7 +105,7 @@ class FrogProcessingService(BaseService):
 
             if not success:
                 # Ошибка отправки - MessagingError уже обработан в delivery service
-                return {"status": "failed", "error": "Не удалось отправить изображение"}
+                return FrogRequestResult(status="failed", error="Не удалось отправить изображение")
 
             # 3. Обновление usage (не критично для успешной отправки)
             if self._usage_tracker:
@@ -112,7 +124,7 @@ class FrogProcessingService(BaseService):
                         error_message=str(e),
                     )
 
-            return {"status": "success"}
+            return FrogRequestResult(status="success", error=None)
 
         except CircuitBreakerOpen as e:
             # Явная обработка открытого circuit breaker
@@ -178,7 +190,7 @@ class FrogProcessingService(BaseService):
         user_id: int,
         status_message_id: int | None,
         error_details: str,
-    ) -> dict[str, Any]:
+    ) -> FrogRequestResult:
         """Обрабатывает ситуацию, когда генерация не удалась.
 
         Args:
@@ -188,7 +200,7 @@ class FrogProcessingService(BaseService):
             error_details: Детали ошибки.
 
         Returns:
-            dict с status="failed" и описанием ошибки.
+            FrogRequestResult с status="failed" и описанием ошибки.
         """
         self.logger.error(
             error_details,
@@ -217,7 +229,7 @@ class FrogProcessingService(BaseService):
                 error_details=error_details,
             )
 
-        return {"status": "failed", "error": error_details}
+        return FrogRequestResult(status="failed", error=error_details)
 
     async def _handle_connection_error(
         self,
@@ -225,7 +237,7 @@ class FrogProcessingService(BaseService):
         user_id: int,
         status_message_id: int | None,
         error: BaseException,
-    ) -> dict[str, Any]:
+    ) -> FrogRequestResult:
         """Обрабатывает connection errors с graceful degradation (fallback).
 
         Args:
@@ -235,7 +247,7 @@ class FrogProcessingService(BaseService):
             error: Исключение connection/network error.
 
         Returns:
-            dict с status="failed" и описанием ошибки.
+            FrogRequestResult с status="failed" и описанием ошибки.
         """
         error_type = type(error).__name__
         error_str = str(error)
@@ -281,4 +293,4 @@ class FrogProcessingService(BaseService):
                 error_details=error_details,
             )
 
-        return {"status": "failed", "error": error_details}
+        return FrogRequestResult(status="failed", error=error_details)

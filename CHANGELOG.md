@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Добавление типизированного DTO для результатов операций**:
+  - Создан `FrogRequestResult` TypedDict для типизации результатов обработки запросов генерации жабы
+  - Обновлены методы `process_frog_request()`, `_handle_generation_failure()`, `_handle_connection_error()` для возврата `FrogRequestResult` вместо `dict[str, Any]`
+  - Улучшена типобезопасность: mypy и IDE теперь проверяют использование полей результата
+  - Соответствие паттерну проекта: используется TypedDict как в `DispatchResult` для результатов операций
+  - Обеспечена обратная совместимость: TypedDict совместим со словарями, существующий код продолжает работать
+
 - **Исправление нарушений слоёв: удаление fallback-кода с доступом к инфраструктурным деталям**:
   - Добавлены helper-методы `increment_generation_success_with_pool()`, `increment_generation_failed_with_pool()`, `increment_dispatch_failed_with_pool()` в протокол `IMetrics`
   - Добавлен helper-метод `increment_with_pool()` в протокол `IUsageTracker`

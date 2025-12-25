@@ -17,7 +17,7 @@ from celery import Task
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
 
-from app.frog_processing_service import FrogProcessingService
+from app.frog_processing_service import FrogProcessingService, FrogRequestResult
 from app.image_service import ImageService
 from infra.celery.app import celery_app
 from infra.celery.context import _ensure_pools_initialized, get_services_context
@@ -333,7 +333,7 @@ async def send_frog_manual(
     chat_id: int,
     user_id: int,
     status_message_id: int | None = None,
-) -> dict[str, Any]:
+) -> FrogRequestResult:
     """Celery задача для отправки изображения жабы по ручной команде /frog.
 
     Теперь только оркестрирует выполнение, вся бизнес-логика в FrogProcessingService.
@@ -345,7 +345,7 @@ async def send_frog_manual(
         status_message_id: ID статусного сообщения для удаления (опционально).
 
     Returns:
-        dict с результатом выполнения.
+        FrogRequestResult с результатом выполнения.
 
     Raises:
         Exception: При ошибке обработки.
