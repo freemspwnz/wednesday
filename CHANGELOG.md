@@ -4,6 +4,19 @@
 
 ### Изменено
 
+- **Устранение дублирования логики fallback: выделение FallbackImageDeliveryService**:
+  - Создан протокол `IFallbackImageProvider` в `shared/protocols.py` для абстракции получения fallback изображений
+  - Создан `FallbackImageDeliveryService` для инкапсуляции общей логики получения и отправки fallback изображений
+  - Рефакторинг `FrogDeliveryService`: использует `FallbackImageDeliveryService`, удалена дублированная логика получения и отправки fallback изображений
+  - Рефакторинг `DispatchDeliveryService`: использует `FallbackImageDeliveryService` с callback-функциями для атомарной отправки текста ошибки и изображения
+  - Обновлен DI-контейнер: создается `FallbackImageDeliveryService` и передается в зависимости
+  - Удален параметр `image_service` из метода `send_fallback_to_user()` в `FrogDeliveryService`
+  - Улучшено переиспользование кода: общая логика fallback централизована в одном месте
+  - Улучшена атомарность: в dispatch текст ошибки и изображение отправляются вместе через единый сервис
+  - Соответствие принципу DRY: устранено дублирование логики между пользовательскими запросами и рассылками
+  - Соответствие принципу Single Responsibility: каждый сервис отвечает за свою специфичную логику
+  - Улучшена тестируемость: можно мокировать `IFallbackImageProvider` для тестов
+
 - **Добавление типизированного DTO для результатов операций**:
   - Создан `FrogRequestResult` TypedDict для типизации результатов обработки запросов генерации жабы
   - Обновлены методы `process_frog_request()`, `_handle_generation_failure()`, `_handle_connection_error()` для возврата `FrogRequestResult` вместо `dict[str, Any]`

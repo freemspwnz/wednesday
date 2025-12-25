@@ -861,6 +861,23 @@ class IMessagingService(Protocol):
 
 
 @runtime_checkable
+class IFallbackImageProvider(Protocol):
+    """Протокол для получения fallback изображений.
+
+    Используется для получения случайных сохраненных изображений,
+    которые отправляются при ошибках генерации.
+    """
+
+    async def get_random_saved_image(self) -> tuple[bytes, str] | None:
+        """Возвращает случайное сохраненное изображение для fallback.
+
+        Returns:
+            Кортеж (байты изображения, подпись) или None, если изображение недоступно.
+        """
+        ...
+
+
+@runtime_checkable
 class IDispatchRegistry(Protocol):
     """Протокол для реестра отправленных сообщений по тайм-слотам и чатам."""
 

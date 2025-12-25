@@ -32,6 +32,7 @@ class ImageService(BaseService):
     5. Возврат результата
 
     Fallback изображения доступны через get_random_saved_image().
+    Реализует протокол IFallbackImageProvider для использования в FallbackImageDeliveryService.
     """
 
     def __init__(  # noqa: PLR0913

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_targets_helper import DispatchResult, process_targets_with_registry_check
-from app.image_service import ImageService
+from app.fallback_image_delivery_service import FallbackImageDeliveryService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import (
     AppError,
@@ -38,7 +38,7 @@ class DispatchDeliveryService(BaseService):
         dispatch_registry: IDispatchRegistry,
         database_operations: DatabaseOperationsService,
         messaging_service: IMessagingService,
-        image_service: ImageService | None = None,
+        fallback_delivery: FallbackImageDeliveryService,
         metrics: IMetrics | None = None,
         *,
         logger: ILogger,
@@ -49,7 +49,7 @@ class DispatchDeliveryService(BaseService):
             dispatch_registry: Реестр отправок для регистрации.
             database_operations: Сервис для групповых операций БД в транзакциях.
             messaging_service: Сервис отправки сообщений.
-            image_service: Сервис генерации изображений для получения fallback (опционально).
+            fallback_delivery: Сервис доставки fallback изображений.
             metrics: Сервис метрик (опционально).
             logger: Экземпляр логгера для использования в сервисе.
         """
@@ -57,7 +57,7 @@ class DispatchDeliveryService(BaseService):
         self._dispatch_registry = dispatch_registry
         self._database_operations = database_operations
         self._messaging = messaging_service
-        self._image_service = image_service
+        self._fallback_delivery = fallback_delivery
         self._metrics = metrics
 
     async def send_image_to_targets(  # noqa: PLR0913, PLR0917
@@ -149,58 +149,57 @@ class DispatchDeliveryService(BaseService):
                 used_fallback=True,
             )
 
-        if self._image_service is None:
-            self.logger.warning("ImageService недоступен для отправки fallback изображений")
-            return result
-
-        image_service = self._image_service  # Для type narrowing
-
         async def _send_fallback_for_single_target(
             target_chat: int,
             current_result: DispatchResult,
         ) -> None:
             try:
-                # Отправляем дружелюбное сообщение
-                await self._messaging.send_user_friendly_error(target_chat)
+                # Callback для отправки дружелюбного сообщения (специфично для dispatch)
+                async def send_user_friendly_error_callback(chat_id: int) -> None:
+                    await self._messaging.send_user_friendly_error(chat_id)
 
-                # Получаем fallback изображение
-                fallback_image = await image_service.get_random_saved_image()
-                if fallback_image:
-                    image_data, caption = fallback_image
-                    # Отправляем случайное изображение
-                    if await self._messaging.send_fallback_image(
-                        chat_id=target_chat,
+                # Callback для отправки fallback изображения (специфично для dispatch)
+                async def send_fallback_image_callback(
+                    chat_id: int,
+                    image_data: bytes,
+                    caption: str,
+                ) -> bool:
+                    return await self._messaging.send_fallback_image(
+                        chat_id=chat_id,
                         image_data=image_data,
                         caption=caption,
-                    ):
-                        # Используем DatabaseOperationsService для атомарной регистрации
-                        try:
-                            await self._database_operations.record_dispatch_success(
-                                slot_date=slot_date,
-                                slot_time=slot_time,
-                                chat_id=target_chat,
-                            )
-                        except RepoError as e:
-                            self.logger.warning(
-                                f"Ошибка при регистрации fallback отправки: {e}",
-                                event="fallback_registration_error",
-                                status="warning",
-                                error_type=type(e).__name__,
-                                error_message=str(e),
-                                chat_id=target_chat,
-                                slot_date=slot_date,
-                                slot_time=slot_time,
-                            )
-                            # Отправка успешна, но регистрация не удалась
-                            # Это менее критично, чем сама отправка
-                        current_result["success_count"] += 1
-                else:
-                    self.logger.warning(
-                        f"Нет сохраненных изображений для fallback в чат {target_chat}",
-                        event="fallback_image_unavailable",
-                        status="warning",
-                        chat_id=target_chat,
                     )
+
+                # Атомарная отправка дружелюбного сообщения и fallback изображения
+                # через общий сервис (текст + фото отправляются вместе)
+                success = await self._fallback_delivery.deliver_fallback_image(
+                    chat_id=target_chat,
+                    send_friendly_message_func=send_user_friendly_error_callback,
+                    send_image_func=send_fallback_image_callback,
+                )
+
+                if success:
+                    # Специфичная логика dispatch: регистрация успеха в dispatch registry
+                    try:
+                        await self._database_operations.record_dispatch_success(
+                            slot_date=slot_date,
+                            slot_time=slot_time,
+                            chat_id=target_chat,
+                        )
+                    except RepoError as e:
+                        self.logger.warning(
+                            f"Ошибка при регистрации fallback отправки: {e}",
+                            event="fallback_registration_error",
+                            status="warning",
+                            error_type=type(e).__name__,
+                            error_message=str(e),
+                            chat_id=target_chat,
+                            slot_date=slot_date,
+                            slot_time=slot_time,
+                        )
+                        # Отправка успешна, но регистрация не удалась
+                        # Это менее критично, чем сама отправка
+                    current_result["success_count"] += 1
 
             except AppError as send_error:
                 # Ожидаемые ошибки приложения при отправке fallback сообщений

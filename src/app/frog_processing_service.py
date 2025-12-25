@@ -214,7 +214,6 @@ class FrogProcessingService(BaseService):
         await self._delivery_service.send_fallback_to_user(
             chat_id=chat_id,
             user_id=user_id,
-            image_service=self._image_service,
             status_message_id=status_message_id,
             friendly_message=(
                 "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
@@ -278,7 +277,6 @@ class FrogProcessingService(BaseService):
         await self._delivery_service.send_fallback_to_user(
             chat_id=chat_id,
             user_id=user_id,
-            image_service=self._image_service,
             status_message_id=status_message_id,
             friendly_message=(
                 "🐸 К сожалению, произошла ошибка подключения при генерации.\n"

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from app.image_service import ImageService
+from app.fallback_image_delivery_service import FallbackImageDeliveryService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import MessagingError
 from shared.protocols import ILogger, IMessagingService
@@ -25,6 +25,7 @@ class FrogDeliveryService(BaseService):
 
     def __init__(
         self,
+        fallback_delivery: FallbackImageDeliveryService,
         messaging_service: IMessagingService,
         *,
         logger: ILogger,
@@ -32,10 +33,12 @@ class FrogDeliveryService(BaseService):
         """Инициализирует сервис доставки.
 
         Args:
+            fallback_delivery: Сервис доставки fallback изображений.
             messaging_service: Сервис отправки сообщений.
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
+        self._fallback_delivery = fallback_delivery
         self._messaging = messaging_service
 
     async def send_image_to_user(
@@ -103,76 +106,30 @@ class FrogDeliveryService(BaseService):
         self,
         chat_id: int,
         user_id: int,
-        image_service: ImageService,
         status_message_id: int | None = None,
         friendly_message: str | None = None,
     ) -> None:
         """Отправляет fallback изображение пользователю.
 
+        Инкапсулирует специфичную для пользовательских запросов логику:
+        - Удаление status_message перед отправкой fallback
+
         Args:
             chat_id: ID чата для отправки.
             user_id: ID пользователя (для логирования).
-            image_service: Сервис генерации изображений для получения fallback.
             status_message_id: ID статусного сообщения для удаления (опционально).
             friendly_message: Текст дружелюбного сообщения (опционально).
         """
-        # Удаление статусного сообщения
+        # Удаление статусного сообщения (специфика пользовательского запроса)
         if status_message_id:
             await self._delete_status_message_safe(chat_id, status_message_id)
 
-        # Отправка дружелюбного сообщения
-        if friendly_message:
-            try:
-                await self._messaging.send_message(
-                    chat_id=chat_id,
-                    text=friendly_message,
-                )
-            except MessagingError as e:
-                self.logger.error(
-                    f"Не удалось отправить дружелюбное сообщение: {e}",
-                    event="friendly_message_send_failed",
-                    status="error",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    user_id=user_id,
-                    chat_id=chat_id,
-                )
-
-        # Отправка случайного изображения
-        fallback_image = await image_service.get_random_saved_image()
-        if fallback_image:
-            fallback_image_data, fallback_caption = fallback_image
-            try:
-                await self._messaging.send_image(
-                    chat_id=chat_id,
-                    image=fallback_image_data,
-                    caption=fallback_caption,
-                )
-                self.logger.info(
-                    f"Случайное изображение отправлено пользователю {user_id} как fallback",
-                    event="fallback_image_sent",
-                    status="ok",
-                    user_id=user_id,
-                    chat_id=chat_id,
-                )
-            except MessagingError as e:
-                self.logger.error(
-                    f"Не удалось отправить fallback изображение: {e}",
-                    event="fallback_image_send_failed",
-                    status="error",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    user_id=user_id,
-                    chat_id=chat_id,
-                )
-        else:
-            self.logger.warning(
-                "Нет сохраненных изображений для отправки как fallback",
-                event="fallback_image_unavailable",
-                status="warning",
-                user_id=user_id,
-                chat_id=chat_id,
-            )
+        # Доставка fallback изображения через общий сервис
+        await self._fallback_delivery.deliver_fallback_image(
+            chat_id=chat_id,
+            friendly_message=friendly_message,
+            send_image_func=None,  # Используем стандартный send_image
+        )
 
     async def _delete_status_message_safe(
         self,

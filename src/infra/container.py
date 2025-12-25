@@ -428,10 +428,19 @@ def build_frog_processing_service(
     Returns:
         Настроенный FrogProcessingService.
     """
+    from app.fallback_image_delivery_service import FallbackImageDeliveryService
     from app.frog_delivery_service import FrogDeliveryService
     from app.frog_processing_service import FrogProcessingService
 
+    # Создаём FallbackImageDeliveryService для переиспользования логики fallback
+    fallback_delivery = FallbackImageDeliveryService(
+        image_provider=image_service,
+        messaging_service=messaging_service,
+        logger=logger,
+    )
+
     delivery_service = FrogDeliveryService(
+        fallback_delivery=fallback_delivery,
         messaging_service=messaging_service,
         logger=logger,
     )
@@ -682,11 +691,20 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
         logger=logger,
     )
 
+    # Создаём FallbackImageDeliveryService для переиспользования логики fallback
+    from app.fallback_image_delivery_service import FallbackImageDeliveryService
+
+    fallback_delivery = FallbackImageDeliveryService(
+        image_provider=image_service,
+        messaging_service=messaging_service,
+        logger=logger,
+    )
+
     dispatch_delivery_service = DispatchDeliveryService(
         dispatch_registry=dispatch_registry,
         database_operations=database_operations,
         messaging_service=messaging_service,
-        image_service=image_service,
+        fallback_delivery=fallback_delivery,
         metrics=metrics,
         logger=logger,
     )
