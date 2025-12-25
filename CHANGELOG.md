@@ -4,6 +4,18 @@
 
 ### Рефакторинг
 
+- **Оптимизация основного цикла SupportBot: замена busy-wait на asyncio.Event**:
+  - Заменен цикл `while self.is_running: await asyncio.sleep(0.1)` на использование `asyncio.Event` в `support_bot.py`
+  - Добавлен `self._stop_event = asyncio.Event()` в `__init__()` для ожидания сигнала остановки
+  - Обновлен метод `start()`: теперь использует `await self._stop_event.wait()` вместо busy-wait цикла
+  - Обновлен метод `stop()`: теперь вызывает `self._stop_event.set()` для разблокировки ожидания
+  - Добавлена обработка `asyncio.CancelledError` для корректной обработки отмены задачи
+  - Улучшена производительность: устранено потребление CPU в простое (busy-wait цикл с sleep(0.1))
+  - Улучшена эффективность: Event.wait() блокируется до вызова set(), не потребляя ресурсы
+  - Улучшена отзывчивость: остановка бота происходит мгновенно через Event.set()
+  - Соответствие best practices: использование Event для координации между корутинами
+  - Консистентность с WednesdayBot: оба бота используют одинаковый подход для управления жизненным циклом
+
 - **Устранение протечки инфраструктуры: удаление прямого доступа к postgres_pool из bot-слоя**:
   - Удален неиспользуемый параметр `db_pool: asyncpg.Pool` из функции `build_dispatch_services()` в `infra/container.py`
   - Удалена передача `db_pool=self.services.postgres_pool` из вызова `build_dispatch_services()` в `wednesday_bot.py`

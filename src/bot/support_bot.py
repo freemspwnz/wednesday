@@ -110,6 +110,8 @@ class SupportBot(BaseHandlers):
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
         self.request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = request_start_main
         self.is_running: bool = False
+        # Event для ожидания сигнала остановки (вместо busy-wait цикла)
+        self._stop_event = asyncio.Event()
         # Данные для редактирования сообщения об остановке основного
         self.pending_shutdown_edit: dict[str, Any] | None = None
         # Данные для цепочки запуска основного: сообщение "Запускаю..."
@@ -348,9 +350,12 @@ class SupportBot(BaseHandlers):
             pass
 
         self.is_running = True
+        self._stop_event.clear()
         try:
-            while self.is_running:
-                await asyncio.sleep(0.1)
+            await self._stop_event.wait()
+        except asyncio.CancelledError:
+            self.logger.info("Получен сигнал отмены для основного цикла SupportBot")
+            self.is_running = False
         finally:
             self.logger.info("SupportBot основной цикл завершен")
 
@@ -371,6 +376,7 @@ class SupportBot(BaseHandlers):
             return
         self.logger.info("Остановка бота-поддержки")
         self.is_running = False
+        self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
         # Если был запуск основного через статусное сообщение — добавим строку про остановку Support Bot
         if isinstance(self.pending_startup_edit, dict):
             state_data = BotStateData(
