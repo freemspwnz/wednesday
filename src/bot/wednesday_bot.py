@@ -88,32 +88,6 @@ class WednesdayBot:
         self.services = services
         # Устанавливаем обратную ссылку для команд управления
         self.services.bot_controller = self
-
-        # Создаём messaging_service и обновляем dispatch сервисы
-        from infra.container import build_dispatch_services
-        from infra.messaging.ptb import PTBMessagingService
-
-        messaging_service = PTBMessagingService(bot=self.application.bot)
-        self.services.messaging_service = messaging_service
-
-        # Обновляем dispatch сервисы с messaging_service
-        if self.services.database_operations is not None and self.services.admins_repo is not None:
-            _target_prep, _dispatch_delivery, dispatch, admin_notifier = build_dispatch_services(
-                messaging_service=messaging_service,
-                chats=self.services.chats,
-                dispatch_registry=self.services.dispatch_registry,
-                database_operations=self.services.database_operations,
-                image_service=self.services.image_service,
-                metrics=self.services.metrics,
-                admins_repo=self.services.admins_repo,
-                logger=self.logger,
-                settings=self.services.settings,
-            )
-            # Обновляем services
-            self.services.dispatch_service = dispatch
-            self.services.admin_notification_service = admin_notifier
-        else:
-            self.logger.warning("database_operations или admins_repo не доступны, dispatch_service не будет создан")
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
         self.pending_startup_edit: dict[str, Any] | None = None
         # Данные для пост-остановки (например, редактирование сообщения об остановке)

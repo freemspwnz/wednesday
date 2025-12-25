@@ -794,4 +794,33 @@ def build_bot(
     # но убеждаемся, что она корректна
     services.bot_controller = bot
 
+    # Создаём messaging_service после создания бота, так как нужен bot.application.bot
+    from infra.messaging.ptb import PTBMessagingService
+
+    messaging_service = PTBMessagingService(bot=bot.application.bot)
+    services.messaging_service = messaging_service
+
+    # Создаём dispatch сервисы с messaging_service
+    if services.database_operations is not None and services.admins_repo is not None:
+        app_logger = get_logger("app")
+        _target_prep, _dispatch_delivery, dispatch, admin_notifier = build_dispatch_services(
+            messaging_service=messaging_service,
+            chats=services.chats,
+            dispatch_registry=services.dispatch_registry,
+            database_operations=services.database_operations,
+            image_service=services.image_service,
+            metrics=services.metrics,
+            admins_repo=services.admins_repo,
+            logger=app_logger,
+            settings=services.settings,
+        )
+        # Обновляем services
+        services.dispatch_service = dispatch
+        services.admin_notification_service = admin_notifier
+    else:
+        app_logger = get_logger("app")
+        app_logger.warning(
+            "database_operations или admins_repo не доступны, dispatch_service не будет создан",
+        )
+
     return bot
