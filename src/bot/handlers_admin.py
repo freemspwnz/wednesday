@@ -128,7 +128,7 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
-        try:
+        async def _execute_status() -> None:
             bot_info = await context.bot.get_me()
             status_message = await self._dashboard_service.build_status_message(
                 bot_name=bot_info.first_name,
@@ -141,35 +141,8 @@ class AdminHandlers(BaseHandlers):
             )
             if success:
                 self.logger.info("Отправлен статус бота")
-        except (ValueError, TypeError, AttributeError) as e:
-            # Ошибки валидации данных или доступа к атрибутам
-            self.logger.error(f"Ошибка валидации при получении статуса: {e}", exc_info=True)
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Ошибка валидации данных",
-            )
-        except (TelegramError, NetworkError, TimedOut) as e:
-            # Сетевые ошибки Telegram API
-            self.logger.warning(f"Сетевая ошибка при получении статуса: {e}")
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Временная проблема с Telegram API. Попробуйте позже.",
-            )
-        except ServiceError as e:
-            # Ошибки сервисного слоя
-            self.logger.error(f"Ошибка сервиса при получении статуса: {e}", exc_info=True)
-            await self._safe_reply_with_fallback(
-                update.message,
-                f"❌ Ошибка сервиса: {str(e)[:200]}",
-            )
-        except RepoError as e:
-            # Ошибки репозитория
-            self.logger.error(f"Ошибка репозитория при получении статуса: {e}", exc_info=True)
-            await self._safe_reply_with_fallback(
-                update.message,
-                f"❌ Ошибка доступа к данным: {str(e)[:200]}",
-            )
-        # Критические ошибки (память, системные) должны пробрасываться выше
+
+        await self._handle_command_errors(update, _execute_status)
 
     async def admin_log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /log.
@@ -223,8 +196,8 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
-        # Получаем экземпляр основного бота через DI и останавливаем его
-        try:
+        async def _execute_stop() -> None:
+            # Получаем экземпляр основного бота через DI и останавливаем его
             bot_controller = self.services.bot_controller
             if bot_controller is not None:
                 await bot_controller.stop()
@@ -234,28 +207,8 @@ class AdminHandlers(BaseHandlers):
                     update.message,
                     "❌ Ошибка: невозможно остановить бота (bot_controller недоступен)",
                 )
-        except (ValueError, TypeError, AttributeError) as e:
-            # Ошибки валидации данных или доступа к атрибутам
-            self.logger.error(f"Ошибка валидации при попытке остановить бота: {e}", exc_info=True)
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Ошибка валидации при попытке остановить бота",
-            )
-        except (TelegramError, NetworkError, TimedOut) as e:
-            # Сетевые ошибки Telegram API
-            self.logger.warning(f"Сетевая ошибка при остановке бота: {e}")
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Временная проблема с Telegram API. Попробуйте позже.",
-            )
-        except ServiceError as e:
-            # Ошибки сервисного слоя
-            self.logger.error(f"Ошибка сервиса при остановке бота: {e}", exc_info=True)
-            await self._safe_reply_with_fallback(
-                update.message,
-                f"❌ Ошибка сервиса: {str(e)[:200]}",
-            )
-        # Критические ошибки (память, системные) должны пробрасываться выше
+
+        await self._handle_command_errors(update, _execute_stop)
 
     async def admin_force_send_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /force_send.
@@ -725,25 +678,16 @@ class AdminHandlers(BaseHandlers):
                 chat_id, title = result
                 chat_list.append(f"• {title} (ID: {chat_id})")
 
-        message = "📋 Активные чаты:\n\n" + "\n".join(chat_list)
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
+        async def _execute_list_chats() -> None:
+            message = "📋 Активные чаты:\n\n" + "\n".join(chat_list)
+            success = await self._safe_reply_with_fallback(
+                update.message,
                 message,
-                max_retries=3,
-                delay=2,
             )
-            self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
-        except (TelegramError, NetworkError, TimedOut) as e:
-            # Сетевые ошибки Telegram API
-            self.logger.warning(f"Сетевая ошибка при отправке списка чатов: {e}")
-        except (ValueError, TypeError, AttributeError) as e:
-            # Ошибки валидации данных
-            self.logger.error(f"Ошибка валидации при отправке списка чатов: {e}", exc_info=True)
-        except ServiceError as e:
-            # Ошибки сервисного слоя
-            self.logger.error(f"Ошибка сервиса при отправке списка чатов: {e}", exc_info=True)
-        # Критические ошибки (память, системные) должны пробрасываться выше
+            if success:
+                self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
+
+        await self._handle_command_errors(update, _execute_list_chats)
 
     async def set_frog_limit_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_limit.

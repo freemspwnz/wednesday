@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from infra.logging.logger import get_logger
+from shared.base.exceptions import RepoError, ServiceError
 from shared.bot_services import BotServices, SupportBotServices
 from shared.paths import LOGS_DIR
 from shared.retry import retry_on_connect_error
@@ -273,6 +276,69 @@ class BaseHandlers:
                 exc_info=True,
             )
             return False
+
+    async def _handle_command_errors(
+        self,
+        update: Update,
+        func: Callable[[], Awaitable[None]],
+    ) -> None:
+        """Универсальный обработчик ошибок для команд.
+
+        Обеспечивает единообразную обработку ошибок во всех командах:
+        - Ошибки валидации данных (ValueError, TypeError, AttributeError)
+        - Сетевые ошибки Telegram API (TelegramError, NetworkError, TimedOut)
+        - Ошибки сервисного слоя (ServiceError)
+        - Ошибки репозитория (RepoError)
+        - Критические ошибки пробрасываются выше
+
+        Args:
+            update: Объект обновления Telegram.
+            func: Асинхронная функция для выполнения команды.
+
+        Side Effects:
+            - Логирует ошибки с соответствующими уровнями (warning/error).
+            - Отправляет сообщения об ошибках пользователю через _safe_reply_with_fallback().
+            - Критические ошибки (память, системные) пробрасываются выше.
+        """
+        try:
+            await func()
+        except (ValueError, TypeError, AttributeError) as e:
+            # Ошибки валидации данных или доступа к атрибутам
+            self.logger.error(f"Ошибка валидации: {e}", exc_info=True)
+            if update.message:
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    "❌ Ошибка валидации данных",
+                )
+        except (TelegramError, NetworkError, TimedOut) as e:
+            # Сетевые ошибки Telegram API
+            self.logger.warning(f"Сетевая ошибка Telegram API: {e}")
+            if update.message:
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    "❌ Временная проблема с Telegram API. Попробуйте позже.",
+                )
+        except ServiceError as e:
+            # Ошибки сервисного слоя
+            self.logger.error(f"Ошибка сервиса: {e}", exc_info=True)
+            if update.message:
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    f"❌ Ошибка сервиса: {str(e)[:200]}",
+                )
+        except RepoError as e:
+            # Ошибки репозитория
+            self.logger.error(f"Ошибка репозитория: {e}", exc_info=True)
+            if update.message:
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    f"❌ Ошибка доступа к данным: {str(e)[:200]}",
+                )
+        except asyncio.CancelledError:
+            # Задача была отменена (например, при остановке бота)
+            self.logger.info("Команда была отменена")
+            raise  # Пробрасываем дальше для корректной обработки
+        # Критические ошибки (память, системные) должны пробрасываться выше
 
     async def _send_logs_command(
         self,

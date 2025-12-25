@@ -4,6 +4,15 @@
 
 ### Изменено
 
+- **Унифицирована обработка ошибок в обработчиках команд**:
+  - Добавлен универсальный метод `_handle_command_errors()` в `BaseHandlers` для единообразной обработки ошибок
+  - Рефакторены методы `status_command()`, `stop_command()`, `list_chats_command()` в `AdminHandlers` для использования нового обработчика
+  - Устранено дублирование кода обработки ошибок (ValueError, TypeError, AttributeError, TelegramError, NetworkError, TimedOut, ServiceError, RepoError)
+  - Добавлена обработка `asyncio.CancelledError` для корректного завершения при отмене задач
+  - Улучшено соблюдение принципа DRY: обработка ошибок централизована в одном месте
+  - Упрощена поддержка: изменения в логике обработки ошибок теперь в одном месте
+  - Улучшена консистентность: все команды обрабатывают ошибки одинаково
+
 - **Улучшено соблюдение SRP в WednesdayBot и SupportBot**:
   - Вынесена регистрация обработчиков в отдельные классы `BotHandlersRegistry` и `SupportBotHandlersRegistry`
   - Вынесено форматирование уведомлений в `BotLifecycleNotificationBuilder`
