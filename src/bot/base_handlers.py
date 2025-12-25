@@ -131,6 +131,54 @@ class BaseHandlers:
         """
         await message.reply_text(text)
 
+    async def _safe_reply_with_fallback(
+        self,
+        message: Message,
+        text: str,
+        fallback_text: str | None = None,
+    ) -> bool:
+        """Безопасная отправка сообщения с обработкой ошибок.
+
+        Отправляет сообщение с retry-логикой. При ошибке логирует её и
+        при необходимости отправляет fallback-сообщение. Не пробрасывает
+        исключения - позволяет централизованному обработчику перехватить их.
+
+        Args:
+            message: Message объект для отправки ответа.
+            text: Текст сообщения для отправки.
+            fallback_text: Текст для отправки при ошибке (опционально).
+
+        Returns:
+            True если сообщение отправлено успешно, False иначе.
+        """
+        try:
+            await retry_on_connect_error(
+                message.reply_text,
+                text,
+                max_retries=MAX_RETRIES_DEFAULT,
+                delay=RETRY_DELAY_DEFAULT,
+            )
+            return True
+        except Exception as e:
+            self.logger.error(
+                f"Не удалось отправить сообщение после {MAX_RETRIES_DEFAULT} попыток: {e}",
+            )
+
+            # Если указан fallback текст, пытаемся отправить его
+            if fallback_text:
+                try:
+                    await retry_on_connect_error(
+                        message.reply_text,
+                        fallback_text,
+                        max_retries=MAX_RETRIES_DEFAULT,
+                        delay=RETRY_DELAY_DEFAULT,
+                    )
+                except Exception:
+                    # Если fallback тоже не удался, централизованный обработчик перехватит
+                    pass
+
+            return False
+
     async def _send_logs_command(
         self,
         update: Update,
