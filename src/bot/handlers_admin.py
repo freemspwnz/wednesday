@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from telegram import Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
@@ -39,6 +41,39 @@ class AdminHandlers(BaseHandlers):
         self._dashboard_service = self.services.admin_dashboard_service
         self._admin_access = self.services.admin_access_service
         self._admin_command = self.services.admin_command_service
+
+    async def _get_chat_info_safe(
+        self,
+        bot: object,
+        chat_id: int,
+        timeout: float = 5.0,
+    ) -> tuple[int, str]:
+        """Безопасно получает информацию о чате с обработкой ошибок.
+
+        Args:
+            bot: Экземпляр Telegram бота.
+            chat_id: ID чата для получения информации.
+            timeout: Таймаут для запроса в секундах.
+
+        Returns:
+            Кортеж (chat_id, title), где title - название чата или сообщение об ошибке.
+        """
+        try:
+            chat_info = await asyncio.wait_for(
+                bot.get_chat(chat_id),  # type: ignore[attr-defined]
+                timeout=timeout,
+            )
+            title = getattr(chat_info, "title", getattr(chat_info, "first_name", "Unknown"))
+            return (chat_id, title)
+        except (TelegramError, NetworkError, TimedOut) as e:
+            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
+            return (chat_id, f"не удалось получить информацию: {type(e).__name__}")
+        except TimeoutError:
+            self.logger.warning(f"Таймаут при получении информации о чате {chat_id}")
+            return (chat_id, "таймаут при получении информации")
+        except Exception as e:
+            self.logger.warning(f"Неожиданная ошибка при получении информации о чате {chat_id}: {e}")
+            return (chat_id, f"не удалось получить информацию: {type(e).__name__}")
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.
@@ -248,16 +283,21 @@ class AdminHandlers(BaseHandlers):
 
         # Если аргумент не передан - показываем список чатов
         if not context.args or len(context.args) == 0:
-            # Получаем информацию о чатах
+            # Получаем информацию о чатах параллельно для улучшения производительности
+            tasks = [self._get_chat_info_safe(context.bot, chat_id) for chat_id in chat_ids]
+            results: list[tuple[int, str] | BaseException] = await asyncio.gather(
+                *tasks,
+                return_exceptions=True,
+            )
+
             chat_list = []
-            for chat_id in chat_ids:
-                try:
-                    chat_info = await context.bot.get_chat(chat_id)
-                    title = getattr(chat_info, "title", getattr(chat_info, "first_name", "Unknown"))
+            for result in results:
+                if isinstance(result, BaseException):
+                    self.logger.warning(f"Ошибка при получении информации о чате: {result}")
+                    chat_list.append(f"• Чат (ошибка: {type(result).__name__})")
+                else:
+                    chat_id, title = result
                     chat_list.append(f"• {title} (ID: {chat_id})")
-                except (TelegramError, NetworkError, TimedOut) as e:
-                    self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
-                    chat_list.append(f"• Чат {chat_id} (не удалось получить информацию)")
 
             message = (
                 "📋 Активные чаты для отправки:\n\n"
@@ -627,16 +667,21 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
             return
 
-        # Получаем информацию о чатах
+        # Получаем информацию о чатах параллельно для улучшения производительности
+        tasks = [self._get_chat_info_safe(context.bot, chat_id) for chat_id in chat_ids]
+        results: list[tuple[int, str] | BaseException] = await asyncio.gather(
+            *tasks,
+            return_exceptions=True,
+        )
+
         chat_list = []
-        for chat_id in chat_ids:
-            try:
-                chat_info = await context.bot.get_chat(chat_id)
-                title = getattr(chat_info, "title", getattr(chat_info, "first_name", "Unknown"))
+        for result in results:
+            if isinstance(result, BaseException):
+                self.logger.warning(f"Ошибка при получении информации о чате: {result}")
+                chat_list.append(f"• Чат (ошибка: {type(result).__name__})")
+            else:
+                chat_id, title = result
                 chat_list.append(f"• {title} (ID: {chat_id})")
-            except Exception as e:
-                self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {e}")
-                chat_list.append(f"• Чат {chat_id} (не удалось получить информацию)")
 
         message = "📋 Активные чаты:\n\n" + "\n".join(chat_list)
         try:
