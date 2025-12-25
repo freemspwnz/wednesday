@@ -208,12 +208,32 @@ class BotRunner:
                 # Создаём логгер для SupportBot
                 support_bot_logger = get_logger("bot.support_bot")
 
+                # Создаём Application через фабрику
+                from bot.bot_application_factory import create_telegram_application
+
+                support_application = create_telegram_application(bot_telegram_config)
+
+                # Создаём компоненты SupportBot через фабрику
+                from infra.container import build_support_bot_components
+
+                support_components, create_handlers_registry = build_support_bot_components(
+                    services=support_services,
+                    application=support_application,
+                    logger=support_bot_logger,
+                )
+
+                # Создаём SupportBot с внедрёнными зависимостями
                 self.support_bot = SupportBot(
                     services=support_services,
                     telegram_config=bot_telegram_config,
                     logger=support_bot_logger,
+                    components=support_components,
                     request_start_main=request_start_main,
                 )
+
+                # Создаём handlers_registry после создания бота (из-за циклической зависимости)
+                handlers_registry = create_handlers_registry(self.support_bot)
+                self.support_bot.set_handlers_registry(handlers_registry)
 
                 # Создаём admin_notification_service после создания бота, так как нужен bot.application.bot
                 from infra.container import build_admin_notification_service

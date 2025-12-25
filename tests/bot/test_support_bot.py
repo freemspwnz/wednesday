@@ -119,10 +119,23 @@ def support_bot(monkeypatch: Any) -> Any:
     telegram_config = BotTelegramConfig(bot_token="test_token", chat_id="123")
 
     mock_logger = MagicMock()
+
+    # Создаём моки компонентов
+    from infra.container import SupportBotComponents
+
+    mock_components = SupportBotComponents(
+        error_handler=MagicMock(),
+        chat_validator=MagicMock(),
+        lifecycle_manager=MagicMock(),
+        chat_event_handler=MagicMock(),
+        handlers_registry=MagicMock(),
+    )
+
     bot = sb_module.SupportBot(
         services=support_services,
         telegram_config=telegram_config,
         logger=mock_logger,
+        components=mock_components,
     )
     return bot
 

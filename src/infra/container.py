@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -529,6 +531,191 @@ def build_support_bot_services(
     )
 
 
+if TYPE_CHECKING:
+    from telegram.ext import Application
+
+    from bot.bot_chat_access_validator import BotChatAccessValidator
+    from bot.bot_error_handler import BotErrorHandler
+    from bot.bot_handlers_registry import BotHandlersRegistry
+    from bot.bot_lifecycle_manager import BotLifecycleManager
+    from bot.chat_event_handler import ChatEventHandler
+    from bot.handlers_admin import AdminHandlers
+    from bot.handlers_models import ModelHandlers
+    from bot.handlers_user import UserHandlers
+    from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
+
+
+@dataclass
+class BotComponents:
+    """Контейнер компонентов для WednesdayBot.
+
+    Инкапсулирует все компоненты, необходимые для работы основного бота.
+    Используется для соблюдения принципа Dependency Injection и SRP.
+    """
+
+    user_handlers: UserHandlers
+    admin_handlers: AdminHandlers
+    model_handlers: ModelHandlers
+    error_handler: BotErrorHandler
+    chat_validator: BotChatAccessValidator
+    lifecycle_manager: BotLifecycleManager
+    chat_event_handler: ChatEventHandler
+    handlers_registry: BotHandlersRegistry
+
+
+@dataclass
+class SupportBotComponents:
+    """Контейнер компонентов для SupportBot.
+
+    Инкапсулирует все компоненты, необходимые для работы резервного бота.
+    Используется для соблюдения принципа Dependency Injection и SRP.
+    """
+
+    error_handler: BotErrorHandler
+    chat_validator: BotChatAccessValidator
+    lifecycle_manager: BotLifecycleManager
+    chat_event_handler: ChatEventHandler
+    handlers_registry: SupportBotHandlersRegistry | None  # None для разрешения циклической зависимости
+
+
+def build_bot_components(
+    services: BotServices,
+    application: Application,
+    logger: ILogger,
+) -> BotComponents:
+    """Создает все компоненты для WednesdayBot.
+
+    Фабрика компонентов для соблюдения принципа Dependency Injection.
+    Все компоненты создаются в composition root, а не внутри WednesdayBot.
+
+    Args:
+        services: Контейнер сервисов бота.
+        application: PTB Application для регистрации обработчиков.
+        logger: Экземпляр логгера.
+
+    Returns:
+        Контейнер BotComponents с созданными компонентами.
+    """
+    from bot.bot_chat_access_validator import BotChatAccessValidator
+    from bot.bot_error_handler import BotErrorHandler
+    from bot.bot_handlers_registry import BotHandlersRegistry
+    from bot.bot_lifecycle_manager import BotLifecycleManager
+    from bot.chat_event_handler import ChatEventHandler
+    from bot.handlers_admin import AdminHandlers
+    from bot.handlers_models import ModelHandlers
+    from bot.handlers_user import UserHandlers
+
+    # Константы
+    TIMEOUT_MEDIUM_SECONDS = 30.0
+
+    # Создаем обработчики команд
+    user_handlers = UserHandlers(services, logger=logger)
+    admin_handlers = AdminHandlers(services, logger=logger)
+    model_handlers = ModelHandlers(services, logger=logger)
+
+    # Создаем компоненты для управления жизненным циклом
+    error_handler = BotErrorHandler(logger)
+    chat_validator = BotChatAccessValidator(logger, timeout=TIMEOUT_MEDIUM_SECONDS)
+    lifecycle_manager = BotLifecycleManager(logger)
+    chat_event_handler = ChatEventHandler(
+        services=services,
+        bot=application.bot,
+        logger=logger,
+    )
+
+    # Создаем регистратор обработчиков
+    handlers_registry = BotHandlersRegistry(
+        application=application,
+        user_handlers=user_handlers,
+        admin_handlers=admin_handlers,
+        model_handlers=model_handlers,
+        chat_event_handler=chat_event_handler,
+        error_handler=error_handler,
+        logger=logger,
+    )
+
+    return BotComponents(
+        user_handlers=user_handlers,
+        admin_handlers=admin_handlers,
+        model_handlers=model_handlers,
+        error_handler=error_handler,
+        chat_validator=chat_validator,
+        lifecycle_manager=lifecycle_manager,
+        chat_event_handler=chat_event_handler,
+        handlers_registry=handlers_registry,
+    )
+
+
+def build_support_bot_components(
+    services: SupportBotServices,
+    application: Application,
+    logger: ILogger,
+) -> tuple[SupportBotComponents, Callable[[object], SupportBotHandlersRegistry]]:
+    """Создает все компоненты для SupportBot.
+
+    Фабрика компонентов для соблюдения принципа Dependency Injection.
+    Все компоненты создаются в composition root, а не внутри SupportBot.
+
+    Note:
+        handlers_registry создается отдельно после создания SupportBot из-за
+        циклической зависимости (SupportBotHandlersRegistry требует support_bot).
+
+    Args:
+        services: Контейнер сервисов для SupportBot.
+        application: PTB Application для регистрации обработчиков.
+        logger: Экземпляр логгера.
+
+    Returns:
+        Кортеж (SupportBotComponents без handlers_registry, функция для создания handlers_registry).
+    """
+    from bot.bot_chat_access_validator import BotChatAccessValidator
+    from bot.bot_error_handler import BotErrorHandler
+    from bot.bot_lifecycle_manager import BotLifecycleManager
+    from bot.chat_event_handler import ChatEventHandler
+
+    # Константы
+    TIMEOUT_MEDIUM_SECONDS = 30.0
+
+    # Создаем компоненты для управления жизненным циклом
+    error_handler = BotErrorHandler(logger)
+    chat_validator = BotChatAccessValidator(logger, timeout=TIMEOUT_MEDIUM_SECONDS)
+    lifecycle_manager = BotLifecycleManager(logger)
+    chat_event_handler = ChatEventHandler(
+        services=services,
+        bot=application.bot,
+        logger=logger,
+    )
+
+    # Функция для создания handlers_registry после создания SupportBot
+    def create_handlers_registry(support_bot: object) -> SupportBotHandlersRegistry:
+        """Создает handlers_registry с переданным support_bot."""
+        from bot.support_bot import SupportBot
+        from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
+
+        if not isinstance(support_bot, SupportBot):
+            raise TypeError(f"support_bot должен быть SupportBot, получен {type(support_bot).__name__}")
+
+        return SupportBotHandlersRegistry(
+            application=application,
+            support_bot=support_bot,
+            chat_event_handler=chat_event_handler,
+            error_handler=error_handler,
+            logger=logger,
+        )
+
+    # Создаем временный заглушку для handlers_registry (будет заменена после создания бота)
+    # Используем None, так как handlers_registry создается после SupportBot
+    components = SupportBotComponents(
+        error_handler=error_handler,
+        chat_validator=chat_validator,
+        lifecycle_manager=lifecycle_manager,
+        chat_event_handler=chat_event_handler,
+        handlers_registry=None,
+    )
+
+    return components, create_handlers_registry
+
+
 def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: RedisClient) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
@@ -839,8 +1026,25 @@ def build_bot(
     # Создаём логгер для bot-слоя
     bot_logger = get_logger("bot.wednesday_bot")
 
+    # Создаём Application через фабрику
+    from bot.bot_application_factory import create_telegram_application
+
+    application = create_telegram_application(bot_telegram_config)
+
+    # Создаём компоненты бота через фабрику
+    components = build_bot_components(
+        services=services,
+        application=application,
+        logger=bot_logger,
+    )
+
     # Создаём бот с внедрёнными зависимостями
-    bot = WednesdayBot(services=services, telegram_config=bot_telegram_config, logger=bot_logger)
+    bot = WednesdayBot(
+        services=services,
+        telegram_config=bot_telegram_config,
+        logger=bot_logger,
+        components=components,
+    )
 
     # Устанавливаем обратную ссылку в composition root для избежания циклической зависимости
     # bot_controller должен быть установлен здесь, а не в конструкторе WednesdayBot
@@ -849,14 +1053,14 @@ def build_bot(
     # Создаём messaging_service после создания бота, так как нужен bot.application.bot
     from infra.messaging.ptb import PTBMessagingService
 
-    messaging_service = PTBMessagingService(bot=bot.application.bot)
+    messaging_service = PTBMessagingService(bot=application.bot)
     services.messaging_service = messaging_service
 
     # Создаём chat_info_service после создания бота, так как нужен bot.application.bot
     from app.chat_info_service import ChatInfoService
 
     app_logger = get_logger("app")
-    chat_info_service = ChatInfoService(bot=bot.application.bot, logger=app_logger)
+    chat_info_service = ChatInfoService(bot=application.bot, logger=app_logger)
     services.chat_info_service = chat_info_service
 
     # Создаём dispatch сервисы с messaging_service

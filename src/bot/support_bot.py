@@ -13,12 +13,7 @@ from telegram.ext import Application, ContextTypes
 from app.bot_notification_builders import BotLifecycleNotificationBuilder
 from bot.base_handlers import BaseHandlers
 from bot.bot_application_factory import create_telegram_application
-from bot.bot_chat_access_validator import TIMEOUT_MEDIUM_SECONDS, BotChatAccessValidator
-from bot.bot_error_handler import BotErrorHandler
-from bot.bot_lifecycle_manager import BotLifecycleManager
 from bot.bot_lifecycle_mixin import BotLifecycleMixin
-from bot.chat_event_handler import ChatEventHandler
-from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
 from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
 from shared.protocols import ILogger
@@ -58,6 +53,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         services: SupportBotServices,
         telegram_config: BotTelegramConfig,
         logger: ILogger,
+        components: object,  # SupportBotComponents
         request_start_main: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Инициализирует SupportBot.
@@ -70,12 +66,16 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
             services: Контейнер сервисов для SupportBot (внедряется через DI).
             telegram_config: Конфигурация Telegram бота (внедряется через DI).
             logger: Экземпляр логгера для логирования операций (внедряется через DI).
+            components: Контейнер компонентов бота (внедряется через DI).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
                 Если None, запуск основного бота через /start будет недоступен.
 
         Raises:
             ValueError: Если services равен None.
+            TypeError: Если components не является SupportBotComponents.
         """
+        from infra.container import SupportBotComponents
+
         if services is None:
             raise ValueError("services не может быть None. Передайте SupportBotServices через Dependency Injection.")
 
@@ -96,33 +96,34 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         # Настройки приложения для доступа к конфигурации через DI
         self.settings: AppSettings = services.settings
 
-        # Инициализация менеджера жизненного цикла
-        self.lifecycle_manager = BotLifecycleManager(self.logger)
+        # Компоненты внедряются через конструктор (DI) - создаются в composition root
 
-        # Инициализация валидатора доступа к чатам
-        self.chat_validator = BotChatAccessValidator(self.logger, timeout=TIMEOUT_MEDIUM_SECONDS)
+        if not isinstance(components, SupportBotComponents):
+            raise TypeError(
+                f"components должен быть SupportBotComponents, получен {type(components).__name__}",
+            )
 
-        # Инициализация обработчика событий чата для синхронизации списка чатов
-        self.chat_event_handler = ChatEventHandler(
-            services=self.services,
-            bot=self.application.bot,
-            logger=self.logger,
-        )
-
-        # Инициализация обработчика ошибок
-        self.error_handler = BotErrorHandler(self.logger)
-
-        # Инициализация регистратора обработчиков
-        self.handlers_registry = SupportBotHandlersRegistry(
-            application=self.application,
-            support_bot=self,
-            chat_event_handler=self.chat_event_handler,
-            error_handler=self.error_handler,
-            logger=self.logger,
-        )
+        # Присваиваем компоненты (типы проверяются mypy через TYPE_CHECKING в container.py)
+        self.error_handler = components.error_handler
+        self.chat_validator = components.chat_validator
+        self.lifecycle_manager = components.lifecycle_manager
+        self.chat_event_handler = components.chat_event_handler
+        # handlers_registry может быть None, если создается после SupportBot (из-за циклической зависимости)
+        self.handlers_registry = components.handlers_registry  # type: ignore[assignment]
 
         # ID чата для отправки сообщений (если задан в конфигурации)
         self.chat_id: str | None = telegram_config.chat_id
+
+    def set_handlers_registry(self, handlers_registry: object) -> None:  # SupportBotHandlersRegistry
+        """Устанавливает handlers_registry после создания бота.
+
+        Используется для разрешения циклической зависимости:
+        SupportBotHandlersRegistry требует support_bot, который еще не создан.
+
+        Args:
+            handlers_registry: Регистратор обработчиков для SupportBot.
+        """
+        self.handlers_registry = handlers_registry  # type: ignore[assignment]
 
     async def start(self) -> None:
         """Запускает SupportBot и начинает обработку команд.

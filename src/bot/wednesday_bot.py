@@ -9,21 +9,10 @@ from telegram.ext import Application
 
 from app.bot_notification_builders import BotLifecycleNotificationBuilder
 from bot.bot_application_factory import create_telegram_application
-from bot.bot_chat_access_validator import BotChatAccessValidator
-from bot.bot_error_handler import BotErrorHandler
-from bot.bot_handlers_registry import BotHandlersRegistry
-from bot.bot_lifecycle_manager import BotLifecycleManager
 from bot.bot_lifecycle_mixin import BotLifecycleMixin
-from bot.chat_event_handler import ChatEventHandler
-from bot.handlers_admin import AdminHandlers
-from bot.handlers_models import ModelHandlers
-from bot.handlers_user import UserHandlers
 from shared.bot_services import BotServices
 from shared.config import BotTelegramConfig
 from shared.protocols import ILogger
-
-# Константы для магических чисел
-TIMEOUT_MEDIUM_SECONDS = 30.0
 
 
 class WednesdayBot(BotLifecycleMixin):
@@ -47,6 +36,7 @@ class WednesdayBot(BotLifecycleMixin):
         services: BotServices,
         telegram_config: BotTelegramConfig,
         logger: ILogger,
+        components: object,  # BotComponents
     ) -> None:
         """Инициализирует WednesdayBot.
 
@@ -54,17 +44,13 @@ class WednesdayBot(BotLifecycleMixin):
             services: Контейнер сервисов бота (внедряется через DI).
             telegram_config: Конфигурация Telegram бота (внедряется через DI).
             logger: Экземпляр логгера для логирования операций (внедряется через DI).
+            components: Контейнер компонентов бота (внедряется через DI).
 
-        Создает и настраивает все компоненты основного бота:
-        - Application для работы с Telegram API
-        - ImageGenerator для генерации изображений
-        - UsageTracker для отслеживания лимитов генераций
-        - ChatsStore для управления списком чатов
-        - PromptCache, UserStateCache, RateLimiter для работы с Redis
-        - UserHandlers, AdminHandlers, ModelHandlers для обработки команд
-
-        Инициализирует все необходимые сервисы и готовит бота к запуску.
+        Все компоненты (handlers, validators, managers) создаются в composition root
+        (infra/container.py) и передаются через DI для соблюдения принципа SRP.
         """
+        from infra.container import BotComponents
+
         self.logger = logger
         self.logger.info("Начало инициализации WednesdayBot")
 
@@ -78,46 +64,29 @@ class WednesdayBot(BotLifecycleMixin):
         # Флаг, чтобы избежать дублирующих сообщений об остановке
         self._stop_message_sent: bool = False
 
-        # Создаем обработчики команд
-        self.logger.info("Создание специализированных наборов хендлеров")
-        # Узкоспециализированные наборы для регистрации в PTB по зонам ответственности
-        self.user_handlers: UserHandlers = UserHandlers(self.services, logger=self.logger)
-        # Админские и пользовательские команды должны разделять общее состояние (лимиты, хранилища),
-        # поэтому используем единый контейнер сервисов.
-        self.admin_handlers: AdminHandlers = AdminHandlers(self.services, logger=self.logger)
-        self.model_handlers: ModelHandlers = ModelHandlers(self.services, logger=self.logger)
+        # Компоненты внедряются через конструктор (DI) - создаются в composition root
+
+        if not isinstance(components, BotComponents):
+            raise TypeError(f"components должен быть BotComponents, получен {type(components).__name__}")
+
+        # Присваиваем компоненты (типы проверяются mypy через TYPE_CHECKING в container.py)
+        self.user_handlers = components.user_handlers
+        self.admin_handlers = components.admin_handlers
+        self.model_handlers = components.model_handlers
+        self.error_handler = components.error_handler
+        self.chat_validator = components.chat_validator
+        self.lifecycle_manager = components.lifecycle_manager
+        self.chat_event_handler = components.chat_event_handler
+        self.handlers_registry = components.handlers_registry
 
         # ID чата для отправки сообщений
         self.chat_id: str | None = telegram_config.chat_id
         self.logger.info(f"Chat ID установлен: {self.chat_id}")
 
-        # Инициализация компонентов для управления жизненным циклом
-        self.error_handler = BotErrorHandler(self.logger)
-        self.chat_validator = BotChatAccessValidator(self.logger, timeout=TIMEOUT_MEDIUM_SECONDS)
-        self.lifecycle_manager = BotLifecycleManager(self.logger)
-        self.chat_event_handler = ChatEventHandler(
-            services=self.services,
-            bot=self.application.bot,
-            logger=self.logger,
-        )
-
-        # Инициализация регистратора обработчиков
-        self.handlers_registry = BotHandlersRegistry(
-            application=self.application,
-            user_handlers=self.user_handlers,
-            admin_handlers=self.admin_handlers,
-            model_handlers=self.model_handlers,
-            chat_event_handler=self.chat_event_handler,
-            error_handler=self.error_handler,
-            logger=self.logger,
-        )
-
         # Флаг состояния бота
         self.is_running: bool = False
         # Event для ожидания сигнала остановки (вместо busy-wait цикла)
         self._stop_event = asyncio.Event()
-
-        # Задача планировщика (инициализируется при старте)
 
         self.logger.info("WednesdayBot успешно инициализирован")
 

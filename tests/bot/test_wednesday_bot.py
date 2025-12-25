@@ -148,7 +148,27 @@ def wednesday_bot(monkeypatch: Any) -> Any:
     from unittest.mock import MagicMock
 
     mock_logger = MagicMock()
-    bot = wb_module.WednesdayBot(services=mock_services, telegram_config=telegram_config, logger=mock_logger)  # type: ignore[arg-type]
+
+    # Создаём моки компонентов
+    from infra.container import BotComponents
+
+    mock_components = BotComponents(
+        user_handlers=MagicMock(),
+        admin_handlers=MagicMock(),
+        model_handlers=MagicMock(),
+        error_handler=MagicMock(),
+        chat_validator=MagicMock(),
+        lifecycle_manager=MagicMock(),
+        chat_event_handler=MagicMock(),
+        handlers_registry=MagicMock(),
+    )
+
+    bot = wb_module.WednesdayBot(
+        services=mock_services,  # type: ignore[arg-type]
+        telegram_config=telegram_config,
+        logger=mock_logger,
+        components=mock_components,
+    )
     return bot
 
 
@@ -160,8 +180,9 @@ def test_wednesday_bot_initializes_components(wednesday_bot: Any) -> None:
     assert wednesday_bot.is_running is False
 
 
-def test_setup_handlers_registers_all_callbacks(wednesday_bot: Any) -> None:
-    wednesday_bot.setup_handlers()
+def test_handlers_registry_registers_all_callbacks(wednesday_bot: Any) -> None:
+    # Регистрация обработчиков происходит через handlers_registry.register_all()
+    wednesday_bot.handlers_registry.register_all()
     assert len(wednesday_bot.application.added_handlers) == EXPECTED_HANDLERS_COUNT
 
 
