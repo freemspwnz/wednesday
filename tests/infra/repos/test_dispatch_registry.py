@@ -30,7 +30,8 @@ async def test_dispatch_registry_mark_and_check(cleanup_tables: Any, async_postg
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     # Используем строку, как в реальном коде (asyncpg должен преобразовать через ::date)
-    await registry.mark_dispatched(today_str, "10:00", 12345)
+    async with async_postgres_pool.acquire() as conn:
+        await registry.mark_dispatched(today_str, "10:00", 12345, connection=conn)
 
     # Проверяем, что запись есть
     result = await registry.is_dispatched(today_str, "10:00", 12345)
@@ -43,8 +44,9 @@ async def test_dispatch_registry_mark_duplicate(cleanup_tables: Any, async_postg
 
     # Помечаем дважды (используем текущую дату)
     today_str = date.today().strftime("%Y-%m-%d")
-    await registry.mark_dispatched(today_str, "10:00", 12345)
-    await registry.mark_dispatched(today_str, "10:00", 12345)
+    async with async_postgres_pool.acquire() as conn:
+        await registry.mark_dispatched(today_str, "10:00", 12345, connection=conn)
+        await registry.mark_dispatched(today_str, "10:00", 12345, connection=conn)
 
     # Проверяем, что запись есть (не должно быть дубликатов)
     result = await registry.is_dispatched(today_str, "10:00", 12345)
@@ -57,7 +59,8 @@ async def test_dispatch_registry_cleanup_old(cleanup_tables: Any, async_postgres
 
     # Помечаем как отправленное (используем текущую дату)
     today_str = date.today().strftime("%Y-%m-%d")
-    await registry.mark_dispatched(today_str, "10:00", 12345)
+    async with async_postgres_pool.acquire() as conn:
+        await registry.mark_dispatched(today_str, "10:00", 12345, connection=conn)
 
     # Очищаем старые записи
     await registry.cleanup_old()

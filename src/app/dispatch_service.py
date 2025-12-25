@@ -303,17 +303,7 @@ class DispatchService(BaseService):
 
         if self._metrics:
             try:
-                # Используем helper-метод для получения connection из pool (вне UoW контекста)
-                if hasattr(self._metrics, 'increment_dispatch_failed_with_pool'):
-                    await self._metrics.increment_dispatch_failed_with_pool()
-                else:
-                    # Fallback для совместимости
-                    import asyncpg
-
-                    if hasattr(self._metrics, '_pool'):
-                        pool: asyncpg.Pool = self._metrics._pool  # type: ignore[attr-defined]
-                        async with pool.acquire() as conn:
-                            await self._metrics.increment_dispatch_failed(connection=conn)
+                await self._metrics.increment_dispatch_failed_with_pool()
             except ServiceError:  # pragma: no cover
                 pass
 

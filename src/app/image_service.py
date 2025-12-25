@@ -181,24 +181,19 @@ class ImageService(BaseService):
                 status="ok",
             )
             return caption
-        except (MemoryError, SystemExit, KeyboardInterrupt):
-            # Системные ошибки пробрасываем выше
-            raise
         except BaseException as e:
             # Неожиданная ошибка при выборе подписи — логируем как unexpected,
             # но продолжаем генерацию с пустой подписью (graceful degradation).
-            unexpected_error = UnexpectedImageError(
-                f"Unexpected error while selecting caption: {e}",
-                original_error=e,
+            self.handle_unexpected_error(
+                e,
+                UnexpectedImageError,
+                message=f"Ошибка при выборе подписи через CaptionService: {e}",
+                context={
+                    "event": "caption_selection_failed",
+                    "user_id": user_id_str,
+                },
             )
-            self.logger.warning(
-                f"Ошибка при выборе подписи через CaptionService: {unexpected_error}",
-                event="caption_selection_failed",
-                user_id=user_id_str,
-                status="warning",
-                error_type=type(unexpected_error).__name__,
-                error_message=str(unexpected_error),
-            )
+            # Возвращаем пустую подпись для graceful degradation
             return ""
 
     async def _generate_prompt(self, user_id_str: str | None) -> str:

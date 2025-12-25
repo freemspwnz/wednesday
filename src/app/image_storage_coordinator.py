@@ -7,8 +7,6 @@
 
 from __future__ import annotations
 
-import traceback
-
 from shared.base.base_service import BaseService
 from shared.base.exceptions import ServiceError, StorageError
 from shared.protocols import IImageStorageUnitOfWork, ILogger, IMetrics
@@ -92,8 +90,8 @@ class ImageStorageCoordinator(BaseService):
                 status="error",
                 error_type=type(e).__name__,
                 error_message=str(e),
-                traceback=traceback.format_exc(),
                 user_id=user_id_str,
+                exc_info=True,
             )
             # Пытаемся откатить
             try:
@@ -105,8 +103,8 @@ class ImageStorageCoordinator(BaseService):
                     status="error",
                     error_type=type(rollback_error).__name__,
                     error_message=str(rollback_error),
-                    traceback=traceback.format_exc(),
                     user_id=user_id_str,
+                    exc_info=True,
                 )
             return False
 

@@ -4,6 +4,37 @@
 
 ### Изменено
 
+- **Исправление нарушений слоёв: удаление fallback-кода с доступом к инфраструктурным деталям**:
+  - Добавлены helper-методы `increment_generation_success_with_pool()`, `increment_generation_failed_with_pool()`, `increment_dispatch_failed_with_pool()` в протокол `IMetrics`
+  - Добавлен helper-метод `increment_with_pool()` в протокол `IUsageTracker`
+  - Удален fallback-код с импортом `asyncpg` и доступом к приватному атрибуту `_pool` из всех файлов app слоя
+  - Удалены проверки `hasattr()` для методов, отсутствующих в протоколах
+  - Обновлены `image_generation_coordinator`, `frog_processing_service`, `dispatch_service`, `database_operations_service`, `dispatch_delivery_service` для использования только методов протоколов
+  - Устранено нарушение границ слоёв: app слой больше не зависит от деталей реализации инфраструктурного слоя
+  - Соответствие принципу Dependency Rule: зависимости направлены внутрь, от внешних слоёв к внутренним
+
+- **Исправление использования traceback.format_exc() в image_storage_coordinator.py**:
+  - Заменено ручное форматирование traceback на использование `exc_info=True` в logger.error()
+  - Улучшено логирование: traceback теперь автоматически включается через стандартный механизм логирования
+  - Удален импорт traceback из image_storage_coordinator.py
+  - Соответствие best practice: использование exc_info=True вместо ручного форматирования traceback
+
+- **Разделение обработки connection errors и unexpected errors в FrogProcessingService**:
+  - Создан метод `_handle_connection_error()` для обработки connection errors с graceful degradation (fallback)
+  - Удален метод `_handle_unexpected_error()` - unexpected errors теперь пробрасываются после логирования
+  - Обновлен `process_frog_request()`: connection errors (NetworkError, MessagingNetworkError, ConnectionError, TimeoutError, OSError) обрабатываются gracefully с fallback
+  - Unexpected errors теперь пробрасываются через `handle_unexpected_error()` из `BaseService` и затем raise
+  - Улучшена архитектура: connection errors (ожидаемые) обрабатываются gracefully, unexpected errors (программные баги) пробрасываются
+  - Соответствие best practice: app слой может пробрасывать unexpected ошибки, connection errors обрабатываются с graceful degradation
+
+- **Устранение дублирования обработки неожиданных ошибок: использование handle_unexpected_error()**:
+  - Обновлен `image_service.py`: заменено дублирующееся логирование на `handle_unexpected_error()` из `BaseService`
+  - Обновлен `frog_processing_service.py`: метод `_handle_unexpected_error()` теперь использует `handle_unexpected_error()` для единообразного логирования
+  - Проверено, что `image_generation_coordinator.py` уже правильно использует `handle_unexpected_error()`
+  - Улучшена консистентность обработки ошибок: все сервисы используют единый метод из `BaseService`
+  - Устранено дублирование кода: логирование ошибок централизовано в `BaseService.handle_unexpected_error()`
+  - Соответствие DRY принципу: единая точка обработки неожиданных ошибок
+
 - **Строгое требование connection для методов репозиториев: устранение рисков атомарности**:
   - Обновлены протоколы `IDispatchRegistry`, `IUsageTracker`, `IMetrics` - параметр `connection` теперь обязательный
   - Обновлены реализации: `DispatchRegistry.mark_dispatched`, `UsageTracker.increment`, `Metrics.increment_*` методы

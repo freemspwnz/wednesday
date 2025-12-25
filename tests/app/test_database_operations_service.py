@@ -88,7 +88,7 @@ async def test_database_operations_record_dispatch_success_rollback_on_error(
 
     # Создаем мок, который будет падать при вызове increment
     class FailingUsageTracker(UsageTracker):
-        async def increment(self, count: int = 1, when: datetime | None = None, connection: Any = None) -> int:
+        async def increment(self, connection: Any, count: int = 1, when: datetime | None = None) -> int:
             raise RuntimeError("Simulated error")
 
     failing_usage_tracker = FailingUsageTracker(pool=async_postgres_pool)

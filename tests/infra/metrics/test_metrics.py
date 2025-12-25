@@ -16,7 +16,7 @@ pytestmark = [
 async def test_metrics_increment_generation_success(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
-    await metrics.increment_generation_success()
+    await metrics.increment_generation_success_with_pool()
 
     summary = await metrics.get_summary()
     assert summary["generations_success"] == 1
@@ -27,7 +27,7 @@ async def test_metrics_increment_generation_success(cleanup_tables: Any, async_p
 async def test_metrics_increment_generation_failed(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
-    await metrics.increment_generation_failed()
+    await metrics.increment_generation_failed_with_pool()
 
     summary = await metrics.get_summary()
     assert summary["generations_failed"] == 1
@@ -38,7 +38,7 @@ async def test_metrics_increment_generation_failed(cleanup_tables: Any, async_po
 async def test_metrics_increment_dispatch_success(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
-    await metrics.increment_dispatch_success()
+    await metrics.increment_dispatch_success_with_pool()
 
     summary = await metrics.get_summary()
     assert summary["dispatches_success"] == 1
@@ -48,7 +48,7 @@ async def test_metrics_increment_dispatch_success(cleanup_tables: Any, async_pos
 async def test_metrics_increment_dispatch_failed(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
-    await metrics.increment_dispatch_failed()
+    await metrics.increment_dispatch_failed_with_pool()
 
     summary = await metrics.get_summary()
     assert summary["dispatches_failed"] == 1
@@ -58,7 +58,7 @@ async def test_metrics_increment_dispatch_failed(cleanup_tables: Any, async_post
 async def test_metrics_add_generation_time(cleanup_tables: Any, async_postgres_pool: Any) -> None:
     metrics = Metrics(pool=async_postgres_pool, logger=get_logger(__name__))
 
-    await metrics.increment_generation_success()
+    await metrics.increment_generation_success_with_pool()
     await metrics.add_generation_time(1.5)
     await metrics.add_generation_time(2.5)
 

@@ -795,7 +795,7 @@ async def test_dispatch_registry_mark_dispatched(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr("utils.dispatch_registry.get_postgres_pool", _mock_get_pool)
 
     registry = DispatchRegistry(pool=mock_pool)
-    await registry.mark_dispatched("2024-01-01", "09:00", 12345)
+    await registry.mark_dispatched("2024-01-01", "09:00", 12345, connection=mock_conn)
 
     mock_conn.execute.assert_called_once()
 
@@ -831,7 +831,7 @@ async def test_usage_tracker_increment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("utils.postgres_client.get_postgres_pool", _mock_get_pool)
 
     tracker = UsageTracker(pool=mock_pool, monthly_quota=100, frog_threshold=70)
-    result = await tracker.increment(count=1)
+    result = await tracker.increment(connection=mock_conn, count=1)
 
     assert isinstance(result, int)
     assert result >= 0
@@ -975,7 +975,7 @@ async def test_metrics_increment_generation_success(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("utils.metrics.get_postgres_pool", _mock_get_pool)
 
     metrics = Metrics(pool=mock_pool, logger=get_logger(__name__))
-    await metrics.increment_generation_success()
+    await metrics.increment_generation_success(connection=mock_conn)
 
     assert mock_conn.execute.await_count >= 1
 

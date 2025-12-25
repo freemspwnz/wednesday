@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import traceback
 from typing import Any
 
 from app.admin_notification_service import AdminNotificationService
@@ -20,6 +19,8 @@ from shared.base.exceptions import (
     CircuitBreakerOpen,
     ImageGenerationError,
     MessagingError,
+    MessagingNetworkError,
+    NetworkError,
     UnexpectedImageError,
 )
 from shared.protocols import ILogger, IUsageTracker
@@ -97,19 +98,7 @@ class FrogProcessingService(BaseService):
             # 3. Обновление usage (не критично для успешной отправки)
             if self._usage_tracker:
                 try:
-                    # Используем helper-метод для получения connection из pool (вне UoW контекста)
-                    if hasattr(self._usage_tracker, 'increment_with_pool'):
-                        await self._usage_tracker.increment_with_pool(1)
-                    else:
-                        # Fallback для совместимости: если helper недоступен, используем pool напрямую
-                        import asyncpg
-
-                        if hasattr(self._usage_tracker, '_pool'):
-                            pool: asyncpg.Pool = self._usage_tracker._pool  # type: ignore[attr-defined]
-                            async with pool.acquire() as conn:
-                                await self._usage_tracker.increment(connection=conn, count=1)
-                        else:
-                            self.logger.warning("UsageTracker pool недоступен, пропускаем обновление usage")
+                    await self._usage_tracker.increment_with_pool(1)
                 except (MemoryError, SystemExit, KeyboardInterrupt):
                     # Системные ошибки пробрасываем выше даже для не критичных операций
                     raise
@@ -149,9 +138,17 @@ class FrogProcessingService(BaseService):
                 status_message_id=status_message_id,
                 error_details=f"Ошибка генерации изображения: {e}",
             )
-        except UnexpectedImageError as e:
-            # Неожиданная ошибка генерации
-            return await self._handle_unexpected_error(
+        except (NetworkError, MessagingNetworkError) as e:
+            # Connection errors - ожидаемые ошибки сети, обрабатываем с graceful degradation
+            return await self._handle_connection_error(
+                chat_id=chat_id,
+                user_id=user_id,
+                status_message_id=status_message_id,
+                error=e,
+            )
+        except (ConnectionError, TimeoutError, OSError) as e:
+            # Стандартные Python connection/timeout errors - тоже обрабатываем gracefully
+            return await self._handle_connection_error(
                 chat_id=chat_id,
                 user_id=user_id,
                 status_message_id=status_message_id,
@@ -161,17 +158,19 @@ class FrogProcessingService(BaseService):
             # Ошибка отправки уже обработана в delivery service
             # Пробрасываем для верхнего уровня
             raise
-        except (MemoryError, SystemExit, KeyboardInterrupt):
-            # Системные ошибки пробрасываем выше без обёртки
-            raise
         except BaseException as e:
-            # Любая другая неожиданная ошибка
-            return await self._handle_unexpected_error(
-                chat_id=chat_id,
-                user_id=user_id,
-                status_message_id=status_message_id,
-                error=e,
+            # Действительно неожиданные ошибки - пробрасываем после логирования
+            unexpected_error = self.handle_unexpected_error(
+                e,
+                UnexpectedImageError,
+                message=f"Неожиданная ошибка при обработке команды /frog: {e}",
+                context={
+                    "event": "frog_request_unexpected_error",
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                },
             )
+            raise unexpected_error from e
 
     async def _handle_generation_failure(
         self,
@@ -220,20 +219,20 @@ class FrogProcessingService(BaseService):
 
         return {"status": "failed", "error": error_details}
 
-    async def _handle_unexpected_error(
+    async def _handle_connection_error(
         self,
         chat_id: int,
         user_id: int,
         status_message_id: int | None,
         error: BaseException,
     ) -> dict[str, Any]:
-        """Обрабатывает неожиданную ошибку.
+        """Обрабатывает connection errors с graceful degradation (fallback).
 
         Args:
             chat_id: ID чата.
             user_id: ID пользователя.
             status_message_id: ID статусного сообщения.
-            error: Исключение.
+            error: Исключение connection/network error.
 
         Returns:
             dict с status="failed" и описанием ошибки.
@@ -241,55 +240,45 @@ class FrogProcessingService(BaseService):
         error_type = type(error).__name__
         error_str = str(error)
 
-        # Определяем тип ошибки для более информативного сообщения
-        if "ConnectError" in error_type or "ConnectionError" in error_type or "Connection" in error_str:
-            error_details = (
-                f"Ошибка подключения к API при обработке команды /frog для пользователя {user_id}.\n"
-                f"Тип: {error_type}\n"
-                f"Детали: {error_str[:200]}\n\n"
-                "Возможные причины:\n"
-                "- Проблемы с интернет-соединением\n"
-                "- Kandinsky API временно недоступен\n"
-                "- Проблемы с прокси (если используется)\n"
-                "- Блокировка доступа на стороне провайдера"
-            )
-        else:
-            error_details = (
-                f"Произошла ошибка при обработке команды /frog для пользователя {user_id}.\n"
-                f"Тип: {error_type}\n"
-                f"Детали: {error_str[:200]}"
-            )
-
-        self.logger.error(
-            f"Ошибка при обработке /frog: {error_type} - {error_str}",
-            event="frog_request_unexpected_error",
-            status="error",
+        # Логируем connection error как warning (ожидаемая ошибка)
+        self.logger.warning(
+            f"Connection error while processing /frog command: {error}",
+            event="frog_connection_error",
+            status="warning",
             user_id=user_id,
             chat_id=chat_id,
             error_type=error_type,
-            error_message=error_str,
-            exc_info=True,
+            error_message=error_str[:200],
         )
 
-        # Используем delivery service для fallback
+        error_details = (
+            f"Ошибка подключения к API при обработке команды /frog для пользователя {user_id}.\n"
+            f"Тип: {error_type}\n"
+            f"Детали: {error_str[:200]}\n\n"
+            "Возможные причины:\n"
+            "- Проблемы с интернет-соединением\n"
+            "- Kandinsky API временно недоступен\n"
+            "- Проблемы с прокси (если используется)\n"
+            "- Блокировка доступа на стороне провайдера"
+        )
+
+        # Используем delivery service для fallback (graceful degradation)
         await self._delivery_service.send_fallback_to_user(
             chat_id=chat_id,
             user_id=user_id,
             image_service=self._image_service,
             status_message_id=status_message_id,
             friendly_message=(
-                "🐸 К сожалению, произошла ошибка при генерации.\n"
+                "🐸 К сожалению, произошла ошибка подключения при генерации.\n"
                 "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
             ),
         )
 
-        # Уведомление администраторов с трейсом
+        # Уведомление администраторов (без трейса для connection errors - это ожидаемые ошибки)
         if self._admin_notifier:
-            full_trace = traceback.format_exc()
             await self._admin_notifier.notify_generation_failure(
                 user_id=user_id,
                 error_details=error_details,
-                traceback_str=full_trace,
             )
 
         return {"status": "failed", "error": error_details}

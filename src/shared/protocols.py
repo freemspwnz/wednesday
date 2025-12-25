@@ -62,6 +62,27 @@ class IMetrics(Protocol):
         """Увеличивает счётчик срабатываний circuit breaker."""
         ...
 
+    async def increment_generation_success_with_pool(self) -> None:
+        """Увеличивает счётчик успешных генераций, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+        """
+        ...
+
+    async def increment_generation_failed_with_pool(self) -> None:
+        """Увеличивает счётчик неудачных генераций, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+        """
+        ...
+
+    async def increment_dispatch_failed_with_pool(self) -> None:
+        """Увеличивает счётчик неудачных отправок, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+        """
+        ...
+
     async def get_summary(self) -> dict[str, Any]:
         """Возвращает сводку всех метрик производительности.
 
@@ -325,6 +346,24 @@ class IUsageTracker(Protocol):
 
         Args:
             connection: Соединение БД для использования в транзакции (обязательно).
+            count: Количество генераций для добавления (по умолчанию 1).
+            when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
+
+        Returns:
+            Новое значение счётчика генераций за месяц.
+        """
+        ...
+
+    async def increment_with_pool(
+        self,
+        count: int = 1,
+        when: datetime | None = None,
+    ) -> int:
+        """Увеличивает счётчик генераций за месяц, получая connection из pool.
+
+        Helper-метод для использования вне UoW контекста.
+
+        Args:
             count: Количество генераций для добавления (по умолчанию 1).
             when: Дата для учёта генераций. Если не указана, используется текущая дата UTC.
 

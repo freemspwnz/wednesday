@@ -314,29 +314,9 @@ class ImageGenerationCoordinator(BaseService):
 
         try:
             if operation == "generation_success":
-                # Используем helper-метод для получения connection из pool (вне UoW контекста)
-                if hasattr(self._metrics, 'increment_generation_success_with_pool'):
-                    await self._metrics.increment_generation_success_with_pool()
-                else:
-                    # Fallback для совместимости
-                    import asyncpg
-
-                    if hasattr(self._metrics, '_pool'):
-                        metrics_pool: asyncpg.Pool = self._metrics._pool  # type: ignore[attr-defined]
-                        async with metrics_pool.acquire() as conn:
-                            await self._metrics.increment_generation_success(connection=conn)
+                await self._metrics.increment_generation_success_with_pool()
             elif operation == "generation_failed":
-                # Используем helper-метод для получения connection из pool (вне UoW контекста)
-                if hasattr(self._metrics, 'increment_generation_failed_with_pool'):
-                    await self._metrics.increment_generation_failed_with_pool()
-                else:
-                    # Fallback для совместимости
-                    import asyncpg
-
-                    if hasattr(self._metrics, '_pool'):
-                        metrics_pool: asyncpg.Pool = self._metrics._pool  # type: ignore[attr-defined]
-                        async with metrics_pool.acquire() as conn:
-                            await self._metrics.increment_generation_failed(connection=conn)
+                await self._metrics.increment_generation_failed_with_pool()
             elif operation == "cache_hit":
                 await self._metrics.increment_cache_hit()
             elif operation == "circuit_breaker_trip":

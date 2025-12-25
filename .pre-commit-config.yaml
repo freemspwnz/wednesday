@@ -133,7 +133,7 @@ repos:
     hooks:
       - id: check-test-quality
         name: Check test quality (markers, fixtures)
-        entry: python tests/check_test_quality.py
+        entry: python3 tests/check_test_quality.py
         language: system
         pass_filenames: false
         stages: [pre-commit]

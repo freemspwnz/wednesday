@@ -44,11 +44,11 @@ async def test_usage_tracker_increment_and_limits(cleanup_tables: Any, async_pos
     )
     when = datetime(2025, 1, 1)
 
-    await tracker.increment(TEST_INCREMENT_2, when=when)
+    await tracker.increment_with_pool(count=TEST_INCREMENT_2, when=when)
     assert await tracker.get_month_total(when=when) == TEST_INCREMENT_2
     assert await tracker.can_use_frog(when=when) is True
 
-    await tracker.increment(TEST_INCREMENT_3, when=when)
+    await tracker.increment_with_pool(count=TEST_INCREMENT_3, when=when)
     assert await tracker.get_month_total(when=when) == TEST_TOTAL_5
     assert await tracker.can_use_frog(when=when) is False
 
@@ -94,7 +94,7 @@ async def test_usage_tracker_increment_with_connection(
     mock_logger.bind.return_value = mock_logger
     async with DatabaseUnitOfWork(pool=async_postgres_pool, logger=mock_logger) as uow:
         connection = uow.connection
-        result = await tracker.increment(TEST_INCREMENT_2, when=when, connection=connection)
+        result = await tracker.increment(connection=connection, count=TEST_INCREMENT_2, when=when)
 
     # После коммита транзакции проверяем, что значение сохранилось
     assert result == TEST_INCREMENT_2
