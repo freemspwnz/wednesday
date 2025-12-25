@@ -12,7 +12,11 @@ from shared.protocols import IAdminsRepo, IChatsRepo, ILogger, IUsageTracker
 
 @dataclass
 class CommandResult:
-    """Результат выполнения админской команды."""
+    """Результат выполнения админской команды.
+
+    Использует dataclass для мутабельной структуры данных.
+    Стандарт: Dataclass для мутабельных DTO, TypedDict для неизменяемых структур.
+    """
 
     success: bool
     message: str
@@ -20,7 +24,11 @@ class CommandResult:
 
 @dataclass
 class ChatInfo:
-    """Информация о чате."""
+    """Информация о чате.
+
+    Использует dataclass для мутабельной структуры данных.
+    Стандарт: Dataclass для мутабельных DTO, TypedDict для неизменяемых структур.
+    """
 
     chat_id: int
     title: str | None = None

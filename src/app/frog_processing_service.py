@@ -29,6 +29,9 @@ from shared.protocols import ILogger, IUsageTracker
 class FrogRequestResult(TypedDict):
     """Типизированный результат обработки запроса генерации жабы.
 
+    Использует TypedDict для неизменяемой структуры данных (только для передачи).
+    Стандарт: TypedDict для неизменяемых структур, Dataclass для мутабельных DTO.
+
     Attributes:
         status: Статус обработки запроса ("success" или "failed").
         error: Описание ошибки, если status="failed", иначе None.

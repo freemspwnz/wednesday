@@ -7,10 +7,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TypedDict
 
 # Магические числа, связанные с форматированием и усечением сообщений
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000
+
+
+class MetricsSummary(TypedDict, total=False):
+    """Типизированная структура сводки метрик производительности.
+
+    Используется для типизации возвращаемого значения IMetrics.get_summary().
+    Все поля опциональны, так как метрики могут быть не настроены.
+    """
+
+    generations_total: int
+    generations_success: int
+    generations_failed: int
+    generations_retries: int
+    average_generation_time: str
+    dispatches_success: int
+    dispatches_failed: int
+    circuit_breaker_trips: int
 
 
 @dataclass
@@ -39,7 +56,7 @@ class StatusData:
     chats_count: int | None
 
     # Сырые данные для metrics_text
-    metrics_summary: dict[str, Any] | None
+    metrics_summary: MetricsSummary | None
 
 
 class StatusMessageBuilder:
@@ -87,7 +104,7 @@ class StatusMessageBuilder:
             return "N/A"
         return str(chats_count)
 
-    def _format_metrics_text(self, metrics_summary: dict[str, Any] | None) -> str:
+    def _format_metrics_text(self, metrics_summary: MetricsSummary | None) -> str:
         """Форматирует метрики производительности.
 
         Args:

@@ -14,9 +14,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from app.admin_dashboard_builders import (
+    MetricsSummary,
     ModelsListData,
     ModelsListMessageBuilder,
     StatusData,
@@ -126,10 +127,12 @@ class AdminDashboardService(BaseService):
                 )
 
         # Собираем сырые данные для metrics_text
-        metrics_summary = None
+        metrics_summary: MetricsSummary | None = None
         if self._metrics:
             try:
-                metrics_summary = await self._metrics.get_summary()
+                # Приводим тип, так как IMetrics.get_summary() возвращает dict[str, Any],
+                # но мы знаем структуру и типизируем её как MetricsSummary
+                metrics_summary = cast(MetricsSummary, await self._metrics.get_summary())
             except ServiceError as e:  # pragma: no cover
                 self.logger.warning(
                     f"Не удалось получить метрики производительности: {e}",
