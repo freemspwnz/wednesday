@@ -18,8 +18,8 @@ from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
 from infra.logging.logger import get_logger, log_all_methods
-from shared.bot_config import BotTelegramConfig
 from shared.bot_services import BotServices
+from shared.config import BotTelegramConfig
 
 # Константы для магических чисел
 CONNECTION_POOL_SIZE = 20
@@ -79,7 +79,7 @@ class WednesdayBot:
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
         # telegram_config.bot_token передается через DI
-        telegram_token: str = telegram_config.bot_token
+        telegram_token: str = telegram_config.bot_token or ""
         assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
         self.logger.info("Создание Application с токеном")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()

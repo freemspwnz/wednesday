@@ -25,8 +25,7 @@ from bot.wednesday_bot import (
 )
 from infra.logging.logger import get_logger, log_all_methods
 from infra.rate_limiting import RateLimiter
-from shared.bot_config import BotTelegramConfig
-from shared.config import AppSettings
+from shared.config import AppSettings, BotTelegramConfig
 from shared.protocols import IRateLimiter
 from shared.retry import retry_on_connect_error
 
@@ -99,7 +98,7 @@ class SupportBot(BaseHandlers):
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
         # telegram_config.bot_token передается через DI
-        telegram_token: str = telegram_config.bot_token
+        telegram_token: str = telegram_config.bot_token or ""
         assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
         self.request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = request_start_main

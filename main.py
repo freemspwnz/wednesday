@@ -196,8 +196,7 @@ class BotRunner:
                 self.logger.info("Создание экземпляра SupportBot")
                 # Создаём репозитории для SupportBot (инфраструктурный слой создаётся вне bot-слоя)
                 from infra.repos import AdminsRepo, ChatsRepo
-                from shared.bot_config import BotTelegramConfig
-                from shared.config import TelegramConfig
+                from shared.config import BotTelegramConfig, TelegramConfig
 
                 telegram_config_full = TelegramConfig()
                 admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config_full.admin_chat_id)

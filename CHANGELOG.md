@@ -5,7 +5,7 @@
 ### Рефакторинг
 
 - **Устранение зависимости от глобального config в bot-слое**:
-  - Создан `BotTelegramConfig` dataclass (`src/shared/bot_config.py`) для минимальной конфигурации bot-слоя
+  - Создан `BotTelegramConfig` dataclass в `src/shared/config.py` для минимальной конфигурации bot-слоя
   - Обновлен `WednesdayBot`: убран глобальный `config`, добавлен параметр `telegram_config: BotTelegramConfig` в конструктор
   - Обновлен `SupportBot`: убран глобальный `config`, добавлен параметр `telegram_config: BotTelegramConfig` в конструктор
   - Обновлен `build_bot()` в `container.py`: создает `BotTelegramConfig` и передает его в `WednesdayBot` через DI

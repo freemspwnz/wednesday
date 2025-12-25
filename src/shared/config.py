@@ -451,6 +451,40 @@ class AppSettings(BaseSettings):
         return self
 
 
+class BotTelegramConfig(BaseSettings):
+    """Минимальная конфигурация для bot-слоя.
+
+    Содержит только необходимые поля для инициализации ботов.
+    Не зависит от полного Config, что упрощает тестирование и соблюдение
+    границ слоёв архитектуры.
+
+    Attributes:
+        bot_token: Токен Telegram бота (обязательный).
+        chat_id: ID основного чата для рассылки (опциональный).
+    """
+
+    model_config = SettingsConfigDict(env_prefix="TELEGRAM_", extra="ignore", populate_by_name=True)
+
+    bot_token: str | None = Field(default=None, alias="BOT_TOKEN")
+    chat_id: str | None = Field(default=None, alias="CHAT_ID")
+
+    @field_validator("bot_token", mode="before")
+    @classmethod
+    def _read_bot_token(cls, v: str | None) -> str | None:
+        """Читает токен бота из переменной окружения или файла."""
+        if v is not None:
+            return v
+        return _get_env_value("TELEGRAM_BOT_TOKEN")
+
+    @field_validator("chat_id", mode="before")
+    @classmethod
+    def _read_chat_id(cls, v: str | None) -> str | None:
+        """Читает chat_id из переменной окружения или файла."""
+        if v is not None:
+            return v
+        return _get_env_value("CHAT_ID")
+
+
 class ImageConfig(BaseModel):
     """Константы для настройки генерации изображений."""
 

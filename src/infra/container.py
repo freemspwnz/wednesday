@@ -776,7 +776,7 @@ def build_bot(
 
     # Ленивый импорт для избежания циклических зависимостей
     from bot.wednesday_bot import WednesdayBot
-    from shared.bot_config import BotTelegramConfig
+    from shared.config import BotTelegramConfig
 
     if services is None:
         services = build_bot_services(config, db_pool, redis_client)
