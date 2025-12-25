@@ -5,12 +5,6 @@ from __future__ import annotations
 from telegram.ext import Application
 from telegram.request import HTTPXRequest
 
-from bot.bot_constants import (
-    CONNECT_TIMEOUT_SECONDS,
-    CONNECTION_POOL_SIZE,
-    POOL_TIMEOUT_SECONDS,
-    READ_TIMEOUT_SECONDS,
-)
 from shared.config import BotTelegramConfig
 
 
@@ -34,12 +28,12 @@ def create_telegram_application(telegram_config: BotTelegramConfig) -> Applicati
     if not telegram_token:
         raise ValueError("TELEGRAM_BOT_TOKEN должен быть установлен. Проверьте конфигурацию.")
 
-    # Создание HTTPXRequest с общими константами
+    # Создание HTTPXRequest с настройками из конфигурации
     request: HTTPXRequest = HTTPXRequest(
-        connection_pool_size=CONNECTION_POOL_SIZE,
-        pool_timeout=POOL_TIMEOUT_SECONDS,
-        read_timeout=READ_TIMEOUT_SECONDS,
-        connect_timeout=CONNECT_TIMEOUT_SECONDS,
+        connection_pool_size=telegram_config.connection_pool_size,
+        pool_timeout=telegram_config.pool_timeout,
+        read_timeout=telegram_config.read_timeout,
+        connect_timeout=telegram_config.connect_timeout,
     )
 
     # Создание и возврат Application

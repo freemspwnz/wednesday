@@ -461,12 +461,22 @@ class BotTelegramConfig(BaseSettings):
     Attributes:
         bot_token: Токен Telegram бота (обязательный).
         chat_id: ID основного чата для рассылки (опциональный).
+        connection_pool_size: Размер пула соединений для HTTPXRequest.
+        pool_timeout: Таймаут ожидания соединения из пула в секундах.
+        read_timeout: Таймаут чтения данных в секундах.
+        connect_timeout: Таймаут установления соединения в секундах.
     """
 
     model_config = SettingsConfigDict(env_prefix="TELEGRAM_", extra="ignore", populate_by_name=True)
 
     bot_token: str | None = Field(default=None, alias="BOT_TOKEN")
     chat_id: str | None = Field(default=None, alias="CHAT_ID")
+
+    # Конфигурация HTTPXRequest для PTB Application
+    connection_pool_size: int = Field(default=20, alias="CONNECTION_POOL_SIZE")
+    pool_timeout: float = Field(default=5.0, alias="POOL_TIMEOUT_SECONDS")
+    read_timeout: float = Field(default=20.0, alias="READ_TIMEOUT_SECONDS")
+    connect_timeout: float = Field(default=15.0, alias="CONNECT_TIMEOUT_SECONDS")
 
     @field_validator("bot_token", mode="before")
     @classmethod

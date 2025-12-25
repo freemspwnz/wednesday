@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     pass
 
 # Константы для SupportBot
-MAX_POLLING_ATTEMPTS = 4  # максимальное количество попыток запуска polling
-LAST_POLLING_ATTEMPT_INDEX = 3  # индекс последней попытки (0-based: 3 = 4-я попытка)
 MAX_LOG_DAYS_SUPPORT = 10  # максимальное количество дней для команды /log в SupportBot
 
 

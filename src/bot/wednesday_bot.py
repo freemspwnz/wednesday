@@ -21,11 +21,7 @@ from shared.bot_services import BotServices
 from shared.config import BotTelegramConfig
 
 # Константы для магических чисел
-MONTHLY_QUOTA_DEFAULT = 100
-FROG_THRESHOLD_DEFAULT = 70
-TIMEOUT_SHORT_SECONDS = 5.0
 TIMEOUT_MEDIUM_SECONDS = 30.0
-TIMEOUT_BOT_INFO_SECONDS = 30.0
 
 
 @log_all_methods()
@@ -461,7 +457,7 @@ class WednesdayBot:
             }
         except TimeoutError:
             error_msg = (
-                f"Таймаут при получении информации о боте ({TIMEOUT_BOT_INFO_SECONDS} секунд). "
+                f"Таймаут при получении информации о боте ({TIMEOUT_MEDIUM_SECONDS} секунд). "
                 "Возможные причины: проблемы с интернет-соединением, недоступность Telegram API."
             )
             self.logger.error(error_msg)

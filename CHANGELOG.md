@@ -4,6 +4,13 @@
 
 ### Исправлено
 
+- **Перенос констант HTTPXRequest в BotTelegramConfig**:
+  - Добавлены поля конфигурации HTTPXRequest (`connection_pool_size`, `pool_timeout`, `read_timeout`, `connect_timeout`) в `BotTelegramConfig`
+  - Обновлена фабрика `bot_application_factory.py` для использования значений из конфигурации вместо отдельного модуля констант
+  - Удален избыточный модуль `bot_constants.py`
+  - Улучшена конфигурируемость: настройки HTTPXRequest можно изменять через переменные окружения
+  - Улучшена архитектура: конфигурация централизована в `shared/config.py`
+
 - **Устранено дублирование кода между WednesdayBot и SupportBot**:
   - Создан модуль `bot_constants.py` с общими константами для конфигурации HTTPXRequest
   - Создан `bot_application_factory.py` для единообразного создания PTB Application
