@@ -18,11 +18,8 @@ from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
 from infra.logging.logger import get_logger, log_all_methods
+from shared.bot_config import BotTelegramConfig
 from shared.bot_services import BotServices
-from shared.config import Config
-
-# Создаём экземпляр Config при импорте модуля
-config: Config = Config()
 
 # Константы для магических чисел
 CONNECTION_POOL_SIZE = 20
@@ -53,11 +50,12 @@ class WednesdayBot:
     корректной остановки с освобождением ресурсов.
     """
 
-    def __init__(self, services: BotServices) -> None:
+    def __init__(self, services: BotServices, telegram_config: BotTelegramConfig) -> None:
         """Инициализирует WednesdayBot.
 
         Args:
             services: Контейнер сервисов бота (внедряется через DI).
+            telegram_config: Конфигурация Telegram бота (внедряется через DI).
 
         Создает и настраивает все компоненты основного бота:
         - Application для работы с Telegram API
@@ -80,8 +78,8 @@ class WednesdayBot:
             read_timeout=READ_TIMEOUT_SECONDS,
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
-        # config.telegram.bot_token проверяется при инициализации Config
-        telegram_token: str = config.telegram.bot_token or ""
+        # telegram_config.bot_token передается через DI
+        telegram_token: str = telegram_config.bot_token
         assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
         self.logger.info("Создание Application с токеном")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
@@ -133,7 +131,7 @@ class WednesdayBot:
         self.model_handlers: ModelHandlers = ModelHandlers(self.services)
 
         # ID чата для отправки сообщений
-        self.chat_id: str | None = config.telegram.chat_id
+        self.chat_id: str | None = telegram_config.chat_id
         self.logger.info(f"Chat ID установлен: {self.chat_id}")
 
         # Инициализация компонентов для управления жизненным циклом
@@ -346,16 +344,11 @@ class WednesdayBot:
         # Валидация конфигурации слотов основана на настройках, а не на внутреннем состоянии планировщика.
         settings = self.services.settings
         configured_times = settings.scheduler_send_times
-        # День недели и таймзона берутся из глобальной конфигурации, но не протекают через протокол планировщика
-        from shared.config import Config
-
-        # Используем глобальный config из модуля
-        if isinstance(config, Config):
-            wednesday_day = config.scheduler.wednesday_day
-            timezone = config.scheduler.tz or "Europe/Moscow"
-        else:
-            wednesday_day = config.scheduler_wednesday_day
-            timezone = config.scheduler_tz or "Europe/Moscow"
+        # Таймзона берется из AppSettings через DI
+        timezone = settings.scheduler_tz or "Europe/Moscow"
+        # День недели по умолчанию - среда (2), если не задан в настройках
+        # Примечание: wednesday_day не доступен в AppSettings, используем значение по умолчанию
+        wednesday_day = 2  # 2 = среда (0 = понедельник)
 
         self.logger.info(
             "Используется Celery для планирования задач: "

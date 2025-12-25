@@ -139,8 +139,13 @@ def wednesday_bot(monkeypatch: Any) -> Any:
     monkeypatch.setattr(wb_module, "ChatMemberHandler", DummyChatMemberHandler)
     monkeypatch.setattr(wb_module, "filters", SimpleNamespace(COMMAND="COMMAND"))
 
+    # Создаём мок конфигурации для тестов
+    from shared.bot_config import BotTelegramConfig
+
+    telegram_config = BotTelegramConfig(bot_token="test_token", chat_id="123")
+
     # Создаём бот с внедрёнными сервисами через DI
-    bot = wb_module.WednesdayBot(services=mock_services)  # type: ignore[arg-type]
+    bot = wb_module.WednesdayBot(services=mock_services, telegram_config=telegram_config)  # type: ignore[arg-type]
     return bot
 
 

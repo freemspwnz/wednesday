@@ -196,19 +196,26 @@ class BotRunner:
                 self.logger.info("Создание экземпляра SupportBot")
                 # Создаём репозитории для SupportBot (инфраструктурный слой создаётся вне bot-слоя)
                 from infra.repos import AdminsRepo, ChatsRepo
+                from shared.bot_config import BotTelegramConfig
                 from shared.config import TelegramConfig
 
-                telegram_config = TelegramConfig()
-                admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config.admin_chat_id)
+                telegram_config_full = TelegramConfig()
+                admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config_full.admin_chat_id)
                 chats_repo = ChatsRepo(pool=postgres_pool)
+
+                # Извлекаем только необходимые поля для bot-слоя (соблюдение границ слоёв)
+                bot_telegram_config = BotTelegramConfig(
+                    bot_token=telegram_config_full.bot_token or "",
+                    chat_id=telegram_config_full.chat_id,
+                )
 
                 self.support_bot = SupportBot(
                     redis_client=redis_client,
                     postgres_pool=postgres_pool,
                     admins_repo=admins_repo,
                     chats_repo=chats_repo,
+                    telegram_config=bot_telegram_config,
                     request_start_main=request_start_main,
-                    config=config,
                 )
                 # Если есть отложенное редактирование для статуса остановки основного — передадим SupportBot
                 try:

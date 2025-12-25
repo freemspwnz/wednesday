@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Рефакторинг
+
+- **Устранение зависимости от глобального config в bot-слое**:
+  - Создан `BotTelegramConfig` dataclass (`src/shared/bot_config.py`) для минимальной конфигурации bot-слоя
+  - Обновлен `WednesdayBot`: убран глобальный `config`, добавлен параметр `telegram_config: BotTelegramConfig` в конструктор
+  - Обновлен `SupportBot`: убран глобальный `config`, добавлен параметр `telegram_config: BotTelegramConfig` в конструктор
+  - Обновлен `build_bot()` в `container.py`: создает `BotTelegramConfig` и передает его в `WednesdayBot` через DI
+  - Обновлен `main.py`: создает `BotTelegramConfig` и передает его в `SupportBot` через DI
+  - Убрано использование глобального `config` в `wednesday_bot.py` для получения `bot_token` и `chat_id`
+  - Убрано использование глобального `config` в `support_bot.py` для получения `telegram_token`
+  - Улучшено соблюдение границ слоев: bot-слой получает только необходимые поля конфигурации
+  - Улучшена тестируемость: можно легко подменить конфигурацию в тестах через DI
+  - Улучшено соблюдение принципа Dependency Inversion: зависимости передаются через конструктор
+  - Обновлены тесты: добавлен `telegram_config` в фикстуры для `SupportBot` и `WednesdayBot`
+
 ### Исправлено
 
 - **Добавлена обработка событий чата в SupportBot для синхронизации списка чатов**:

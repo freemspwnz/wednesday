@@ -25,16 +25,14 @@ from bot.wednesday_bot import (
 )
 from infra.logging.logger import get_logger, log_all_methods
 from infra.rate_limiting import RateLimiter
-from shared.config import AppSettings, Config
+from shared.bot_config import BotTelegramConfig
+from shared.config import AppSettings
 from shared.protocols import IRateLimiter
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
     from infra.redis.redis_client import RedisClient
     from shared.protocols import IAdminsRepo, IChatsRepo
-
-# Создаём экземпляр Config при импорте модуля
-config: Config = Config()
 
 # Константы для SupportBot
 MAX_POLLING_ATTEMPTS = 4  # максимальное количество попыток запуска polling
@@ -71,8 +69,8 @@ class SupportBot(BaseHandlers):
         postgres_pool: asyncpg.Pool,
         admins_repo: "IAdminsRepo",
         chats_repo: "IChatsRepo",
+        telegram_config: BotTelegramConfig,
         request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
-        config: Config | None = None,
     ) -> None:
         """Инициализирует SupportBot.
 
@@ -85,10 +83,10 @@ class SupportBot(BaseHandlers):
             postgres_pool: Пул подключений PostgreSQL (ОБЯЗАТЕЛЬНЫЙ, для BotServices).
             admins_repo: Репозиторий администраторов (ОБЯЗАТЕЛЬНЫЙ, для BaseHandlers).
             chats_repo: Репозиторий чатов (ОБЯЗАТЕЛЬНЫЙ, для обработки событий чата).
+            telegram_config: Конфигурация Telegram бота (внедряется через DI).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
                 Принимает словарь с метаданными (chat_id, message_id) для редактирования статусного
                 сообщения. Если None, запуск основного бота через /start будет недоступен.
-            config: Экземпляр Config. Если None, используется глобальный config.
 
         Raises:
             ValueError: Если redis_client, postgres_pool, admins_repo или chats_repo равны None.
@@ -100,15 +98,8 @@ class SupportBot(BaseHandlers):
             read_timeout=READ_TIMEOUT_SECONDS,
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
-        # Используем переданный config или глобальный
-        if config is None:
-            # Используем глобальный config из модуля (импортирован в начале файла)
-            config_obj = globals()["config"]
-        else:
-            config_obj = config  # Используем переданный config
-
-        # config_obj.telegram_token проверяется в _validate_required_vars, поэтому не может быть None
-        telegram_token: str = config_obj.telegram_token or ""
+        # telegram_config.bot_token передается через DI
+        telegram_token: str = telegram_config.bot_token
         assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
         self.request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = request_start_main

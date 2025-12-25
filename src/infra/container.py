@@ -776,12 +776,19 @@ def build_bot(
 
     # Ленивый импорт для избежания циклических зависимостей
     from bot.wednesday_bot import WednesdayBot
+    from shared.bot_config import BotTelegramConfig
 
     if services is None:
         services = build_bot_services(config, db_pool, redis_client)
 
+    # Извлекаем только необходимые поля для bot-слоя (соблюдение границ слоёв)
+    bot_telegram_config = BotTelegramConfig(
+        bot_token=config.telegram.bot_token or "",
+        chat_id=config.telegram.chat_id,
+    )
+
     # Создаём бот с внедрёнными зависимостями
-    bot = WednesdayBot(services=services)
+    bot = WednesdayBot(services=services, telegram_config=bot_telegram_config)
 
     # Обратная ссылка уже установлена в конструкторе бота,
     # но убеждаемся, что она корректна
