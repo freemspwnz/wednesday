@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Устранена утечка инфраструктурных деталей в bot-слое**:
+  - Убраны импорты из `infra.container` внутри методов `__init__` в `WednesdayBot` и `SupportBot`
+  - Использован `TYPE_CHECKING` для типизации компонентов без импорта во время выполнения
+  - Улучшена типизация: заменен `object` на конкретные типы (`BotComponents`, `SupportBotComponents`)
+  - Убраны проверки `isinstance` для компонентов, так как тип гарантирован через типизацию
+  - Улучшена типизация `handlers_registry` в `SupportBot` через протокол `IHandlersRegistry`
+  - Убраны `type: ignore` комментарии через правильную типизацию
+  - Улучшено соблюдение принципа Dependency Inversion: bot-слой не зависит от infra-слоя во время выполнения
+  - Улучшена тестируемость: можно легко передать моки компонентов без зависимости от infra-контейнера
+  - Улучшена поддерживаемость: изменения в инфраструктурном слое не требуют изменений в bot-слое
+
 - **Устранено нарушение SRP в WednesdayBot и SupportBot через вынос создания компонентов в фабрики**:
   - Создан dataclass `BotComponents` и фабрика `build_bot_components()` в `container.py` для создания всех компонентов WednesdayBot
   - Создан dataclass `SupportBotComponents` и фабрика `build_support_bot_components()` в `container.py` для создания всех компонентов SupportBot

@@ -34,7 +34,7 @@ class BotLifecycleMixin:
     is_running: bool
     _stop_event: asyncio.Event
     services: BotServices | SupportBotServices
-    handlers_registry: IHandlersRegistry
+    handlers_registry: IHandlersRegistry | None
     chat_validator: IChatValidator
     chat_id: str | int | None
 
@@ -171,6 +171,8 @@ class BotLifecycleMixin:
             Exception: Если не удалось выполнить какой-либо шаг последовательности.
         """
         # 1. Регистрация обработчиков
+        if self.handlers_registry is None:
+            raise RuntimeError("handlers_registry не установлен. Убедитесь, что он установлен перед вызовом start().")
         self.handlers_registry.register_all()
 
         # 2. Валидация доступа к чату (если chat_id задан)

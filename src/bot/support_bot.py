@@ -16,11 +16,12 @@ from bot.bot_application_factory import create_telegram_application
 from bot.bot_lifecycle_mixin import BotLifecycleMixin
 from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
-from shared.protocols import ILogger
+from shared.protocols import IHandlersRegistry, ILogger
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
-    pass
+    from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
+    from infra.container import SupportBotComponents
 
 # Константы для SupportBot
 MAX_LOG_DAYS_SUPPORT = 10  # максимальное количество дней для команды /log в SupportBot
@@ -53,7 +54,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         services: SupportBotServices,
         telegram_config: BotTelegramConfig,
         logger: ILogger,
-        components: object,  # SupportBotComponents
+        components: SupportBotComponents,
         request_start_main: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Инициализирует SupportBot.
@@ -72,10 +73,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
 
         Raises:
             ValueError: Если services равен None.
-            TypeError: Если components не является SupportBotComponents.
         """
-        from infra.container import SupportBotComponents
-
         if services is None:
             raise ValueError("services не может быть None. Передайте SupportBotServices через Dependency Injection.")
 
@@ -97,24 +95,18 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         self.settings: AppSettings = services.settings
 
         # Компоненты внедряются через конструктор (DI) - создаются в composition root
-
-        if not isinstance(components, SupportBotComponents):
-            raise TypeError(
-                f"components должен быть SupportBotComponents, получен {type(components).__name__}",
-            )
-
-        # Присваиваем компоненты (типы проверяются mypy через TYPE_CHECKING в container.py)
+        # Тип гарантирован через типизацию параметра конструктора
         self.error_handler = components.error_handler
         self.chat_validator = components.chat_validator
         self.lifecycle_manager = components.lifecycle_manager
         self.chat_event_handler = components.chat_event_handler
         # handlers_registry может быть None, если создается после SupportBot (из-за циклической зависимости)
-        self.handlers_registry = components.handlers_registry  # type: ignore[assignment]
+        self.handlers_registry: IHandlersRegistry | None = components.handlers_registry
 
         # ID чата для отправки сообщений (если задан в конфигурации)
         self.chat_id: str | None = telegram_config.chat_id
 
-    def set_handlers_registry(self, handlers_registry: object) -> None:  # SupportBotHandlersRegistry
+    def set_handlers_registry(self, handlers_registry: SupportBotHandlersRegistry) -> None:
         """Устанавливает handlers_registry после создания бота.
 
         Используется для разрешения циклической зависимости:
@@ -123,7 +115,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         Args:
             handlers_registry: Регистратор обработчиков для SupportBot.
         """
-        self.handlers_registry = handlers_registry  # type: ignore[assignment]
+        self.handlers_registry = handlers_registry
 
     async def start(self) -> None:
         """Запускает SupportBot и начинает обработку команд.

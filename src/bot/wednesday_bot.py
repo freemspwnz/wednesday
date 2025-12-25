@@ -4,6 +4,7 @@
 """
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from telegram.ext import Application
 
@@ -13,6 +14,9 @@ from bot.bot_lifecycle_mixin import BotLifecycleMixin
 from shared.bot_services import BotServices
 from shared.config import BotTelegramConfig
 from shared.protocols import ILogger
+
+if TYPE_CHECKING:
+    from infra.container import BotComponents
 
 
 class WednesdayBot(BotLifecycleMixin):
@@ -36,7 +40,7 @@ class WednesdayBot(BotLifecycleMixin):
         services: BotServices,
         telegram_config: BotTelegramConfig,
         logger: ILogger,
-        components: object,  # BotComponents
+        components: BotComponents,
     ) -> None:
         """Инициализирует WednesdayBot.
 
@@ -49,8 +53,6 @@ class WednesdayBot(BotLifecycleMixin):
         Все компоненты (handlers, validators, managers) создаются в composition root
         (infra/container.py) и передаются через DI для соблюдения принципа SRP.
         """
-        from infra.container import BotComponents
-
         self.logger = logger
         self.logger.info("Начало инициализации WednesdayBot")
 
@@ -65,11 +67,7 @@ class WednesdayBot(BotLifecycleMixin):
         self._stop_message_sent: bool = False
 
         # Компоненты внедряются через конструктор (DI) - создаются в composition root
-
-        if not isinstance(components, BotComponents):
-            raise TypeError(f"components должен быть BotComponents, получен {type(components).__name__}")
-
-        # Присваиваем компоненты (типы проверяются mypy через TYPE_CHECKING в container.py)
+        # Тип гарантирован через типизацию параметра конструктора
         self.user_handlers = components.user_handlers
         self.admin_handlers = components.admin_handlers
         self.model_handlers = components.model_handlers
