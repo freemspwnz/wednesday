@@ -25,6 +25,8 @@ from shared.retry import retry_on_connect_error
 # Константы
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
 RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по умолчанию
+CHAT_INFO_TIMEOUT_DEFAULT = 5.0  # таймаут для получения информации о чате по умолчанию
+CHAT_TIMEOUT_DEFAULT = 10.0  # таймаут для получения полного объекта чата по умолчанию
 
 
 class BaseHandlers:
@@ -358,6 +360,48 @@ class BaseHandlers:
             self.logger.info("Команда была отменена")
             raise  # Пробрасываем дальше для корректной обработки
         # Критические ошибки (память, системные) должны пробрасываться выше
+
+    async def _gather_with_timeout(
+        self,
+        *tasks: Awaitable,
+        timeout: float | None = None,
+        return_exceptions: bool = True,
+    ) -> list:
+        """Выполняет asyncio.gather с таймаутом для всех задач.
+
+        Оборачивает каждую задачу в asyncio.wait_for для защиты от зависаний.
+        Если таймаут не указан, используется значение по умолчанию.
+
+        Args:
+            *tasks: Асинхронные задачи для параллельного выполнения.
+            timeout: Таймаут для каждой задачи в секундах. Если None, используется
+                CHAT_INFO_TIMEOUT_DEFAULT.
+            return_exceptions: Если True, исключения возвращаются как результаты,
+                а не пробрасываются.
+
+        Returns:
+            Список результатов выполнения задач. Если return_exceptions=True,
+            исключения включаются в список как элементы.
+
+        Side Effects:
+            - Логирует предупреждения при таймаутах.
+            - Защищает от зависания при проблемах с сетью.
+        """
+        if timeout is None:
+            timeout = CHAT_INFO_TIMEOUT_DEFAULT
+
+        async def _with_timeout(task: Awaitable) -> object:
+            """Оборачивает задачу в таймаут."""
+            try:
+                return await asyncio.wait_for(task, timeout=timeout)
+            except TimeoutError as e:
+                self.logger.warning(f"Таймаут {timeout}с при выполнении задачи")
+                if return_exceptions:
+                    return e
+                raise
+
+        wrapped_tasks = [_with_timeout(task) for task in tasks]
+        return await asyncio.gather(*wrapped_tasks, return_exceptions=return_exceptions)
 
     async def _send_logs_command(
         self,

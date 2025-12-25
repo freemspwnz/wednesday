@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import asyncio
-
 from telegram import Bot, Chat, Update, User
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
-from bot.base_handlers import BaseHandlers
+from bot.base_handlers import (
+    CHAT_INFO_TIMEOUT_DEFAULT,
+    CHAT_TIMEOUT_DEFAULT,
+    BaseHandlers,
+)
 from shared.base.exceptions import (
     AccessDeniedError,
     CircuitBreakerOpen,
@@ -261,8 +263,9 @@ class AdminHandlers(BaseHandlers):
         if not context.args or len(context.args) == 0:
             # Получаем информацию о чатах параллельно для улучшения производительности
             tasks = [self._get_chat_info_safe(context.bot, chat_id) for chat_id in chat_ids]
-            results: list[tuple[int, str] | BaseException] = await asyncio.gather(
+            results: list[tuple[int, str] | BaseException] = await self._gather_with_timeout(
                 *tasks,
+                timeout=CHAT_INFO_TIMEOUT_DEFAULT,
                 return_exceptions=True,
             )
 
@@ -666,8 +669,9 @@ class AdminHandlers(BaseHandlers):
 
         # Получаем информацию о чатах параллельно для улучшения производительности
         tasks = [self._get_chat_info_safe(context.bot, chat_id) for chat_id in chat_ids]
-        results: list[tuple[int, str] | BaseException] = await asyncio.gather(
+        results: list[tuple[int, str] | BaseException] = await self._gather_with_timeout(
             *tasks,
+            timeout=CHAT_INFO_TIMEOUT_DEFAULT,
             return_exceptions=True,
         )
 
@@ -1011,8 +1015,9 @@ class AdminHandlers(BaseHandlers):
 
                 # Получаем информацию об администраторах параллельно для улучшения производительности
                 tasks = [self._get_chat_safe(context.bot, admin_id) for admin_id in admins]
-                chat_results: list[object | None | BaseException] = await asyncio.gather(
+                chat_results: list[object | None | BaseException] = await self._gather_with_timeout(
                     *tasks,
+                    timeout=CHAT_TIMEOUT_DEFAULT,
                     return_exceptions=True,
                 )
 
