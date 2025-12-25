@@ -370,11 +370,20 @@ def build_admin_notification_service(
     Returns:
         Настроенный AdminNotificationService.
     """
+    from app.admin_notification_builders import (
+        DispatchErrorNotificationBuilder,
+        GenerationErrorNotificationBuilder,
+    )
     from app.admin_notification_service import AdminNotificationService
+
+    generation_builder = GenerationErrorNotificationBuilder()
+    dispatch_builder = DispatchErrorNotificationBuilder()
 
     return AdminNotificationService(
         messaging_service=messaging_service,
         admins_repo=admins_repo,
+        generation_builder=generation_builder,
+        dispatch_builder=dispatch_builder,
         logger=logger,
     )
 
