@@ -9,8 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import asyncpg
-
 from app.admin_access_service import AdminAccessService
 from app.admin_command_service import AdminCommandService
 from app.admin_dashboard_service import AdminDashboardService
@@ -35,7 +33,6 @@ from shared.protocols import (
 )
 
 if TYPE_CHECKING:
-    from infra.redis.redis_client import RedisClient
     from shared.protocols import ITaskQueue
 
 
@@ -48,17 +45,18 @@ class SupportBotServices:
     - chats для обработки событий чата
     - settings для конфигурации
     - admin_notification_service для уведомлений администраторов
-    - postgres_pool и redis_client для cleanup ресурсов
 
     Используется вместо полного BotServices для соблюдения принципа YAGNI
     и упрощения тестирования.
+
+    Cleanup ресурсов (postgres_pool, redis_client) выполняется через
+    глобальные функции close_postgres_pool() и close_redis(), что исключает
+    необходимость хранения инфраструктурных объектов в контейнере сервисов.
     """
 
     admins_repo: IAdminsRepo
     chats: IChatsRepo
     settings: AppSettings
-    postgres_pool: asyncpg.Pool
-    redis_client: RedisClient
     admin_notification_service: AdminNotificationService | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
@@ -94,11 +92,12 @@ class BotServices:
 
     Собирает в себе все основные сервисы, которые ранее прокидывались разрозненно
     через атрибуты `WednesdayBot` и `context.application.bot_data`.
-    """
 
-    # Инфраструктурные зависимости (ОБЯЗАТЕЛЬНЫЕ)
-    postgres_pool: asyncpg.Pool
-    redis_client: RedisClient
+    Cleanup ресурсов (postgres_pool, redis_client) выполняется через
+    глобальные функции close_postgres_pool() и close_redis(), что исключает
+    необходимость хранения инфраструктурных объектов в контейнере сервисов
+    и предотвращает протечку абстракции инфраструктурного слоя.
+    """
 
     usage: IUsageTracker
     chats: IChatsRepo

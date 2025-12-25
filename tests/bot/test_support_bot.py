@@ -103,13 +103,6 @@ def support_bot(monkeypatch: Any) -> Any:
 
     from unittest.mock import MagicMock
 
-    import asyncpg
-
-    from infra.redis.redis_client import _InMemoryRedis
-
-    redis_client = _InMemoryRedis()
-    # Создаём мок пула для тестов
-    mock_pool = MagicMock(spec=asyncpg.Pool)
     # Создаём мок репозиториев для тестов
     admins_repo = DummyAdminsRepo()
     chats_repo = DummyChatsRepo()
@@ -122,11 +115,8 @@ def support_bot(monkeypatch: Any) -> Any:
         admins_repo=admins_repo,
         chats=chats_repo,
         settings=app_settings,
-        postgres_pool=mock_pool,
-        redis_client=redis_client,
     )
     telegram_config = BotTelegramConfig(bot_token="test_token", chat_id="123")
-    from unittest.mock import MagicMock
 
     mock_logger = MagicMock()
     bot = sb_module.SupportBot(

@@ -196,8 +196,6 @@ async def test_command_handlers_start_help(
     )
     task_queue = CeleryTaskQueue()
     services = BotServices(
-        postgres_pool=MagicMock(),  # Mock для тестов
-        redis_client=redis_client,
         usage=MagicMock(),
         chats=MagicMock(),
         dispatch_registry=MagicMock(),

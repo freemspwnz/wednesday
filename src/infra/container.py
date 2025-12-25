@@ -488,7 +488,9 @@ def build_support_bot_services(
     - admins_repo для проверки прав администратора
     - chats для обработки событий чата
     - settings для конфигурации
-    - postgres_pool и redis_client для cleanup
+
+    Cleanup ресурсов выполняется через глобальные функции close_postgres_pool()
+    и close_redis(), поэтому инфраструктурные объекты не хранятся в контейнере.
 
     Args:
         db_pool: Пул подключений PostgreSQL.
@@ -524,8 +526,6 @@ def build_support_bot_services(
         admins_repo=admins_repo,
         chats=chats,
         settings=app_settings,
-        postgres_pool=db_pool,
-        redis_client=redis_client,
     )
 
 
@@ -710,8 +710,6 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
         model_management_service=model_management_service,
         admin_access_service=admin_access_service,
         admin_command_service=admin_command_service,
-        postgres_pool=db_pool,
-        redis_client=redis_client,
         messaging_service=None,  # будет установлен позже в bot слое
         database_operations=database_operations,
         admins_repo=admins_repo,
