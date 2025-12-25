@@ -7,7 +7,13 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
-from shared.base.exceptions import AccessDeniedError, ServiceError
+from shared.base.exceptions import (
+    AccessDeniedError,
+    CircuitBreakerOpen,
+    ImageGenerationError,
+    RepoError,
+    ServiceError,
+)
 from shared.bot_services import BotServices, SupportBotServices, require_bot_services
 from shared.retry import retry_on_connect_error
 
@@ -140,15 +146,30 @@ class AdminHandlers(BaseHandlers):
             self.logger.error(f"Ошибка валидации при получении статуса: {e}", exc_info=True)
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Ошибка при получении статуса",
+                "❌ Ошибка валидации данных",
             )
-        except Exception as e:
-            # Неожиданные ошибки - логируем с полным стеком и отправляем общее сообщение
-            self.logger.error(f"Неожиданная ошибка при получении статуса: {e}", exc_info=True)
+        except (TelegramError, NetworkError, TimedOut) as e:
+            # Сетевые ошибки Telegram API
+            self.logger.warning(f"Сетевая ошибка при получении статуса: {e}")
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Произошла неожиданная ошибка при получении статуса",
+                "❌ Временная проблема с Telegram API. Попробуйте позже.",
             )
+        except ServiceError as e:
+            # Ошибки сервисного слоя
+            self.logger.error(f"Ошибка сервиса при получении статуса: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                f"❌ Ошибка сервиса: {str(e)[:200]}",
+            )
+        except RepoError as e:
+            # Ошибки репозитория
+            self.logger.error(f"Ошибка репозитория при получении статуса: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                f"❌ Ошибка доступа к данным: {str(e)[:200]}",
+            )
+        # Критические ошибки (память, системные) должны пробрасываться выше
 
     async def admin_log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /log.
@@ -220,13 +241,21 @@ class AdminHandlers(BaseHandlers):
                 update.message,
                 "❌ Ошибка валидации при попытке остановить бота",
             )
-        except Exception as e:
-            # Неожиданные ошибки - логируем с полным стеком
-            self.logger.error(f"Неожиданная ошибка при попытке остановить бота через /stop: {e}", exc_info=True)
+        except (TelegramError, NetworkError, TimedOut) as e:
+            # Сетевые ошибки Telegram API
+            self.logger.warning(f"Сетевая ошибка при остановке бота: {e}")
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Произошла неожиданная ошибка при остановке бота",
+                "❌ Временная проблема с Telegram API. Попробуйте позже.",
             )
+        except ServiceError as e:
+            # Ошибки сервисного слоя
+            self.logger.error(f"Ошибка сервиса при остановке бота: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                f"❌ Ошибка сервиса: {str(e)[:200]}",
+            )
+        # Критические ошибки (память, системные) должны пробрасываться выше
 
     async def admin_force_send_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /force_send.
@@ -378,14 +407,22 @@ class AdminHandlers(BaseHandlers):
                 # Увеличиваем счетчик использования
                 if usage:
                     await usage.increment(1)
-            except Exception as e:
-                # Обрабатываем все ошибки генерации (CircuitBreakerOpen, ImageGenerationError и т.д.)
-                # используем fallback изображение
+            except (ImageGenerationError, CircuitBreakerOpen) as e:
+                # Ошибки генерации изображений - используем fallback
                 self.logger.warning(
                     f"Ошибка при генерации изображения, используем fallback: {e}",
                     exc_info=True,
                 )
                 use_fallback = True
+            except (ValueError, TypeError, AttributeError) as e:
+                # Ошибки валидации данных
+                self.logger.error(f"Ошибка валидации при генерации изображения: {e}", exc_info=True)
+                use_fallback = True
+            except ServiceError as e:
+                # Ошибки сервисного слоя
+                self.logger.error(f"Ошибка сервиса при генерации изображения: {e}", exc_info=True)
+                use_fallback = True
+            # Критические ошибки (память, системные) должны пробрасываться выше
         else:
             use_fallback = True
             self.logger.info("Лимит генераций исчерпан, используем fallback")
@@ -436,9 +473,16 @@ class AdminHandlers(BaseHandlers):
                     delay=2,
                 )
                 self.logger.info(f"Изображение отправлено главному админу {admin_chat_id}")
-            except Exception as e:
-                # Exception оправдан - отправка админу не критична, нужно продолжить работу
-                self.logger.warning(f"Не удалось отправить изображение главному админу: {e}", exc_info=True)
+            except (TelegramError, NetworkError, TimedOut) as e:
+                # Сетевые ошибки - отправка админу не критична, продолжаем работу
+                self.logger.warning(f"Сетевая ошибка при отправке изображения главному админу: {e}")
+            except (ValueError, TypeError, AttributeError) as e:
+                # Ошибки валидации данных
+                self.logger.warning(f"Ошибка валидации при отправке изображения главному админу: {e}", exc_info=True)
+            except ServiceError as e:
+                # Ошибки сервисного слоя
+                self.logger.warning(f"Ошибка сервиса при отправке изображения главному админу: {e}", exc_info=True)
+            # Критические ошибки (память, системные) должны пробрасываться выше
 
         # Отправляем изображение в целевые чаты
         success_count = 0
@@ -455,10 +499,23 @@ class AdminHandlers(BaseHandlers):
                 )
                 success_count += 1
                 self.logger.info(f"Изображение отправлено в чат {target_chat_id}")
-            except Exception as e:
-                # Exception оправдан - ошибка отправки в один чат не должна прерывать отправку в другие
+            except (TelegramError, NetworkError, TimedOut) as e:
+                # Сетевые ошибки - ошибка отправки в один чат не должна прерывать отправку в другие
                 failed_count += 1
-                self.logger.warning(f"Не удалось отправить изображение в чат {target_chat_id}: {e}", exc_info=True)
+                self.logger.warning(f"Сетевая ошибка при отправке изображения в чат {target_chat_id}: {e}")
+            except (ValueError, TypeError, AttributeError) as e:
+                # Ошибки валидации данных
+                failed_count += 1
+                self.logger.warning(
+                    f"Ошибка валидации при отправке изображения в чат {target_chat_id}: {e}", exc_info=True
+                )
+            except ServiceError as e:
+                # Ошибки сервисного слоя
+                failed_count += 1
+                self.logger.warning(
+                    f"Ошибка сервиса при отправке изображения в чат {target_chat_id}: {e}", exc_info=True
+                )
+            # Критические ошибки (память, системные) должны пробрасываться выше
 
         # Удаляем статусное сообщение и отправляем итоговое
         await self._safe_delete_message(status_msg)
@@ -677,9 +734,16 @@ class AdminHandlers(BaseHandlers):
                 delay=2,
             )
             self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
-        except Exception as e:
-            # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-            self.logger.error(f"Не удалось отправить список чатов после {3} попыток: {e}", exc_info=True)
+        except (TelegramError, NetworkError, TimedOut) as e:
+            # Сетевые ошибки Telegram API
+            self.logger.warning(f"Сетевая ошибка при отправке списка чатов: {e}")
+        except (ValueError, TypeError, AttributeError) as e:
+            # Ошибки валидации данных
+            self.logger.error(f"Ошибка валидации при отправке списка чатов: {e}", exc_info=True)
+        except ServiceError as e:
+            # Ошибки сервисного слоя
+            self.logger.error(f"Ошибка сервиса при отправке списка чатов: {e}", exc_info=True)
+        # Критические ошибки (память, системные) должны пробрасываться выше
 
     async def set_frog_limit_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_limit.
@@ -734,9 +798,18 @@ class AdminHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
+            except (TelegramError, NetworkError, TimedOut) as e:
+                # Сетевые ошибки Telegram API
+                self.logger.warning(f"Сетевая ошибка при отправке сообщения в set_frog_limit_command: {e}")
+            except (ValueError, TypeError, AttributeError) as e:
+                # Ошибки валидации данных
+                self.logger.error(
+                    f"Ошибка валидации при отправке сообщения в set_frog_limit_command: {e}", exc_info=True
+                )
+            except ServiceError as e:
+                # Ошибки сервисного слоя
+                self.logger.error(f"Ошибка сервиса при отправке сообщения в set_frog_limit_command: {e}", exc_info=True)
+            # Критические ошибки (память, системные) должны пробрасываться выше
         except ValueError as e:
             self.logger.error(f"set_frog_limit_command: ошибка валидации параметра: {e}", exc_info=True)
             try:
@@ -751,10 +824,30 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(
                     f"Не удалось отправить сообщение об ошибке после {3} попыток: {send_error}", exc_info=True
                 )
-        except Exception as e:
-            # Неожиданные ошибки - логируем с полным стеком
-            # Exception оправдан здесь, так как нужно гарантировать, что ошибка не сломает обработчик команды
-            self.logger.error(f"set_frog_limit_command: неожиданная ошибка: {e}", exc_info=True)
+        except (TelegramError, NetworkError, TimedOut) as e:
+            # Сетевые ошибки Telegram API
+            self.logger.warning(f"Сетевая ошибка в set_frog_limit_command: {e}")
+        except ServiceError as e:
+            # Ошибки сервисного слоя
+            self.logger.error(f"Ошибка сервиса в set_frog_limit_command: {e}", exc_info=True)
+            await self._safe_reply_text_with_error_logging(
+                update.message,
+                f"❌ Ошибка сервиса: {str(e)[:200]}",
+                error_context="сообщение об ошибке сервиса",
+                max_retries=3,
+                delay=2,
+            )
+        except RepoError as e:
+            # Ошибки репозитория
+            self.logger.error(f"Ошибка репозитория в set_frog_limit_command: {e}", exc_info=True)
+            await self._safe_reply_text_with_error_logging(
+                update.message,
+                f"❌ Ошибка доступа к данным: {str(e)[:200]}",
+                error_context="сообщение об ошибке репозитория",
+                max_retries=3,
+                delay=2,
+            )
+            # Критические ошибки (память, системные) должны пробрасываться выше
             await self._safe_reply_text_with_error_logging(
                 update.message,
                 "❌ Произошла неожиданная ошибка при изменении лимита",
@@ -814,9 +907,18 @@ class AdminHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
+            except (TelegramError, NetworkError, TimedOut) as e:
+                # Сетевые ошибки Telegram API
+                self.logger.warning(f"Сетевая ошибка при отправке сообщения в set_frog_used_command: {e}")
+            except (ValueError, TypeError, AttributeError) as e:
+                # Ошибки валидации данных
+                self.logger.error(
+                    f"Ошибка валидации при отправке сообщения в set_frog_used_command: {e}", exc_info=True
+                )
+            except ServiceError as e:
+                # Ошибки сервисного слоя
+                self.logger.error(f"Ошибка сервиса при отправке сообщения в set_frog_used_command: {e}", exc_info=True)
+            # Критические ошибки (память, системные) должны пробрасываться выше
         except ValueError:
             try:
                 await retry_on_connect_error(
