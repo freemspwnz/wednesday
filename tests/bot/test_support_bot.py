@@ -65,6 +65,19 @@ def support_bot(monkeypatch: Any) -> Any:
             self.admins.discard(user_id)
             return True
 
+    class DummyChatsRepo:
+        def __init__(self) -> None:
+            self.chats: dict[int, str] = {}
+
+        async def add_chat(self, chat_id: int, title: str | None = None) -> None:
+            self.chats[chat_id] = title or ""
+
+        async def remove_chat(self, chat_id: int) -> None:
+            self.chats.pop(chat_id, None)
+
+        async def list_chat_ids(self) -> list[int]:
+            return list(self.chats.keys())
+
     class DummyCommandHandler:
         def __init__(self, command: Any, callback: Any) -> None:
             self.command = command
@@ -75,9 +88,17 @@ def support_bot(monkeypatch: Any) -> Any:
             self.command_filter = command_filter
             self.callback = callback
 
+    class DummyChatMemberHandler:
+        MY_CHAT_MEMBER = "MY_CHAT_MEMBER"
+
+        def __init__(self, callback: Any, chat_member_type: Any) -> None:
+            self.callback = callback
+            self.chat_member_type = chat_member_type
+
     monkeypatch.setattr(sb_module, "AdminsRepo", DummyAdminsRepo)
     monkeypatch.setattr(sb_module, "CommandHandler", DummyCommandHandler)
     monkeypatch.setattr(sb_module, "MessageHandler", DummyMessageHandler)
+    monkeypatch.setattr(sb_module, "ChatMemberHandler", DummyChatMemberHandler)
     monkeypatch.setattr(sb_module, "filters", SimpleNamespace(COMMAND="COMMAND"))
 
     from unittest.mock import MagicMock
@@ -89,12 +110,14 @@ def support_bot(monkeypatch: Any) -> Any:
     redis_client = _InMemoryRedis()
     # Создаём мок пула для тестов
     mock_pool = MagicMock(spec=asyncpg.Pool)
-    # Создаём мок AdminsRepo для тестов
+    # Создаём мок репозиториев для тестов
     admins_repo = DummyAdminsRepo()
+    chats_repo = DummyChatsRepo()
     bot = sb_module.SupportBot(
         redis_client=redis_client,
         postgres_pool=mock_pool,
         admins_repo=admins_repo,
+        chats_repo=chats_repo,
     )
     return bot
 
@@ -123,7 +146,7 @@ def _make_context(args: Any = None) -> Any:
 
 def test_support_bot_setup_handlers(support_bot: Any) -> None:
     support_bot.setup_handlers()
-    EXPECTED_HANDLERS_COUNT = 4
+    EXPECTED_HANDLERS_COUNT = 5  # start, help, log, maintenance_message, chat_member
     assert len(support_bot.application.added_handlers) == EXPECTED_HANDLERS_COUNT
 
 

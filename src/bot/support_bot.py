@@ -9,11 +9,12 @@ from typing import TYPE_CHECKING, Any
 import asyncpg
 from telegram import Update
 from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
 from bot.base_handlers import BaseHandlers
 from bot.bot_state_coordinator import BotStateCoordinator, BotStateData
+from bot.chat_event_handler import ChatEventHandler
 
 # Константы для магических чисел (импортируем из wednesday_bot для консистентности)
 from bot.wednesday_bot import (
@@ -30,7 +31,7 @@ from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
     from infra.redis.redis_client import RedisClient
-    from shared.protocols import IAdminsRepo
+    from shared.protocols import IAdminsRepo, IChatsRepo
 
 # Создаём экземпляр Config при импорте модуля
 config: Config = Config()
@@ -64,11 +65,12 @@ class SupportBot(BaseHandlers):
     Использует минимальный BotServices (только с settings и rate_limiter).
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         redis_client: "RedisClient",
         postgres_pool: asyncpg.Pool,
         admins_repo: "IAdminsRepo",
+        chats_repo: "IChatsRepo",
         request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
         config: Config | None = None,
     ) -> None:
@@ -82,13 +84,14 @@ class SupportBot(BaseHandlers):
             redis_client: Redis-клиент для rate limiter (ОБЯЗАТЕЛЬНЫЙ).
             postgres_pool: Пул подключений PostgreSQL (ОБЯЗАТЕЛЬНЫЙ, для BotServices).
             admins_repo: Репозиторий администраторов (ОБЯЗАТЕЛЬНЫЙ, для BaseHandlers).
+            chats_repo: Репозиторий чатов (ОБЯЗАТЕЛЬНЫЙ, для обработки событий чата).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
                 Принимает словарь с метаданными (chat_id, message_id) для редактирования статусного
                 сообщения. Если None, запуск основного бота через /start будет недоступен.
             config: Экземпляр Config. Если None, используется глобальный config.
 
         Raises:
-            ValueError: Если redis_client, postgres_pool или admins_repo равны None.
+            ValueError: Если redis_client, postgres_pool, admins_repo или chats_repo равны None.
         """
         # Сначала создаем все необходимые компоненты для BotServices
         request: HTTPXRequest = HTTPXRequest(
@@ -172,12 +175,14 @@ class SupportBot(BaseHandlers):
             raise ValueError("postgres_pool не может быть None. Передайте пул через Dependency Injection.")
         if admins_repo is None:
             raise ValueError("admins_repo не может быть None. Передайте репозиторий через Dependency Injection.")
+        if chats_repo is None:
+            raise ValueError("chats_repo не может быть None. Передайте репозиторий через Dependency Injection.")
 
         services: BotServices = BotServices(
             postgres_pool=postgres_pool,
             redis_client=redis_client,
             usage=None,  # type: ignore[arg-type]
-            chats=None,  # type: ignore[arg-type]
+            chats=chats_repo,
             dispatch_registry=None,  # type: ignore[arg-type]
             metrics=None,  # type: ignore[arg-type]
             prompt_cache=None,  # type: ignore[arg-type]
@@ -199,6 +204,13 @@ class SupportBot(BaseHandlers):
             admin_chat_id=admin_chat_id_int,
         )
 
+        # Инициализация обработчика событий чата для синхронизации списка чатов
+        self.chat_event_handler = ChatEventHandler(
+            services=self.services,
+            bot=self.application.bot,
+            logger=self.logger,
+        )
+
     def setup_handlers(self) -> None:
         """Настраивает обработчики команд для SupportBot.
 
@@ -207,12 +219,20 @@ class SupportBot(BaseHandlers):
         - /help - справка по резервному боту
         - /log - отправка логов администратору
         - Обработчик неизвестных команд для сообщений о техработах
+        - Обработчик событий изменения статуса бота в чатах
         """
         self.application.add_handler(CommandHandler("start", self.start_main_command))
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("log", self.log_command))
         # Любые неизвестные команды – сообщение о техработах
         self.application.add_handler(MessageHandler(filters.COMMAND, self.maintenance_message))
+        # Обработчик событий изменения статуса бота в чатах
+        self.application.add_handler(
+            ChatMemberHandler(
+                self.chat_event_handler.on_my_chat_member,
+                ChatMemberHandler.MY_CHAT_MEMBER,
+            ),
+        )
 
     async def start(self) -> None:
         """Запускает SupportBot и начинает обработку команд.
