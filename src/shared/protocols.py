@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 else:
     import asyncpg
 
+# TypeVar для типизации connection в Unit of Work
+# Позволяет использовать разные типы connection (asyncpg.Connection, моки для тестов и т.д.)
+ConnectionType = TypeVar("ConnectionType", bound=asyncpg.Connection)
+
 
 @runtime_checkable
 class IMetrics(Protocol):
@@ -966,10 +970,17 @@ class IDispatchRegistry(Protocol):
 
 
 @runtime_checkable
-class IDatabaseUnitOfWork(Protocol):
-    """Протокол для Unit of Work управления транзакциями БД."""
+class IDatabaseUnitOfWork(Protocol[ConnectionType]):
+    """Протокол для Unit of Work управления транзакциями БД.
 
-    async def __aenter__(self) -> IDatabaseUnitOfWork:
+    Использует TypeVar для типизации connection, что позволяет использовать
+    разные типы connection (asyncpg.Connection, моки для тестов и т.д.).
+
+    Type Parameters:
+        ConnectionType: Тип соединения БД (по умолчанию asyncpg.Connection).
+    """
+
+    async def __aenter__(self) -> IDatabaseUnitOfWork[ConnectionType]:
         """Вход в контекстный менеджер. Начинает транзакцию."""
         ...
 
@@ -983,11 +994,12 @@ class IDatabaseUnitOfWork(Protocol):
         ...
 
     @property
-    def connection(self) -> asyncpg.Connection:
+    def connection(self) -> ConnectionType:
         """Возвращает соединение БД для использования в репозиториях.
 
         Returns:
             Соединение БД, используемое в текущей транзакции.
+            Тип определяется параметром ConnectionType протокола.
 
         Raises:
             RuntimeError: Если транзакция не начата.
@@ -996,14 +1008,22 @@ class IDatabaseUnitOfWork(Protocol):
 
 
 @runtime_checkable
-class IUnitOfWorkFactory(Protocol):
-    """Протокол для фабрики создания экземпляров Unit of Work."""
+class IUnitOfWorkFactory(Protocol[ConnectionType]):
+    """Протокол для фабрики создания экземпляров Unit of Work.
 
-    def __call__(self) -> IDatabaseUnitOfWork:
+    Использует TypeVar для типизации connection, что позволяет явно указать
+    тип connection, возвращаемого Unit of Work.
+
+    Type Parameters:
+        ConnectionType: Тип соединения БД (по умолчанию asyncpg.Connection).
+    """
+
+    def __call__(self) -> IDatabaseUnitOfWork[ConnectionType]:
         """Создает новый экземпляр Unit of Work.
 
         Returns:
             Новый экземпляр IDatabaseUnitOfWork для использования в транзакции.
+            Connection в возвращаемом Unit of Work будет иметь тип ConnectionType.
         """
         ...
 

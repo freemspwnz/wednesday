@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncpg
+
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError, UnexpectedAppError
 from shared.protocols import (
@@ -68,7 +70,8 @@ class DatabaseOperationsService(BaseService):
         uow = self._unit_of_work_factory()
 
         async with uow:
-            connection = uow.connection
+            # Явная типизация connection для ясности типа
+            connection: asyncpg.Connection = uow.connection
 
             try:
                 # 1. Отмечаем в реестре
@@ -132,7 +135,8 @@ class DatabaseOperationsService(BaseService):
         uow = self._unit_of_work_factory()
 
         async with uow:
-            connection = uow.connection
+            # Явная типизация connection для ясности типа
+            connection: asyncpg.Connection = uow.connection
 
             try:
                 # 1. Пытаемся забронировать (атомарный захват)

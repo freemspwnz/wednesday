@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Явная типизация connection в Unit of Work через TypeVar**:
+  - Добавлен TypeVar `ConnectionType` в `shared/protocols.py` для generic типизации connection в Unit of Work
+  - Обновлен протокол `IDatabaseUnitOfWork`: теперь использует `Protocol[ConnectionType]` для явной типизации connection
+  - Обновлен протокол `IUnitOfWorkFactory`: теперь использует `Protocol[ConnectionType]` для явного указания типа connection
+  - Обновлен `DatabaseOperationsService`: добавлена явная аннотация типа `connection: asyncpg.Connection` для ясности
+  - Добавлен импорт `asyncpg` в `database_operations_service.py` для явной типизации
+  - Улучшена типизация: тип connection теперь явно указан в протоколах и при использовании
+  - Улучшена гибкость: TypeVar позволяет использовать разные типы connection (asyncpg.Connection, моки для тестов и т.д.)
+  - Улучшена читаемость: явная типизация делает код более понятным и безопасным
+  - Соответствие принципу явности: типы connection теперь явно указаны в протоколах и при использовании
+  - Соответствие архитектуре: типизация не нарушает слои, протоколы остаются в shared
+
 - **Устранение дублирования логики проверки dispatch: унификация через batch-проверку**:
   - Добавлен метод `are_dispatched_batch()` в протокол `IDispatchRegistry` для batch-проверки статуса отправки для нескольких чатов за один запрос
   - Реализован метод `are_dispatched_batch()` в `DispatchRegistry`: использует один SQL-запрос с `ANY($1::text[])` вместо N отдельных запросов
