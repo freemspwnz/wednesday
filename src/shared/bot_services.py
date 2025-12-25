@@ -39,6 +39,53 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class SupportBotServices:
+    """Минимальный контейнер зависимостей для SupportBot.
+
+    Содержит только необходимые сервисы для работы резервного бота:
+    - admins_repo для проверки прав администратора
+    - chats для обработки событий чата
+    - settings для конфигурации
+    - postgres_pool и redis_client для cleanup ресурсов
+
+    Используется вместо полного BotServices для соблюдения принципа YAGNI
+    и упрощения тестирования.
+    """
+
+    admins_repo: IAdminsRepo
+    chats: IChatsRepo
+    settings: AppSettings
+    postgres_pool: asyncpg.Pool
+    redis_client: RedisClient
+
+    async def cleanup(self) -> None:  # noqa: PLR6301
+        """Закрывает ресурсы (если нужно).
+
+        Минимальный cleanup для SupportBot. В отличие от BotServices,
+        не закрывает клиенты изображений и текста, так как они не используются.
+        """
+        from infra.database.postgres_client import close_postgres_pool
+        from infra.logging.logger import get_logger
+        from infra.redis.redis_client import close_redis
+
+        logger = get_logger(__name__)
+
+        # Закрываем Redis соединения
+        try:
+            await close_redis()
+            logger.info("Redis соединения закрыты через SupportBotServices.cleanup()")
+        except Exception as e:
+            logger.warning(f"Ошибка при закрытии Redis: {e}")
+
+        # Закрываем PostgreSQL pool
+        try:
+            await close_postgres_pool()
+            logger.info("PostgreSQL pool закрыт через SupportBotServices.cleanup()")
+        except Exception as e:
+            logger.warning(f"Ошибка при закрытии PostgreSQL pool: {e}")
+
+
+@dataclass
 class BotServices:
     """Явный контейнер зависимостей бота.
 

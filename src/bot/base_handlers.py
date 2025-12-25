@@ -15,7 +15,7 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from infra.logging.logger import get_logger
-from shared.bot_services import BotServices
+from shared.bot_services import BotServices, SupportBotServices
 from shared.paths import LOGS_DIR
 from shared.retry import retry_on_connect_error, retry_telegram
 
@@ -27,18 +27,23 @@ RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по
 class BaseHandlers:
     """Базовый класс для обработчиков команд с общими утилитарными методами."""
 
-    def __init__(self, services: BotServices) -> None:
+    def __init__(self, services: BotServices | SupportBotServices) -> None:
         """Инициализирует базовый класс обработчиков.
 
         Args:
             services: Контейнер сервисов бота для доступа к зависимостям.
+                Может быть BotServices (для основного бота) или SupportBotServices (для резервного).
         """
         self.logger = get_logger(__name__)
-        self.services: BotServices = services
+        self.services: BotServices | SupportBotServices = services
         # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
-        if services.admins_repo is None:
+        # SupportBotServices всегда имеет admins_repo, BotServices может иметь None
+        if isinstance(services, SupportBotServices):
+            self.admins_store = services.admins_repo
+        elif services.admins_repo is None:
             raise RuntimeError("admins_repo не инициализирован в BotServices")
-        self.admins_store = services.admins_repo
+        else:
+            self.admins_store = services.admins_repo
 
     async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:  # noqa: PLR6301
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.

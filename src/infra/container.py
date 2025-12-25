@@ -52,7 +52,7 @@ from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
 from infra.storage.failed_cache_queue import FailedCacheQueue
 from infra.storage.image_storage import ImageStorageService
-from shared.bot_services import BotServices
+from shared.bot_services import BotServices, SupportBotServices
 from shared.config import (
     AppSettings,
     Config,
@@ -476,6 +476,57 @@ def build_cleanup_service(logger: ILogger) -> CleanupService:
     from infra.cleanup_service import CleanupService
 
     return CleanupService(logger=logger)
+
+
+def build_support_bot_services(
+    db_pool: asyncpg.Pool,
+    redis_client: RedisClient,
+) -> SupportBotServices:
+    """Собирает минимальный контейнер SupportBotServices для резервного бота.
+
+    Создает только необходимые зависимости для SupportBot:
+    - admins_repo для проверки прав администратора
+    - chats для обработки событий чата
+    - settings для конфигурации
+    - postgres_pool и redis_client для cleanup
+
+    Args:
+        db_pool: Пул подключений PostgreSQL.
+        redis_client: Redis-клиент для использования в сервисах.
+
+    Returns:
+        Настроенный экземпляр SupportBotServices.
+
+    Raises:
+        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
+    """
+    from shared.bot_services import SupportBotServices
+    from shared.config import AppSettings, TelegramConfig
+
+    # Валидация параметров
+    if db_pool is None:
+        raise ValueError("db_pool не может быть None")
+    if redis_client is None:
+        raise ValueError("redis_client не может быть None")
+
+    # Создаём AppSettings из Config
+    app_settings = AppSettings()
+
+    # Создаём AdminsRepo для admin сервисов
+    # Используем исходное значение из TelegramConfig (str), а не из AppSettings (int)
+    telegram_config = TelegramConfig()
+    admins_repo = AdminsRepo(pool=db_pool, admin_chat_id=telegram_config.admin_chat_id)
+
+    # Создаём ChatsRepo для обработки событий чата
+    chats = ChatsRepo(pool=db_pool)
+
+    return SupportBotServices(
+        admins_repo=admins_repo,
+        chats=chats,
+        settings=app_settings,
+        postgres_pool=db_pool,
+        redis_client=redis_client,
+    )
 
 
 def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: RedisClient) -> BotServices:

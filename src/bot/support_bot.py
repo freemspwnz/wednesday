@@ -6,7 +6,6 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-import asyncpg
 from telegram import Update
 from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
@@ -23,15 +22,14 @@ from bot.wednesday_bot import (
     POOL_TIMEOUT_SECONDS,
     READ_TIMEOUT_SECONDS,
 )
-from infra.logging.logger import get_logger, log_all_methods
+from infra.logging.logger import log_all_methods
 from infra.rate_limiting import RateLimiter
+from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
-from shared.protocols import IRateLimiter
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
-    from infra.redis.redis_client import RedisClient
-    from shared.protocols import IAdminsRepo, IChatsRepo
+    pass
 
 # Константы для SupportBot
 MAX_POLLING_ATTEMPTS = 4  # максимальное количество попыток запуска polling
@@ -62,12 +60,9 @@ class SupportBot(BaseHandlers):
     Использует минимальный BotServices (только с settings и rate_limiter).
     """
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(
         self,
-        redis_client: "RedisClient",
-        postgres_pool: asyncpg.Pool,
-        admins_repo: "IAdminsRepo",
-        chats_repo: "IChatsRepo",
+        services: SupportBotServices,
         telegram_config: BotTelegramConfig,
         request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> None:
@@ -78,19 +73,25 @@ class SupportBot(BaseHandlers):
         для запуска основного бота.
 
         Args:
-            redis_client: Redis-клиент для rate limiter (ОБЯЗАТЕЛЬНЫЙ).
-            postgres_pool: Пул подключений PostgreSQL (ОБЯЗАТЕЛЬНЫЙ, для BotServices).
-            admins_repo: Репозиторий администраторов (ОБЯЗАТЕЛЬНЫЙ, для BaseHandlers).
-            chats_repo: Репозиторий чатов (ОБЯЗАТЕЛЬНЫЙ, для обработки событий чата).
+            services: Контейнер сервисов для SupportBot (внедряется через DI).
             telegram_config: Конфигурация Telegram бота (внедряется через DI).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
                 Принимает словарь с метаданными (chat_id, message_id) для редактирования статусного
                 сообщения. Если None, запуск основного бота через /start будет недоступен.
 
         Raises:
-            ValueError: Если redis_client, postgres_pool, admins_repo или chats_repo равны None.
+            ValueError: Если services равен None.
         """
-        # Сначала создаем все необходимые компоненты для BotServices
+        if services is None:
+            raise ValueError("services не может быть None. Передайте SupportBotServices через Dependency Injection.")
+
+        # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)
+        super().__init__(services)
+
+        # Сохраняем ссылку на services для доступа к зависимостям
+        self.services = services
+
+        # Создаем HTTPXRequest для PTB Application
         request: HTTPXRequest = HTTPXRequest(
             connection_pool_size=CONNECTION_POOL_SIZE,
             pool_timeout=POOL_TIMEOUT_SECONDS,
@@ -114,78 +115,14 @@ class SupportBot(BaseHandlers):
         # (например, /log), чтобы избежать случайного "забивания" лог‑канала.
         # В случае недоступности Redis лимитер автоматически работает в in‑memory
         # режиме и не блокирует админа.
-        # redis_client теперь обязательный параметр
-        if redis_client is None:
-            raise ValueError("redis_client не может быть None. Передайте Redis-клиент через Dependency Injection.")
-
         self.rate_limiter: RateLimiter = RateLimiter(
-            redis_client=redis_client,
+            redis_client=services.redis_client,
             prefix="rate:support:",
             window=60,
             limit=20,
         )
         # Настройки приложения для доступа к конфигурации через DI
-        self.settings: AppSettings = AppSettings()
-        # Создаем минимальный BotServices только с settings для использования BaseHandlers
-        # SupportBot не использует остальные сервисы, поэтому передаем заглушки для обязательных полей
-        from app.frog_limit_service import FrogRateLimiterService
-        from shared.bot_services import BotServices
-
-        # Создаём общий логгер для всех сервисов
-        app_logger = get_logger("app")
-
-        # Создаём rate limiters для команды /frog
-        # redis_client уже проверен выше и не может быть None
-        SECONDS_PER_MINUTE = 60
-        global_limiter: IRateLimiter = RateLimiter(
-            redis_client=redis_client,
-            prefix="frog:global:",
-            window=self.settings.frog_rate_limit_window_seconds,
-            limit=self.settings.frog_rate_limit_max_requests,
-        )
-        user_limiter: IRateLimiter = RateLimiter(
-            redis_client=redis_client,
-            prefix="frog:user:",
-            window=self.settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
-            limit=1,
-        )
-
-        frog_rate_limiter = FrogRateLimiterService(
-            settings=self.settings,
-            global_limiter=global_limiter,
-            user_limiter=user_limiter,
-            logger=app_logger,
-        )
-        from infra.celery.celery_task_queue import CeleryTaskQueue
-
-        task_queue = CeleryTaskQueue()
-        # SupportBot не использует postgres_pool напрямую, но BotServices требует его
-        # Пул передаётся через Dependency Injection
-        if postgres_pool is None:
-            raise ValueError("postgres_pool не может быть None. Передайте пул через Dependency Injection.")
-        if admins_repo is None:
-            raise ValueError("admins_repo не может быть None. Передайте репозиторий через Dependency Injection.")
-        if chats_repo is None:
-            raise ValueError("chats_repo не может быть None. Передайте репозиторий через Dependency Injection.")
-
-        services: BotServices = BotServices(
-            postgres_pool=postgres_pool,
-            redis_client=redis_client,
-            usage=None,  # type: ignore[arg-type]
-            chats=chats_repo,
-            dispatch_registry=None,  # type: ignore[arg-type]
-            metrics=None,  # type: ignore[arg-type]
-            prompt_cache=None,  # type: ignore[arg-type]
-            user_state_store=None,  # type: ignore[arg-type]
-            settings=self.settings,
-            image_service=None,  # type: ignore[arg-type]
-            frog_rate_limiter=frog_rate_limiter,
-            task_queue=task_queue,
-            bot_controller=None,
-            admins_repo=admins_repo,
-        )
-        # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)
-        super().__init__(services)
+        self.settings: AppSettings = services.settings
 
         # Инициализация state coordinator для координации с основным ботом
         admin_chat_id_int = self.settings.admin_chat_id if self.settings else None

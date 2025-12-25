@@ -4,6 +4,17 @@
 
 ### Рефакторинг
 
+- **Создание минимального SupportBotServices для резервного бота**:
+  - Создан отдельный контейнер `SupportBotServices` с только необходимыми зависимостями
+  - Убрано создание ненужных сервисов (`frog_rate_limiter`, `task_queue`) в `SupportBot`
+  - Убраны множественные `None` значения в `BotServices` для `SupportBot`
+  - Создана функция `build_support_bot_services()` в `infra.container` для соблюдения границ слоёв
+  - Обновлен конструктор `SupportBot` для приема `SupportBotServices` через DI
+  - Обновлены `BaseHandlers` и `ChatEventHandler` для работы с обоими типами сервисов
+  - Улучшено соблюдение принципа YAGNI: только необходимые зависимости
+  - Улучшена тестируемость: меньше зависимостей для мокирования
+  - Упрощено создание `SupportBot`: все зависимости создаются в composition root
+
 - **Устранение циклической зависимости через интерфейс IBotController**:
   - Создан протокол `IBotController` в `shared/protocols.py` для управления жизненным циклом бота
   - Обновлен `BotServices`: `bot_controller` теперь использует `IBotController` вместо `WednesdayBot`

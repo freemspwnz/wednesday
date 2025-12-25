@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from telegram import Bot, Update
 from telegram.ext import ContextTypes
 
-from shared.bot_services import BotServices
+from shared.bot_services import BotServices, SupportBotServices
 from shared.protocols import ILogger
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ class ChatEventHandler:
 
     def __init__(
         self,
-        services: BotServices,
+        services: BotServices | SupportBotServices,
         bot: Bot,
         logger: ILogger,
     ) -> None:
@@ -32,6 +32,7 @@ class ChatEventHandler:
 
         Args:
             services: Контейнер сервисов бота для доступа к репозиториям.
+                Может быть BotServices (для основного бота) или SupportBotServices (для резервного).
             bot: Экземпляр Telegram Bot для отправки сообщений.
             logger: Экземпляр логгера для логирования операций.
         """

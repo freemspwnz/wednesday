@@ -114,14 +114,20 @@ def support_bot(monkeypatch: Any) -> Any:
     admins_repo = DummyAdminsRepo()
     chats_repo = DummyChatsRepo()
     # Создаём мок конфигурации для тестов
-    from shared.config import BotTelegramConfig
+    from shared.bot_services import SupportBotServices
+    from shared.config import AppSettings, BotTelegramConfig
 
+    app_settings = AppSettings()
+    support_services = SupportBotServices(
+        admins_repo=admins_repo,
+        chats=chats_repo,
+        settings=app_settings,
+        postgres_pool=mock_pool,
+        redis_client=redis_client,
+    )
     telegram_config = BotTelegramConfig(bot_token="test_token", chat_id="123")
     bot = sb_module.SupportBot(
-        redis_client=redis_client,
-        postgres_pool=mock_pool,
-        admins_repo=admins_repo,
-        chats_repo=chats_repo,
+        services=support_services,
         telegram_config=telegram_config,
     )
     return bot

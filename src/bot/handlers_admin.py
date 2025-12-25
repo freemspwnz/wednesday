@@ -32,6 +32,9 @@ class AdminHandlers(BaseHandlers):
         services: BotServices,
     ) -> None:
         super().__init__(services)
+        # Type narrowing: AdminHandlers работает только с BotServices
+        assert isinstance(services, BotServices), "AdminHandlers requires BotServices, not SupportBotServices"
+        self.services: BotServices = services
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
         if self.services.admin_access_service is None:

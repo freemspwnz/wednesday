@@ -24,6 +24,9 @@ class ModelHandlers(BaseHandlers):
         services: BotServices,
     ) -> None:
         super().__init__(services)
+        # Type narrowing: ModelHandlers работает только с BotServices
+        assert isinstance(services, BotServices), "ModelHandlers requires BotServices, not SupportBotServices"
+        self.services: BotServices = services
         # Используем ModelManagementService для управления моделями
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")

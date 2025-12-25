@@ -194,13 +194,15 @@ class BotRunner:
                     await asyncio.sleep(0)
 
                 self.logger.info("Создание экземпляра SupportBot")
-                # Создаём репозитории для SupportBot (инфраструктурный слой создаётся вне bot-слоя)
-                from infra.repos import AdminsRepo, ChatsRepo
+                # Создаём сервисы для SupportBot через composition root
+                from infra.container import build_support_bot_services
                 from shared.config import BotTelegramConfig, TelegramConfig
 
                 telegram_config_full = TelegramConfig()
-                admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config_full.admin_chat_id)
-                chats_repo = ChatsRepo(pool=postgres_pool)
+                support_services = build_support_bot_services(
+                    db_pool=postgres_pool,
+                    redis_client=redis_client,
+                )
 
                 # Извлекаем только необходимые поля для bot-слоя (соблюдение границ слоёв)
                 bot_telegram_config = BotTelegramConfig(
@@ -209,10 +211,7 @@ class BotRunner:
                 )
 
                 self.support_bot = SupportBot(
-                    redis_client=redis_client,
-                    postgres_pool=postgres_pool,
-                    admins_repo=admins_repo,
-                    chats_repo=chats_repo,
+                    services=support_services,
                     telegram_config=bot_telegram_config,
                     request_start_main=request_start_main,
                 )

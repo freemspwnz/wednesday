@@ -25,6 +25,9 @@ class UserHandlers(BaseHandlers):
         services: BotServices,
     ) -> None:
         super().__init__(services)
+        # Type narrowing: UserHandlers работает только с BotServices
+        assert isinstance(services, BotServices), "UserHandlers requires BotServices, not SupportBotServices"
+        self.services: BotServices = services
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.
