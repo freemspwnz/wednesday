@@ -10,6 +10,7 @@ from bot.base_handlers import BaseHandlers
 from bot.bot_state_coordinator import BotStateCoordinator
 from shared.base.exceptions import AccessDeniedError, ServiceError
 from shared.bot_services import BotServices, SupportBotServices, require_bot_services
+from shared.models import StatusMessageMetadata
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -246,13 +247,15 @@ class AdminHandlers(BaseHandlers):
                 status_msg = None
 
         # Подготавливаем метаданные для статусного сообщения (только для не-админ чатов)
-        shutdown_metadata = None
+        shutdown_metadata: StatusMessageMetadata | None = None
         if (not is_admin_chat) and status_msg is not None and update.effective_chat:
             try:
-                shutdown_metadata = {
-                    "chat_id": update.effective_chat.id,
-                    "message_id": getattr(status_msg, "message_id", None),
-                }
+                message_id = getattr(status_msg, "message_id", None)
+                if message_id is not None:
+                    shutdown_metadata = {
+                        "chat_id": update.effective_chat.id,
+                        "message_id": message_id,
+                    }
             except (ValueError, TypeError, AttributeError):
                 shutdown_metadata = None
 

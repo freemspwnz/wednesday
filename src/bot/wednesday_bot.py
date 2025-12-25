@@ -20,6 +20,7 @@ from bot.handlers_user import UserHandlers
 from infra.logging.logger import get_logger, log_all_methods
 from shared.bot_services import BotServices
 from shared.config import BotTelegramConfig
+from shared.models import StatusMessageMetadata
 
 # Константы для магических чисел
 CONNECTION_POOL_SIZE = 20
@@ -89,9 +90,9 @@ class WednesdayBot:
         self.services = services
         # bot_controller устанавливается в composition root (container.py) для избежания циклической зависимости
         # Данные для пост-старта (например, редактирование сообщения из SupportBot)
-        self.pending_startup_edit: dict[str, Any] | None = None
+        self.pending_startup_edit: StatusMessageMetadata | None = None
         # Данные для пост-остановки (например, редактирование сообщения об остановке)
-        self.pending_shutdown_edit: dict[str, Any] | None = None
+        self.pending_shutdown_edit: StatusMessageMetadata | None = None
         # Флаг, чтобы избежать дублирующих сообщений об остановке
         self._stop_message_sent: bool = False
 
@@ -373,10 +374,10 @@ class WednesdayBot:
                     self.logger.info("Бот запущен, но не удалось отправить уведомление в чат")
 
             # Если был передан статус от SupportBot — дополняем его финальным состоянием основного
-            if isinstance(self.pending_startup_edit, dict):
+            if self.pending_startup_edit is not None:
                 state_data = BotStateData(
-                    chat_id=self.pending_startup_edit.get("chat_id"),
-                    message_id=self.pending_startup_edit.get("message_id"),
+                    chat_id=self.pending_startup_edit["chat_id"],
+                    message_id=self.pending_startup_edit["message_id"],
                 )
                 await self.state_coordinator.handle_startup_edit(
                     bot=self.application.bot,
@@ -402,7 +403,7 @@ class WednesdayBot:
             self.logger.error(f"Ошибка при запуске бота: {e}")
             raise
 
-    async def stop(self, shutdown_metadata: dict[str, Any] | None = None) -> None:
+    async def stop(self, shutdown_metadata: StatusMessageMetadata | None = None) -> None:
         """Останавливает бота и планировщик задач.
 
         Корректно завершает работу бота: останавливает планировщик, polling,
@@ -411,7 +412,7 @@ class WednesdayBot:
 
         Args:
             shutdown_metadata: Опциональные метаданные для редактирования статусного сообщения.
-                Словарь с ключами 'chat_id' и 'message_id' или None.
+                Содержит 'chat_id' и 'message_id' или None.
                 Если передан, используется вместо self.pending_shutdown_edit.
 
         Side Effects:
@@ -463,10 +464,10 @@ class WednesdayBot:
             # Обновляем статусное сообщение от SupportBot
             # Используем переданные метаданные или внутреннее поле (для обратной совместимости)
             metadata = shutdown_metadata or self.pending_shutdown_edit
-            if isinstance(metadata, dict):
+            if metadata is not None:
                 state_data = BotStateData(
-                    chat_id=metadata.get("chat_id"),
-                    message_id=metadata.get("message_id"),
+                    chat_id=metadata["chat_id"],
+                    message_id=metadata["message_id"],
                 )
                 await self.state_coordinator.handle_shutdown_edit(
                     bot=self.application.bot,

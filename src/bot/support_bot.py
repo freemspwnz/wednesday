@@ -4,7 +4,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from telegram import Update
 from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
@@ -25,6 +25,7 @@ from bot.wednesday_bot import (
 from infra.logging.logger import log_all_methods
 from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
+from shared.models import StatusMessageMetadata
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
@@ -63,7 +64,7 @@ class SupportBot(BaseHandlers):
         self,
         services: SupportBotServices,
         telegram_config: BotTelegramConfig,
-        request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+        request_start_main: Callable[[StatusMessageMetadata | None], Awaitable[None]] | None = None,
     ) -> None:
         """Инициализирует SupportBot.
 
@@ -75,8 +76,8 @@ class SupportBot(BaseHandlers):
             services: Контейнер сервисов для SupportBot (внедряется через DI).
             telegram_config: Конфигурация Telegram бота (внедряется через DI).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
-                Принимает словарь с метаданными (chat_id, message_id) для редактирования статусного
-                сообщения. Если None, запуск основного бота через /start будет недоступен.
+                Принимает StatusMessageMetadata с метаданными (chat_id, message_id) для редактирования статусного
+                сообщения или None. Если None, запуск основного бота через /start будет недоступен.
 
         Raises:
             ValueError: Если services равен None.
@@ -102,14 +103,14 @@ class SupportBot(BaseHandlers):
         if not telegram_token:
             raise ValueError("TELEGRAM_BOT_TOKEN должен быть установлен. Проверьте конфигурацию.")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
-        self.request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = request_start_main
+        self.request_start_main: Callable[[StatusMessageMetadata | None], Awaitable[None]] | None = request_start_main
         self.is_running: bool = False
         # Event для ожидания сигнала остановки (вместо busy-wait цикла)
         self._stop_event = asyncio.Event()
         # Данные для редактирования сообщения об остановке основного
-        self.pending_shutdown_edit: dict[str, Any] | None = None
+        self.pending_shutdown_edit: StatusMessageMetadata | None = None
         # Данные для цепочки запуска основного: сообщение "Запускаю..."
-        self.pending_startup_edit: dict[str, Any] | None = None
+        self.pending_startup_edit: StatusMessageMetadata | None = None
 
         # Настройки приложения для доступа к конфигурации через DI
         self.settings: AppSettings = services.settings
@@ -256,10 +257,10 @@ class SupportBot(BaseHandlers):
                 delay *= 1.5
 
         # Если есть сообщение о статусе остановки — редактируем его на финальное (кроме админ-чата)
-        if isinstance(self.pending_shutdown_edit, dict):
+        if self.pending_shutdown_edit is not None:
             state_data = BotStateData(
-                chat_id=self.pending_shutdown_edit.get("chat_id"),
-                message_id=self.pending_shutdown_edit.get("message_id"),
+                chat_id=self.pending_shutdown_edit["chat_id"],
+                message_id=self.pending_shutdown_edit["message_id"],
             )
             await self.state_coordinator.handle_support_startup_edit(
                 bot=self.application.bot,
@@ -319,10 +320,10 @@ class SupportBot(BaseHandlers):
             self.is_running = False
             self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
             # Если был запуск основного через статусное сообщение — добавим строку про остановку Support Bot
-            if isinstance(self.pending_startup_edit, dict):
+            if self.pending_startup_edit is not None:
                 state_data = BotStateData(
-                    chat_id=self.pending_startup_edit.get("chat_id"),
-                    message_id=self.pending_startup_edit.get("message_id"),
+                    chat_id=self.pending_startup_edit["chat_id"],
+                    message_id=self.pending_startup_edit["message_id"],
                 )
                 await self.state_coordinator.handle_support_shutdown_edit(
                     bot=self.application.bot,
@@ -520,9 +521,12 @@ class SupportBot(BaseHandlers):
         if self.request_start_main is not None:
             try:
                 # В админ-чате не передаём payload для последующего редактирования
-                payload = {}
+                payload: StatusMessageMetadata | None = None
                 if (not is_admin_chat) and (status_msg is not None):
-                    payload = {"chat_id": update.effective_chat.id, "message_id": status_msg.message_id}
+                    payload = {
+                        "chat_id": update.effective_chat.id,
+                        "message_id": status_msg.message_id,
+                    }
                 await self.request_start_main(payload)
                 self.logger.info("SupportBot запрос запуска основного отправлен супервизору")
                 # Не редактируем статусное сообщение сразу; финальный текст поставит основной бот после запуска
