@@ -304,7 +304,7 @@ class WednesdayBot:
             - Инициализирует приложение через application.initialize().
             - Запускает polling через updater.start_polling().
             - Сохраняет сервисы в bot_data для доступа обработчиков.
-            - Проверяет доступность чата через _check_chat_access().
+            - Проверяет доступность чата через chat_validator.validate_chat_access().
             - Отправляет сообщения о запуске в CHAT_ID и админам.
             - Редактирует статусные сообщения от SupportBot (если есть).
             - Запускает планировщик в фоновой задаче (если включен).
@@ -401,41 +401,6 @@ class WednesdayBot:
         except Exception as e:
             self.logger.error(f"Ошибка при запуске бота: {e}")
             raise
-
-    async def _check_chat_access(self) -> None:
-        """Проверяет доступность чата для отправки сообщений.
-
-        Выполняет проверку доступа к чату, указанному в self.chat_id, перед запуском.
-        Использует увеличенный таймаут для более надежной проверки. Предупреждения
-        логируются, но не блокируют запуск бота.
-
-        Side Effects:
-            - Вызывает bot.get_chat() для получения информации о чате.
-            - Логирует результат проверки или предупреждения при ошибках.
-            - Не блокирует запуск бота при ошибках, только предупреждает.
-
-        Raises:
-            TimeoutError: Если проверка заняла больше TIMEOUT_MEDIUM_SECONDS секунд.
-            Exception: При других ошибках доступа к чату (логируется, но не пробрасывается).
-        """
-        try:
-            # Пытаемся получить информацию о чате с увеличенным таймаутом
-            chat_info = await asyncio.wait_for(
-                self.application.bot.get_chat(self.chat_id),
-                timeout=TIMEOUT_MEDIUM_SECONDS,
-            )
-            self.logger.info(f"Чат доступен: {chat_info.title or chat_info.first_name}")
-        except TimeoutError:
-            self.logger.warning(f"Таймаут при проверке доступа к чату {self.chat_id}")
-            self.logger.warning("Возможно, проблемы с сетью или Telegram API")
-            self.logger.warning("Бот будет работать, но проверка доступа к чату не выполнена")
-        except Exception as e:
-            self.logger.warning(f"Не удалось получить доступ к чату {self.chat_id}: {e}")
-            self.logger.warning("Бот будет работать, но не сможет отправлять сообщения в указанный чат")
-            self.logger.warning("Убедитесь, что:")
-            self.logger.warning("1. CHAT_ID указан правильно")
-            self.logger.warning("2. Бот добавлен в чат/канал")
-            self.logger.warning("3. У бота есть права на отправку сообщений")
 
     async def stop(self) -> None:
         """Останавливает бота и планировщик задач.
