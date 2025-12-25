@@ -851,6 +851,13 @@ def build_bot(
     messaging_service = PTBMessagingService(bot=bot.application.bot)
     services.messaging_service = messaging_service
 
+    # Создаём chat_info_service после создания бота, так как нужен bot.application.bot
+    from app.chat_info_service import ChatInfoService
+
+    app_logger = get_logger("app")
+    chat_info_service = ChatInfoService(bot=bot.application.bot, logger=app_logger)
+    services.chat_info_service = chat_info_service
+
     # Создаём dispatch сервисы с messaging_service
     if services.database_operations is not None and services.admins_repo is not None:
         app_logger = get_logger("app")

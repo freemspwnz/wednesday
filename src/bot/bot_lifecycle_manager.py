@@ -100,11 +100,8 @@ class BotLifecycleManager:
         except Exception as e:
             self._logger.warning(f"Ошибка при остановке updater'а: {e}")
 
-        # Небольшая пауза, чтобы освободить соединения пула
-        try:
+            # Небольшая пауза, чтобы освободить соединения пула
             await asyncio.sleep(0.2)
-        except Exception:
-            pass
 
         # Безопасная остановка приложения
         try:

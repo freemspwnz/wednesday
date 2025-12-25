@@ -15,6 +15,7 @@ from app.admin_access_service import AdminAccessService
 from app.admin_command_service import AdminCommandService
 from app.admin_dashboard_service import AdminDashboardService
 from app.admin_notification_service import AdminNotificationService
+from app.chat_info_service import ChatInfoService
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
@@ -112,6 +113,7 @@ class BotServices:
     admin_access_service: AdminAccessService | None = None
     admin_command_service: AdminCommandService | None = None
     admin_notification_service: AdminNotificationService | None = None
+    chat_info_service: ChatInfoService | None = None
     bot_controller: IBotController | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
     messaging_service: IMessagingService | None = None
