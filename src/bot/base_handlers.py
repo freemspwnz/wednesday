@@ -178,13 +178,17 @@ class BaseHandlers:
                         max_retries=MAX_RETRIES_DEFAULT,
                         delay=RETRY_DELAY_DEFAULT,
                     )
-                except Exception:
-                    # Если fallback тоже не удался, централизованный обработчик перехватит
-                    pass
+                except Exception as fallback_error:
+                    # Логируем, но не пробрасываем, так как это fallback
+                    self.logger.warning(
+                        f"Не удалось отправить fallback сообщение: {fallback_error}",
+                        exc_info=True,
+                    )
+                    # Централизованный обработчик перехватит, если это критично
 
             return False
 
-    async def _safe_delete_message(self, message: Message | None) -> None:  # noqa: PLR6301
+    async def _safe_delete_message(self, message: Message | None) -> None:
         """Безопасно удаляет сообщение, игнорируя ошибки.
 
         Используется для удаления статусных сообщений, где ошибка удаления
@@ -198,10 +202,13 @@ class BaseHandlers:
 
         try:
             await message.delete()
-        except Exception:
-            # Exception с pass оправдан - удаление статусного сообщения не критично
+        except Exception as delete_error:
+            # Логируем, но не пробрасываем - удаление статусного сообщения не критично
+            self.logger.debug(
+                f"Не удалось удалить статусное сообщение: {delete_error}",
+                exc_info=False,
+            )
             # Централизованный обработчик перехватит, если это критично
-            pass
 
     async def _safe_reply_text_with_error_logging(
         self,
