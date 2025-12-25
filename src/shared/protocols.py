@@ -911,6 +911,34 @@ class IDispatchRegistry(Protocol):
         """
         ...
 
+    async def try_reserve_dispatch(
+        self,
+        slot_date: str,
+        slot_time: str,
+        chat_id: int,
+        connection: asyncpg.Connection,
+    ) -> bool:
+        """Пытается забронировать право на отправку (оптимистическая бронь).
+
+        Атомарно создает запись в реестре. Если запись уже существует,
+        возвращает False (бронь не получена). Если запись создана успешно,
+        возвращает True (бронь получена).
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: Идентификатор чата.
+            connection: Соединение БД для использования в транзакции (обязательно).
+
+        Returns:
+            True если бронь получена (запись создана), False если уже забронировано
+            (запись уже существует).
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
+        ...
+
 
 @runtime_checkable
 class IDatabaseUnitOfWork(Protocol):

@@ -251,7 +251,12 @@ class DispatchDeliveryService(BaseService):
         main_chat_id: int | None,
         result: DispatchResult,
     ) -> bool:
-        """Отправляет одно изображение в целевой чат.
+        """Отправляет одно изображение в целевой чат с оптимистической броней.
+
+        Выполняет:
+        1. Бронирование права на отправку (атомарный захват через БД)
+        2. Отправку изображения (если бронь получена)
+        3. Финализация (usage, metrics) - уже выполнена при бронировании
 
         Args:
             target_chat: ID целевого чата.
@@ -259,13 +264,37 @@ class DispatchDeliveryService(BaseService):
             slot_time: Время слота в формате HH:MM.
             image_data: Байты изображения.
             caption: Подпись к изображению.
-            main_chat_id: ID основного чата для отправки сообщений об ошибках (опционально).
+            main_chat_id: ID основного чата для отправки сообщений об ошибках.
             result: Результат рассылки для обновления счетчиков.
 
         Returns:
-            True если отправка успешна, False иначе.
+            True если отправка успешна или уже забронирована, False иначе.
         """
+        # 1. Оптимистическая бронь: атомарный захват права на отправку
+        # Если бронь не получена - уже забронировано, пропускаем
         try:
+            reservation_success = await self._database_operations.reserve_and_finalize_dispatch(
+                slot_date=slot_date,
+                slot_time=slot_time,
+                chat_id=target_chat,
+            )
+
+            if not reservation_success:
+                # Бронь не получена - уже забронировано/отправлено другим процессом
+                self.logger.info(
+                    (
+                        f"Пропуск отправки в чат {target_chat} - "
+                        f"уже забронировано/отправлено в слот {slot_date}_{slot_time}"
+                    ),
+                    event="dispatch_already_reserved",
+                    chat_id=target_chat,
+                    slot_date=slot_date,
+                    slot_time=slot_time,
+                )
+                result["success_count"] += 1  # Считаем как успех (идемпотентность)
+                return True
+
+            # 2. Бронь получена - отправляем изображение
             await retry_on_connect_error(
                 self._messaging.send_image,
                 chat_id=target_chat,
@@ -275,31 +304,39 @@ class DispatchDeliveryService(BaseService):
                 delay=2.0,
                 handle_rate_limit=True,
             )
-            # Используем DatabaseOperationsService для атомарной регистрации
-            try:
-                await self._database_operations.record_dispatch_success(
-                    slot_date=slot_date,
-                    slot_time=slot_time,
-                    chat_id=target_chat,
-                )
-            except RepoError as e:
-                self.logger.warning(
-                    f"Ошибка при регистрации отправки: {e}",
-                    event="dispatch_registration_error",
-                    status="warning",
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    chat_id=target_chat,
-                    slot_date=slot_date,
-                    slot_time=slot_time,
-                )
-                # Отправка успешна, но регистрация не удалась
-                # Это менее критично, чем сама отправка
+
+            # 3. Финализация уже выполнена при бронировании (usage, metrics)
+            # Запись в dispatch_registry уже создана при бронировании
+            # Ничего дополнительного делать не нужно
+
             result["success_count"] += 1
             self.logger.info(f"Жаба отправлена в чат {target_chat}")
             return True
 
+        except RepoError as e:
+            # Ошибка при бронировании - логируем и считаем ошибкой
+            self.logger.error(
+                f"Ошибка при бронировании отправки в чат {target_chat}: {e}",
+                event="dispatch_reservation_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                chat_id=target_chat,
+                slot_date=slot_date,
+                slot_time=slot_time,
+            )
+            await self._notify_error_and_update_metrics(
+                main_chat_id=main_chat_id,
+                error_message=f"Не удалось забронировать отправку в чат {target_chat}",
+                result=result,
+            )
+            return False
+
         except (MessagingNetworkError, MessagingAPIError) as send_error:
+            # Ошибка отправки после успешной брони
+            # Запись в БД уже создана, но отправка не удалась
+            # Это допустимо: лучше не отправить, чем отправить дважды
+            # При следующем запуске проверка is_dispatched пропустит этот чат
             return await self._handle_messaging_error(
                 send_error=send_error,
                 target_chat=target_chat,

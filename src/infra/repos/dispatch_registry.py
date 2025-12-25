@@ -124,6 +124,60 @@ class DispatchRegistry:
             )
             raise
 
+    async def try_reserve_dispatch(
+        self,
+        slot_date: str,
+        slot_time: str,
+        chat_id: int,
+        connection: asyncpg.Connection,
+    ) -> bool:
+        """Пытается забронировать право на отправку (оптимистическая бронь).
+
+        Атомарно создает запись в реестре. Использует INSERT с ON CONFLICT
+        для атомарного захвата. Возвращает True только если запись была создана
+        (бронь получена), False если запись уже существовала (бронь не получена).
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: Идентификатор чата.
+            connection: Соединение БД для использования в транзакции (обязательно).
+
+        Returns:
+            True если бронь получена (запись создана), False если уже забронировано.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
+        from datetime import date as date_type
+
+        key = self._key(slot_date, slot_time, chat_id)
+        slot_date_obj = date_type.fromisoformat(slot_date) if isinstance(slot_date, str) else slot_date
+
+        try:
+            # INSERT с ON CONFLICT DO NOTHING
+            # Возвращает количество затронутых строк: 1 если создано, 0 если конфликт
+            result: str = await connection.execute(
+                """
+                INSERT INTO dispatch_registry (key, slot_date, slot_time, chat_id, created_at)
+                VALUES ($1, $2, $3, $4, NOW())
+                ON CONFLICT (key) DO NOTHING;
+                """,
+                key,
+                slot_date_obj,
+                slot_time,
+                int(chat_id),
+            )
+            # Проверяем количество затронутых строк
+            # "INSERT 0 1" означает, что строка была создана (бронь получена)
+            # "INSERT 0 0" означает конфликт (бронь не получена)
+            return result == "INSERT 0 1"  # True если создано, False если конфликт
+        except Exception as exc:
+            self.logger.error(
+                f"Ошибка при бронировании dispatch_registry (key={key}) в Postgres: {exc}",
+            )
+            raise
+
     async def cleanup_old(self) -> None:
         """Удаляет старые записи реестра старше retention_days.
 

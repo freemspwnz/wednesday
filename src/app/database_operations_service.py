@@ -104,6 +104,73 @@ class DatabaseOperationsService(BaseService):
                 # Пробрасываем оригинальную ошибку независимо от результата логирования
                 raise
 
+    async def reserve_and_finalize_dispatch(
+        self,
+        slot_date: str,
+        slot_time: str,
+        chat_id: int,
+    ) -> bool:
+        """Бронирует отправку и выполняет финализацию (usage, metrics).
+
+        Выполняет в одной транзакции:
+        1. Попытка бронирования отправки (атомарный захват)
+        2. Если бронь получена - финализация (increment usage, metrics)
+        3. Если бронь не получена - ничего не делаем
+
+        Args:
+            slot_date: Дата слота в формате YYYY-MM-DD.
+            slot_time: Время слота в формате HH:MM.
+            chat_id: ID чата, для которого бронируется отправка.
+
+        Returns:
+            True если бронь получена и финализация выполнена,
+            False если отправка уже забронирована/выполнена другим процессом.
+
+        Raises:
+            RepoError: При ошибке выполнения операций (транзакция откатывается).
+        """
+        uow = self._unit_of_work_factory()
+
+        async with uow:
+            connection = uow.connection
+
+            try:
+                # 1. Пытаемся забронировать (атомарный захват)
+                reservation_success = await self._dispatch_registry.try_reserve_dispatch(
+                    slot_date=slot_date,
+                    slot_time=slot_time,
+                    chat_id=chat_id,
+                    connection=connection,
+                )
+
+                if not reservation_success:
+                    # Бронь не получена - уже забронировано другим процессом
+                    # Транзакция откатится автоматически (ничего не было изменено)
+                    return False
+
+                # 2. Бронь получена - финализируем (increment usage, metrics)
+                await self._usage_tracker.increment(connection=connection, count=1)
+
+                if self._metrics:
+                    await self._metrics.increment_dispatch_success(connection=connection)
+
+                # Коммит происходит автоматически при выходе из async with
+                return True
+
+            except RepoError as e:
+                # Откат происходит автоматически при исключении
+                self._safe_log_error(
+                    f"Ошибка при бронировании/финализации отправки: {e}",
+                    e,
+                    context={
+                        "event": "dispatch_reservation_error",
+                        "slot_date": slot_date,
+                        "slot_time": slot_time,
+                        "chat_id": chat_id,
+                    },
+                )
+                raise
+
     async def record_dispatch_failure(
         self,
         slot_date: str,
