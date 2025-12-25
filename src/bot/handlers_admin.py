@@ -11,8 +11,6 @@ from bot.base_handlers import (
 )
 from shared.base.exceptions import (
     AccessDeniedError,
-    CircuitBreakerOpen,
-    ImageGenerationError,
     RepoError,
     ServiceError,
 )
@@ -360,33 +358,20 @@ class AdminHandlers(BaseHandlers):
 
         image_service = self.services.image_service
         if can_generate and image_service is not None:
-            try:
-                image_data, caption = await image_service.generate_frog_image(user_id=user_id)
-                # Увеличиваем счетчик использования
-                if usage:
-                    await usage.increment(1)
-            except (ImageGenerationError, CircuitBreakerOpen) as e:
-                # Ошибки генерации изображений - используем fallback
-                self.logger.warning(
-                    f"Ошибка при генерации изображения, используем fallback: {e}",
-                    exc_info=True,
-                )
-                use_fallback = True
-            except (ValueError, TypeError, AttributeError) as e:
-                # Ошибки валидации данных
-                self.logger.error(f"Ошибка валидации при генерации изображения: {e}", exc_info=True)
-                use_fallback = True
-            except ServiceError as e:
-                # Ошибки сервисного слоя
-                self.logger.error(f"Ошибка сервиса при генерации изображения: {e}", exc_info=True)
-                use_fallback = True
-            # Критические ошибки (память, системные) должны пробрасываться выше
+            # Используем централизованный метод обработки ошибок генерации изображений
+            image_data, caption, use_fallback = await self._handle_image_generation_errors(
+                image_service=image_service,
+                user_id=user_id,
+            )
+            # Увеличиваем счетчик использования только если генерация успешна
+            if not use_fallback and usage:
+                await usage.increment(1)
         else:
             use_fallback = True
             self.logger.info("Лимит генераций исчерпан, используем fallback")
 
-        # Если нужно использовать fallback
-        if use_fallback:
+        # Если нужно использовать fallback и изображение еще не получено
+        if use_fallback and image_data is None:
             if image_service is not None:
                 fallback_image = await image_service.get_random_saved_image()
             else:

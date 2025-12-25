@@ -90,10 +90,17 @@ class ChatEventHandler:
                     except (TelegramError, NetworkError, TimedOut) as send_error:
                         # Временные сетевые ошибки - можно повторить позже
                         self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {send_error}")
-                    except Exception as send_error:
-                        # Другие ошибки (например, бот заблокирован)
-                        self.logger.error(
+                    except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as send_error:
+                        # Критические ошибки - пробрасываем выше
+                        self.logger.critical(
                             f"Критическая ошибка при отправке приветствия в чат {chat_id}: {send_error}",
+                            exc_info=True,
+                        )
+                        raise
+                    except Exception as send_error:
+                        # Другие ошибки (например, бот заблокирован) - логируем, но не прерываем работу
+                        self.logger.error(
+                            f"Ошибка при отправке приветствия в чат {chat_id}: {send_error}",
                             exc_info=True,
                         )
                 except ServiceError as add_error:
@@ -102,8 +109,15 @@ class ChatEventHandler:
                         f"Ошибка сервиса при добавлении чата {chat_id}: {add_error}",
                         exc_info=True,
                     )
+                except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as add_error:
+                    # Критические ошибки - пробрасываем выше
+                    self.logger.critical(
+                        f"Критическая ошибка при добавлении чата {chat_id}: {add_error}",
+                        exc_info=True,
+                    )
+                    raise
                 except Exception as add_error:
-                    # Неожиданные ошибки
+                    # Неожиданные ошибки - логируем, но не прерываем работу
                     self.logger.error(
                         f"Неожиданная ошибка при добавлении чата {chat_id}: {add_error}",
                         exc_info=True,
@@ -119,12 +133,24 @@ class ChatEventHandler:
                         f"Ошибка сервиса при удалении чата {chat_id}: {remove_error}",
                         exc_info=True,
                     )
+                except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as remove_error:
+                    # Критические ошибки - пробрасываем выше
+                    self.logger.critical(
+                        f"Критическая ошибка при удалении чата {chat_id}: {remove_error}",
+                        exc_info=True,
+                    )
+                    raise
                 except Exception as remove_error:
-                    # Неожиданные ошибки
+                    # Неожиданные ошибки - логируем, но не прерываем работу
                     self.logger.error(
                         f"Неожиданная ошибка при удалении чата {chat_id}: {remove_error}",
                         exc_info=True,
                     )
 
+        except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as e:
+            # Критические ошибки - пробрасываем выше
+            self.logger.critical(f"Критическая ошибка в on_my_chat_member: {e}", exc_info=True)
+            raise
         except Exception as e:
-            self.logger.error(f"Критическая ошибка в on_my_chat_member: {e}", exc_info=True)
+            # Неожиданные ошибки - логируем, но не прерываем работу
+            self.logger.error(f"Неожиданная ошибка в on_my_chat_member: {e}", exc_info=True)
