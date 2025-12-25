@@ -6,8 +6,7 @@
 
 from __future__ import annotations
 
-import random
-
+from domain.fallback_prompt_builder import FallbackPromptBuilder
 from domain.value_objects import Prompt
 from shared.base.exceptions import (
     APIError,
@@ -80,7 +79,7 @@ class PromptGenerationService:
         """Возвращает статический промпт из конфигурации (fallback).
 
         Используется когда не удалось получить промпт через текстовый клиент.
-        Выбирает случайный промпт и стиль из переданной конфигурации.
+        Делегирует построение промпта FallbackPromptBuilder.
 
         Returns:
             Валидированный статический промпт для генерации изображения.
@@ -90,18 +89,14 @@ class PromptGenerationService:
         """
         if not self._fallback_config:
             raise PromptGenerationError(
-                "Fallback config is required. Provide PromptFallbackConfig during initialization."
+                "Обязательное поле конфигурации fallback промпта. Передайте PromptFallbackConfig при инициализации."
             )
 
         try:
-            if not self._fallback_config.frog_prompts or not self._fallback_config.styles:
-                fallback_text = self._fallback_config.default_fallback_prompt
-            else:
-                frog_prompt = random.choice(self._fallback_config.frog_prompts)
-                style = random.choice(self._fallback_config.styles)
-                fallback_text = f"{frog_prompt}, {style}, high quality, detailed, Wednesday frog meme"
-
-            # Валидация fallback промпта
-            return Prompt(fallback_text)
+            return FallbackPromptBuilder.build(
+                frog_prompts=self._fallback_config.frog_prompts,
+                styles=self._fallback_config.styles,
+                default_fallback=self._fallback_config.default_fallback_prompt,
+            )
         except ValueError as exc:
             raise PromptGenerationError(f"Невалидный fallback промпт: {exc}") from exc
