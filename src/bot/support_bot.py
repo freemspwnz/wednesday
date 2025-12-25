@@ -23,7 +23,6 @@ from bot.wednesday_bot import (
     READ_TIMEOUT_SECONDS,
 )
 from infra.logging.logger import log_all_methods
-from infra.rate_limiting import RateLimiter
 from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
 from shared.retry import retry_on_connect_error
@@ -57,7 +56,7 @@ class SupportBot(BaseHandlers):
 
     Наследуется от BaseHandlers для использования общих методов (_send_log_file,
     _safe_reply_text) и консистентности с другими хендлерами.
-    Использует минимальный BotServices (только с settings и rate_limiter).
+    Использует минимальный SupportBotServices с только необходимыми зависимостями.
     """
 
     def __init__(
@@ -111,16 +110,6 @@ class SupportBot(BaseHandlers):
         # Данные для цепочки запуска основного: сообщение "Запускаю..."
         self.pending_startup_edit: dict[str, Any] | None = None
 
-        # Лимитер на основе Redis для административных команд SupportBot
-        # (например, /log), чтобы избежать случайного "забивания" лог‑канала.
-        # В случае недоступности Redis лимитер автоматически работает в in‑memory
-        # режиме и не блокирует админа.
-        self.rate_limiter: RateLimiter = RateLimiter(
-            redis_client=services.redis_client,
-            prefix="rate:support:",
-            window=60,
-            limit=20,
-        )
         # Настройки приложения для доступа к конфигурации через DI
         self.settings: AppSettings = services.settings
 
@@ -449,7 +438,7 @@ class SupportBot(BaseHandlers):
 
         Отправляет логи администратору. Без аргумента отправляет последний файл,
         с аргументом [count] отправляет логи за N дней (1..10).
-        Команда доступна только администраторам и защищена rate limiting.
+        Команда доступна только администраторам.
 
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении,
