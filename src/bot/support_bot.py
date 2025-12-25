@@ -318,65 +318,81 @@ class SupportBot(BaseHandlers):
             - Останавливает updater через updater.stop().
             - Отправляет уведомления администраторам об остановке.
             - Останавливает приложение через application.stop().
+            - Гарантированно закрывает ресурсы через services.cleanup() в finally блоке.
         """
         if not self.is_running:
             return
-        self.logger.info("Остановка бота-поддержки")
-        self.is_running = False
-        self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
-        # Если был запуск основного через статусное сообщение — добавим строку про остановку Support Bot
-        if isinstance(self.pending_startup_edit, dict):
-            state_data = BotStateData(
-                chat_id=self.pending_startup_edit.get("chat_id"),
-                message_id=self.pending_startup_edit.get("message_id"),
-            )
-            await self.state_coordinator.handle_support_shutdown_edit(
-                bot=self.application.bot,
-                state_data=state_data,
-            )
-            # Очистим ссылку, чтобы не переиспользовать
-            self.pending_startup_edit = None
-        # Сначала останавливаем polling, чтобы освободить соединения
-        try:
-            if hasattr(self.application, "updater") and self.application.updater:
-                await self.application.updater.stop()
-        except Exception as e:
-            self.logger.warning(f"Ошибка при остановке updater'а SupportBot: {e}", exc_info=True)
-        # Короткая пауза, чтобы соединения вернулись в пул
-        try:
-            await asyncio.sleep(0.2)
-        except Exception:
-            pass
-        # Уведомим админов об остановке
-        try:
-            admins = await self.admins_store.list_all_admins()
-            if admins:
-                for admin_id in admins:
-                    try:
-                        await retry_on_connect_error(
-                            self.application.bot.send_message,
-                            chat_id=admin_id,
-                            text=(
-                                "🛑 SupportBot остановлен.\n\n"
-                                "Если это не плановая остановка, проверьте логи и состояние основного бота."
-                            ),
-                            max_retries=3,
-                            delay=2.0,
-                        )
-                    except (TelegramError, _TNetworkError, _TTimedOut):
-                        pass
-        except Exception:
-            pass
-        try:
-            await self.application.stop()
-        except Exception as e:
-            self.logger.warning(f"Ошибка при остановке приложения SupportBot: {e}", exc_info=True)
 
-        # Завершаем жизненный цикл приложения, освобождая все ресурсы PTB
+        self.logger.info("Остановка бота-поддержки")
+
         try:
-            await self.application.shutdown()
+            self.is_running = False
+            self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
+            # Если был запуск основного через статусное сообщение — добавим строку про остановку Support Bot
+            if isinstance(self.pending_startup_edit, dict):
+                state_data = BotStateData(
+                    chat_id=self.pending_startup_edit.get("chat_id"),
+                    message_id=self.pending_startup_edit.get("message_id"),
+                )
+                await self.state_coordinator.handle_support_shutdown_edit(
+                    bot=self.application.bot,
+                    state_data=state_data,
+                )
+                # Очистим ссылку, чтобы не переиспользовать
+                self.pending_startup_edit = None
+            # Сначала останавливаем polling, чтобы освободить соединения
+            try:
+                if hasattr(self.application, "updater") and self.application.updater:
+                    await self.application.updater.stop()
+            except Exception as e:
+                self.logger.warning(f"Ошибка при остановке updater'а SupportBot: {e}", exc_info=True)
+            # Короткая пауза, чтобы соединения вернулись в пул
+            try:
+                await asyncio.sleep(0.2)
+            except Exception:
+                pass
+            # Уведомим админов об остановке
+            try:
+                admins = await self.admins_store.list_all_admins()
+                if admins:
+                    for admin_id in admins:
+                        try:
+                            await retry_on_connect_error(
+                                self.application.bot.send_message,
+                                chat_id=admin_id,
+                                text=(
+                                    "🛑 SupportBot остановлен.\n\n"
+                                    "Если это не плановая остановка, проверьте логи и состояние основного бота."
+                                ),
+                                max_retries=3,
+                                delay=2.0,
+                            )
+                        except (TelegramError, _TNetworkError, _TTimedOut):
+                            pass
+            except Exception:
+                pass
+            try:
+                await self.application.stop()
+            except Exception as e:
+                self.logger.warning(f"Ошибка при остановке приложения SupportBot: {e}", exc_info=True)
+
+            # Завершаем жизненный цикл приложения, освобождая все ресурсы PTB
+            try:
+                await self.application.shutdown()
+            except Exception as e:
+                self.logger.warning(f"Ошибка при shutdown приложения SupportBot: {e}", exc_info=True)
+
+            self.logger.info("SupportBot успешно остановлен")
+
         except Exception as e:
-            self.logger.warning(f"Ошибка при shutdown приложения SupportBot: {e}", exc_info=True)
+            self.logger.error(f"Ошибка при остановке SupportBot: {e}", exc_info=True)
+        finally:
+            # Гарантированное закрытие ресурсов (всегда выполняется)
+            try:
+                await self.services.cleanup()
+                self.logger.info("Все ресурсы SupportBotServices закрыты")
+            except Exception as cleanup_error:
+                self.logger.warning(f"Ошибка при cleanup ресурсов: {cleanup_error}")
 
     async def maintenance_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик неизвестных команд.
