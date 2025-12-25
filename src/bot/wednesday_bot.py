@@ -6,14 +6,14 @@
 import asyncio
 from typing import Any
 
-from telegram import Update
-from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ChatMemberHandler, CommandHandler, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
 from bot.bot_chat_access_validator import BotChatAccessValidator
 from bot.bot_error_handler import BotErrorHandler
 from bot.bot_lifecycle_manager import BotLifecycleManager
 from bot.bot_state_coordinator import BotStateCoordinator, BotStateData
+from bot.chat_event_handler import ChatEventHandler
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
@@ -140,6 +140,11 @@ class WednesdayBot:
         self.error_handler = BotErrorHandler(self.logger)
         self.chat_validator = BotChatAccessValidator(self.logger, timeout=TIMEOUT_MEDIUM_SECONDS)
         self.lifecycle_manager = BotLifecycleManager(self.logger)
+        self.chat_event_handler = ChatEventHandler(
+            services=self.services,
+            bot=self.application.bot,
+            logger=self.logger,
+        )
 
         # Инициализация state coordinator для координации с SupportBot
         admin_chat_id_int = None
@@ -250,7 +255,10 @@ class WednesdayBot:
 
         # Обработчик событий изменения статуса бота в чатах
         self.application.add_handler(
-            ChatMemberHandler(self.on_my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER),
+            ChatMemberHandler(
+                self.chat_event_handler.on_my_chat_member,
+                ChatMemberHandler.MY_CHAT_MEMBER,
+            ),
         )
 
         self.logger.info("Обработчики команд успешно настроены и зарегистрированы")
@@ -426,60 +434,6 @@ class WednesdayBot:
         except Exception as e:
             self.logger.error(f"Ошибка при запуске бота: {e}")
             raise
-
-    async def on_my_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обработчик событий изменения статуса бота в чатах.
-
-        Обрабатывает события, когда бот добавляется или удаляется из чата.
-        Автоматически добавляет чат в список рассылки при добавлении бота и
-        удаляет при удалении бота из чата.
-
-        Args:
-            update: Объект обновления Telegram, содержащий информацию о событии
-                изменения статуса бота в чате через update.my_chat_member.
-            context: Контекст бота (не используется напрямую, но требуется
-                для совместимости с интерфейсом обработчиков событий).
-
-        Side Effects:
-            - При добавлении бота: вызывает chats.add_chat() для добавления чата
-              и отправляет приветственное сообщение.
-            - При удалении бота: вызывает chats.remove_chat() для удаления чата
-              из списка рассылки.
-            - Логирует все операции и ошибки.
-        """
-        try:
-            my_cm = update.my_chat_member
-            if not my_cm:
-                return
-            old = getattr(my_cm.old_chat_member, "status", None)
-            new = getattr(my_cm.new_chat_member, "status", None)
-            chat = my_cm.chat
-            chat_id = chat.id
-            title = getattr(chat, "title", None) or getattr(chat, "username", "") or ""
-
-            # Бот добавлен/активирован в чате
-            if new in {"member", "administrator"} and old in {"left", "kicked", "restricted", None}:
-                await self.services.chats.add_chat(chat_id, title)
-                welcome = (
-                    "🐸 Привет! Я Wednesday Frog Bot.\n\n"
-                    "Я присылаю картинки с жабой по средам (09:00, 12:00, 18:00 по Мск), "
-                    "а также по команде /frog (если не превышен лимит ручных генераций).\n\n"
-                    "Доступные команды:\n"
-                    "• /start — информация\n"
-                    "• /help — справка\n"
-                    "• /frog — сгенерировать жабу сейчас\n"
-                )
-                try:
-                    await self.application.bot.send_message(chat_id=chat_id, text=welcome)
-                except Exception as e:
-                    self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {e}")
-
-            # Бот удалён из чата
-            if new in {"left", "kicked"} and old in {"member", "administrator", "restricted"}:
-                await self.services.chats.remove_chat(chat_id)
-
-        except Exception as e:
-            self.logger.error(f"Ошибка в on_my_chat_member: {e}")
 
     async def _check_chat_access(self) -> None:
         """Проверяет доступность чата для отправки сообщений.
