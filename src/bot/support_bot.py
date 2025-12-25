@@ -158,12 +158,18 @@ class SupportBot(BaseHandlers):
             logger=app_logger,
         )
         from infra.celery.celery_task_queue import CeleryTaskQueue
+        from infra.repos import AdminsRepo
+        from shared.config import TelegramConfig
 
         task_queue = CeleryTaskQueue()
         # SupportBot не использует postgres_pool напрямую, но BotServices требует его
         # Пул передаётся через Dependency Injection
         if postgres_pool is None:
             raise ValueError("postgres_pool не может быть None. Передайте пул через Dependency Injection.")
+
+        # Создаём AdminsRepo для BaseHandlers (используется через DI в BotServices)
+        telegram_config = TelegramConfig()
+        admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config.admin_chat_id)
 
         services: BotServices = BotServices(
             postgres_pool=postgres_pool,
@@ -179,6 +185,7 @@ class SupportBot(BaseHandlers):
             frog_rate_limiter=frog_rate_limiter,
             task_queue=task_queue,
             bot_controller=None,
+            admins_repo=admins_repo,
         )
         # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)
         super().__init__(services)

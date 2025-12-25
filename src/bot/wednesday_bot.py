@@ -388,18 +388,15 @@ class WednesdayBot:
             - Автоматически обрезает длинные сообщения до безопасного размера.
             - Логирует ошибки при отправке.
         """
-        from infra.repos import AdminsRepo
-
-        # Получаем пул из сервисов (ОБЯЗАТЕЛЬНО)
-        if not hasattr(self.services, 'postgres_pool') or self.services.postgres_pool is None:
+        # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
+        if self.services.admins_repo is None:
             self.logger.error(
-                "postgres_pool недоступен в BotServices. Убедитесь, что пул передаётся через Dependency Injection."
+                "admins_repo недоступен в BotServices. "
+                "Убедитесь, что репозиторий передаётся через Dependency Injection."
             )
-            raise RuntimeError("postgres_pool не инициализирован в BotServices")
+            raise RuntimeError("admins_repo не инициализирован в BotServices")
 
-        pool = self.services.postgres_pool
-        admins_store = AdminsRepo(pool=pool)
-        all_admins = await admins_store.list_all_admins()
+        all_admins = await self.services.admins_repo.list_all_admins()
 
         if not all_admins:
             self.logger.warning("Нет администраторов для отправки ошибки")
@@ -658,18 +655,15 @@ class WednesdayBot:
                     else:
                         # Если ADMIN_CHAT_ID не задан, разошлем всем админам из хранилища (без дубля с CHAT_ID)
                         try:
-                            from infra.repos import AdminsRepo
-
-                            # Получаем пул из сервисов (ОБЯЗАТЕЛЬНО)
-                            if not hasattr(self.services, 'postgres_pool') or self.services.postgres_pool is None:
+                            # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
+                            if self.services.admins_repo is None:
                                 self.logger.error(
-                                    "postgres_pool недоступен в BotServices. "
-                                    "Убедитесь, что пул передаётся через Dependency Injection."
+                                    "admins_repo недоступен в BotServices. "
+                                    "Убедитесь, что репозиторий передаётся через Dependency Injection."
                                 )
-                                raise RuntimeError("postgres_pool не инициализирован в BotServices")
+                                raise RuntimeError("admins_repo не инициализирован в BotServices")
 
-                            pool = self.services.postgres_pool
-                            admins = await AdminsRepo(pool=pool).list_all_admins()
+                            admins = await self.services.admins_repo.list_all_admins()
                             for admin_id in admins:
                                 try:
                                     chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None
@@ -1032,7 +1026,6 @@ class WednesdayBot:
                 shutdown_message = (
                     "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
                 )
-                from infra.repos import AdminsRepo
                 from shared.config import Config
 
                 # Используем глобальный config из модуля
@@ -1061,18 +1054,15 @@ class WednesdayBot:
                     except Exception:
                         pass
                 else:
-                    from infra.repos import AdminsRepo
-
-                    # Получаем пул из сервисов (ОБЯЗАТЕЛЬНО)
-                    if not hasattr(self.services, 'postgres_pool') or self.services.postgres_pool is None:
+                    # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
+                    if self.services.admins_repo is None:
                         self.logger.error(
-                            "postgres_pool недоступен в BotServices. "
-                            "Убедитесь, что пул передаётся через Dependency Injection."
+                            "admins_repo недоступен в BotServices. "
+                            "Убедитесь, что репозиторий передаётся через Dependency Injection."
                         )
-                        raise RuntimeError("postgres_pool не инициализирован в BotServices")
+                        raise RuntimeError("admins_repo не инициализирован в BotServices")
 
-                    pool = self.services.postgres_pool
-                    admins = await AdminsRepo(pool=pool).list_all_admins()
+                    admins = await self.services.admins_repo.list_all_admins()
                     for admin_id in admins:
                         try:
                             chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None

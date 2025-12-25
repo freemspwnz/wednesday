@@ -15,7 +15,6 @@ from telegram import Bot, Message, Update
 from telegram.ext import ContextTypes
 
 from infra.logging.logger import get_logger
-from infra.repos import AdminsRepo
 from shared.bot_services import BotServices
 from shared.retry import (
     retry_on_connect_error as global_retry_on_connect_error,
@@ -40,10 +39,10 @@ class BaseHandlers:
         """
         self.logger = get_logger(__name__)
         self.services: BotServices = services
-        # Используем пул из сервисов (ОБЯЗАТЕЛЬНО)
-        if not hasattr(services, 'postgres_pool') or services.postgres_pool is None:
-            raise RuntimeError("postgres_pool не инициализирован в BotServices")
-        self.admins_store: AdminsRepo = AdminsRepo(pool=services.postgres_pool)
+        # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
+        if services.admins_repo is None:
+            raise RuntimeError("admins_repo не инициализирован в BotServices")
+        self.admins_store = services.admins_repo
 
     async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.
