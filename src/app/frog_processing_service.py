@@ -111,17 +111,16 @@ class FrogProcessingService(BaseService):
             if self._usage_tracker:
                 try:
                     await self._usage_tracker.increment_with_pool(1)
-                except (MemoryError, SystemExit, KeyboardInterrupt):
-                    # Системные ошибки пробрасываем выше даже для не критичных операций
-                    raise
                 except BaseException as e:
-                    # Ошибка обновления usage не критична, только логируем
-                    self.logger.warning(
-                        f"Ошибка обновления usage: {e}",
-                        event="usage_update_failed",
-                        status="warning",
-                        error_type=type(e).__name__,
-                        error_message=str(e),
+                    # Ошибка обновления usage не критична, логируем через handle_unexpected_error
+                    # но не пробрасываем (graceful degradation)
+                    self.handle_unexpected_error(
+                        e,
+                        UnexpectedImageError,
+                        message=f"Ошибка обновления usage: {e}",
+                        context={
+                            "event": "usage_update_failed",
+                        },
                     )
 
             return FrogRequestResult(status="success", error=None)

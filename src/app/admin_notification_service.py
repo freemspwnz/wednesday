@@ -9,7 +9,7 @@ from app.admin_notification_builders import (
     GenerationErrorNotificationBuilder,
 )
 from shared.base.base_service import BaseService
-from shared.base.exceptions import MessagingError, RepoError
+from shared.base.exceptions import MessagingError, RepoError, UnexpectedAppError
 from shared.protocols import IAdminsRepo, ILogger, IMessagingService
 
 
@@ -113,18 +113,16 @@ class AdminNotificationService(BaseService):
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
-        except (MemoryError, SystemExit, KeyboardInterrupt):
-            # Системные ошибки пробрасываем выше без обёртки
-            raise
         except BaseException as e:
-            # Неожиданная ошибка
-            self.logger.error(
-                f"Неожиданная ошибка при уведомлении администраторов: {e}",
-                event="admin_notification_unexpected_error",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-                exc_info=True,
+            # Неожиданная ошибка - логируем через handle_unexpected_error
+            # Уведомления не критичны, поэтому не пробрасываем, только логируем
+            self.handle_unexpected_error(
+                e,
+                UnexpectedAppError,
+                message=f"Неожиданная ошибка при уведомлении администраторов: {e}",
+                context={
+                    "event": "admin_notification_unexpected_error",
+                },
             )
 
     async def notify_dispatch_failure(
@@ -199,16 +197,14 @@ class AdminNotificationService(BaseService):
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
-        except (MemoryError, SystemExit, KeyboardInterrupt):
-            # Системные ошибки пробрасываем выше без обёртки
-            raise
         except BaseException as e:
-            # Неожиданная ошибка
-            self.logger.error(
-                f"Неожиданная ошибка при уведомлении администраторов: {e}",
-                event="admin_notification_unexpected_error",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-                exc_info=True,
+            # Неожиданная ошибка - логируем через handle_unexpected_error
+            # Уведомления не критичны, поэтому не пробрасываем, только логируем
+            self.handle_unexpected_error(
+                e,
+                UnexpectedAppError,
+                message=f"Неожиданная ошибка при уведомлении администраторов: {e}",
+                context={
+                    "event": "admin_notification_unexpected_error",
+                },
             )

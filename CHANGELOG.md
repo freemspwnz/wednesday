@@ -4,6 +4,26 @@
 
 ### Изменено
 
+- **Устранение дублирования проверок системных ошибок: удаление избыточных проверок перед BaseException**:
+  - Удалены избыточные проверки `except (MemoryError, SystemExit, KeyboardInterrupt)` в `frog_delivery_service.py`
+  - Удалены избыточные проверки `except (MemoryError, SystemExit, KeyboardInterrupt)` в `frog_processing_service.py`
+  - Удалены избыточные проверки `except (MemoryError, SystemExit, KeyboardInterrupt)` в `admin_notification_service.py` (2 места)
+  - Упрощена обработка ошибок: системные ошибки обрабатываются автоматически через `handle_unexpected_error()` из `BaseService`
+  - Улучшена читаемость кода: удалено дублирование логики обработки системных ошибок
+  - Соответствие принципу DRY: системные ошибки обрабатываются в одном месте (`BaseService.handle_unexpected_error`)
+  - Соответствие архитектуре: единая точка обработки системных ошибок в базовом классе
+
+- **Унификация обработки неожиданных ошибок: использование handle_unexpected_error во всех сервисах**:
+  - Исправлен `admin_notification_service.py`: заменено прямое логирование `BaseException` на использование `handle_unexpected_error()`
+  - Исправлен `frog_processing_service.py`: заменено прямое логирование `BaseException` при обновлении usage на использование `handle_unexpected_error()`
+  - Исправлен `frog_delivery_service.py`: заменен `except BaseException: pass` на использование `handle_unexpected_error()` для удаления статусного сообщения
+  - Проверен `image_service.py`: подтверждено правильное использование `handle_unexpected_error()` для graceful degradation при выборе подписи
+  - Унифицирована обработка неожиданных ошибок: все сервисы теперь используют `handle_unexpected_error()` из `BaseService`
+  - Улучшена консистентность: единообразная обработка ошибок во всех сервисах
+  - Улучшена трассируемость: все неожиданные ошибки логируются через единый механизм с полным контекстом
+  - Соответствие принципу DRY: устранено дублирование логики обработки неожиданных ошибок
+  - Соответствие архитектуре: все сервисы используют наследуемый метод из `BaseService`
+
 - **Устранение избыточных опциональных зависимостей: обязательные критичные зависимости и документация опциональных**:
   - Сделана `image_storage` обязательной зависимостью в `ImageService`: критична для fallback функциональности через `get_random_saved_image()`
   - Удалена проверка `if self._storage is None` из `get_random_saved_image()`: теперь всегда пытается получить изображение

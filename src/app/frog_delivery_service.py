@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.fallback_image_delivery_service import FallbackImageDeliveryService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import MessagingError
+from shared.base.exceptions import MessagingError, UnexpectedAppError
 from shared.protocols import ILogger, IMessagingService
 from shared.retry import retry_on_connect_error
 
@@ -147,9 +147,14 @@ class FrogDeliveryService(BaseService):
                 chat_id=chat_id,
                 message_id=message_id,
             )
-        except (MemoryError, SystemExit, KeyboardInterrupt):
-            # Системные ошибки пробрасываем выше
-            raise
-        except BaseException:
-            # Игнорируем другие ошибки при удалении статусного сообщения (не критично)
-            pass
+        except BaseException as e:
+            # Ошибка удаления статусного сообщения не критична, логируем через handle_unexpected_error
+            # но не пробрасываем (graceful degradation)
+            self.handle_unexpected_error(
+                e,
+                UnexpectedAppError,
+                message=f"Ошибка при удалении статусного сообщения: {e}",
+                context={
+                    "event": "status_message_delete_failed",
+                },
+            )
