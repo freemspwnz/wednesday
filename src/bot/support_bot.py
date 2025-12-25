@@ -26,6 +26,7 @@ from infra.logging.logger import get_logger, log_all_methods
 from infra.rate_limiting import RateLimiter
 from shared.config import AppSettings, Config
 from shared.protocols import IRateLimiter
+from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
     from infra.redis.redis_client import RedisClient
@@ -58,7 +59,7 @@ class SupportBot(BaseHandlers):
     вместо прямого чтения из глобального config.
 
     Наследуется от BaseHandlers для использования общих методов (_send_log_file,
-    _retry_on_connect_error, _safe_reply_text) и консистентности с другими хендлерами.
+    _safe_reply_text) и консистентности с другими хендлерами.
     Использует минимальный BotServices (только с settings и rate_limiter).
     """
 
@@ -352,7 +353,7 @@ class SupportBot(BaseHandlers):
             admins = await self.admins_store.list_all_admins()
             for admin_id in admins:
                 try:
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         self.application.bot.send_message,
                         chat_id=admin_id,
                         text=(
@@ -437,7 +438,7 @@ class SupportBot(BaseHandlers):
             if admins:
                 for admin_id in admins:
                     try:
-                        await self._retry_on_connect_error(
+                        await retry_on_connect_error(
                             self.application.bot.send_message,
                             chat_id=admin_id,
                             text=(
@@ -490,7 +491,7 @@ class SupportBot(BaseHandlers):
         except Exception:
             pass
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 "🛠 Технические работы. Основной бот временно недоступен. \nПожалуйста, попробуйте позже.",
                 max_retries=3,
@@ -537,7 +538,7 @@ class SupportBot(BaseHandlers):
         chat_id = update.effective_chat.id
         self.logger.info(f"SupportBot /log от user_id={user_id}, chat_id={chat_id}")
         if not await self._is_admin(user_id):
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 "❌ Доступно только администратору",
                 max_retries=3,
@@ -548,7 +549,7 @@ class SupportBot(BaseHandlers):
         try:
             logs_dir = Path("logs")
             if not logs_dir.exists():
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📭 Папка logs пуста или отсутствует",
                     max_retries=3,
@@ -562,7 +563,7 @@ class SupportBot(BaseHandlers):
             if context.args and len(context.args) > 0:
                 raw = context.args[0]
                 if not raw.isdigit():
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         update.message.reply_text,
                         "❌ Неверный аргумент. Используйте: /log [count], где count — число 1..10",
                         max_retries=3,
@@ -592,7 +593,7 @@ class SupportBot(BaseHandlers):
                 selected = sorted(log_files, key=lambda p: p.stat().st_mtime, reverse=True)[:1]
 
             if not selected:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📭 Нет логов для отправки",
                     max_retries=3,
@@ -600,7 +601,7 @@ class SupportBot(BaseHandlers):
                 )
                 return
 
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 f"📦 Отправляю файл(ы) логов за {len(selected)} дн. {capped_note or ''}",
                 max_retries=3,
@@ -618,7 +619,7 @@ class SupportBot(BaseHandlers):
                     self.logger.info("SupportBot: лог отправлен успешно")
                 except (TelegramError, _TNetworkError, _TTimedOut) as e:
                     self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 "✅ Готово",
                 max_retries=3,
@@ -627,7 +628,7 @@ class SupportBot(BaseHandlers):
         except Exception as e:
             self.logger.error(f"Ошибка в команде /log: {e}", exc_info=True)
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ Ошибка при отправке логов: {str(e)[:200]}",
                     max_retries=3,
@@ -663,7 +664,7 @@ class SupportBot(BaseHandlers):
         chat_id = update.effective_chat.id
         self.logger.info(f"SupportBot /start от user_id={user_id}, chat_id={chat_id}")
         if not await self._is_admin(user_id):
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 "❌ Доступно только администратору",
                 max_retries=3,
@@ -686,7 +687,7 @@ class SupportBot(BaseHandlers):
         status_msg = None
         if not is_admin_chat:
             try:
-                status_msg = await self._retry_on_connect_error(
+                status_msg = await retry_on_connect_error(
                     update.message.reply_text,
                     "🚀 Запускаю основной бот...",
                     max_retries=3,
@@ -743,7 +744,7 @@ class SupportBot(BaseHandlers):
         chat_id = update.effective_chat.id
         self.logger.info(f"SupportBot /help от user_id={user_id}, chat_id={chat_id}")
         if not await self._is_admin(user_id):
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 "❌ Доступно только администратору",
                 max_retries=3,
@@ -759,7 +760,7 @@ class SupportBot(BaseHandlers):
             "Поведение по умолчанию: любая неизвестная команда — сообщение о техработах."
         )
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 help_text,
                 max_retries=3,

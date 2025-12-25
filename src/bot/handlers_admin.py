@@ -11,6 +11,7 @@ from bot.base_handlers import BaseHandlers
 from shared.base.exceptions import AccessDeniedError, ServiceError
 from shared.bot_services import BotServices
 from shared.paths import LOGS_DIR
+from shared.retry import retry_on_connect_error
 
 # Константы
 MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
@@ -62,7 +63,7 @@ class AdminHandlers(BaseHandlers):
             - Получает список чатов через chats.list_chat_ids().
             - Получает метрики через metrics.get_summary().
             - Отправляет подробный статус пользователю.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -73,7 +74,7 @@ class AdminHandlers(BaseHandlers):
         # Проверка доступа администратора
         if not await self._admin_access.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -90,7 +91,7 @@ class AdminHandlers(BaseHandlers):
             )
 
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     status_message,
                     max_retries=3,
@@ -100,7 +101,7 @@ class AdminHandlers(BaseHandlers):
             except Exception as e:
                 self.logger.error(f"Не удалось отправить статус после {3} попыток: {e}")
                 try:
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         update.message.reply_text,
                         f"❌ Ошибка при получении статуса: {str(e)[:200]}",
                         max_retries=3,
@@ -111,7 +112,7 @@ class AdminHandlers(BaseHandlers):
         except Exception as e:
             self.logger.error(f"Ошибка при получении статуса: {e}")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ Ошибка при получении статуса: {str(e)[:200]}",
                     max_retries=3,
@@ -136,7 +137,7 @@ class AdminHandlers(BaseHandlers):
         Side Effects:
             - Читает файлы логов из директории logs/.
             - Отправляет файлы логов в чат через context.bot.send_document().
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user or not update.effective_chat:
             return
@@ -144,7 +145,7 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         if not await self.admins_store.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -160,7 +161,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.info(
                     f"Запрошена команда /log, но директория логов отсутствует: {logs_dir}",
                 )
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📭 Папка logs пуста или отсутствует",
                     max_retries=3,
@@ -177,7 +178,7 @@ class AdminHandlers(BaseHandlers):
             raw = context.args[0]
             if not raw.isdigit():
                 try:
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         update.message.reply_text,
                         "❌ Неверный аргумент. Используйте: /log [count], где count — число 1..10",
                         max_retries=3,
@@ -209,7 +210,7 @@ class AdminHandlers(BaseHandlers):
 
         if not candidates:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📭 Нет логов для отправки",
                     max_retries=3,
@@ -220,7 +221,7 @@ class AdminHandlers(BaseHandlers):
             return
 
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 f"📦 Отправляю файл(ы) логов за {len(candidates)} дн. {capped_note or ''}",
                 max_retries=3,
@@ -241,7 +242,7 @@ class AdminHandlers(BaseHandlers):
             except (TelegramError, NetworkError, TimedOut) as e:
                 self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 "✅ Готово",
                 max_retries=3,
@@ -266,7 +267,7 @@ class AdminHandlers(BaseHandlers):
         Side Effects:
             - Сохраняет метаданные сообщения для последующего редактирования.
             - Вызывает bot_controller.stop() для остановки основного бота через DI.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -277,7 +278,7 @@ class AdminHandlers(BaseHandlers):
         # Проверка прав администратора
         if not await self.admins_store.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -303,7 +304,7 @@ class AdminHandlers(BaseHandlers):
         status_msg = None
         if not is_admin_chat:
             try:
-                status_msg = await self._retry_on_connect_error(
+                status_msg = await retry_on_connect_error(
                     update.message.reply_text,
                     "🛑 Останавливаю Wednesday Frog Bot...",
                     max_retries=3,
@@ -363,7 +364,7 @@ class AdminHandlers(BaseHandlers):
             - Использует image_generator.get_random_saved_image() как fallback при недоступности генерации.
             - Отправляет изображение в указанные чаты через context.bot.send_image().
             - Вызывает usage.increment() для увеличения счетчика использования.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -373,7 +374,7 @@ class AdminHandlers(BaseHandlers):
 
         if not await self.admins_store.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -387,7 +388,7 @@ class AdminHandlers(BaseHandlers):
         if not chat_ids:
             self.logger.info("Нет активных чатов")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📭 Нет активных чатов для отправки",
                     max_retries=3,
@@ -419,7 +420,7 @@ class AdminHandlers(BaseHandlers):
                 + "• /force_send all — отправить жабу во все чаты"
             )
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     message,
                     max_retries=3,
@@ -455,7 +456,7 @@ class AdminHandlers(BaseHandlers):
                     target_chat_ids = [requested_chat_id]
                 else:
                     try:
-                        await self._retry_on_connect_error(
+                        await retry_on_connect_error(
                             update.message.reply_text,
                             f"❌ Чат {requested_chat_id} не найден в списке активных чатов",
                             max_retries=3,
@@ -466,7 +467,7 @@ class AdminHandlers(BaseHandlers):
                     return
             except ValueError:
                 try:
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         update.message.reply_text,
                         "❌ Неверный аргумент. Используйте: /force_send <chat_id> или /force_send all",
                         max_retries=3,
@@ -478,7 +479,7 @@ class AdminHandlers(BaseHandlers):
 
         if not target_chat_ids:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Нет целевых чатов для отправки",
                     max_retries=3,
@@ -490,7 +491,7 @@ class AdminHandlers(BaseHandlers):
 
         # Отправляем статусное сообщение
         try:
-            status_msg = await self._retry_on_connect_error(
+            status_msg = await retry_on_connect_error(
                 update.message.reply_text,
                 f"🔄 Генерирую и отправляю жабу в {len(target_chat_ids)} чат(ов)...",
                 max_retries=3,
@@ -536,7 +537,7 @@ class AdminHandlers(BaseHandlers):
             else:
                 self.logger.warning("Нет сохраненных изображений для отправки")
                 try:
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         update.message.reply_text,
                         "❌ Не удалось получить изображение (лимит исчерпан и нет сохраненных изображений)",
                         max_retries=3,
@@ -554,7 +555,7 @@ class AdminHandlers(BaseHandlers):
         if not image_data:
             self.logger.error("Не удалось получить изображение для отправки")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Не удалось получить изображение для отправки",
                     max_retries=3,
@@ -573,7 +574,7 @@ class AdminHandlers(BaseHandlers):
         admin_chat_id = self.services.settings.admin_chat_id
         if admin_chat_id:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     context.bot.send_photo,
                     chat_id=admin_chat_id,
                     photo=image_data,
@@ -590,7 +591,7 @@ class AdminHandlers(BaseHandlers):
         failed_count = 0
         for target_chat_id in target_chat_ids:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     context.bot.send_photo,
                     chat_id=target_chat_id,
                     photo=image_data,
@@ -618,7 +619,7 @@ class AdminHandlers(BaseHandlers):
             f"• Использован: {'fallback (лимит исчерпан)' if use_fallback else 'новая генерация'}"
         )
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 result_message,
                 max_retries=3,
@@ -643,7 +644,7 @@ class AdminHandlers(BaseHandlers):
         Side Effects:
             - Вызывает chats.add_chat() для добавления чата в хранилище.
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
 
         Raises:
             ValueError: Если переданный chat_id не является числом.
@@ -653,7 +654,7 @@ class AdminHandlers(BaseHandlers):
 
         if not await self.admins_store.is_admin(update.effective_user.id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -665,7 +666,7 @@ class AdminHandlers(BaseHandlers):
 
         if not context.args or len(context.args) == 0:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📝 Использование: /add_chat <chat_id>",
                     max_retries=3,
@@ -679,7 +680,7 @@ class AdminHandlers(BaseHandlers):
             chat_id = int(context.args[0])
             result = await self._admin_command.add_chat(chat_id, "Manually added")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     result.message,
                     max_retries=3,
@@ -689,7 +690,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
         except ValueError:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Неверный chat_id (должен быть числом)",
                     max_retries=3,
@@ -722,7 +723,7 @@ class AdminHandlers(BaseHandlers):
 
         if not await self.admins_store.is_admin(update.effective_user.id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -734,7 +735,7 @@ class AdminHandlers(BaseHandlers):
 
         if not context.args or len(context.args) == 0:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📝 Использование: /remove_chat <chat_id>",
                     max_retries=3,
@@ -748,7 +749,7 @@ class AdminHandlers(BaseHandlers):
             chat_id = int(context.args[0])
             result = await self._admin_command.remove_chat(chat_id)
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     result.message,
                     max_retries=3,
@@ -758,7 +759,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
         except ValueError:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Неверный chat_id (должен быть числом)",
                     max_retries=3,
@@ -784,7 +785,7 @@ class AdminHandlers(BaseHandlers):
             - Вызывает chats.list_chat_ids() для получения списка ID чатов.
             - Вызывает context.bot.get_chat() для каждого чата для получения названия.
             - Отправляет форматированный список чатов пользователю.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -794,7 +795,7 @@ class AdminHandlers(BaseHandlers):
 
         if not await self.admins_store.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -808,7 +809,7 @@ class AdminHandlers(BaseHandlers):
         if not chat_ids:
             self.logger.info("Нет активных чатов")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📭 Нет активных чатов",
                     max_retries=3,
@@ -831,7 +832,7 @@ class AdminHandlers(BaseHandlers):
 
         message = "📋 Активные чаты:\n\n" + "\n".join(chat_list)
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 message,
                 max_retries=3,
@@ -870,7 +871,7 @@ class AdminHandlers(BaseHandlers):
         if not await self.admins_store.is_admin(user_id):
             self.logger.warning(f"set_frog_limit_command: пользователь {user_id} не является администратором")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -882,7 +883,7 @@ class AdminHandlers(BaseHandlers):
         if not context.args or len(context.args) < 1:
             self.logger.warning("set_frog_limit_command: аргументы не предоставлены")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"📝 Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})",
                     max_retries=3,
@@ -898,7 +899,7 @@ class AdminHandlers(BaseHandlers):
                 raise ValueError(f"Порог должен быть положительным числом, получено: {raw}")
             result = await self._admin_command.set_frog_threshold(raw, max_threshold=MAX_FROG_THRESHOLD)
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     result.message,
                     max_retries=3,
@@ -909,7 +910,7 @@ class AdminHandlers(BaseHandlers):
         except ValueError as e:
             self.logger.error(f"set_frog_limit_command: ошибка валидации параметра: {e}", exc_info=True)
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ Неверный параметр. Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})",
                     max_retries=3,
@@ -946,7 +947,7 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         if not await self.admins_store.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -957,7 +958,7 @@ class AdminHandlers(BaseHandlers):
             return
         if not context.args or len(context.args) < 1:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📝 Использование: /set_frog_used <count>",
                     max_retries=3,
@@ -972,7 +973,7 @@ class AdminHandlers(BaseHandlers):
                 raise ValueError
             result = await self._admin_command.set_frog_used(raw)
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     result.message,
                     max_retries=3,
@@ -982,7 +983,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
         except ValueError:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Неверный параметр. Использование: /set_frog_used <count>",
                     max_retries=3,
@@ -1010,7 +1011,7 @@ class AdminHandlers(BaseHandlers):
         Side Effects:
             - Вызывает admins_store.add_admin() для добавления пользователя в список администраторов.
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -1022,7 +1023,7 @@ class AdminHandlers(BaseHandlers):
         if not await self._admin_access.is_super_admin(user_id):
             self.logger.warning(f"mod_command: пользователь {user_id} не является главным администратором")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только главному администратору",
                     max_retries=3,
@@ -1038,7 +1039,7 @@ class AdminHandlers(BaseHandlers):
         if target_user_id is None:
             self.logger.warning("mod_command: не удалось определить target_user_id")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📝 Использование: ответьте на сообщение пользователя командой /mod или вызовите: /mod <user_id>",
                     max_retries=3,
@@ -1057,7 +1058,7 @@ class AdminHandlers(BaseHandlers):
                 requester_user_id=user_id,
             )
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     result.message,
                     max_retries=3,
@@ -1068,7 +1069,7 @@ class AdminHandlers(BaseHandlers):
         except AccessDeniedError:
             # Должно быть обработано выше, но на всякий случай
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только главному администратору",
                     max_retries=3,
@@ -1099,7 +1100,7 @@ class AdminHandlers(BaseHandlers):
             - Вызывает admins_store.list_all_admins() для получения списка администраторов.
             - Вызывает context.bot.get_chat() для получения информации о пользователях.
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -1111,7 +1112,7 @@ class AdminHandlers(BaseHandlers):
         if not await self._admin_access.is_super_admin(user_id):
             self.logger.warning(f"unmod_command: пользователь {user_id} не является главным администратором")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только главному администратору",
                     max_retries=3,
@@ -1131,7 +1132,7 @@ class AdminHandlers(BaseHandlers):
                 admins = await self._admin_command.list_all_admins()
                 if not admins:
                     try:
-                        await self._retry_on_connect_error(
+                        await retry_on_connect_error(
                             update.message.reply_text,
                             "📭 Нет администраторов",
                             max_retries=3,
@@ -1169,7 +1170,7 @@ class AdminHandlers(BaseHandlers):
 
                 message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
                 try:
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         update.message.reply_text,
                         message,
                         max_retries=3,
@@ -1181,7 +1182,7 @@ class AdminHandlers(BaseHandlers):
             except Exception as e:
                 self.logger.error(f"Ошибка при получении списка админов: {e}", exc_info=True)
                 try:
-                    await self._retry_on_connect_error(
+                    await retry_on_connect_error(
                         update.message.reply_text,
                         "❌ Ошибка при получении списка администраторов",
                         max_retries=3,
@@ -1209,7 +1210,7 @@ class AdminHandlers(BaseHandlers):
                 super_admin_id=super_admin_id,
             )
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     result.message,
                     max_retries=3,
@@ -1220,7 +1221,7 @@ class AdminHandlers(BaseHandlers):
         except AccessDeniedError:
             # Должно быть обработано выше, но на всякий случай
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только главному администратору",
                     max_retries=3,
@@ -1231,7 +1232,7 @@ class AdminHandlers(BaseHandlers):
         except ServiceError as e:
             # Ошибка при попытке удалить главного админа
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ {str(e)[:200]}",
                     max_retries=3,
@@ -1256,7 +1257,7 @@ class AdminHandlers(BaseHandlers):
         Side Effects:
             - Вызывает admins_store.list_all_admins() для получения списка администраторов.
             - Отправляет форматированный список администраторов пользователю.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -1266,7 +1267,7 @@ class AdminHandlers(BaseHandlers):
 
         if not await self.admins_store.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -1280,7 +1281,7 @@ class AdminHandlers(BaseHandlers):
         if not all_admins:
             self.logger.info("Нет администраторов")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📭 Нет администраторов",
                     max_retries=3,
@@ -1298,7 +1299,7 @@ class AdminHandlers(BaseHandlers):
 
         message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 message,
                 max_retries=3,

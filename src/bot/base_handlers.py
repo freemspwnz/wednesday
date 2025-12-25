@@ -7,25 +7,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import TypeVar
 
 from telegram import Bot, Message, Update
 from telegram.ext import ContextTypes
 
 from infra.logging.logger import get_logger
 from shared.bot_services import BotServices
-from shared.retry import (
-    retry_on_connect_error as global_retry_on_connect_error,
-    retry_telegram,
-)
+from shared.retry import retry_on_connect_error, retry_telegram
 
 # Константы
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
 RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по умолчанию
-
-T = TypeVar("T")
 
 
 class BaseHandlers:
@@ -44,7 +37,7 @@ class BaseHandlers:
             raise RuntimeError("admins_repo не инициализирован в BotServices")
         self.admins_store = services.admins_repo
 
-    async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
+    async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:  # noqa: PLR6301
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.
 
         Чтение файла выполняется в отдельном потоке через run_in_executor,
@@ -58,13 +51,14 @@ class BaseHandlers:
             return p.read_bytes()
 
         data = await loop.run_in_executor(None, _read_bytes, path)
-        await self._retry_on_connect_error(
+        await retry_on_connect_error(
             bot.send_document,
             chat_id=chat_id,
             document=data,
             filename=path.name,
             max_retries=3,
             delay=2,
+            handle_rate_limit=True,
         )
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
@@ -129,35 +123,7 @@ class BaseHandlers:
         """Безопасная отправка текста с retry для Telegram/сетевых ошибок.
 
         Используется как сокращённая запись для типичного паттерна
-        `_retry_on_connect_error(message.reply_text, ...)` в местах, где
+        `retry_on_connect_error(message.reply_text, ...)` в местах, где
         не требуется гибкая настройка retry-параметров.
         """
         await message.reply_text(text)
-
-    async def _retry_on_connect_error(  # noqa: PLR6301
-        self,
-        func: Callable[..., Awaitable[T]],
-        *args: object,
-        max_retries: int = MAX_RETRIES_DEFAULT,
-        delay: float = RETRY_DELAY_DEFAULT,
-        **kwargs: object,
-    ) -> T:
-        """
-        Выполняет функцию с повторными попытками при сетевых/Telgram-ошибках.
-
-        Это тонкая обёртка вокруг общего helper'а `utils.retry.retry_on_connect_error`,
-        оставленная для совместимости с существующими тестами, которые патчат
-        `_retry_on_connect_error` через monkeypatch.
-
-        Note:
-            Метод остаётся instance method (а не staticmethod) намеренно, чтобы
-            тесты могли патчить его через monkeypatch.setattr(handler, "_retry_on_connect_error", ...).
-        """
-        return await global_retry_on_connect_error(
-            func,
-            *args,
-            max_retries=max_retries,
-            delay=delay,
-            handle_rate_limit=True,
-            **kwargs,
-        )

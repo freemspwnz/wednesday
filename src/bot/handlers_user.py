@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from shared.bot_services import BotServices
+from shared.retry import retry_on_connect_error
 
 # Константы
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
@@ -39,7 +40,7 @@ class UserHandlers(BaseHandlers):
 
         Side Effects:
             - Отправляет приветственное сообщение пользователю.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -56,7 +57,7 @@ class UserHandlers(BaseHandlers):
         )
 
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 welcome_message,
                 max_retries=3,
@@ -82,7 +83,7 @@ class UserHandlers(BaseHandlers):
         Side Effects:
             - Проверяет права администратора через admins_store.is_admin().
             - Отправляет соответствующую справку (админскую или пользовательскую).
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -138,7 +139,7 @@ class UserHandlers(BaseHandlers):
             self.logger.info("Отправлена пользовательская справка")
 
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 help_message,
                 max_retries=3,
@@ -183,7 +184,7 @@ class UserHandlers(BaseHandlers):
         )
         if not is_allowed:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     rate_limit_message or "⏰ Повторная генерация временно недоступна",
                     max_retries=MAX_RETRIES_DEFAULT,
@@ -200,7 +201,7 @@ class UserHandlers(BaseHandlers):
         if usage and not await usage.can_use_frog():
             total, threshold, quota = await usage.get_limits_info()
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     (
                         "🚫 Лимит ручных генераций на этот месяц исчерпан.\n"
@@ -219,7 +220,7 @@ class UserHandlers(BaseHandlers):
         # Отправляем сообщение о начале генерации
         status_message = None
         try:
-            status_message = await self._retry_on_connect_error(
+            status_message = await retry_on_connect_error(
                 update.message.reply_text,
                 "🐸 Генерирую жабу для вас... Это может занять несколько секунд.",
                 max_retries=MAX_RETRIES_DEFAULT,
@@ -248,7 +249,7 @@ class UserHandlers(BaseHandlers):
                     pass
             # Отправляем сообщение пользователю об ошибке
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "⚠️ Не удалось поставить запрос в очередь. Попробуйте позже.",
                     max_retries=3,
@@ -271,7 +272,7 @@ class UserHandlers(BaseHandlers):
 
         Side Effects:
             - Отправляет сообщение с информацией о доступных командах пользователю.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -289,7 +290,7 @@ class UserHandlers(BaseHandlers):
         )
 
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 unknown_message,
                 max_retries=3,

@@ -4,6 +4,17 @@
 
 ### Исправлено
 
+- **Устранение дублирования логики retry: удаление обёртки _retry_on_connect_error из BaseHandlers**:
+  - Удален метод `_retry_on_connect_error` из `BaseHandlers`, который был тонкой обёрткой над глобальной функцией
+  - Заменены все использования `self._retry_on_connect_error(...)` на прямые вызовы `retry_on_connect_error(...)` из `shared.retry`
+  - Добавлены прямые импорты `retry_on_connect_error` во все файлы handlers (admin, user, models, support_bot)
+  - Обновлены docstring'и: упоминания `_retry_on_connect_error()` заменены на `retry_on_connect_error()`
+  - Удалены неиспользуемые импорты (TypeVar, Awaitable, Callable) из `base_handlers.py`
+  - Улучшена архитектурная чистота: устранено дублирование логики между instance method и global function
+  - Улучшена ясность ответственности: теперь явно используется глобальная функция retry вместо неясной обёртки
+  - Соответствие принципу DRY: единая точка реализации retry-логики в `shared.retry`
+  - Исправление проблемы из архитектурного аудита bot-слоя
+
 - **Устранение нарушений архитектурных границ в bot слое: использование DI вместо прямых импортов из infra/**:
   - Удалены прямые импорты `AdminsRepo` из `infra.repos` в `base_handlers.py` и `wednesday_bot.py`
   - Исправлен `base_handlers.py`: теперь использует `services.admins_repo` через DI вместо создания `AdminsRepo` напрямую

@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from bot.base_handlers import BaseHandlers
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError
 from shared.bot_services import BotServices
+from shared.retry import retry_on_connect_error
 
 # Константы
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
@@ -47,14 +48,14 @@ class ModelHandlers(BaseHandlers):
         Side Effects:
             - Вызывает image_generator.image_client.set_model() для установки модели.
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
 
         if not await self.admins_store.is_admin(update.effective_user.id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -66,7 +67,7 @@ class ModelHandlers(BaseHandlers):
 
         if not context.args or len(context.args) == 0:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     (
                         "📝 Использование: /set_kandinsky_model <pipeline_id или название модели>\n\n"
@@ -82,7 +83,7 @@ class ModelHandlers(BaseHandlers):
 
         model_arg = " ".join(context.args)  # Объединяем аргументы на случай названий с пробелами
         try:
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 "⏳ Устанавливаю модель...",
                 max_retries=3,
@@ -94,14 +95,14 @@ class ModelHandlers(BaseHandlers):
         try:
             result = await self._model_management_service.set_kandinsky_model(model_arg)
             if result.success:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"✅ {result.message}",
                     max_retries=3,
                     delay=2,
                 )
             else:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ {result.message}",
                     max_retries=3,
@@ -110,7 +111,7 @@ class ModelHandlers(BaseHandlers):
         except ValueError as e:
             self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ {e!s}",
                     max_retries=3,
@@ -121,7 +122,7 @@ class ModelHandlers(BaseHandlers):
         except (AuthenticationError, NetworkError, APIError) as e:
             self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ Ошибка API: {str(e)[:200]}",
                     max_retries=3,
@@ -147,14 +148,14 @@ class ModelHandlers(BaseHandlers):
         Side Effects:
             - Вызывает image_generator.text_client.set_model() для установки модели.
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
 
         if not await self.admins_store.is_admin(update.effective_user.id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -166,7 +167,7 @@ class ModelHandlers(BaseHandlers):
 
         if not context.args or len(context.args) == 0:
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "📝 Использование: /set_gigachat_model <model_name>\n\n"
                     "Используйте /list_models для просмотра доступных моделей.",
@@ -181,7 +182,7 @@ class ModelHandlers(BaseHandlers):
 
         try:
             result = await self._model_management_service.set_gigachat_model(model_name)
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 result.message,
                 max_retries=3,
@@ -190,7 +191,7 @@ class ModelHandlers(BaseHandlers):
         except ValueError as e:
             self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ {e!s}",
                     max_retries=3,
@@ -201,7 +202,7 @@ class ModelHandlers(BaseHandlers):
         except (AuthenticationError, NetworkError, APIError) as e:
             self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ Ошибка API: {str(e)[:200]}",
                     max_retries=3,
@@ -228,7 +229,7 @@ class ModelHandlers(BaseHandlers):
         Side Effects:
             - Вызывает admin_dashboard_service.build_models_list_message() для получения списка моделей.
             - Отправляет форматированный список моделей пользователю.
-            - Использует _retry_on_connect_error() для обработки сетевых ошибок.
+            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -238,7 +239,7 @@ class ModelHandlers(BaseHandlers):
 
         if not await self.admins_store.is_admin(user_id):
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     "❌ Доступно только администратору",
                     max_retries=3,
@@ -250,7 +251,7 @@ class ModelHandlers(BaseHandlers):
 
         try:
             message = await self._dashboard_service.build_models_list_message()
-            await self._retry_on_connect_error(
+            await retry_on_connect_error(
                 update.message.reply_text,
                 message,
                 max_retries=3,
@@ -260,7 +261,7 @@ class ModelHandlers(BaseHandlers):
         except Exception as e:
             self.logger.error(f"Ошибка при получении списка моделей: {e}", exc_info=True)
             try:
-                await self._retry_on_connect_error(
+                await retry_on_connect_error(
                     update.message.reply_text,
                     f"❌ Ошибка при получении списка моделей: {str(e)[:200]}",
                     max_retries=3,
