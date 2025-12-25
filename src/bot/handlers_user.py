@@ -58,16 +58,12 @@ class UserHandlers(BaseHandlers):
             "/frog - Сгенерировать жабу прямо сейчас\n"
         )
 
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                welcome_message,
-                max_retries=3,
-                delay=2,
-            )
+        success = await self._safe_reply_with_fallback(
+            update.message,
+            welcome_message,
+        )
+        if success:
             self.logger.info("Отправлено приветственное сообщение")
-        except Exception as e:
-            self.logger.error(f"Не удалось отправить приветственное сообщение после {3} попыток: {e}")
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /help.
@@ -140,15 +136,10 @@ class UserHandlers(BaseHandlers):
             )
             self.logger.info("Отправлена пользовательская справка")
 
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                help_message,
-                max_retries=3,
-                delay=2,
-            )
-        except Exception as e:
-            self.logger.error(f"Не удалось отправить справку после {3} попыток: {e}")
+        await self._safe_reply_with_fallback(
+            update.message,
+            help_message,
+        )
 
     async def frog_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /frog.
@@ -246,15 +237,10 @@ class UserHandlers(BaseHandlers):
             # Удаляем статусное сообщение
             await self._safe_delete_message(status_message)
             # Отправляем сообщение пользователю об ошибке
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "⚠️ Не удалось поставить запрос в очередь. Попробуйте позже.",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as send_error:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке очереди: {send_error}")
+            await self._safe_reply_with_fallback(
+                update.message,
+                "⚠️ Не удалось поставить запрос в очередь. Попробуйте позже.",
+            )
 
     async def unknown_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик неизвестных команд.
@@ -287,13 +273,9 @@ class UserHandlers(BaseHandlers):
             "Используйте /help для получения подробной информации."
         )
 
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                unknown_message,
-                max_retries=3,
-                delay=2,
-            )
+        success = await self._safe_reply_with_fallback(
+            update.message,
+            unknown_message,
+        )
+        if success:
             self.logger.info("Отправлено сообщение о неизвестной команде")
-        except Exception as e:
-            self.logger.error(f"Не удалось отправить сообщение о неизвестной команде после {3} попыток: {e}")

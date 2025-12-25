@@ -68,31 +68,21 @@ class ModelHandlers(BaseHandlers):
             return
 
         if not context.args or len(context.args) == 0:
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    (
-                        "📝 Использование: /set_kandinsky_model <pipeline_id или название модели>\n\n"
-                        "Используйте /list_models для просмотра доступных моделей.\n"
-                        "Можно указать как ID (например: 12345678), так и название модели (например: kandinsky-2.2)"
-                    ),
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об использовании команды после {3} попыток: {e}")
+            await self._safe_reply_with_fallback(
+                update.message,
+                (
+                    "📝 Использование: /set_kandinsky_model <pipeline_id или название модели>\n\n"
+                    "Используйте /list_models для просмотра доступных моделей.\n"
+                    "Можно указать как ID (например: 12345678), так и название модели (например: kandinsky-2.2)"
+                ),
+            )
             return
 
         model_arg = " ".join(context.args)  # Объединяем аргументы на случай названий с пробелами
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                "⏳ Устанавливаю модель...",
-                max_retries=3,
-                delay=2,
-            )
-        except Exception as e:
-            self.logger.error(f"Не удалось отправить сообщение о начале установки после {3} попыток: {e}")
+        await self._safe_reply_with_fallback(
+            update.message,
+            "⏳ Устанавливаю модель...",
+        )
 
         try:
             result = await self._model_management_service.set_kandinsky_model(model_arg)
@@ -156,28 +146,18 @@ class ModelHandlers(BaseHandlers):
             return
 
         if not await self.admins_store.is_admin(update.effective_user.id):
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Доступно только администратору",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Доступно только администратору",
+            )
             return
 
         if not context.args or len(context.args) == 0:
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📝 Использование: /set_gigachat_model <model_name>\n\n"
-                    "Используйте /list_models для просмотра доступных моделей.",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об использовании команды после {3} попыток: {e}")
+            await self._safe_reply_with_fallback(
+                update.message,
+                "📝 Использование: /set_gigachat_model <model_name>\n\n"
+                "Используйте /list_models для просмотра доступных моделей.",
+            )
             return
 
         model_name = context.args[0]
@@ -240,15 +220,10 @@ class ModelHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /list_models от пользователя {user_id}")
 
         if not await self.admins_store.is_admin(user_id):
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Доступно только администратору",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Доступно только администратору",
+            )
             return
 
         try:

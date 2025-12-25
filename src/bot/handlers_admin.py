@@ -267,15 +267,10 @@ class AdminHandlers(BaseHandlers):
         chat_ids = await self._admin_command.list_chat_ids()
         if not chat_ids:
             self.logger.info("Нет активных чатов")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📭 Нет активных чатов для отправки",
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}")
+            await self._safe_reply_with_fallback(
+                update.message,
+                "📭 Нет активных чатов для отправки",
+            )
             return
 
         # Если аргумент не передан - показываем список чатов
@@ -340,38 +335,23 @@ class AdminHandlers(BaseHandlers):
                 if requested_chat_id in chat_ids:
                     target_chat_ids = [requested_chat_id]
                 else:
-                    try:
-                        await retry_on_connect_error(
-                            update.message.reply_text,
-                            f"❌ Чат {requested_chat_id} не найден в списке активных чатов",
-                            max_retries=3,
-                            delay=2,
-                        )
-                    except (TelegramError, NetworkError, TimedOut) as e:
-                        self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+                    await self._safe_reply_with_fallback(
+                        update.message,
+                        f"❌ Чат {requested_chat_id} не найден в списке активных чатов",
+                    )
                     return
             except ValueError:
-                try:
-                    await retry_on_connect_error(
-                        update.message.reply_text,
-                        "❌ Неверный аргумент. Используйте: /force_send <chat_id> или /force_send all",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except (TelegramError, NetworkError, TimedOut) as e:
-                    self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    "❌ Неверный аргумент. Используйте: /force_send <chat_id> или /force_send all",
+                )
                 return
 
         if not target_chat_ids:
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Нет целевых чатов для отправки",
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}")
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Нет целевых чатов для отправки",
+            )
             return
 
         # Отправляем статусное сообщение
