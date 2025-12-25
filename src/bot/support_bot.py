@@ -29,6 +29,7 @@ from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
     from infra.redis.redis_client import RedisClient
+    from shared.protocols import IAdminsRepo
 
 # Создаём экземпляр Config при импорте модуля
 config: Config = Config()
@@ -66,6 +67,7 @@ class SupportBot(BaseHandlers):
         self,
         redis_client: "RedisClient",
         postgres_pool: asyncpg.Pool,
+        admins_repo: "IAdminsRepo",
         request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
         config: Config | None = None,
     ) -> None:
@@ -76,15 +78,16 @@ class SupportBot(BaseHandlers):
         для запуска основного бота.
 
         Args:
+            redis_client: Redis-клиент для rate limiter (ОБЯЗАТЕЛЬНЫЙ).
+            postgres_pool: Пул подключений PostgreSQL (ОБЯЗАТЕЛЬНЫЙ, для BotServices).
+            admins_repo: Репозиторий администраторов (ОБЯЗАТЕЛЬНЫЙ, для BaseHandlers).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
                 Принимает словарь с метаданными (chat_id, message_id) для редактирования статусного
                 сообщения. Если None, запуск основного бота через /start будет недоступен.
             config: Экземпляр Config. Если None, используется глобальный config.
-            redis_client: Redis-клиент для rate limiter (ОБЯЗАТЕЛЬНЫЙ).
-            postgres_pool: Пул подключений PostgreSQL (ОБЯЗАТЕЛЬНЫЙ, для BotServices).
 
         Raises:
-            ValueError: Если redis_client или postgres_pool равны None.
+            ValueError: Если redis_client, postgres_pool или admins_repo равны None.
         """
         # Сначала создаем все необходимые компоненты для BotServices
         request: HTTPXRequest = HTTPXRequest(
@@ -158,18 +161,14 @@ class SupportBot(BaseHandlers):
             logger=app_logger,
         )
         from infra.celery.celery_task_queue import CeleryTaskQueue
-        from infra.repos import AdminsRepo
-        from shared.config import TelegramConfig
 
         task_queue = CeleryTaskQueue()
         # SupportBot не использует postgres_pool напрямую, но BotServices требует его
         # Пул передаётся через Dependency Injection
         if postgres_pool is None:
             raise ValueError("postgres_pool не может быть None. Передайте пул через Dependency Injection.")
-
-        # Создаём AdminsRepo для BaseHandlers (используется через DI в BotServices)
-        telegram_config = TelegramConfig()
-        admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config.admin_chat_id)
+        if admins_repo is None:
+            raise ValueError("admins_repo не может быть None. Передайте репозиторий через Dependency Injection.")
 
         services: BotServices = BotServices(
             postgres_pool=postgres_pool,

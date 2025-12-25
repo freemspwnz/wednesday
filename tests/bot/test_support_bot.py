@@ -57,6 +57,14 @@ def support_bot(monkeypatch: Any) -> Any:
         async def list_all_admins(self) -> list[int]:
             return list(self.admins)
 
+        async def add_admin(self, user_id: int) -> bool:
+            self.admins.add(user_id)
+            return True
+
+        async def remove_admin(self, user_id: int) -> bool:
+            self.admins.discard(user_id)
+            return True
+
     class DummyCommandHandler:
         def __init__(self, command: Any, callback: Any) -> None:
             self.command = command
@@ -81,7 +89,13 @@ def support_bot(monkeypatch: Any) -> Any:
     redis_client = _InMemoryRedis()
     # Создаём мок пула для тестов
     mock_pool = MagicMock(spec=asyncpg.Pool)
-    bot = sb_module.SupportBot(redis_client=redis_client, postgres_pool=mock_pool)
+    # Создаём мок AdminsRepo для тестов
+    admins_repo = DummyAdminsRepo()
+    bot = sb_module.SupportBot(
+        redis_client=redis_client,
+        postgres_pool=mock_pool,
+        admins_repo=admins_repo,
+    )
     return bot
 
 
