@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Изменено
+
+- **Улучшено соблюдение SRP в WednesdayBot и SupportBot**:
+  - Вынесена регистрация обработчиков в отдельные классы `BotHandlersRegistry` и `SupportBotHandlersRegistry`
+  - Вынесено форматирование уведомлений в `BotLifecycleNotificationBuilder`
+  - Удален неиспользуемый метод `get_bot_info()` из `WednesdayBot`
+  - Улучшена тестируемость: компоненты можно тестировать изолированно
+  - Улучшена поддерживаемость: изменения локализованы в соответствующих классах
+  - Соблюдены границы слоев: `BotLifecycleNotificationBuilder` в слое `app/`, регистраторы в слое `bot/`
+
 ### Исправлено
 
 - **Улучшена обработка ошибок в handlers_admin.py - заменены широкие except Exception на специфичные**:

@@ -279,12 +279,6 @@ class BotRunner:
                         exc_info=True,
                     )
 
-                try:
-                    self.logger.info("[Supervisor] Получение информации о боте перед запуском")
-                    bot_info = await self.bot.get_bot_info()
-                    self.logger.info(f"[Supervisor] Информация о боте получена: {bot_info}")
-                except Exception as e:
-                    self.logger.warning(f"[Supervisor] Не удалось получить информацию о боте: {e}", exc_info=True)
                 self.logger.info("[Supervisor] Запуск основного бота в фоновой задаче")
                 bot_task = asyncio.create_task(self.bot.start())
                 self.logger.info("[Supervisor] Запуск задачи ожидания shutdown")

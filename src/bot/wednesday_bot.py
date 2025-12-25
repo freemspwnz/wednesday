@@ -4,13 +4,14 @@
 """
 
 import asyncio
-from typing import Any
 
-from telegram.ext import Application, ChatMemberHandler, CommandHandler, MessageHandler, filters
+from telegram.ext import Application
 
+from app.bot_notification_builders import BotLifecycleNotificationBuilder
 from bot.bot_application_factory import create_telegram_application
 from bot.bot_chat_access_validator import BotChatAccessValidator
 from bot.bot_error_handler import BotErrorHandler
+from bot.bot_handlers_registry import BotHandlersRegistry
 from bot.bot_lifecycle_manager import BotLifecycleManager
 from bot.bot_lifecycle_mixin import BotLifecycleMixin
 from bot.chat_event_handler import ChatEventHandler
@@ -95,6 +96,17 @@ class WednesdayBot(BotLifecycleMixin):
             logger=self.logger,
         )
 
+        # Инициализация регистратора обработчиков
+        self.handlers_registry = BotHandlersRegistry(
+            application=self.application,
+            user_handlers=self.user_handlers,
+            admin_handlers=self.admin_handlers,
+            model_handlers=self.model_handlers,
+            chat_event_handler=self.chat_event_handler,
+            error_handler=self.error_handler,
+            logger=self.logger,
+        )
+
         # Флаг состояния бота
         self.is_running: bool = False
         # Event для ожидания сигнала остановки (вместо busy-wait цикла)
@@ -103,110 +115,6 @@ class WednesdayBot(BotLifecycleMixin):
         # Задача планировщика (инициализируется при старте)
 
         self.logger.info("WednesdayBot успешно инициализирован")
-
-    def setup_handlers(self) -> None:
-        """Настраивает обработчики команд для бота.
-
-        Регистрирует все обработчики команд и событий в приложении:
-        - Пользовательские команды: /start, /help, /frog, /status
-        - Административные команды: /force_send, /log, /add_chat, /remove_chat,
-          /list_chats, /stop, /set_kandinsky_model, /set_gigachat_model, /list_models,
-          /mod, /unmod, /list_mods, /set_frog_limit, /set_frog_used
-        - Обработчик неизвестных команд
-        - Обработчик событий изменения статуса бота в чатах (on_my_chat_member)
-        - Глобальный обработчик ошибок (_handle_error)
-
-        Side Effects:
-            - Регистрирует все обработчики команд через application.add_handler().
-            - Регистрирует обработчик событий ChatMemberHandler.
-            - Регистрирует глобальный обработчик ошибок через add_error_handler()
-              (если метод доступен).
-        """
-        self.logger.info("Начало настройки обработчиков команд")
-
-        # Регистрируем пользовательские команды
-        self.application.add_handler(
-            CommandHandler("start", self.user_handlers.start_command),
-        )
-        self.application.add_handler(
-            CommandHandler("help", self.user_handlers.help_command),
-        )
-        self.application.add_handler(
-            CommandHandler("frog", self.user_handlers.frog_command),
-        )
-
-        # Админские команды (регистрируем перед unknown_command!)
-        self.application.add_handler(
-            CommandHandler("status", self.admin_handlers.status_command),
-        )
-        self.application.add_handler(
-            CommandHandler("force_send", self.admin_handlers.admin_force_send_command),
-        )
-        self.application.add_handler(
-            CommandHandler("log", self.admin_handlers.admin_log_command),
-        )
-        self.application.add_handler(
-            CommandHandler("add_chat", self.admin_handlers.admin_add_chat_command),
-        )
-        self.application.add_handler(
-            CommandHandler("remove_chat", self.admin_handlers.admin_remove_chat_command),
-        )
-        self.application.add_handler(
-            CommandHandler("stop", self.admin_handlers.stop_command),
-        )
-        self.application.add_handler(
-            CommandHandler("list_chats", self.admin_handlers.list_chats_command),
-        )
-        self.application.add_handler(
-            CommandHandler("mod", self.admin_handlers.mod_command),
-        )
-        self.application.add_handler(
-            CommandHandler("unmod", self.admin_handlers.unmod_command),
-        )
-        self.application.add_handler(
-            CommandHandler("list_mods", self.admin_handlers.list_mods_command),
-        )
-        # Админ: управление лимитами
-        self.application.add_handler(
-            CommandHandler("set_frog_limit", self.admin_handlers.set_frog_limit_command),
-        )
-        self.application.add_handler(
-            CommandHandler("set_frog_used", self.admin_handlers.set_frog_used_command),
-        )
-
-        # Команды управления моделями
-        self.application.add_handler(
-            CommandHandler("set_kandinsky_model", self.model_handlers.set_kandinsky_model_command),
-        )
-        self.application.add_handler(
-            CommandHandler("set_gigachat_model", self.model_handlers.set_gigachat_model_command),
-        )
-        self.application.add_handler(
-            CommandHandler("list_models", self.model_handlers.list_models_command),
-        )
-
-        # Обработчик для неизвестных команд
-        self.application.add_handler(
-            MessageHandler(filters.COMMAND, self.user_handlers.unknown_command),
-        )
-
-        # Обработчик событий изменения статуса бота в чатах
-        self.application.add_handler(
-            ChatMemberHandler(
-                self.chat_event_handler.on_my_chat_member,
-                ChatMemberHandler.MY_CHAT_MEMBER,
-            ),
-        )
-
-        self.logger.info("Обработчики команд успешно настроены и зарегистрированы")
-
-        # Регистрируем глобальный обработчик ошибок, чтобы централизованно
-        # отлавливать исключения из любых хендлеров и репортить их в Sentry.
-        #
-        # В проде объект Application всегда имеет метод add_error_handler,
-        # но в юнит‑тестах может использоваться упрощённая заглушка без него.
-        if hasattr(self.application, "add_error_handler"):
-            self.application.add_error_handler(self.error_handler.handle_error)
 
     async def send_wednesday_frog(self, slot_time: str | None = None) -> None:
         """Основная функция для отправки изображения жабы по расписанию.
@@ -266,7 +174,7 @@ class WednesdayBot(BotLifecycleMixin):
               статусных сообщений в чатах.
 
         Side Effects:
-            - Настраивает обработчики команд через setup_handlers().
+            - Настраивает обработчики команд через handlers_registry.register_all().
             - Инициализирует приложение через application.initialize().
             - Запускает polling через updater.start_polling().
             - Сохраняет сервисы в bot_data для доступа обработчиков.
@@ -300,7 +208,7 @@ class WednesdayBot(BotLifecycleMixin):
 
         try:
             # Настраиваем обработчики
-            self.setup_handlers()
+            self.handlers_registry.register_all()
 
             # Настраиваем и запускаем планировщик (только если используется старый планировщик)
 
@@ -314,14 +222,7 @@ class WednesdayBot(BotLifecycleMixin):
             # Отправляем уведомление о запуске
             if self.services.admin_notification_service:
                 try:
-                    startup_message = (
-                        "🚀 Wednesday Frog Bot запущен!\n\n"
-                        "✅ Бот активен и готов к работе\n"
-                        "📅 Планировщик: включен (Celery)\n"
-                        "🎨 Генератор изображений: Kandinsky API\n"
-                        "📝 Логирование: включено\n\n"
-                        "🐸 Используйте команду /frog для генерации жабы!"
-                    )
+                    startup_message = BotLifecycleNotificationBuilder.build_startup_message()
                     chat_id_int = int(self.chat_id) if self.chat_id else None
                     admin_chat_id_str = (
                         str(self.services.settings.admin_chat_id)
@@ -378,9 +279,7 @@ class WednesdayBot(BotLifecycleMixin):
             # Отправляем уведомление об остановке
             if self.services.admin_notification_service and not self._stop_message_sent:
                 try:
-                    shutdown_message = (
-                        "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
-                    )
+                    shutdown_message = BotLifecycleNotificationBuilder.build_shutdown_message()
                     chat_id_int = int(self.chat_id) if self.chat_id else None
                     admin_chat_id_str = (
                         str(self.services.settings.admin_chat_id)
@@ -409,66 +308,3 @@ class WednesdayBot(BotLifecycleMixin):
 
             # Дополнительно защитимся от повторных отправок в жизненном цикле объекта
             self._stop_message_sent = True
-
-    async def get_bot_info(self) -> dict[str, Any]:
-        """Получает информацию о боте.
-
-        Возвращает основную информацию о боте: имя, username, ID и статус работы.
-        Используется для мониторинга и проверки состояния бота.
-
-        Returns:
-            Словарь с информацией о боте:
-            - name (str): Имя бота (first_name).
-            - username (str | None): Username бота.
-            - id (int): ID бота в Telegram.
-            - is_running (bool): Статус работы бота.
-
-            При ошибках возвращает словарь с ключами:
-            - error (str): Тип ошибки (например, "Timeout").
-            - error_message (str): Подробное описание ошибки.
-            - is_running (bool): Текущий статус работы бота.
-
-        Raises:
-            TimeoutError: Если получение информации заняло больше TIMEOUT_MEDIUM_SECONDS секунд.
-            Exception: При других ошибках (информация возвращается в виде словаря с error).
-        """
-        try:
-            bot_info = await asyncio.wait_for(
-                self.application.bot.get_me(),
-                timeout=TIMEOUT_MEDIUM_SECONDS,
-            )
-            return {
-                "name": bot_info.first_name,
-                "username": bot_info.username,
-                "id": bot_info.id,
-                "is_running": self.is_running,
-            }
-        except TimeoutError:
-            error_msg = (
-                f"Таймаут при получении информации о боте ({TIMEOUT_MEDIUM_SECONDS} секунд). "
-                "Возможные причины: проблемы с интернет-соединением, недоступность Telegram API."
-            )
-            self.logger.error(error_msg)
-            return {"error": "Timeout", "error_message": error_msg, "is_running": self.is_running}
-        except Exception as e:
-            error_type = type(e).__name__
-            error_str = str(e)
-
-            # Определяем тип ошибки для более информативного сообщения
-            if "ConnectError" in error_type or "ConnectionError" in error_type or "Connection" in error_str:
-                error_msg = (
-                    f"Ошибка подключения к Telegram API при получении информации о боте.\n"
-                    f"Тип: {error_type}\n"
-                    f"Детали: {error_str[:200]}\n\n"
-                    "Возможные причины:\n"
-                    "- Проблемы с интернет-соединением\n"
-                    "- Telegram API временно недоступен\n"
-                    "- Проблемы с прокси (если используется)\n"
-                    "- Блокировка доступа на стороне провайдера\n\n"
-                    "Бот будет запущен, но некоторые функции могут быть недоступны."
-                )
-            else:
-                error_msg = f"Ошибка при получении информации о боте: {error_type} - {error_str[:200]}"
-
-            self.logger.error(f"Ошибка при получении информации о боте: {error_type} - {error_str}")
-            return {"error": error_type, "error_message": error_msg, "is_running": self.is_running}

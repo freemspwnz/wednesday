@@ -8,14 +8,17 @@ from typing import TYPE_CHECKING
 
 from telegram import Update
 from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
-from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ContextTypes
 
+from app.bot_notification_builders import BotLifecycleNotificationBuilder
 from bot.base_handlers import BaseHandlers
 from bot.bot_application_factory import create_telegram_application
 from bot.bot_chat_access_validator import TIMEOUT_MEDIUM_SECONDS, BotChatAccessValidator
+from bot.bot_error_handler import BotErrorHandler
 from bot.bot_lifecycle_manager import BotLifecycleManager
 from bot.bot_lifecycle_mixin import BotLifecycleMixin
 from bot.chat_event_handler import ChatEventHandler
+from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
 from infra.logging.logger import log_all_methods
 from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
@@ -105,31 +108,20 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
             logger=self.logger,
         )
 
+        # Инициализация обработчика ошибок
+        self.error_handler = BotErrorHandler(self.logger)
+
+        # Инициализация регистратора обработчиков
+        self.handlers_registry = SupportBotHandlersRegistry(
+            application=self.application,
+            support_bot=self,
+            chat_event_handler=self.chat_event_handler,
+            error_handler=self.error_handler,
+            logger=self.logger,
+        )
+
         # ID чата для отправки сообщений (если задан в конфигурации)
         self.chat_id: str | None = telegram_config.chat_id
-
-    def setup_handlers(self) -> None:
-        """Настраивает обработчики команд для SupportBot.
-
-        Регистрирует команды:
-        - /start - запуск основного бота
-        - /help - справка по резервному боту
-        - /log - отправка логов администратору
-        - Обработчик неизвестных команд для сообщений о техработах
-        - Обработчик событий изменения статуса бота в чатах
-        """
-        self.application.add_handler(CommandHandler("start", self.start_main_command))
-        self.application.add_handler(CommandHandler("help", self.help_command))
-        self.application.add_handler(CommandHandler("log", self.log_command))
-        # Любые неизвестные команды – сообщение о техработах
-        self.application.add_handler(MessageHandler(filters.COMMAND, self.maintenance_message))
-        # Обработчик событий изменения статуса бота в чатах
-        self.application.add_handler(
-            ChatMemberHandler(
-                self.chat_event_handler.on_my_chat_member,
-                ChatMemberHandler.MY_CHAT_MEMBER,
-            ),
-        )
 
     async def start(self) -> None:
         """Запускает SupportBot и начинает обработку команд.
@@ -146,7 +138,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
             Exception: Если не удалось запустить приложение после всех попыток.
         """
         self.logger.info("Запуск бота-поддержки (SupportBot)")
-        self.setup_handlers()
+        self.handlers_registry.register_all()
 
         # Проверяем доступность чата перед отправкой сообщения
         if self.chat_id:
@@ -158,10 +150,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         # Отправляем уведомление о запуске
         if self.services.admin_notification_service:
             try:
-                startup_message = (
-                    "🟢 SupportBot запущен и принимает команды.\n"
-                    "• /help — справка\n• /log — последний лог\n• /start — запустить основной бот"
-                )
+                startup_message = BotLifecycleNotificationBuilder.build_support_startup_message()
                 chat_id_int = int(self.chat_id) if self.chat_id else None
                 admin_chat_id_str = (
                     str(self.services.settings.admin_chat_id)
@@ -210,10 +199,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
             # Отправляем уведомление об остановке
             if self.services.admin_notification_service:
                 try:
-                    shutdown_message = (
-                        "🛑 SupportBot остановлен.\n\n"
-                        "Если это не плановая остановка, проверьте логи и состояние основного бота."
-                    )
+                    shutdown_message = BotLifecycleNotificationBuilder.build_support_shutdown_message()
                     chat_id_int = int(self.chat_id) if self.chat_id else None
                     admin_chat_id_str = (
                         str(self.services.settings.admin_chat_id)
