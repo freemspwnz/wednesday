@@ -3,6 +3,7 @@
 """
 
 import asyncio
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from telegram.ext import Application
@@ -96,7 +97,11 @@ class SupportBot(BotLifecycleMixin):
         """
         self.handlers_registry = handlers_registry
 
-    async def start(self) -> None:
+    async def start(
+        self,
+        notification_builder: Callable[[], str] | None = None,
+        pre_startup_hook: Callable[[], None] | None = None,
+    ) -> None:
         """Запускает SupportBot и начинает обработку команд.
 
         Инициализирует приложение, запускает polling через BotLifecycleManager
@@ -112,15 +117,25 @@ class SupportBot(BotLifecycleMixin):
         """
         self.logger.info("Запуск бота-поддержки (SupportBot)")
 
+        # Используем переданный notification_builder или значение по умолчанию
+        if notification_builder is None:
+            notification_builder = BotLifecycleNotificationBuilder.build_support_startup_message
+
         # Выполняем общую последовательность запуска через миксин
-        await self._execute_startup_sequence(
-            notification_builder=BotLifecycleNotificationBuilder.build_support_startup_message,
-            log_context="запуске",
+        await super().start(
+            notification_builder=notification_builder,
+            pre_startup_hook=pre_startup_hook,
         )
 
         self.logger.info("SupportBot основной цикл завершен")
 
-    async def stop(self) -> None:
+    async def stop(
+        self,
+        notification_builder: Callable[[], str] | None = None,
+        chat_id: str | int | None = None,
+        pre_stop_hook: Callable[[], None] | None = None,
+        post_stop_hook: Callable[[], None] | None = None,
+    ) -> None:
         """Останавливает SupportBot и освобождает ресурсы.
 
         Корректно завершает работу бота, останавливает polling и отправляет
@@ -132,26 +147,18 @@ class SupportBot(BotLifecycleMixin):
             - Останавливает PTB Application через lifecycle_manager.stop_application().
             - Гарантированно закрывает ресурсы через services.cleanup() в finally блоке.
         """
-        if not self.is_running:
-            return
-
         self.logger.info("Остановка бота-поддержки")
 
-        try:
-            # Останавливаем жизненный цикл
-            await self._stop_lifecycle()
+        # Используем переданные значения или значения по умолчанию
+        if notification_builder is None:
+            notification_builder = BotLifecycleNotificationBuilder.build_support_shutdown_message
+        if chat_id is None:
+            chat_id = self.chat_id
 
-            # Отправляем уведомление об остановке
-            await self._send_lifecycle_notification(
-                BotLifecycleNotificationBuilder.build_support_shutdown_message,
-                self.chat_id,
-                log_context="остановке",
-            )
-
-            self.logger.info("SupportBot успешно остановлен")
-
-        except Exception as e:
-            self.logger.error(f"Ошибка при остановке SupportBot: {e}", exc_info=True)
-        finally:
-            # Гарантированное закрытие ресурсов (всегда выполняется)
-            await self._cleanup_resources()
+        # Выполняем общую последовательность остановки через миксин
+        await super().stop(
+            notification_builder=notification_builder,
+            chat_id=chat_id,
+            pre_stop_hook=pre_stop_hook,
+            post_stop_hook=post_stop_hook,
+        )

@@ -195,3 +195,96 @@ class BotLifecycleMixin:
 
         # 6. Ожидание сигнала остановки
         await self._wait_for_stop_signal()
+
+    async def start(
+        self,
+        notification_builder: Callable[[], str],
+        pre_startup_hook: Callable[[], None] | None = None,
+    ) -> None:
+        """Универсальный метод запуска для обоих ботов.
+
+        Выполняет общую последовательность запуска через _execute_startup_sequence.
+        Позволяет выполнить специфичную логику перед запуском через pre_startup_hook.
+
+        Args:
+            notification_builder: Функция, которая возвращает текст сообщения для отправки.
+            pre_startup_hook: Опциональная функция для выполнения специфичной логики перед запуском
+                (например, валидация конфигурации).
+
+        Side Effects:
+            - Вызывает pre_startup_hook() если он задан
+            - Выполняет общую последовательность запуска через _execute_startup_sequence()
+
+        Raises:
+            Exception: Если не удалось запустить бота после всех попыток ретраев.
+        """
+        if pre_startup_hook:
+            pre_startup_hook()
+
+        try:
+            await self._execute_startup_sequence(
+                notification_builder=notification_builder,
+                log_context="запуске",
+            )
+        except Exception as e:
+            self.logger.error(f"Ошибка при запуске бота: {e}")
+            raise
+
+    async def stop(
+        self,
+        notification_builder: Callable[[], str] | None = None,
+        chat_id: str | int | None = None,
+        pre_stop_hook: Callable[[], None] | None = None,
+        post_stop_hook: Callable[[], None] | None = None,
+    ) -> None:
+        """Универсальный метод остановки для обоих ботов.
+
+        Выполняет общую последовательность остановки с возможностью выполнения
+        специфичной логики через хуки.
+
+        Args:
+            notification_builder: Опциональная функция для построения сообщения об остановке.
+            chat_id: ID чата для отправки уведомления об остановке (если не указан, используется self.chat_id).
+            pre_stop_hook: Опциональная функция для выполнения специфичной логики перед остановкой.
+            post_stop_hook: Опциональная функция для выполнения специфичной логики после остановки
+                (но до cleanup ресурсов).
+
+        Side Effects:
+            - Устанавливает флаг is_running в False.
+            - Останавливает PTB Application через lifecycle_manager.stop_application().
+            - Отправляет уведомление об остановке (если notification_builder задан).
+            - Гарантированно закрывает все ресурсы через services.cleanup() в finally блоке.
+        """
+        # Защита от повторных вызовов
+        if not self.is_running:
+            self.logger.info("Бот уже остановлен или остановка уже начата")
+            return
+
+        # Выполняем специфичную логику перед остановкой
+        if pre_stop_hook:
+            pre_stop_hook()
+
+        try:
+            # Останавливаем жизненный цикл
+            await self._stop_lifecycle()
+
+            # Отправляем уведомление об остановке (если задано)
+            if notification_builder:
+                target_chat_id = chat_id if chat_id is not None else self.chat_id
+                await self._send_lifecycle_notification(
+                    notification_builder,
+                    target_chat_id,
+                    log_context="остановке",
+                )
+
+            # Выполняем специфичную логику после остановки
+            if post_stop_hook:
+                post_stop_hook()
+
+            self.logger.info("Бот успешно остановлен")
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при остановке бота: {e}", exc_info=True)
+        finally:
+            # Гарантированное закрытие ресурсов (всегда выполняется)
+            await self._cleanup_resources()

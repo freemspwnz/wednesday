@@ -4,6 +4,7 @@
 """
 
 import asyncio
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from telegram.ext import Application
@@ -115,7 +116,11 @@ class WednesdayBot(BotLifecycleMixin):
             main_chat_id=self.chat_id,
         )
 
-    async def start(self) -> None:
+    async def start(
+        self,
+        notification_builder: Callable[[], str] | None = None,
+        pre_startup_hook: Callable[[], None] | None = None,
+    ) -> None:
         """Запускает бота и планировщик задач.
 
         Важно:
@@ -161,38 +166,58 @@ class WednesdayBot(BotLifecycleMixin):
         """
         self.logger.info("Запускаю Wednesday Bot (боевой режим с планировщиком)")
 
-        # Валидация конфигурации слотов основана на настройках, а не на внутреннем состоянии планировщика.
-        settings = self.services.settings
-        configured_times = settings.scheduler_send_times
-        # Таймзона берется из AppSettings через DI
-        timezone = settings.scheduler_tz or "Europe/Moscow"
-        # День недели по умолчанию - среда (2), если не задан в настройках
-        # Примечание: wednesday_day не доступен в AppSettings, используем значение по умолчанию
-        wednesday_day = 2  # 2 = среда (0 = понедельник)
+        def _validate_configuration() -> None:
+            """Валидация конфигурации слотов перед запуском."""
+            # Валидация конфигурации слотов основана на настройках, а не на внутреннем состоянии планировщика.
+            settings = self.services.settings
+            configured_times = settings.scheduler_send_times
+            # Таймзона берется из AppSettings через DI
+            timezone = settings.scheduler_tz or "Europe/Moscow"
+            # День недели по умолчанию - среда (2), если не задан в настройках
+            # Примечание: wednesday_day не доступен в AppSettings, используем значение по умолчанию
+            wednesday_day = 2  # 2 = среда (0 = понедельник)
 
-        self.logger.info(
-            "Используется Celery для планирования задач: "
-            f"день недели={wednesday_day}, времена={configured_times}, TZ={timezone}",
-        )
+            self.logger.info(
+                "Используется Celery для планирования задач: "
+                f"день недели={wednesday_day}, времена={configured_times}, TZ={timezone}",
+            )
 
-        if not configured_times:
-            self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
+            if not configured_times:
+                self.logger.error("⚠️  Не заданы времена отправки! Используются значения по умолчанию.")
 
-        try:
             # Celery используется для планирования задач
             self.logger.info("Celery используется для планирования задач")
 
-            # Выполняем общую последовательность запуска через миксин
-            await self._execute_startup_sequence(
-                notification_builder=BotLifecycleNotificationBuilder.build_startup_message,
-                log_context="запуске",
-            )
+        # Используем переданный notification_builder или значение по умолчанию
+        if notification_builder is None:
+            notification_builder = BotLifecycleNotificationBuilder.build_startup_message
 
-        except Exception as e:
-            self.logger.error(f"Ошибка при запуске бота: {e}")
-            raise
+        # Используем переданный pre_startup_hook или валидацию конфигурации
+        if pre_startup_hook is None:
+            pre_startup_hook = _validate_configuration
+        else:
+            # Если передан внешний hook, выполняем его после валидации
+            original_hook = pre_startup_hook
 
-    async def stop(self) -> None:
+            def _combined_hook() -> None:
+                _validate_configuration()
+                original_hook()
+
+            pre_startup_hook = _combined_hook
+
+        # Выполняем общую последовательность запуска через миксин
+        await super().start(
+            notification_builder=notification_builder,
+            pre_startup_hook=pre_startup_hook,
+        )
+
+    async def stop(
+        self,
+        notification_builder: Callable[[], str] | None = None,
+        chat_id: str | int | None = None,
+        pre_stop_hook: Callable[[], None] | None = None,
+        post_stop_hook: Callable[[], None] | None = None,
+    ) -> None:
         """Останавливает бота и планировщик задач.
 
         Корректно завершает работу бота: останавливает планировщик, polling,
@@ -205,33 +230,32 @@ class WednesdayBot(BotLifecycleMixin):
             - Отправляет сообщения об остановке в CHAT_ID и админам.
             - Гарантированно закрывает все ресурсы через services.cleanup() в finally блоке.
         """
-        # Защита от повторных вызовов
-        if not self.is_running:
-            self.logger.info("Бот уже остановлен или остановка уже начата")
-            return
-
         self.logger.info("Останавливаю Wednesday Bot")
 
-        try:
-            # Останавливаем жизненный цикл
-            await self._stop_lifecycle()
+        # Используем переданный chat_id или значение по умолчанию
+        if chat_id is None:
+            chat_id = self.chat_id
 
-            # Отправляем уведомление об остановке
-            if not self._stop_message_sent:
-                await self._send_lifecycle_notification(
-                    BotLifecycleNotificationBuilder.build_shutdown_message,
-                    self.chat_id,
-                    log_context="остановке",
-                )
-                self._stop_message_sent = True
+        # Определяем функцию для отправки уведомления с проверкой флага
+        if notification_builder is None and not self._stop_message_sent:
+            notification_builder = BotLifecycleNotificationBuilder.build_shutdown_message
 
-            self.logger.info("Бот успешно остановлен")
-
-        except Exception as e:
-            self.logger.error(f"Ошибка при остановке бота: {e}")
-        finally:
-            # Гарантированное закрытие ресурсов (всегда выполняется)
-            await self._cleanup_resources()
-
+        def _post_stop() -> None:
+            """Специфичная логика после остановки: защита от повторных отправок."""
             # Дополнительно защитимся от повторных отправок в жизненном цикле объекта
+            self._stop_message_sent = True
+            # Выполняем переданный post_stop_hook, если есть
+            if post_stop_hook:
+                post_stop_hook()
+
+        # Выполняем общую последовательность остановки через миксин
+        await super().stop(
+            notification_builder=notification_builder,
+            chat_id=chat_id,
+            pre_stop_hook=pre_stop_hook,
+            post_stop_hook=_post_stop,
+        )
+
+        # Устанавливаем флаг после успешной отправки (если было отправлено)
+        if not self._stop_message_sent:
             self._stop_message_sent = True
