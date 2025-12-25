@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 from bot.base_handlers import BaseHandlers
 from bot.bot_state_coordinator import BotStateCoordinator
 from shared.base.exceptions import AccessDeniedError, ServiceError
-from shared.bot_services import BotServices
+from shared.bot_services import BotServices, SupportBotServices, require_bot_services
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -29,12 +29,11 @@ class AdminHandlers(BaseHandlers):
 
     def __init__(
         self,
-        services: BotServices,
+        services: BotServices | SupportBotServices,
     ) -> None:
         super().__init__(services)
-        # Type narrowing: AdminHandlers работает только с BotServices
-        assert isinstance(services, BotServices), "AdminHandlers requires BotServices, not SupportBotServices"
-        self.services: BotServices = services
+        # Валидация типа: AdminHandlers работает только с BotServices
+        self.services: BotServices = require_bot_services(services, "AdminHandlers")
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
         if self.services.admin_access_service is None:

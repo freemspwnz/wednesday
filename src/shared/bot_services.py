@@ -165,3 +165,29 @@ class BotServices:
             logger.info("PostgreSQL pool закрыт через BotServices.cleanup()")
         except Exception as e:
             logger.warning(f"Ошибка при закрытии PostgreSQL pool: {e}")
+
+
+def require_bot_services(
+    services: BotServices | SupportBotServices,
+    handler_name: str,
+) -> BotServices:
+    """Проверяет, что services является BotServices, и возвращает его.
+
+    Используется для валидации типа в конструкторах обработчиков, которые требуют
+    полный BotServices, а не минимальный SupportBotServices.
+
+    Args:
+        services: Контейнер сервисов (может быть BotServices или SupportBotServices).
+        handler_name: Имя класса-обработчика для сообщения об ошибке.
+
+    Returns:
+        Экземпляр BotServices (гарантированно после проверки типа).
+
+    Raises:
+        TypeError: Если services не является экземпляром BotServices.
+    """
+    if not isinstance(services, BotServices):
+        raise TypeError(
+            f"{handler_name} requires BotServices, got {type(services).__name__}",
+        )
+    return services

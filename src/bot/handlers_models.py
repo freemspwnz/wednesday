@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError
-from shared.bot_services import BotServices
+from shared.bot_services import BotServices, SupportBotServices, require_bot_services
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -21,12 +21,11 @@ class ModelHandlers(BaseHandlers):
 
     def __init__(
         self,
-        services: BotServices,
+        services: BotServices | SupportBotServices,
     ) -> None:
         super().__init__(services)
-        # Type narrowing: ModelHandlers работает только с BotServices
-        assert isinstance(services, BotServices), "ModelHandlers requires BotServices, not SupportBotServices"
-        self.services: BotServices = services
+        # Валидация типа: ModelHandlers работает только с BotServices
+        self.services: BotServices = require_bot_services(services, "ModelHandlers")
         # Используем ModelManagementService для управления моделями
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
