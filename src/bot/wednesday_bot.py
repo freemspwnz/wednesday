@@ -80,7 +80,8 @@ class WednesdayBot:
         )
         # telegram_config.bot_token передается через DI
         telegram_token: str = telegram_config.bot_token or ""
-        assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
+        if not telegram_token:
+            raise ValueError("TELEGRAM_BOT_TOKEN должен быть установлен. Проверьте конфигурацию.")
         self.logger.info("Создание Application с токеном")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
 

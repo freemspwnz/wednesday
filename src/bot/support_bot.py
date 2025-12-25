@@ -99,7 +99,8 @@ class SupportBot(BaseHandlers):
         )
         # telegram_config.bot_token передается через DI
         telegram_token: str = telegram_config.bot_token or ""
-        assert telegram_token, "TELEGRAM_BOT_TOKEN должен быть установлен"
+        if not telegram_token:
+            raise ValueError("TELEGRAM_BOT_TOKEN должен быть установлен. Проверьте конфигурацию.")
         self.application: Application = Application.builder().token(telegram_token).request(request).build()
         self.request_start_main: Callable[[dict[str, Any]], Awaitable[None]] | None = request_start_main
         self.is_running: bool = False
