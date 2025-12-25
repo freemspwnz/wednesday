@@ -236,22 +236,22 @@ class AdminHandlers(BaseHandlers):
             except (TelegramError, NetworkError, TimedOut):
                 status_msg = None
 
-        # Сохраняем метаданные сообщения в экземпляр основного бота (только для не-админ чатов)
-        try:
-            bot_controller = self.services.bot_controller
-            if (not is_admin_chat) and bot_controller is not None and status_msg is not None and update.effective_chat:
-                bot_controller.pending_shutdown_edit = {
+        # Подготавливаем метаданные для статусного сообщения (только для не-админ чатов)
+        shutdown_metadata = None
+        if (not is_admin_chat) and status_msg is not None and update.effective_chat:
+            try:
+                shutdown_metadata = {
                     "chat_id": update.effective_chat.id,
                     "message_id": getattr(status_msg, "message_id", None),
                 }
-        except (ValueError, TypeError, AttributeError):
-            pass
+            except (ValueError, TypeError, AttributeError):
+                shutdown_metadata = None
 
         # Получаем экземпляр основного бота через DI и останавливаем его
         try:
             bot_controller = self.services.bot_controller
             if bot_controller is not None:
-                await bot_controller.stop()
+                await bot_controller.stop(shutdown_metadata=shutdown_metadata)
             else:
                 # Фоллбек: попытаться аккуратно остановить приложение
                 try:

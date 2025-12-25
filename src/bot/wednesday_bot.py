@@ -401,12 +401,17 @@ class WednesdayBot:
             self.logger.error(f"Ошибка при запуске бота: {e}")
             raise
 
-    async def stop(self) -> None:
+    async def stop(self, shutdown_metadata: dict[str, Any] | None = None) -> None:
         """Останавливает бота и планировщик задач.
 
         Корректно завершает работу бота: останавливает планировщик, polling,
         отправляет уведомления об остановке и освобождает все ресурсы.
         Защищен от повторных вызовов через проверку is_running.
+
+        Args:
+            shutdown_metadata: Опциональные метаданные для редактирования статусного сообщения.
+                Словарь с ключами 'chat_id' и 'message_id' или None.
+                Если передан, используется вместо self.pending_shutdown_edit.
 
         Side Effects:
             - Устанавливает флаг is_running в False.
@@ -455,10 +460,12 @@ class WednesdayBot:
                     )
 
             # Обновляем статусное сообщение от SupportBot
-            if isinstance(self.pending_shutdown_edit, dict):
+            # Используем переданные метаданные или внутреннее поле (для обратной совместимости)
+            metadata = shutdown_metadata or self.pending_shutdown_edit
+            if isinstance(metadata, dict):
                 state_data = BotStateData(
-                    chat_id=self.pending_shutdown_edit.get("chat_id"),
-                    message_id=self.pending_shutdown_edit.get("message_id"),
+                    chat_id=metadata.get("chat_id"),
+                    message_id=metadata.get("message_id"),
                 )
                 await self.state_coordinator.handle_shutdown_edit(
                     bot=self.application.bot,
