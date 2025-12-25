@@ -674,7 +674,6 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
     image_service: ImageService,
     metrics: IMetrics,
     admins_repo: IAdminsRepo,
-    db_pool: asyncpg.Pool,
     logger: ILogger,
 ) -> tuple[TargetPreparationService, DispatchDeliveryService, DispatchService, AdminNotificationService]:
     """Создаёт dispatch сервисы с messaging_service.
@@ -687,7 +686,6 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
         image_service: Сервис генерации изображений.
         metrics: Сервис метрик.
         admins_repo: Репозиторий администраторов.
-        db_pool: Пул подключений PostgreSQL.
         logger: Логгер.
 
     Returns:

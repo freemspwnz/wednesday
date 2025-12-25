@@ -108,7 +108,6 @@ class WednesdayBot:
                 image_service=self.services.image_service,
                 metrics=self.services.metrics,
                 admins_repo=self.services.admins_repo,
-                db_pool=self.services.postgres_pool,
                 logger=self.logger,
             )
             # Обновляем services

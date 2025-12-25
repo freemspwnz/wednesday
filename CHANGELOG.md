@@ -4,6 +4,14 @@
 
 ### Рефакторинг
 
+- **Устранение протечки инфраструктуры: удаление прямого доступа к postgres_pool из bot-слоя**:
+  - Удален неиспользуемый параметр `db_pool: asyncpg.Pool` из функции `build_dispatch_services()` в `infra/container.py`
+  - Удалена передача `db_pool=self.services.postgres_pool` из вызова `build_dispatch_services()` в `wednesday_bot.py`
+  - Улучшена архитектурная чистота: bot-слой больше не знает о деталях инфраструктуры (asyncpg.Pool)
+  - Улучшена тестируемость: теперь можно легко подменить реализацию БД без изменения bot-слоя
+  - Соответствие принципу Dependency Inversion: bot-слой зависит только от сервисов из app-слоя, а не от конкретной реализации инфраструктуры
+  - Соответствие границам слоев: bot-слой не просачивается в инфраструктурный слой
+
 - **Устранение дублирования проверки админ-чата**:
   - Добавлен статический метод `BotStateCoordinator.is_admin_chat()` для централизованной проверки админ-чата
   - Упрощена логика проверки в 4 методах `BotStateCoordinator`: `handle_startup_edit()`, `handle_shutdown_edit()`, `handle_support_startup_edit()`, `handle_support_shutdown_edit()`
@@ -11,7 +19,6 @@
   - Заменена дублирующаяся проверка в `support_bot.py.start_main_command()` на использование `BotStateCoordinator.is_admin_chat()`
   - Улучшена поддерживаемость: изменение логики проверки админ-чата теперь в одном месте
   - Соблюдение принципов SOLID (SRP, OCP), DRY и Clean Architecture (композиция вместо наследования)
-  - Исправление проблемы из `BOT_LAYER_AUDIT_REPORT.md` (дублирование кода между WednesdayBot и SupportBot, строки 378-406)
 
 ### Исправлено
 
@@ -19,7 +26,6 @@
   - Перенесен вызов `services.cleanup()` из try блока в finally блок в методе `WednesdayBot.stop()`
   - Гарантировано освобождение ресурсов (HTTP сессии, Redis, PostgreSQL pool) даже при ошибках остановки
   - Улучшена надежность: ресурсы всегда закрываются, независимо от успешности других операций остановки
-  - Исправление проблемы из `BOT_LAYER_AUDIT_REPORT.md` (потенциальная утечка ресурсов)
 
 ### Рефакторинг
 
@@ -33,7 +39,6 @@
   - Улучшена тестируемость: компоненты можно тестировать независимо
   - Улучшена читаемость: WednesdayBot стал координатором высокого уровня вместо монолита
   - Соблюдение принципов SOLID, DRY и Clean Architecture
-  - Исправление проблемы из `BOT_LAYER_AUDIT_REPORT.md` (нарушение SRP в WednesdayBot, строки 105-143)
 
 - **Перенос логики lifecycle-уведомлений в AdminNotificationService**:
   - Удален `BotLifecycleNotificationHelper` (`src/bot/bot_lifecycle_notification_helper.py`)
