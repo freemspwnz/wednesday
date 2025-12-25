@@ -19,9 +19,9 @@ from bot.bot_lifecycle_manager import BotLifecycleManager
 from bot.bot_lifecycle_mixin import BotLifecycleMixin
 from bot.chat_event_handler import ChatEventHandler
 from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
-from infra.logging.logger import log_all_methods
 from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
+from shared.protocols import ILogger
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 MAX_LOG_DAYS_SUPPORT = 10  # максимальное количество дней для команды /log в SupportBot
 
 
-@log_all_methods()
 class SupportBot(BaseHandlers, BotLifecycleMixin):
     """Резервный бот-поддержка.
 
@@ -58,6 +57,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         self,
         services: SupportBotServices,
         telegram_config: BotTelegramConfig,
+        logger: ILogger,
         request_start_main: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Инициализирует SupportBot.
@@ -69,6 +69,7 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         Args:
             services: Контейнер сервисов для SupportBot (внедряется через DI).
             telegram_config: Конфигурация Telegram бота (внедряется через DI).
+            logger: Экземпляр логгера для логирования операций (внедряется через DI).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
                 Если None, запуск основного бота через /start будет недоступен.
 
@@ -78,8 +79,8 @@ class SupportBot(BaseHandlers, BotLifecycleMixin):
         if services is None:
             raise ValueError("services не может быть None. Передайте SupportBotServices через Dependency Injection.")
 
-        # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)
-        super().__init__(services)
+        # Инициализируем BaseHandlers с services и logger (создает self.logger и self.admins_store)
+        super().__init__(services, logger)
 
         # Сохраняем ссылку на services для доступа к зависимостям
         self.services = services

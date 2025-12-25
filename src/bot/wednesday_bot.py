@@ -18,15 +18,14 @@ from bot.chat_event_handler import ChatEventHandler
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
-from infra.logging.logger import get_logger, log_all_methods
 from shared.bot_services import BotServices
 from shared.config import BotTelegramConfig
+from shared.protocols import ILogger
 
 # Константы для магических чисел
 TIMEOUT_MEDIUM_SECONDS = 30.0
 
 
-@log_all_methods()
 class WednesdayBot(BotLifecycleMixin):
     """Основной класс Telegram бота для отправки изображений жабы каждую среду.
 
@@ -43,12 +42,18 @@ class WednesdayBot(BotLifecycleMixin):
     корректной остановки с освобождением ресурсов.
     """
 
-    def __init__(self, services: BotServices, telegram_config: BotTelegramConfig) -> None:
+    def __init__(
+        self,
+        services: BotServices,
+        telegram_config: BotTelegramConfig,
+        logger: ILogger,
+    ) -> None:
         """Инициализирует WednesdayBot.
 
         Args:
             services: Контейнер сервисов бота (внедряется через DI).
             telegram_config: Конфигурация Telegram бота (внедряется через DI).
+            logger: Экземпляр логгера для логирования операций (внедряется через DI).
 
         Создает и настраивает все компоненты основного бота:
         - Application для работы с Telegram API
@@ -60,7 +65,7 @@ class WednesdayBot(BotLifecycleMixin):
 
         Инициализирует все необходимые сервисы и готовит бота к запуску.
         """
-        self.logger = get_logger(__name__)
+        self.logger = logger
         self.logger.info("Начало инициализации WednesdayBot")
 
         # Создаем Application через фабрику
@@ -76,11 +81,11 @@ class WednesdayBot(BotLifecycleMixin):
         # Создаем обработчики команд
         self.logger.info("Создание специализированных наборов хендлеров")
         # Узкоспециализированные наборы для регистрации в PTB по зонам ответственности
-        self.user_handlers: UserHandlers = UserHandlers(self.services)
+        self.user_handlers: UserHandlers = UserHandlers(self.services, logger=self.logger)
         # Админские и пользовательские команды должны разделять общее состояние (лимиты, хранилища),
         # поэтому используем единый контейнер сервисов.
-        self.admin_handlers: AdminHandlers = AdminHandlers(self.services)
-        self.model_handlers: ModelHandlers = ModelHandlers(self.services)
+        self.admin_handlers: AdminHandlers = AdminHandlers(self.services, logger=self.logger)
+        self.model_handlers: ModelHandlers = ModelHandlers(self.services, logger=self.logger)
 
         # ID чата для отправки сообщений
         self.chat_id: str | None = telegram_config.chat_id

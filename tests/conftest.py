@@ -552,6 +552,23 @@ def fake_context() -> Any:
 
 
 @pytest.fixture
+def mock_logger() -> Any:
+    """Фикстура для создания mock логгера для тестов."""
+    from unittest.mock import MagicMock
+
+    logger = MagicMock()
+    logger.trace = MagicMock()
+    logger.debug = MagicMock()
+    logger.info = MagicMock()
+    logger.success = MagicMock()
+    logger.warning = MagicMock()
+    logger.error = MagicMock()
+    logger.critical = MagicMock()
+    logger.bind = MagicMock(return_value=logger)
+    return logger
+
+
+@pytest.fixture
 def async_retry_stub(monkeypatch: Any) -> Callable[[Any], None]:
     """Фикстура, подменяющая _retry_on_connect_error на прямой вызов функции."""
 

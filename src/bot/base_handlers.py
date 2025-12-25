@@ -16,10 +16,10 @@ from telegram import Bot, Message, Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
-from infra.logging.logger import get_logger
 from shared.base.exceptions import RepoError, ServiceError
 from shared.bot_services import BotServices, SupportBotServices
 from shared.paths import LOGS_DIR
+from shared.protocols import ILogger
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -30,14 +30,19 @@ RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по
 class BaseHandlers:
     """Базовый класс для обработчиков команд с общими утилитарными методами."""
 
-    def __init__(self, services: BotServices | SupportBotServices) -> None:
+    def __init__(
+        self,
+        services: BotServices | SupportBotServices,
+        logger: ILogger,
+    ) -> None:
         """Инициализирует базовый класс обработчиков.
 
         Args:
             services: Контейнер сервисов бота для доступа к зависимостям.
                 Может быть BotServices (для основного бота) или SupportBotServices (для резервного).
+            logger: Экземпляр логгера для логирования операций.
         """
-        self.logger = get_logger(__name__)
+        self.logger = logger
         self.services: BotServices | SupportBotServices = services
         # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
         # SupportBotServices всегда имеет admins_repo, BotServices может иметь None

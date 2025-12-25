@@ -145,7 +145,10 @@ def wednesday_bot(monkeypatch: Any) -> Any:
     telegram_config = BotTelegramConfig(bot_token="test_token", chat_id="123")
 
     # Создаём бот с внедрёнными сервисами через DI
-    bot = wb_module.WednesdayBot(services=mock_services, telegram_config=telegram_config)  # type: ignore[arg-type]
+    from unittest.mock import MagicMock
+
+    mock_logger = MagicMock()
+    bot = wb_module.WednesdayBot(services=mock_services, telegram_config=telegram_config, logger=mock_logger)  # type: ignore[arg-type]
     return bot
 
 

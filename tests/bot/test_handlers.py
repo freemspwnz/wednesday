@@ -11,10 +11,12 @@ from bot.handlers_user import UserHandlers
 
 
 @pytest.mark.asyncio
-async def test_start_command_replies(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_start_command_replies(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services)
+    handler = UserHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     await handler.start_command(fake_update, fake_context)
@@ -23,10 +25,12 @@ async def test_start_command_replies(fake_update: Any, fake_context: Any, async_
 
 
 @pytest.mark.asyncio
-async def test_help_command_replies(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_help_command_replies(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services)
+    handler = UserHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminNo:
@@ -45,10 +49,12 @@ async def test_help_command_replies(fake_update: Any, fake_context: Any, async_r
 
 
 @pytest.mark.asyncio
-async def test_start_command_handles_retry_failure(fake_update: Any, fake_context: Any, monkeypatch: Any) -> None:
+async def test_start_command_handles_retry_failure(
+    fake_update: Any, fake_context: Any, monkeypatch: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services)
+    handler = UserHandlers(services=services, logger=mock_logger)
 
     def failing_retry(func: Any, *args: Any, **kwargs: Any) -> Any:
         raise RuntimeError("boom")
@@ -64,10 +70,12 @@ async def test_start_command_handles_retry_failure(fake_update: Any, fake_contex
 
 
 @pytest.mark.asyncio
-async def test_help_command_admin_version(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_help_command_admin_version(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services)
+    handler = UserHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -84,7 +92,7 @@ async def test_help_command_admin_version(fake_update: Any, fake_context: Any, a
 
 
 @pytest.mark.asyncio
-async def test_set_frog_limit_command_success(fake_update: Any, fake_context: Any) -> None:
+async def test_set_frog_limit_command_success(fake_update: Any, fake_context: Any, mock_logger: Any) -> None:
     class FakeUsage:
         def __init__(self) -> None:
             self.frog_threshold: int = 70
@@ -101,7 +109,7 @@ async def test_set_frog_limit_command_success(fake_update: Any, fake_context: An
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = FakeUsage()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     class _AdminOk2:
         async def is_admin(self, _uid: int) -> bool:
@@ -119,10 +127,10 @@ async def test_set_frog_limit_command_success(fake_update: Any, fake_context: An
 
 
 @pytest.mark.asyncio
-async def test_set_frog_limit_command_invalid(fake_update: Any, fake_context: Any) -> None:
+async def test_set_frog_limit_command_invalid(fake_update: Any, fake_context: Any, mock_logger: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     class _AdminOk:
         async def is_admin(self, _uid: int) -> bool:
@@ -144,6 +152,7 @@ async def test_frog_command_success(
     fake_context: Any,
     async_retry_stub: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Успешный сценарий /frog: задача ставится в Celery очередь."""
 
@@ -164,7 +173,7 @@ async def test_frog_command_success(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = DummyUsage()
-    handler = UserHandlers(services=services)
+    handler = UserHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminNo:
@@ -209,6 +218,7 @@ async def test_frog_command_usage_limit(
     fake_context: Any,
     async_retry_stub: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """При превышении лимита /frog задача в Celery не ставится, а юзеру возвращается сообщение."""
 
@@ -226,7 +236,7 @@ async def test_frog_command_usage_limit(
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = LimitedUsage()
-    handler = UserHandlers(services=services)
+    handler = UserHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminNo2:
@@ -262,6 +272,7 @@ async def test_status_command_integration_with_postgres_stores(
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
+    mock_logger: Any,
 ) -> None:
     from infra.logging.logger import get_logger
     from infra.metrics.metrics import Metrics
@@ -284,7 +295,7 @@ async def test_status_command_integration_with_postgres_stores(
     services.chats = ChatsRepo(pool=mock_pool)
     services.metrics = Metrics(pool=mock_pool, logger=get_logger(__name__))
 
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -314,6 +325,7 @@ async def test_force_send_command_integration_with_postgres_stores(
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
+    mock_logger: Any,
 ) -> None:
     from infra.repos import ChatsRepo
     from infra.repos.usage_tracker import UsageTracker
@@ -334,7 +346,7 @@ async def test_force_send_command_integration_with_postgres_stores(
     services.chats = ChatsRepo(pool=mock_pool)
     services.usage = UsageTracker(pool=mock_pool)
 
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -357,7 +369,9 @@ async def test_force_send_command_integration_with_postgres_stores(
 
 
 @pytest.mark.asyncio
-async def test_set_frog_used_command_success(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_frog_used_command_success(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     class FakeUsage:
         def __init__(self) -> None:
             self.monthly_quota: int = 100
@@ -372,7 +386,7 @@ async def test_set_frog_used_command_success(fake_update: Any, fake_context: Any
     services = MagicMock()
     services.image_generator = MagicMock()
     services.usage = FakeUsage()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -390,10 +404,12 @@ async def test_set_frog_used_command_success(fake_update: Any, fake_context: Any
 
 
 @pytest.mark.asyncio
-async def test_set_frog_used_command_invalid(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_frog_used_command_invalid(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -411,10 +427,12 @@ async def test_set_frog_used_command_invalid(fake_update: Any, fake_context: Any
 
 
 @pytest.mark.asyncio
-async def test_set_frog_used_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_frog_used_command_no_args(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -432,10 +450,10 @@ async def test_set_frog_used_command_no_args(fake_update: Any, fake_context: Any
 
 
 @pytest.mark.asyncio
-async def test_unknown_command(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_unknown_command(fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = UserHandlers(services=services)
+    handler = UserHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     await handler.unknown_command(fake_update, fake_context)
@@ -457,6 +475,7 @@ async def test_admin_add_chat_command_success(
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
+    mock_logger: Any,
 ) -> None:
     from infra.repos import ChatsRepo
 
@@ -466,7 +485,7 @@ async def test_admin_add_chat_command_success(
 
     mock_pool = MockPool()
     services.chats = ChatsRepo(pool=mock_pool)
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -490,10 +509,12 @@ async def test_admin_add_chat_command_success(
 
 
 @pytest.mark.asyncio
-async def test_admin_add_chat_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_admin_add_chat_command_no_args(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -511,10 +532,12 @@ async def test_admin_add_chat_command_no_args(fake_update: Any, fake_context: An
 
 
 @pytest.mark.asyncio
-async def test_admin_add_chat_command_invalid_id(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_admin_add_chat_command_invalid_id(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -540,6 +563,7 @@ async def test_admin_remove_chat_command_success(
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
+    mock_logger: Any,
 ) -> None:
     from infra.repos import ChatsRepo
 
@@ -549,7 +573,7 @@ async def test_admin_remove_chat_command_success(
 
     mock_pool = MockPool()
     services.chats = ChatsRepo(pool=mock_pool)
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -574,10 +598,12 @@ async def test_admin_remove_chat_command_success(
 
 
 @pytest.mark.asyncio
-async def test_admin_remove_chat_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_admin_remove_chat_command_no_args(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -603,6 +629,7 @@ async def test_list_chats_command_success(
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
+    mock_logger: Any,
 ) -> None:
     from infra.repos import ChatsRepo
 
@@ -612,7 +639,7 @@ async def test_list_chats_command_success(
 
     mock_pool = MockPool()
     services.chats = ChatsRepo(pool=mock_pool)
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -642,6 +669,7 @@ async def test_list_chats_command_no_chats(
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
+    mock_logger: Any,
 ) -> None:
     from infra.repos import ChatsRepo
 
@@ -651,7 +679,7 @@ async def test_list_chats_command_no_chats(
 
     mock_pool = MockPool()
     services.chats = ChatsRepo(pool=mock_pool)
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -669,10 +697,12 @@ async def test_list_chats_command_no_chats(
 
 
 @pytest.mark.asyncio
-async def test_stop_command_non_admin(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_stop_command_non_admin(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminNo:
@@ -690,10 +720,10 @@ async def test_stop_command_non_admin(fake_update: Any, fake_context: Any, async
 
 
 @pytest.mark.asyncio
-async def test_stop_command_admin(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_stop_command_admin(fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -716,10 +746,12 @@ async def test_stop_command_admin(fake_update: Any, fake_context: Any, async_ret
 
 
 @pytest.mark.asyncio
-async def test_set_kandinsky_model_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_kandinsky_model_command_no_args(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = ModelHandlers(services=services)
+    handler = ModelHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -738,7 +770,9 @@ async def test_set_kandinsky_model_command_no_args(fake_update: Any, fake_contex
 
 
 @pytest.mark.asyncio
-async def test_set_kandinsky_model_command_success(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_kandinsky_model_command_success(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     image_client = MagicMock()
     image_client.set_model = AsyncMock(return_value=(True, "Модель установлена"))
 
@@ -748,7 +782,7 @@ async def test_set_kandinsky_model_command_success(fake_update: Any, fake_contex
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services)
+    handler = ModelHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -768,10 +802,12 @@ async def test_set_kandinsky_model_command_success(fake_update: Any, fake_contex
 
 
 @pytest.mark.asyncio
-async def test_set_gigachat_model_command_no_args(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_gigachat_model_command_no_args(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = ModelHandlers(services=services)
+    handler = ModelHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -790,14 +826,16 @@ async def test_set_gigachat_model_command_no_args(fake_update: Any, fake_context
 
 
 @pytest.mark.asyncio
-async def test_set_gigachat_model_command_no_client(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_gigachat_model_command_no_client(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     image_generator = MagicMock()
     image_generator.text_client = None
 
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services)
+    handler = ModelHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -816,7 +854,9 @@ async def test_set_gigachat_model_command_no_client(fake_update: Any, fake_conte
 
 
 @pytest.mark.asyncio
-async def test_set_gigachat_model_command_success(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_set_gigachat_model_command_success(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     text_client = MagicMock()
     text_client.set_model = AsyncMock(return_value=(True, "✅ Модель GigaChat установлена: GigaChat-Pro"))
 
@@ -826,7 +866,7 @@ async def test_set_gigachat_model_command_success(fake_update: Any, fake_context
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services)
+    handler = ModelHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -852,12 +892,13 @@ async def test_set_gigachat_model_command_success(fake_update: Any, fake_context
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_mod_command_success(
+async def test_mod_command_success(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест успешного выполнения команды /mod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -870,7 +911,7 @@ async def test_mod_command_success(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -894,14 +935,14 @@ async def test_mod_command_success(
 
 @pytest.mark.asyncio
 async def test_mod_command_no_args(
-    fake_update: Any, fake_context: Any, async_retry_stub: Any, monkeypatch: Any
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, monkeypatch: Any, mock_logger: Any
 ) -> None:
     """Тест команды /mod без аргументов (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     # Не нужно мокать admins_store, так как теперь проверяется _is_super_admin
@@ -920,12 +961,13 @@ async def test_mod_command_no_args(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_success(
+async def test_unmod_command_success(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест успешного выполнения команды /unmod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -938,7 +980,7 @@ async def test_unmod_command_success(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -965,12 +1007,13 @@ async def test_unmod_command_success(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_no_args_shows_list(
+async def test_unmod_command_no_args_shows_list(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест команды /unmod без аргументов (теперь показывает список админов)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -981,7 +1024,7 @@ async def test_unmod_command_no_args_shows_list(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1013,12 +1056,13 @@ async def test_unmod_command_no_args_shows_list(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_list_mods_command_success(
+async def test_list_mods_command_success(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     # Импортируем реальный AdminsRepo напрямую из модуля, обходя патч
     import infra.repos.admins_repo as admins_repo_module
@@ -1029,7 +1073,7 @@ async def test_list_mods_command_success(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1054,7 +1098,9 @@ async def test_list_mods_command_success(
 
 
 @pytest.mark.asyncio
-async def test_list_models_command(fake_update: Any, fake_context: Any, async_retry_stub: Any) -> None:
+async def test_list_models_command(
+    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
+) -> None:
     image_generator = MagicMock()
     image_generator.check_api_status = AsyncMock(
         return_value=(True, "OK", ["Model 1", "Model 2"], ("id1", "name1")),
@@ -1066,7 +1112,7 @@ async def test_list_models_command(fake_update: Any, fake_context: Any, async_re
     services = MagicMock()
     services.image_generator = image_generator
 
-    handler = ModelHandlers(services=services)
+    handler = ModelHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     class _AdminOk:
@@ -1085,11 +1131,11 @@ async def test_list_models_command(fake_update: Any, fake_context: Any, async_re
 
 # Тесты для новых функций mod/unmod с поддержкой reply и ограничением доступа
 @pytest.mark.asyncio
-async def test_extract_target_user_id_from_reply(fake_update: Any, fake_context: Any) -> None:
+async def test_extract_target_user_id_from_reply(fake_update: Any, fake_context: Any, mock_logger: Any) -> None:
     """Тест извлечения target_user_id из reply на сообщение."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     # Создаем reply_to_message
     reply_user = SimpleNamespace(id=12345)
@@ -1102,11 +1148,11 @@ async def test_extract_target_user_id_from_reply(fake_update: Any, fake_context:
 
 
 @pytest.mark.asyncio
-async def test_extract_target_user_id_from_args(fake_update: Any, fake_context: Any) -> None:
+async def test_extract_target_user_id_from_args(fake_update: Any, fake_context: Any, mock_logger: Any) -> None:
     """Тест извлечения target_user_id из аргументов команды."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     fake_update.message.reply_to_message = None
     fake_context.args = ["67890"]
@@ -1116,11 +1162,13 @@ async def test_extract_target_user_id_from_args(fake_update: Any, fake_context: 
 
 
 @pytest.mark.asyncio
-async def test_extract_target_user_id_priority_reply_over_args(fake_update: Any, fake_context: Any) -> None:
+async def test_extract_target_user_id_priority_reply_over_args(
+    fake_update: Any, fake_context: Any, mock_logger: Any
+) -> None:
     """Тест приоритета reply над аргументами."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     # Есть и reply, и аргументы - должен вернуть reply
     reply_user = SimpleNamespace(id=11111)
@@ -1133,11 +1181,11 @@ async def test_extract_target_user_id_priority_reply_over_args(fake_update: Any,
 
 
 @pytest.mark.asyncio
-async def test_extract_target_user_id_invalid_args(fake_update: Any, fake_context: Any) -> None:
+async def test_extract_target_user_id_invalid_args(fake_update: Any, fake_context: Any, mock_logger: Any) -> None:
     """Тест обработки невалидных аргументов."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     fake_update.message.reply_to_message = None
     fake_context.args = ["not_a_number"]
@@ -1147,11 +1195,11 @@ async def test_extract_target_user_id_invalid_args(fake_update: Any, fake_contex
 
 
 @pytest.mark.asyncio
-async def test_extract_target_user_id_multiple_args(fake_update: Any, fake_context: Any) -> None:
+async def test_extract_target_user_id_multiple_args(fake_update: Any, fake_context: Any, mock_logger: Any) -> None:
     """Тест обработки множественных аргументов (должен вернуть None)."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     fake_update.message.reply_to_message = None
     fake_context.args = ["111", "222"]
@@ -1161,11 +1209,11 @@ async def test_extract_target_user_id_multiple_args(fake_update: Any, fake_conte
 
 
 @pytest.mark.asyncio
-async def test_extract_target_user_id_no_reply_no_args(fake_update: Any, fake_context: Any) -> None:
+async def test_extract_target_user_id_no_reply_no_args(fake_update: Any, fake_context: Any, mock_logger: Any) -> None:
     """Тест отсутствия reply и аргументов (должен вернуть None)."""
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
 
     fake_update.message.reply_to_message = None
     fake_context.args = []
@@ -1175,24 +1223,24 @@ async def test_extract_target_user_id_no_reply_no_args(fake_update: Any, fake_co
 
 
 @pytest.mark.asyncio
-async def test_is_super_admin_true(monkeypatch: Any) -> None:
+async def test_is_super_admin_true(monkeypatch: Any, mock_logger: Any) -> None:
     """Тест проверки супер-админа (должен вернуть True)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     assert handler._is_super_admin(42) is True
 
 
 @pytest.mark.asyncio
-async def test_is_super_admin_false(monkeypatch: Any) -> None:
+async def test_is_super_admin_false(monkeypatch: Any, mock_logger: Any) -> None:
     """Тест проверки не-супер-админа (должен вернуть False)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     assert handler._is_super_admin(42) is False
 
 
@@ -1200,12 +1248,13 @@ async def test_is_super_admin_false(monkeypatch: Any) -> None:
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_mod_command_non_super_admin_denied(
+async def test_mod_command_non_super_admin_denied(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест отказа команды /mod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
@@ -1216,7 +1265,7 @@ async def test_mod_command_non_super_admin_denied(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1240,12 +1289,13 @@ async def test_mod_command_non_super_admin_denied(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_mod_command_with_reply(
+async def test_mod_command_with_reply(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест команды /mod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1256,7 +1306,7 @@ async def test_mod_command_with_reply(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1285,12 +1335,13 @@ async def test_mod_command_with_reply(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_mod_command_with_args(
+async def test_mod_command_with_args(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест команды /mod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1301,7 +1352,7 @@ async def test_mod_command_with_args(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1326,12 +1377,13 @@ async def test_mod_command_with_args(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_non_super_admin_denied(
+async def test_unmod_command_non_super_admin_denied(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест отказа команды /unmod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
@@ -1342,7 +1394,7 @@ async def test_unmod_command_non_super_admin_denied(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1366,12 +1418,13 @@ async def test_unmod_command_non_super_admin_denied(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_with_reply(
+async def test_unmod_command_with_reply(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест команды /unmod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1382,7 +1435,7 @@ async def test_unmod_command_with_reply(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1413,12 +1466,13 @@ async def test_unmod_command_with_reply(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_with_args(
+async def test_unmod_command_with_args(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест команды /unmod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1429,7 +1483,7 @@ async def test_unmod_command_with_args(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1455,12 +1509,13 @@ async def test_unmod_command_with_args(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_cannot_remove_super_admin(
+async def test_unmod_command_cannot_remove_super_admin(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест попытки удалить главного администратора (должен быть отказ)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1471,7 +1526,7 @@ async def test_unmod_command_cannot_remove_super_admin(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool
@@ -1495,12 +1550,13 @@ async def test_unmod_command_cannot_remove_super_admin(
 @pytest.mark.db
 @pytest.mark.usefixtures("_setup_test_postgres")
 @pytest.mark.asyncio
-async def test_unmod_command_shows_admin_list_when_no_args(
+async def test_unmod_command_shows_admin_list_when_no_args(  # noqa: PLR0913, PLR0917
     fake_update: Any,
     fake_context: Any,
     async_retry_stub: Any,
     cleanup_tables: Any,
     monkeypatch: Any,
+    mock_logger: Any,
 ) -> None:
     """Тест показа списка админов при вызове /unmod без аргументов."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1511,7 +1567,7 @@ async def test_unmod_command_shows_admin_list_when_no_args(
 
     services = MagicMock()
     services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services)
+    handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     from infra.database.postgres_client import _pool

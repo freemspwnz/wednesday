@@ -838,8 +838,11 @@ def build_bot(
         chat_id=config.telegram.chat_id,
     )
 
+    # Создаём логгер для bot-слоя
+    bot_logger = get_logger("bot.wednesday_bot")
+
     # Создаём бот с внедрёнными зависимостями
-    bot = WednesdayBot(services=services, telegram_config=bot_telegram_config)
+    bot = WednesdayBot(services=services, telegram_config=bot_telegram_config, logger=bot_logger)
 
     # Устанавливаем обратную ссылку в composition root для избежания циклической зависимости
     # bot_controller должен быть установлен здесь, а не в конструкторе WednesdayBot

@@ -126,9 +126,13 @@ def support_bot(monkeypatch: Any) -> Any:
         redis_client=redis_client,
     )
     telegram_config = BotTelegramConfig(bot_token="test_token", chat_id="123")
+    from unittest.mock import MagicMock
+
+    mock_logger = MagicMock()
     bot = sb_module.SupportBot(
         services=support_services,
         telegram_config=telegram_config,
+        logger=mock_logger,
     )
     return bot
 

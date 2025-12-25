@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from bot.base_handlers import BaseHandlers
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError
 from shared.bot_services import BotServices, SupportBotServices, require_bot_services
+from shared.protocols import ILogger
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -22,8 +23,9 @@ class ModelHandlers(BaseHandlers):
     def __init__(
         self,
         services: BotServices | SupportBotServices,
+        logger: ILogger,
     ) -> None:
-        super().__init__(services)
+        super().__init__(services, logger)
         # Валидация типа: ModelHandlers работает только с BotServices
         self.services: BotServices = require_bot_services(services, "ModelHandlers")
         # Используем ModelManagementService для управления моделями

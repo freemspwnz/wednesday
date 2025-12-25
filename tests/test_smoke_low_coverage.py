@@ -209,7 +209,8 @@ async def test_command_handlers_start_help(
         frog_rate_limiter=frog_rate_limiter,
         task_queue=task_queue,
     )
-    handler = UserHandlers(services=services)
+
+    handler = UserHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
     await handler.start_command(fake_update, fake_context)

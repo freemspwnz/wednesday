@@ -15,6 +15,7 @@ from shared.base.exceptions import (
     ServiceError,
 )
 from shared.bot_services import BotServices, SupportBotServices, require_bot_services
+from shared.protocols import ILogger
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -35,8 +36,9 @@ class AdminHandlers(BaseHandlers):
     def __init__(
         self,
         services: BotServices | SupportBotServices,
+        logger: ILogger,
     ) -> None:
-        super().__init__(services)
+        super().__init__(services, logger)
         # Валидация типа: AdminHandlers работает только с BotServices
         self.services: BotServices = require_bot_services(services, "AdminHandlers")
         if self.services.admin_dashboard_service is None:

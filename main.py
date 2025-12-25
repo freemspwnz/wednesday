@@ -205,15 +205,18 @@ class BotRunner:
                     chat_id=telegram_config_full.chat_id,
                 )
 
+                # Создаём логгер для SupportBot
+                support_bot_logger = get_logger("bot.support_bot")
+
                 self.support_bot = SupportBot(
                     services=support_services,
                     telegram_config=bot_telegram_config,
+                    logger=support_bot_logger,
                     request_start_main=request_start_main,
                 )
 
                 # Создаём admin_notification_service после создания бота, так как нужен bot.application.bot
                 from infra.container import build_admin_notification_service
-                from infra.logging.logger import get_logger
                 from infra.messaging.ptb import PTBMessagingService
 
                 messaging_service = PTBMessagingService(bot=self.support_bot.application.bot)

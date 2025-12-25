@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes
 
-from infra.logging.logger import get_logger, log_event
+from infra.logging.logger import log_event
 from shared.protocols import ILogger
 
 if TYPE_CHECKING:
@@ -22,13 +22,13 @@ class BotErrorHandler:
     и структурированное логирование для дальнейшего анализа.
     """
 
-    def __init__(self, logger: ILogger | None = None) -> None:
+    def __init__(self, logger: ILogger) -> None:
         """Инициализирует обработчик ошибок.
 
         Args:
-            logger: Экземпляр логгера. Если None, создается новый.
+            logger: Экземпляр логгера для логирования ошибок.
         """
-        self.logger = logger or get_logger(__name__)
+        self.logger = logger
 
     async def handle_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обрабатывает необработанные исключения из хендлеров PTB.
