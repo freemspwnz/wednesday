@@ -164,8 +164,11 @@ class AdminHandlers(BaseHandlers):
                 bot_name=bot_info.first_name,
             )
 
+            # update.message гарантированно не None после проверки выше
+            message = update.message
+            assert message is not None  # для mypy
             success = await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 status_message,
                 fallback_text="❌ Ошибка при получении статуса",
             )
@@ -1111,9 +1114,12 @@ class AdminHandlers(BaseHandlers):
                             max_retries=3,
                             delay=2,
                         )
-                    except Exception:
-                        # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
-                        pass
+                    except Exception as fallback_error:
+                        # Обрабатываем ошибку отправки fallback сообщения
+                        self._handle_send_message_error(
+                            fallback_error,
+                            context="отправке сообщения об ошибке отправки списка админов",
+                        )
             except Exception as e:
                 # Неожиданные ошибки при получении списка админов
                 self.logger.error(f"Ошибка при получении списка админов: {e}", exc_info=True)
@@ -1124,9 +1130,12 @@ class AdminHandlers(BaseHandlers):
                         max_retries=3,
                         delay=2,
                     )
-                except Exception:
-                    # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
-                    pass
+                except Exception as error_error:
+                    # Обрабатываем ошибку отправки сообщения об ошибке
+                    self._handle_send_message_error(
+                        error_error,
+                        context="отправке сообщения об ошибке получения списка админов",
+                    )
             return
 
         # Ветка удаления админа
@@ -1171,9 +1180,12 @@ class AdminHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
-                # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
-                pass
+            except Exception as service_error:
+                # Обрабатываем ошибку отправки сообщения об ошибке сервиса
+                self._handle_send_message_error(
+                    service_error,
+                    context="отправке сообщения об ошибке сервиса при удалении админа",
+                )
 
     async def list_mods_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_mods.
@@ -1253,6 +1265,9 @@ class AdminHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
-                # Exception с pass оправдан - если не удалось отправить, централизованный обработчик перехватит
-                pass  # Если не удалось отправить, централизованный обработчик перехватит
+            except Exception as list_error:
+                # Обрабатываем ошибку отправки сообщения об ошибке
+                self._handle_send_message_error(
+                    list_error,
+                    context="отправке сообщения об ошибке отправки списка админов",
+                )

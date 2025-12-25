@@ -225,8 +225,12 @@ class SupportBotHandlers(BaseHandlers):
             chat_id = update.effective_chat.id if update.effective_chat else None
             text = update.message.text if update.message else None
             self.logger.info(f"/unknown for SupportBot: user_id={user_id}, chat_id={chat_id}, text={text}")
-        except Exception:
-            pass
+        except Exception as log_error:
+            # Обрабатываем ошибку логирования - не критично, но логируем для диагностики
+            self.logger.warning(
+                f"Не удалось залогировать информацию о неизвестной команде: {log_error}",
+                exc_info=False,
+            )
         try:
             await retry_on_connect_error(
                 update.message.reply_text,

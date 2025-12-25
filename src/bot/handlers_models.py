@@ -111,8 +111,12 @@ class ModelHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
-                pass
+            except Exception as send_error:
+                # Обрабатываем ошибку отправки сообщения
+                self._handle_send_message_error(
+                    send_error,
+                    context="отправке сообщения об ошибке установки модели Kandinsky",
+                )
         except (AuthenticationError, NetworkError, APIError) as e:
             self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
             try:
@@ -122,8 +126,12 @@ class ModelHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
-                pass
+            except Exception as api_error:
+                # Обрабатываем ошибку отправки сообщения об ошибке API
+                self._handle_send_message_error(
+                    api_error,
+                    context="отправке сообщения об ошибке API при установке модели Kandinsky",
+                )
         except Exception as e:
             self.logger.error(f"Неожиданная ошибка при установке модели Kandinsky: {e}")
 
@@ -181,8 +189,12 @@ class ModelHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
-                pass
+            except Exception as send_error:
+                # Обрабатываем ошибку отправки сообщения
+                self._handle_send_message_error(
+                    send_error,
+                    context="отправке сообщения об ошибке установки модели GigaChat",
+                )
         except (AuthenticationError, NetworkError, APIError) as e:
             self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
             try:
@@ -192,8 +204,12 @@ class ModelHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
-                pass
+            except Exception as api_error:
+                # Обрабатываем ошибку отправки сообщения об ошибке API
+                self._handle_send_message_error(
+                    api_error,
+                    context="отправке сообщения об ошибке API при установке модели GigaChat",
+                )
         except Exception as e:
             self.logger.error(f"Неожиданная ошибка при установке модели GigaChat: {e}")
 
@@ -246,5 +262,9 @@ class ModelHandlers(BaseHandlers):
                     max_retries=3,
                     delay=2,
                 )
-            except Exception:
-                pass
+            except Exception as send_error:
+                # Обрабатываем ошибку отправки сообщения
+                self._handle_send_message_error(
+                    send_error,
+                    context="отправке сообщения об ошибке установки модели Kandinsky",
+                )

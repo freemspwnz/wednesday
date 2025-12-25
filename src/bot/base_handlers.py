@@ -298,13 +298,45 @@ class BaseHandlers:
 
         try:
             await message.delete()
-        except Exception as delete_error:
-            # Логируем, но не пробрасываем - удаление статусного сообщения не критично
+        except (TelegramError, NetworkError, TimedOut) as delete_error:
+            # Сетевые ошибки Telegram API - логируем, но не прерываем
             self.logger.debug(
-                f"Не удалось удалить статусное сообщение: {delete_error}",
+                f"Не удалось удалить статусное сообщение (сетевая ошибка): {delete_error}",
                 exc_info=False,
             )
-            # Централизованный обработчик перехватит, если это критично
+        except Exception as delete_error:
+            # Неожиданные ошибки - логируем с полным стеком для диагностики
+            self.logger.warning(
+                f"Неожиданная ошибка при удалении статусного сообщения: {delete_error}",
+                exc_info=True,
+            )
+
+    def _handle_send_message_error(
+        self,
+        error: Exception,
+        context: str = "отправке сообщения",
+    ) -> None:
+        """Обрабатывает ошибки отправки сообщений с правильным логированием.
+
+        Разделяет обработку сетевых ошибок Telegram API и неожиданных ошибок.
+        Используется для замены `except Exception: pass` на более специфичную обработку.
+
+        Args:
+            error: Исключение, которое произошло при отправке сообщения.
+            context: Контекст для логирования (например, "отправке сообщения об ошибке").
+        """
+        if isinstance(error, TelegramError | NetworkError | TimedOut):
+            # Сетевые ошибки Telegram API - логируем, но не прерываем
+            self.logger.warning(
+                f"Сетевая ошибка Telegram API при {context}: {error}",
+                exc_info=False,
+            )
+        else:
+            # Неожиданные ошибки - логируем с полным стеком для диагностики
+            self.logger.error(
+                f"Неожиданная ошибка при {context}: {error}",
+                exc_info=True,
+            )
 
     async def _safe_reply_text_with_error_logging(
         self,
