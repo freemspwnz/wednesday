@@ -564,11 +564,10 @@ class WednesdayBot:
 
         Side Effects:
             - Устанавливает флаг is_running в False.
-            - Останавливает планировщик через scheduler.stop() (если включен).
-            - Останавливает updater через updater.stop().
+            - Останавливает PTB Application через lifecycle_manager.stop_application().
             - Отправляет сообщения об остановке в CHAT_ID и админам.
             - Редактирует статусные сообщения об остановке (если есть).
-            - Останавливает приложение через application.stop().
+            - Гарантированно закрывает все ресурсы через services.cleanup() в finally блоке.
         """
         # Защита от повторных вызовов
         if not self.is_running:
@@ -624,18 +623,18 @@ class WednesdayBot:
             self.pending_shutdown_edit = None
             self.pending_startup_edit = None
 
-            # Закрываем все ресурсы через BotServices
-            try:
-                await self.services.cleanup()
-                self.logger.info("Все ресурсы BotServices закрыты")
-            except Exception as e:
-                self.logger.warning(f"Ошибка при cleanup ресурсов: {e}")
-
             self.logger.info("Бот успешно остановлен")
 
         except Exception as e:
             self.logger.error(f"Ошибка при остановке бота: {e}")
         finally:
+            # Гарантированное закрытие ресурсов (всегда выполняется)
+            try:
+                await self.services.cleanup()
+                self.logger.info("Все ресурсы BotServices закрыты")
+            except Exception as cleanup_error:
+                self.logger.warning(f"Ошибка при cleanup ресурсов: {cleanup_error}")
+
             # Дополнительно защитимся от повторных отправок в жизненном цикле объекта
             self._stop_message_sent = True
 
