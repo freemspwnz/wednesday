@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from telegram import Bot, Update
+from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
+from shared.base.exceptions import ServiceError
 from shared.bot_services import BotServices, SupportBotServices
 from shared.protocols import ILogger
 
@@ -85,11 +87,25 @@ class ChatEventHandler:
                     )
                     try:
                         await self.bot.send_message(chat_id=chat_id, text=welcome)
-                    except Exception as send_error:
+                    except (TelegramError, NetworkError, TimedOut) as send_error:
+                        # Временные сетевые ошибки - можно повторить позже
                         self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {send_error}")
-                except Exception as add_error:
+                    except Exception as send_error:
+                        # Другие ошибки (например, бот заблокирован)
+                        self.logger.error(
+                            f"Критическая ошибка при отправке приветствия в чат {chat_id}: {send_error}",
+                            exc_info=True,
+                        )
+                except ServiceError as add_error:
+                    # Ошибки сервисного слоя
                     self.logger.error(
-                        f"Не удалось добавить чат {chat_id} в список рассылки: {add_error}",
+                        f"Ошибка сервиса при добавлении чата {chat_id}: {add_error}",
+                        exc_info=True,
+                    )
+                except Exception as add_error:
+                    # Неожиданные ошибки
+                    self.logger.error(
+                        f"Неожиданная ошибка при добавлении чата {chat_id}: {add_error}",
                         exc_info=True,
                     )
 
@@ -97,9 +113,16 @@ class ChatEventHandler:
             if new in {"left", "kicked"} and old in {"member", "administrator", "restricted"}:
                 try:
                     await self.services.chats.remove_chat(chat_id)
-                except Exception as remove_error:
+                except ServiceError as remove_error:
+                    # Ошибки сервисного слоя
                     self.logger.error(
-                        f"Не удалось удалить чат {chat_id} из списка рассылки: {remove_error}",
+                        f"Ошибка сервиса при удалении чата {chat_id}: {remove_error}",
+                        exc_info=True,
+                    )
+                except Exception as remove_error:
+                    # Неожиданные ошибки
+                    self.logger.error(
+                        f"Неожиданная ошибка при удалении чата {chat_id}: {remove_error}",
                         exc_info=True,
                     )
 
