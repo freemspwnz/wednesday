@@ -526,6 +526,10 @@ class AdminHandlers(BaseHandlers):
                 raise ValueError("chat_id не может быть нулем")
 
             result = await self._admin_command.add_chat(chat_id, "Manually added")
+            if result.success:
+                self.logger.info(f"Чат {chat_id} успешно добавлен в рассылку")
+            else:
+                self.logger.warning(f"Не удалось добавить чат {chat_id}: {result.message}")
             await self._safe_reply_with_fallback(
                 update.message,
                 result.message,
@@ -584,6 +588,10 @@ class AdminHandlers(BaseHandlers):
                 raise ValueError("chat_id не может быть нулем")
 
             result = await self._admin_command.remove_chat(chat_id)
+            if result.success:
+                self.logger.info(f"Чат {chat_id} успешно удалён из рассылки")
+            else:
+                self.logger.warning(f"Не удалось удалить чат {chat_id}: {result.message}")
             await self._safe_reply_with_fallback(
                 update.message,
                 result.message,
