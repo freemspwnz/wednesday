@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from pathlib import Path
-
 from telegram import Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
@@ -10,7 +7,6 @@ from telegram.ext import ContextTypes
 from bot.base_handlers import BaseHandlers
 from shared.base.exceptions import AccessDeniedError, ServiceError
 from shared.bot_services import BotServices
-from shared.paths import LOGS_DIR
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -139,117 +135,7 @@ class AdminHandlers(BaseHandlers):
             - Отправляет файлы логов в чат через context.bot.send_document().
             - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
-        if not update.message or not update.effective_user or not update.effective_chat:
-            return
-
-        user_id = update.effective_user.id
-        if not await self.admins_store.is_admin(user_id):
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Доступно только администратору",
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut):
-                pass
-            return
-
-        logs_dir = LOGS_DIR
-        if not logs_dir.exists():
-            try:
-                self.logger.info(
-                    f"Запрошена команда /log, но директория логов отсутствует: {logs_dir}",
-                )
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📭 Папка logs пуста или отсутствует",
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut):
-                pass
-            return
-
-        # Парсим аргумент count
-        count = 1
-        capped_note = None
-        if context.args and len(context.args) > 0:
-            raw = context.args[0]
-            if not raw.isdigit():
-                try:
-                    await retry_on_connect_error(
-                        update.message.reply_text,
-                        "❌ Неверный аргумент. Используйте: /log [count], где count — число 1..10",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except (TelegramError, NetworkError, TimedOut):
-                    pass
-                return
-            count = int(raw)
-            if count > MAX_LOG_DAYS:
-                count = MAX_LOG_DAYS
-                capped_note = f"(ограничено максимумом {MAX_LOG_DAYS} дней)"
-
-        # Определяем файлы по датам за count дней, учитывая .log и .log.zip
-        wanted_dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(count)]
-        candidates: list[Path] = []
-        for ds in wanted_dates:
-            log_path = logs_dir / f"wednesday_bot_{ds}.log"
-            zip_path = logs_dir / f"wednesday_bot_{ds}.log.zip"
-            if log_path.exists():
-                candidates.append(log_path)
-            elif zip_path.exists():
-                candidates.append(zip_path)
-
-        # Фоллбек: если ничего не нашли по датам — возьмем самый свежий файл
-        if not candidates:
-            log_files = [p for p in logs_dir.iterdir() if p.is_file()]
-            candidates = sorted(log_files, key=lambda p: p.stat().st_mtime, reverse=True)[:1]
-
-        if not candidates:
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📭 Нет логов для отправки",
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut):
-                pass
-            return
-
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                f"📦 Отправляю файл(ы) логов за {len(candidates)} дн. {capped_note or ''}",
-                max_retries=3,
-                delay=2,
-            )
-        except (TelegramError, NetworkError, TimedOut):
-            pass
-
-        # Отправляем в порядке от старых к новым
-        for lf in sorted(candidates, key=lambda p: p.name):
-            try:
-                self.logger.info(f"Отправляю лог-файл {lf}")
-                await self._send_log_file(
-                    bot=context.bot,
-                    chat_id=update.effective_chat.id,
-                    path=lf,
-                )
-            except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                "✅ Готово",
-                max_retries=3,
-                delay=2,
-            )
-        except (TelegramError, NetworkError, TimedOut):
-            pass
+        await self._send_logs_command(update, context, max_days=MAX_LOG_DAYS)
 
     async def stop_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /stop.

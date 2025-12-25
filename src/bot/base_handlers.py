@@ -7,13 +7,16 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from telegram import Bot, Message, Update
+from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from infra.logging.logger import get_logger
 from shared.bot_services import BotServices
+from shared.paths import LOGS_DIR
 from shared.retry import retry_on_connect_error, retry_telegram
 
 # Константы
@@ -127,3 +130,138 @@ class BaseHandlers:
         не требуется гибкая настройка retry-параметров.
         """
         await message.reply_text(text)
+
+    async def _send_logs_command(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        max_days: int = 10,
+    ) -> None:
+        """Общая логика отправки логов для команды /log.
+
+        Отправляет логи администратору. Без аргумента отправляет последний файл,
+        с аргументом [count] отправляет логи за N дней (1..max_days).
+
+        Args:
+            update: Объект обновления Telegram, содержащий информацию о сообщении,
+                пользователе и чате, из которого отправлена команда.
+            context: Контекст бота, предоставляющий доступ к аргументам команды
+                через context.args и к боту для отправки файлов через context.bot.
+            max_days: Максимальное количество дней для отправки логов (по умолчанию 10).
+
+        Side Effects:
+            - Читает файлы логов из директории logs/.
+            - Отправляет файлы логов в чат через context.bot.send_document().
+            - Проверяет права администратора через admins_store.is_admin().
+        """
+        if not update.message or not update.effective_user or not update.effective_chat:
+            return
+
+        user_id = update.effective_user.id
+        if not await self.admins_store.is_admin(user_id):
+            try:
+                await retry_on_connect_error(
+                    update.message.reply_text,
+                    "❌ Доступно только администратору",
+                    max_retries=3,
+                    delay=2,
+                )
+            except (TelegramError, NetworkError, TimedOut):
+                pass
+            return
+
+        logs_dir = LOGS_DIR
+        if not logs_dir.exists():
+            try:
+                self.logger.info(
+                    f"Запрошена команда /log, но директория логов отсутствует: {logs_dir}",
+                )
+                await retry_on_connect_error(
+                    update.message.reply_text,
+                    "📭 Папка logs пуста или отсутствует",
+                    max_retries=3,
+                    delay=2,
+                )
+            except (TelegramError, NetworkError, TimedOut):
+                pass
+            return
+
+        # Парсим аргумент count
+        count = 1
+        capped_note = None
+        if context.args and len(context.args) > 0:
+            raw = context.args[0]
+            if not raw.isdigit():
+                try:
+                    await retry_on_connect_error(
+                        update.message.reply_text,
+                        f"❌ Неверный аргумент. Используйте: /log [count], где count — число 1..{max_days}",
+                        max_retries=3,
+                        delay=2,
+                    )
+                except (TelegramError, NetworkError, TimedOut):
+                    pass
+                return
+            count = int(raw)
+            if count > max_days:
+                count = max_days
+                capped_note = f"(ограничено максимумом {max_days} дней)"
+
+        # Определяем файлы по датам за count дней, учитывая .log и .log.zip
+        wanted_dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(count)]
+        candidates: list[Path] = []
+        for ds in wanted_dates:
+            log_path = logs_dir / f"wednesday_bot_{ds}.log"
+            zip_path = logs_dir / f"wednesday_bot_{ds}.log.zip"
+            if log_path.exists():
+                candidates.append(log_path)
+            elif zip_path.exists():
+                candidates.append(zip_path)
+
+        # Фоллбек: если ничего не нашли по датам — возьмем самый свежий файл
+        if not candidates:
+            log_files = [p for p in logs_dir.iterdir() if p.is_file()]
+            candidates = sorted(log_files, key=lambda p: p.stat().st_mtime, reverse=True)[:1]
+
+        if not candidates:
+            try:
+                await retry_on_connect_error(
+                    update.message.reply_text,
+                    "📭 Нет логов для отправки",
+                    max_retries=3,
+                    delay=2,
+                )
+            except (TelegramError, NetworkError, TimedOut):
+                pass
+            return
+
+        try:
+            await retry_on_connect_error(
+                update.message.reply_text,
+                f"📦 Отправляю файл(ы) логов за {len(candidates)} дн. {capped_note or ''}",
+                max_retries=3,
+                delay=2,
+            )
+        except (TelegramError, NetworkError, TimedOut):
+            pass
+
+        # Отправляем в порядке от старых к новым
+        for lf in sorted(candidates, key=lambda p: p.name):
+            try:
+                self.logger.info(f"Отправляю лог-файл {lf}")
+                await self._send_log_file(
+                    bot=context.bot,
+                    chat_id=update.effective_chat.id,
+                    path=lf,
+                )
+            except (TelegramError, NetworkError, TimedOut) as e:
+                self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
+        try:
+            await retry_on_connect_error(
+                update.message.reply_text,
+                "✅ Готово",
+                max_retries=3,
+                delay=2,
+            )
+        except (TelegramError, NetworkError, TimedOut):
+            pass

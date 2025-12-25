@@ -7,7 +7,6 @@ import asyncio
 from typing import Any
 
 from telegram import Update
-from telegram.error import TelegramError
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
@@ -307,125 +306,6 @@ class WednesdayBot:
             slot_time=slot_time,
             main_chat_id=self.chat_id,
         )
-
-    async def _send_error_message(self, error_text: str) -> None:
-        """Отправляет сообщение об ошибке в основной чат.
-
-        Вспомогательная функция для отправки дружелюбного сообщения об ошибке
-        в чат, указанный в self.chat_id.
-
-        Args:
-            error_text: Текст сообщения об ошибке, который будет дополнен
-                стандартным префиксом и эмодзи.
-
-        Side Effects:
-            - Отправляет сообщение в чат через bot.send_message().
-            - Логирует ошибку, если отправка не удалась.
-        """
-        try:
-            error_message = f"⚠️ {error_text}\nПопробуем в следующий раз! 🐸"
-            await self.application.bot.send_message(
-                chat_id=self.chat_id,
-                text=error_message,
-            )
-        except TelegramError as send_error:
-            self.logger.warning(f"Не удалось отправить сообщение об ошибке (TelegramError): {send_error}")
-        except Exception as send_error:
-            self.logger.error(
-                f"Неожиданная программная ошибка при отправке сообщения об ошибке: {send_error}",
-                exc_info=True,
-            )
-
-    async def _send_user_friendly_error(self, chat_id: int, error_context: str = "генерации изображения") -> None:
-        """Отправляет дружелюбное сообщение об ошибке в указанный чат.
-
-        Вспомогательная функция для отправки пользователю дружелюбного сообщения
-        об ошибке, которое не раскрывает технических деталей.
-
-        Args:
-            chat_id: ID чата для отправки сообщения.
-            error_context: Контекст ошибки для пользовательского сообщения
-                (по умолчанию "генерации изображения").
-
-        Side Effects:
-            - Отправляет дружелюбное сообщение в указанный чат через bot.send_message().
-            - Логирует ошибку, если отправка не удалась.
-        """
-        try:
-            friendly_message = (
-                "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
-                "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
-            )
-            await self.application.bot.send_message(
-                chat_id=chat_id,
-                text=friendly_message,
-            )
-        except TelegramError as send_error:
-            self.logger.warning(
-                "Не удалось отправить дружелюбное сообщение об ошибке (TelegramError): %s",
-                send_error,
-            )
-        except Exception as send_error:
-            self.logger.error(
-                "Неожиданная программная ошибка при отправке дружелюбного сообщения об ошибке: %s",
-                send_error,
-                exc_info=True,
-            )
-
-    async def _send_fallback_image(self, chat_id: int) -> bool:
-        """Отправляет случайное изображение из сохраненных в случае ошибки генерации.
-
-        Вспомогательная функция для отправки случайного изображения из архива
-        когда не удалось сгенерировать новое изображение.
-
-        Args:
-            chat_id: ID чата для отправки изображения.
-
-        Returns:
-            True если изображение успешно отправлено, False если нет сохраненных
-            изображений или произошла ошибка при отправке.
-
-        Side Effects:
-            - Получает случайное изображение через image_generator.get_random_saved_image().
-            - Отправляет изображение в указанный чат через bot.send_image().
-            - Логирует результат операции.
-        """
-        try:
-            # Чтение fallback‑изображения выполняется через публичный метод ImageService,
-            # который инкапсулирует детали инфраструктурного хранилища.
-            image_service = self.services.image_service
-            if image_service is None:
-                self.logger.warning("Сервис изображений недоступен для fallback-изображения")
-                return False
-
-            fallback_image = await image_service.get_random_saved_image()
-            if fallback_image:
-                image_data, caption = fallback_image
-                await self.application.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=image_data,
-                    caption=caption,
-                )
-                self.logger.info(f"Случайное изображение отправлено в чат {chat_id} как fallback")
-                return True
-            else:
-                self.logger.warning("Нет сохраненных изображений для отправки как fallback")
-                return False
-        except TelegramError as send_error:
-            self.logger.warning(
-                "Не удалось отправить fallback-изображение в чат %s (TelegramError): %s",
-                chat_id,
-                send_error,
-            )
-            return False
-        except Exception as e:
-            self.logger.error(
-                "Неожиданная программная ошибка при отправке fallback-изображения в чат %s: %s",
-                chat_id,
-                e,
-                exc_info=True,
-            )
-            return False
 
     async def start(self) -> None:
         """Запускает бота и планировщик задач.

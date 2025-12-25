@@ -4,6 +4,28 @@
 
 ### Исправлено
 
+- **Устранение дублирования логики команды /log: вынесение общей логики в BaseHandlers**:
+  - Добавлен метод `_send_logs_command()` в `BaseHandlers` с общей логикой отправки логов
+  - Обновлен `AdminHandlers.admin_log_command()`: теперь использует `_send_logs_command()` вместо дублирования логики
+  - Обновлен `SupportBot.log_command()`: теперь использует `_send_logs_command()` вместо дублирования логики
+  - Удалены дублирующиеся импорты (`datetime`, `timedelta`, `Path`, `LOGS_DIR`) из `handlers_admin.py`
+  - Удален неиспользуемый импорт `Path` из `support_bot.py`
+  - Устранено ~130 строк дублирующегося кода между `AdminHandlers` и `SupportBot`
+  - Улучшена консистентность: единая реализация логики отправки логов в `BaseHandlers`
+  - Улучшена поддерживаемость: изменения в логике отправки логов теперь в одном месте
+  - Соответствие принципу DRY: устранено дублирование логики команды /log
+  - Исправление проблемы из архитектурного аудита bot-слоя (дублирование кода)
+
+- **Удаление неиспользуемых методов из WednesdayBot: устранение мертвого кода**:
+  - Удален метод `_send_fallback_image()` из `wednesday_bot.py` (не использовался, дублировал `FallbackImageDeliveryService`)
+  - Удален метод `_send_error_message()` из `wednesday_bot.py` (не использовался, дублировал `PTBMessagingService.send_error_message()`)
+  - Удален метод `_send_user_friendly_error()` из `wednesday_bot.py` (не использовался, дублировал `PTBMessagingService.send_user_friendly_error()`)
+  - Улучшена архитектурная чистота: bot-слой не содержит дублирующейся логики из app/infra слоев
+  - Улучшена читаемость: удалено ~150 строк мертвого кода из `wednesday_bot.py`
+  - Соответствие принципу DRY: использование сервисов из app/infra слоев вместо дублирования
+  - Соответствие границам слоев: bot-слой делегирует отправку сообщений в infra-слой через `messaging_service`
+  - Исправление проблемы из архитектурного аудита bot-слоя (нарушение SRP в WednesdayBot)
+
 - **Устранение дублирования логики уведомлений админов: использование AdminNotificationService вместо _send_admin_error**:
   - Добавлен `AdminNotificationService` в `BotServices` для доступа из bot слоя через DI
   - Изменен `build_dispatch_services`: теперь возвращает `admin_notification_service` вместе с dispatch сервисами

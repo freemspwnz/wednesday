@@ -4,7 +4,6 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import asyncpg
@@ -529,113 +528,9 @@ class SupportBot(BaseHandlers):
         Side Effects:
             - Читает файлы логов из директории logs/.
             - Отправляет файлы логов в чат через context.bot.send_document().
-            - Проверяет права администратора через _is_admin().
+            - Проверяет права администратора через admins_store.is_admin().
         """
-        if not update.message or not update.effective_user or not update.effective_chat:
-            return
-
-        user_id = update.effective_user.id
-        chat_id = update.effective_chat.id
-        self.logger.info(f"SupportBot /log от user_id={user_id}, chat_id={chat_id}")
-        if not await self._is_admin(user_id):
-            await retry_on_connect_error(
-                update.message.reply_text,
-                "❌ Доступно только администратору",
-                max_retries=3,
-                delay=2.0,
-            )
-            return
-
-        try:
-            logs_dir = Path("logs")
-            if not logs_dir.exists():
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📭 Папка logs пуста или отсутствует",
-                    max_retries=3,
-                    delay=2.0,
-                )
-                return
-
-            # Аргумент count
-            count = 1
-            capped_note = None
-            if context.args and len(context.args) > 0:
-                raw = context.args[0]
-                if not raw.isdigit():
-                    await retry_on_connect_error(
-                        update.message.reply_text,
-                        "❌ Неверный аргумент. Используйте: /log [count], где count — число 1..10",
-                        max_retries=3,
-                        delay=2.0,
-                    )
-                    return
-                count = int(raw)
-                if count > MAX_LOG_DAYS_SUPPORT:
-                    count = MAX_LOG_DAYS_SUPPORT
-                    capped_note = f"(ограничено максимумом {MAX_LOG_DAYS_SUPPORT} дней)"
-
-            # Выбираем файлы по датам
-            from datetime import datetime, timedelta
-
-            wanted_dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(count)]
-            selected: list[Path] = []
-            for ds in wanted_dates:
-                log_path = logs_dir / f"wednesday_bot_{ds}.log"
-                zip_path = logs_dir / f"wednesday_bot_{ds}.log.zip"
-                if log_path.exists():
-                    selected.append(log_path)
-                elif zip_path.exists():
-                    selected.append(zip_path)
-
-            if not selected:
-                log_files = [p for p in logs_dir.iterdir() if p.is_file()]
-                selected = sorted(log_files, key=lambda p: p.stat().st_mtime, reverse=True)[:1]
-
-            if not selected:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📭 Нет логов для отправки",
-                    max_retries=3,
-                    delay=2.0,
-                )
-                return
-
-            await retry_on_connect_error(
-                update.message.reply_text,
-                f"📦 Отправляю файл(ы) логов за {len(selected)} дн. {capped_note or ''}",
-                max_retries=3,
-                delay=2.0,
-            )
-            for lf in sorted(selected, key=lambda p: p.name):
-                self.logger.info(f"SupportBot отправляет лог-файл: {lf.name} ({lf.stat().st_size} bytes)")
-                try:
-                    # Используем _send_log_file из BaseHandlers для отправки лог-файла
-                    await self._send_log_file(
-                        bot=context.bot,
-                        chat_id=update.effective_chat.id,
-                        path=lf,
-                    )
-                    self.logger.info("SupportBot: лог отправлен успешно")
-                except (TelegramError, _TNetworkError, _TTimedOut) as e:
-                    self.logger.warning(f"Ошибка при отправке лога {lf}: {e}")
-            await retry_on_connect_error(
-                update.message.reply_text,
-                "✅ Готово",
-                max_retries=3,
-                delay=2.0,
-            )
-        except Exception as e:
-            self.logger.error(f"Ошибка в команде /log: {e}", exc_info=True)
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ Ошибка при отправке логов: {str(e)[:200]}",
-                    max_retries=3,
-                    delay=2.0,
-                )
-            except (TelegramError, _TNetworkError, _TTimedOut):
-                pass
+        await self._send_logs_command(update, context, max_days=MAX_LOG_DAYS_SUPPORT)
 
     async def start_main_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.
