@@ -31,20 +31,34 @@ class BotLifecycleManager:
         """
         self._logger = logger
 
-    async def start_application(self, application: Application) -> None:
+    async def start_application(
+        self,
+        application: Application,
+        enable_warmup: bool = False,
+    ) -> None:
         """Запускает PTB Application с retry логикой.
 
-        Выполняет инициализацию, запуск и начало polling с повторными попытками
-        при сетевых ошибках.
+        Выполняет инициализацию, опциональный warmup, запуск и начало polling
+        с повторными попытками при сетевых ошибках.
 
         Args:
             application: Экземпляр PTB Application для запуска.
+            enable_warmup: Если True, выполняет warmup через bot.get_me() после initialize().
 
         Raises:
             Exception: Если не удалось запустить после всех попыток.
         """
         # Инициализируем приложение асинхронно
         await application.initialize()
+
+        # Опциональный warmup для гарантированного установления контекста
+        if enable_warmup:
+            try:
+                _ = await application.bot.get_me()
+                self._logger.info("Warmup get_me() успешно выполнен")
+            except Exception as warmup_err:
+                # Не фейлим старт из-за warmup; просто залогируем
+                self._logger.warning(f"Warmup get_me() не удался: {warmup_err}", exc_info=True)
 
         # Ретраи запуска сети (start + polling)
         delay = 3

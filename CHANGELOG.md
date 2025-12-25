@@ -4,6 +4,21 @@
 
 ### Исправлено
 
+- **Устранено дублирование кода между WednesdayBot и SupportBot**:
+  - Создан модуль `bot_constants.py` с общими константами для конфигурации HTTPXRequest
+  - Создан `bot_application_factory.py` для единообразного создания PTB Application
+  - Расширен `BotLifecycleManager` для поддержки опционального warmup через `enable_warmup` параметр
+  - Рефакторинг `WednesdayBot`: использование фабрики Application и общих констант
+  - Рефакторинг `SupportBot`: использование фабрики Application, общих констант и `BotLifecycleManager` для единой логики запуска/остановки
+  - Удалена сложная логика редактирования статусных сообщений из обоих ботов (pending_startup_edit, pending_shutdown_edit)
+  - Упрощены методы `stop()` в обоих ботах: убран параметр `shutdown_metadata`
+  - Упрощен `handlers_admin.py`: убрано создание и передача `shutdown_metadata`
+  - Упрощен `main.py`: убраны поля `pending_startup_edit` и `pending_shutdown_edit`, упрощен callback `request_start_main`
+  - Обновлен протокол `IBotController.stop()`: убран параметр `shutdown_metadata`
+  - Улучшено соблюдение принципа DRY: общая логика вынесена в переиспользуемые компоненты
+  - Улучшена поддерживаемость: изменения в логике жизненного цикла теперь в одном месте
+  - Упрощена архитектура: удалена избыточная функциональность, не несущая реальной ценности
+
 - **Замена dict[str, Any] на TypedDict для метаданных статусных сообщений**:
   - Создан `StatusMessageMetadata` TypedDict в `shared/models.py` для типизации метаданных статусных сообщений
   - Заменены `dict[str, Any]` на `StatusMessageMetadata` для `pending_startup_edit` и `pending_shutdown_edit` в `WednesdayBot` и `SupportBot`

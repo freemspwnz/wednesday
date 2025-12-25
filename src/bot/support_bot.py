@@ -9,23 +9,14 @@ from typing import TYPE_CHECKING
 from telegram import Update
 from telegram.error import NetworkError as _TNetworkError, TelegramError, TimedOut as _TTimedOut
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
-from telegram.request import HTTPXRequest
 
 from bot.base_handlers import BaseHandlers
-from bot.bot_state_coordinator import BotStateCoordinator, BotStateData
+from bot.bot_application_factory import create_telegram_application
+from bot.bot_lifecycle_manager import BotLifecycleManager
 from bot.chat_event_handler import ChatEventHandler
-
-# Константы для магических чисел (импортируем из wednesday_bot для консистентности)
-from bot.wednesday_bot import (
-    CONNECT_TIMEOUT_SECONDS,
-    CONNECTION_POOL_SIZE,
-    POOL_TIMEOUT_SECONDS,
-    READ_TIMEOUT_SECONDS,
-)
 from infra.logging.logger import log_all_methods
 from shared.bot_services import SupportBotServices
 from shared.config import AppSettings, BotTelegramConfig
-from shared.models import StatusMessageMetadata
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
@@ -64,7 +55,7 @@ class SupportBot(BaseHandlers):
         self,
         services: SupportBotServices,
         telegram_config: BotTelegramConfig,
-        request_start_main: Callable[[StatusMessageMetadata | None], Awaitable[None]] | None = None,
+        request_start_main: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Инициализирует SupportBot.
 
@@ -76,8 +67,7 @@ class SupportBot(BaseHandlers):
             services: Контейнер сервисов для SupportBot (внедряется через DI).
             telegram_config: Конфигурация Telegram бота (внедряется через DI).
             request_start_main: Опциональный callback-функция для запроса запуска основного бота.
-                Принимает StatusMessageMetadata с метаданными (chat_id, message_id) для редактирования статусного
-                сообщения или None. Если None, запуск основного бота через /start будет недоступен.
+                Если None, запуск основного бота через /start будет недоступен.
 
         Raises:
             ValueError: Если services равен None.
@@ -91,36 +81,19 @@ class SupportBot(BaseHandlers):
         # Сохраняем ссылку на services для доступа к зависимостям
         self.services = services
 
-        # Создаем HTTPXRequest для PTB Application
-        request: HTTPXRequest = HTTPXRequest(
-            connection_pool_size=CONNECTION_POOL_SIZE,
-            pool_timeout=POOL_TIMEOUT_SECONDS,
-            read_timeout=READ_TIMEOUT_SECONDS,
-            connect_timeout=CONNECT_TIMEOUT_SECONDS,
-        )
-        # telegram_config.bot_token передается через DI
-        telegram_token: str = telegram_config.bot_token or ""
-        if not telegram_token:
-            raise ValueError("TELEGRAM_BOT_TOKEN должен быть установлен. Проверьте конфигурацию.")
-        self.application: Application = Application.builder().token(telegram_token).request(request).build()
-        self.request_start_main: Callable[[StatusMessageMetadata | None], Awaitable[None]] | None = request_start_main
+        # Создаем Application через фабрику
+        self.logger.info("Создание Application через фабрику")
+        self.application: Application = create_telegram_application(telegram_config)
+        self.request_start_main: Callable[[], Awaitable[None]] | None = request_start_main
         self.is_running: bool = False
         # Event для ожидания сигнала остановки (вместо busy-wait цикла)
         self._stop_event = asyncio.Event()
-        # Данные для редактирования сообщения об остановке основного
-        self.pending_shutdown_edit: StatusMessageMetadata | None = None
-        # Данные для цепочки запуска основного: сообщение "Запускаю..."
-        self.pending_startup_edit: StatusMessageMetadata | None = None
 
         # Настройки приложения для доступа к конфигурации через DI
         self.settings: AppSettings = services.settings
 
-        # Инициализация state coordinator для координации с основным ботом
-        admin_chat_id_int = self.settings.admin_chat_id if self.settings else None
-        self.state_coordinator = BotStateCoordinator(
-            logger=self.logger,
-            admin_chat_id=admin_chat_id_int,
-        )
+        # Инициализация менеджера жизненного цикла
+        self.lifecycle_manager = BotLifecycleManager(self.logger)
 
         # Инициализация обработчика событий чата для синхронизации списка чатов
         self.chat_event_handler = ChatEventHandler(
@@ -155,117 +128,22 @@ class SupportBot(BaseHandlers):
     async def start(self) -> None:
         """Запускает SupportBot и начинает обработку команд.
 
-        Инициализирует приложение с повторными попытками при сетевых ошибках,
-        запускает polling и обрабатывает статусные сообщения от основного бота.
+        Инициализирует приложение, запускает polling через BotLifecycleManager
+        и отправляет уведомления администраторам о запуске SupportBot.
 
         Side Effects:
-            - Инициализирует приложение через application.initialize().
-            - Запускает polling через updater.start_polling().
-            - Редактирует сообщение об остановке основного бота (если было передано).
+            - Запускает PTB Application через lifecycle_manager.start_application() с warmup.
             - Отправляет уведомления администраторам о запуске SupportBot.
             - Запускает основной цикл ожидания.
 
         Raises:
-            TimedOut: Если не удалось установить соединение после всех попыток.
-            NetworkError: Если возникли проблемы с сетью при инициализации.
-            Conflict: Если не удалось запустить polling из-за конфликта getUpdates.
+            Exception: Если не удалось запустить приложение после всех попыток.
         """
         self.logger.info("Запуск бота-поддержки (SupportBot)")
         self.setup_handlers()
 
-        # Все зависимости доступны через экземпляр SupportBot, bot_data больше не используется для DI
-
-        # Этап 1: initialize с ретраями
-        init_attempts = 4
-        backoff = 2.0
-        for attempt in range(1, init_attempts + 1):
-            try:
-                await self.application.initialize()
-                self.logger.info("SupportBot: initialize() успешно")
-                # Дополнительно «разогреем» бота, чтобы гарантированно установить контекст
-                try:
-                    _ = await self.application.bot.get_me()
-                except Exception as warmup_err:
-                    # Не фейлим старт из-за warmup; просто залогируем
-                    self.logger.warning(f"SupportBot warmup get_me() не удался: {warmup_err}", exc_info=True)
-                break
-            except (_TTimedOut, _TNetworkError) as e:
-                self.logger.warning(
-                    f"SupportBot: сеть недоступна при initialize (попытка {attempt}/{init_attempts}): {e}",
-                )
-                if attempt == init_attempts:
-                    raise
-                await asyncio.sleep(backoff)
-                backoff *= 1.5
-
-        # Этап 2: start с ретраями (без повторного initialize)
-        start_attempts = 3
-        backoff = 2.0
-        for attempt in range(1, start_attempts + 1):
-            try:
-                await self.application.start()
-                self.logger.info("SupportBot: start() успешно")
-                break
-            except (_TTimedOut, _TNetworkError) as e:
-                self.logger.warning(f"SupportBot: сеть недоступна при start (попытка {attempt}/{start_attempts}): {e}")
-                if attempt == start_attempts:
-                    raise
-                await asyncio.sleep(backoff)
-                backoff *= 1.5
-            except RuntimeError as re:
-                # Обработка случая: "ExtBot is not properly initialized"
-                msg = str(re)
-                if "ExtBot is not properly initialized" in msg:
-                    self.logger.warning("SupportBot: повторная инициализация после ошибки ExtBot not initialized")
-                    try:
-                        await self.application.initialize()
-                        # Повторный warmup
-                        try:
-                            _ = await self.application.bot.get_me()
-                        except Exception:
-                            pass
-                    except Exception as reinit_err:
-                        self.logger.warning(
-                            f"SupportBot: не удалось повторно инициализировать приложение: {reinit_err}",
-                            exc_info=True,
-                        )
-                    # Ретраим без немедленного падения
-                    if attempt == start_attempts:
-                        raise
-                    await asyncio.sleep(backoff)
-                    backoff *= 1.5
-                else:
-                    raise
-        # Безопасный запуск polling с ретраями на случай конфликта getUpdates
-        import asyncio as _asyncio
-
-        from telegram.error import Conflict as _TGConflict
-
-        delay = 2.0
-        for attempt in range(4):
-            try:
-                updater = self.application.updater
-                if updater:
-                    await updater.start_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
-                self.logger.info("SupportBot polling запущен")
-                break
-            except _TGConflict as e:
-                self.logger.warning(f"Conflict при запуске polling SupportBot (попытка {attempt + 1}/4): {e}")
-                if attempt == LAST_POLLING_ATTEMPT_INDEX:
-                    raise
-                await _asyncio.sleep(delay)
-                delay *= 1.5
-
-        # Если есть сообщение о статусе остановки — редактируем его на финальное (кроме админ-чата)
-        if self.pending_shutdown_edit is not None:
-            state_data = BotStateData(
-                chat_id=self.pending_shutdown_edit["chat_id"],
-                message_id=self.pending_shutdown_edit["message_id"],
-            )
-            await self.state_coordinator.handle_support_startup_edit(
-                bot=self.application.bot,
-                state_data=state_data,
-            )
+        # Запускаем PTB Application через lifecycle manager с warmup
+        await self.lifecycle_manager.start_application(self.application, enable_warmup=True)
 
         # Сообщим админам о запуске SupportBot
         try:
@@ -300,15 +178,13 @@ class SupportBot(BaseHandlers):
     async def stop(self) -> None:
         """Останавливает SupportBot и освобождает ресурсы.
 
-        Корректно завершает работу бота, останавливает polling, обновляет
-        статусные сообщения и отправляет уведомления администраторам.
+        Корректно завершает работу бота, останавливает polling и отправляет
+        уведомления администраторам об остановке.
 
         Side Effects:
             - Устанавливает флаг is_running в False.
-            - Редактирует статусное сообщение о запуске основного бота.
-            - Останавливает updater через updater.stop().
             - Отправляет уведомления администраторам об остановке.
-            - Останавливает приложение через application.stop().
+            - Останавливает PTB Application через lifecycle_manager.stop_application().
             - Гарантированно закрывает ресурсы через services.cleanup() в finally блоке.
         """
         if not self.is_running:
@@ -319,29 +195,7 @@ class SupportBot(BaseHandlers):
         try:
             self.is_running = False
             self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
-            # Если был запуск основного через статусное сообщение — добавим строку про остановку Support Bot
-            if self.pending_startup_edit is not None:
-                state_data = BotStateData(
-                    chat_id=self.pending_startup_edit["chat_id"],
-                    message_id=self.pending_startup_edit["message_id"],
-                )
-                await self.state_coordinator.handle_support_shutdown_edit(
-                    bot=self.application.bot,
-                    state_data=state_data,
-                )
-                # Очистим ссылку, чтобы не переиспользовать
-                self.pending_startup_edit = None
-            # Сначала останавливаем polling, чтобы освободить соединения
-            try:
-                if hasattr(self.application, "updater") and self.application.updater:
-                    await self.application.updater.stop()
-            except Exception as e:
-                self.logger.warning(f"Ошибка при остановке updater'а SupportBot: {e}", exc_info=True)
-            # Короткая пауза, чтобы соединения вернулись в пул
-            try:
-                await asyncio.sleep(0.2)
-            except Exception:
-                pass
+
             # Уведомим админов об остановке
             try:
                 admins = await self.admins_store.list_all_admins()
@@ -362,16 +216,9 @@ class SupportBot(BaseHandlers):
                             pass
             except Exception:
                 pass
-            try:
-                await self.application.stop()
-            except Exception as e:
-                self.logger.warning(f"Ошибка при остановке приложения SupportBot: {e}", exc_info=True)
 
-            # Завершаем жизненный цикл приложения, освобождая все ресурсы PTB
-            try:
-                await self.application.shutdown()
-            except Exception as e:
-                self.logger.warning(f"Ошибка при shutdown приложения SupportBot: {e}", exc_info=True)
+            # Останавливаем PTB Application через lifecycle manager
+            await self.lifecycle_manager.stop_application(self.application)
 
             self.logger.info("SupportBot успешно остановлен")
 
@@ -472,7 +319,6 @@ class SupportBot(BaseHandlers):
         Side Effects:
             - Проверяет права администратора через _is_admin().
             - Отправляет статусное сообщение "Запускаю основной бот..." (кроме админ-чата).
-            - Сохраняет метаданные сообщения для последующего редактирования.
             - Вызывает request_start_main() для передачи запроса супервизору.
         """
         if not update.message or not update.effective_user or not update.effective_chat:
@@ -490,9 +336,14 @@ class SupportBot(BaseHandlers):
             )
             return
 
-        # В админ-чате не отправляем изменяемое статусное сообщение
+        # В админ-чате не отправляем статусное сообщение
         admin_chat_id = self.settings.admin_chat_id if self.settings else None
-        is_admin_chat = BotStateCoordinator.is_admin_chat(chat_id, admin_chat_id)
+        is_admin_chat = False
+        if admin_chat_id is not None and chat_id is not None:
+            try:
+                is_admin_chat = int(chat_id) == admin_chat_id
+            except (ValueError, TypeError):
+                pass
 
         # Отправляем статусное сообщение только если это не админ-чат
         status_msg = None
@@ -506,28 +357,13 @@ class SupportBot(BaseHandlers):
                 )
                 if status_msg:
                     self.logger.info(f"SupportBot /start сообщение статусное: message_id={status_msg.message_id}")
-                    # Сохраним ссылку, чтобы при остановке SupportBot дополнить текст строкой о его остановке
-                    try:
-                        self.pending_startup_edit = {
-                            "chat_id": update.effective_chat.id,
-                            "message_id": status_msg.message_id,
-                        }
-                    except (ValueError, TypeError, AttributeError):
-                        self.pending_startup_edit = None
             except (TelegramError, _TNetworkError, _TTimedOut):
                 pass
 
         # Сигнализируем раннеру/супервизору о необходимости запуска основного бота
         if self.request_start_main is not None:
             try:
-                # В админ-чате не передаём payload для последующего редактирования
-                payload: StatusMessageMetadata | None = None
-                if (not is_admin_chat) and (status_msg is not None):
-                    payload = {
-                        "chat_id": update.effective_chat.id,
-                        "message_id": status_msg.message_id,
-                    }
-                await self.request_start_main(payload)
+                await self.request_start_main()
                 self.logger.info("SupportBot запрос запуска основного отправлен супервизору")
                 # Не редактируем статусное сообщение сразу; финальный текст поставит основной бот после запуска
             except Exception as e:

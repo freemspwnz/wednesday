@@ -17,8 +17,6 @@ if TYPE_CHECKING:
 else:
     import asyncpg
 
-from shared.models import StatusMessageMetadata
-
 # TypeVar для типизации connection в Unit of Work
 # Позволяет использовать разные типы connection (asyncpg.Connection, моки для тестов и т.д.)
 ConnectionType = TypeVar("ConnectionType", bound=asyncpg.Connection)
@@ -1159,15 +1157,10 @@ class IBotController(Protocol):
     Позволяет хендлерам останавливать бота через DI без прямой зависимости от конкретного класса.
     """
 
-    async def stop(self, shutdown_metadata: StatusMessageMetadata | None = None) -> None:
+    async def stop(self) -> None:
         """Останавливает бота и освобождает ресурсы.
 
         Корректно завершает работу бота: останавливает polling,
         отправляет уведомления об остановке и освобождает все ресурсы.
-
-        Args:
-            shutdown_metadata: Опциональные метаданные для редактирования статусного сообщения.
-                Содержит 'chat_id' и 'message_id' или None.
-                Используется для координации состояния между основным и резервным ботом.
         """
         ...

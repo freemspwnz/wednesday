@@ -7,10 +7,8 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.base_handlers import BaseHandlers
-from bot.bot_state_coordinator import BotStateCoordinator
 from shared.base.exceptions import AccessDeniedError, ServiceError
 from shared.bot_services import BotServices, SupportBotServices, require_bot_services
-from shared.models import StatusMessageMetadata
 from shared.retry import retry_on_connect_error
 
 # Константы
@@ -228,42 +226,11 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
-        # В админ-чате НЕ отправляем короткое статусное сообщение (только полные сообщения об остановке)
-        admin_chat_id = self.services.settings.admin_chat_id if self.services.settings else None
-        chat_id = update.effective_chat.id if update.effective_chat else None
-        is_admin_chat = BotStateCoordinator.is_admin_chat(chat_id, admin_chat_id)
-
-        # Отправляем статус только если это НЕ админ-чат
-        status_msg = None
-        if not is_admin_chat:
-            try:
-                status_msg = await retry_on_connect_error(
-                    update.message.reply_text,
-                    "🛑 Останавливаю Wednesday Frog Bot...",
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut):
-                status_msg = None
-
-        # Подготавливаем метаданные для статусного сообщения (только для не-админ чатов)
-        shutdown_metadata: StatusMessageMetadata | None = None
-        if (not is_admin_chat) and status_msg is not None and update.effective_chat:
-            try:
-                message_id = getattr(status_msg, "message_id", None)
-                if message_id is not None:
-                    shutdown_metadata = {
-                        "chat_id": update.effective_chat.id,
-                        "message_id": message_id,
-                    }
-            except (ValueError, TypeError, AttributeError):
-                shutdown_metadata = None
-
         # Получаем экземпляр основного бота через DI и останавливаем его
         try:
             bot_controller = self.services.bot_controller
             if bot_controller is not None:
-                await bot_controller.stop(shutdown_metadata=shutdown_metadata)
+                await bot_controller.stop()
             else:
                 # Фоллбек: попытаться аккуратно остановить приложение
                 try:

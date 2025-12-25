@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
 
 
 @dataclass(frozen=True)
@@ -87,14 +86,3 @@ class PromptRecordDTO:
     prompt_hash: str
     created_at: datetime
     ab_group: str | None
-
-
-class StatusMessageMetadata(TypedDict):
-    """Метаданные для статусного сообщения бота.
-
-    Используется для передачи информации о сообщении, которое нужно отредактировать
-    при изменении состояния бота (запуск/остановка).
-    """
-
-    chat_id: int
-    message_id: int

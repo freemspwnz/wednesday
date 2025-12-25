@@ -7,12 +7,11 @@ import asyncio
 from typing import Any
 
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, MessageHandler, filters
-from telegram.request import HTTPXRequest
 
+from bot.bot_application_factory import create_telegram_application
 from bot.bot_chat_access_validator import BotChatAccessValidator
 from bot.bot_error_handler import BotErrorHandler
 from bot.bot_lifecycle_manager import BotLifecycleManager
-from bot.bot_state_coordinator import BotStateCoordinator, BotStateData
 from bot.chat_event_handler import ChatEventHandler
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
@@ -20,13 +19,8 @@ from bot.handlers_user import UserHandlers
 from infra.logging.logger import get_logger, log_all_methods
 from shared.bot_services import BotServices
 from shared.config import BotTelegramConfig
-from shared.models import StatusMessageMetadata
 
 # Константы для магических чисел
-CONNECTION_POOL_SIZE = 20
-POOL_TIMEOUT_SECONDS = 5.0
-READ_TIMEOUT_SECONDS = 20.0
-CONNECT_TIMEOUT_SECONDS = 15.0
 MONTHLY_QUOTA_DEFAULT = 100
 FROG_THRESHOLD_DEFAULT = 70
 TIMEOUT_SHORT_SECONDS = 5.0
@@ -71,28 +65,13 @@ class WednesdayBot:
         self.logger = get_logger(__name__)
         self.logger.info("Начало инициализации WednesdayBot")
 
-        # Инициализируем компоненты
-        self.logger.info("Создание HTTPXRequest с настройками подключения")
-        request: HTTPXRequest = HTTPXRequest(
-            connection_pool_size=CONNECTION_POOL_SIZE,
-            pool_timeout=POOL_TIMEOUT_SECONDS,
-            read_timeout=READ_TIMEOUT_SECONDS,
-            connect_timeout=CONNECT_TIMEOUT_SECONDS,
-        )
-        # telegram_config.bot_token передается через DI
-        telegram_token: str = telegram_config.bot_token or ""
-        if not telegram_token:
-            raise ValueError("TELEGRAM_BOT_TOKEN должен быть установлен. Проверьте конфигурацию.")
-        self.logger.info("Создание Application с токеном")
-        self.application: Application = Application.builder().token(telegram_token).request(request).build()
+        # Создаем Application через фабрику
+        self.logger.info("Создание Application через фабрику")
+        self.application: Application = create_telegram_application(telegram_config)
 
         # Сервисы внедряются через конструктор (DI)
         self.services = services
         # bot_controller устанавливается в composition root (container.py) для избежания циклической зависимости
-        # Данные для пост-старта (например, редактирование сообщения из SupportBot)
-        self.pending_startup_edit: StatusMessageMetadata | None = None
-        # Данные для пост-остановки (например, редактирование сообщения об остановке)
-        self.pending_shutdown_edit: StatusMessageMetadata | None = None
         # Флаг, чтобы избежать дублирующих сообщений об остановке
         self._stop_message_sent: bool = False
 
@@ -117,18 +96,6 @@ class WednesdayBot:
             services=self.services,
             bot=self.application.bot,
             logger=self.logger,
-        )
-
-        # Инициализация state coordinator для координации с SupportBot
-        admin_chat_id_int = None
-        if self.services.settings and self.services.settings.admin_chat_id:
-            try:
-                admin_chat_id_int = int(self.services.settings.admin_chat_id)
-            except (ValueError, TypeError):
-                pass
-        self.state_coordinator = BotStateCoordinator(
-            logger=self.logger,
-            admin_chat_id=admin_chat_id_int,
         )
 
         # Флаг состояния бота
@@ -373,17 +340,6 @@ class WednesdayBot:
                     self.logger.warning(f"Не удалось отправить сообщение о запуске: {send_error}")
                     self.logger.info("Бот запущен, но не удалось отправить уведомление в чат")
 
-            # Если был передан статус от SupportBot — дополняем его финальным состоянием основного
-            if self.pending_startup_edit is not None:
-                state_data = BotStateData(
-                    chat_id=self.pending_startup_edit["chat_id"],
-                    message_id=self.pending_startup_edit["message_id"],
-                )
-                await self.state_coordinator.handle_startup_edit(
-                    bot=self.application.bot,
-                    state_data=state_data,
-                )
-
             # Celery используется для планирования задач
             self.logger.info("Celery используется для планирования задач")
 
@@ -403,23 +359,17 @@ class WednesdayBot:
             self.logger.error(f"Ошибка при запуске бота: {e}")
             raise
 
-    async def stop(self, shutdown_metadata: StatusMessageMetadata | None = None) -> None:
+    async def stop(self) -> None:
         """Останавливает бота и планировщик задач.
 
         Корректно завершает работу бота: останавливает планировщик, polling,
         отправляет уведомления об остановке и освобождает все ресурсы.
         Защищен от повторных вызовов через проверку is_running.
 
-        Args:
-            shutdown_metadata: Опциональные метаданные для редактирования статусного сообщения.
-                Содержит 'chat_id' и 'message_id' или None.
-                Если передан, используется вместо self.pending_shutdown_edit.
-
         Side Effects:
             - Устанавливает флаг is_running в False.
             - Останавливает PTB Application через lifecycle_manager.stop_application().
             - Отправляет сообщения об остановке в CHAT_ID и админам.
-            - Редактирует статусные сообщения об остановке (если есть).
             - Гарантированно закрывает все ресурсы через services.cleanup() в finally блоке.
         """
         # Защита от повторных вызовов
@@ -460,23 +410,6 @@ class WednesdayBot:
                     self.logger.debug(
                         f"Не удалось отправить сообщение об остановке (возможно, соединение уже закрыто): {send_error}",
                     )
-
-            # Обновляем статусное сообщение от SupportBot
-            # Используем переданные метаданные или внутреннее поле (для обратной совместимости)
-            metadata = shutdown_metadata or self.pending_shutdown_edit
-            if metadata is not None:
-                state_data = BotStateData(
-                    chat_id=metadata["chat_id"],
-                    message_id=metadata["message_id"],
-                )
-                await self.state_coordinator.handle_shutdown_edit(
-                    bot=self.application.bot,
-                    state_data=state_data,
-                )
-
-            # Очистим данные, чтобы не переиспользовать их при последующих переключениях
-            self.pending_shutdown_edit = None
-            self.pending_startup_edit = None
 
             self.logger.info("Бот успешно остановлен")
 

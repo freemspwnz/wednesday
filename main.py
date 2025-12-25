@@ -26,7 +26,6 @@ from infra.redis.redis_client import (
     redis_available,
 )
 from shared.config import Config
-from shared.models import StatusMessageMetadata
 
 # Создаём экземпляр Config при импорте модуля
 config = Config()
@@ -60,8 +59,6 @@ class BotRunner:
         self.shutdown_event: asyncio.Event = asyncio.Event()
         self.should_stop: bool = False
         self.request_start_main_event: asyncio.Event = asyncio.Event()
-        self.pending_startup_edit: StatusMessageMetadata | None = None
-        self.pending_shutdown_edit: StatusMessageMetadata | None = None
         # Регистрируем cleanup через atexit для гарантированного вызова при завершении
         atexit.register(self._sync_cleanup)
         self.logger.info("BotRunner успешно инициализирован")
@@ -185,11 +182,8 @@ class BotRunner:
                 self.logger.info("[Supervisor] Старт SupportBot (режим по умолчанию)")
                 self.request_start_main_event.clear()
 
-                async def request_start_main(payload: StatusMessageMetadata | None) -> None:
-                    self.logger.info(
-                        f"[Supervisor] Получен запрос запуска основного бота из SupportBot, payload={payload}",
-                    )
-                    self.pending_startup_edit = payload
+                async def request_start_main() -> None:
+                    self.logger.info("[Supervisor] Получен запрос запуска основного бота из SupportBot")
                     self.request_start_main_event.set()
                     self.logger.info("[Supervisor] Событие request_start_main_event установлено")
                     await asyncio.sleep(0)
@@ -216,15 +210,6 @@ class BotRunner:
                     telegram_config=bot_telegram_config,
                     request_start_main=request_start_main,
                 )
-                # Если есть отложенное редактирование для статуса остановки основного — передадим SupportBot
-                try:
-                    if self.pending_shutdown_edit is not None:
-                        self.logger.info(f"Передача pending_shutdown_edit в SupportBot: {self.pending_shutdown_edit}")
-                        self.support_bot.pending_shutdown_edit = self.pending_shutdown_edit
-                        self.pending_shutdown_edit = None
-                except Exception as e:
-                    self.logger.error(f"Ошибка при передаче pending_shutdown_edit: {e}", exc_info=True)
-                    self.pending_shutdown_edit = None
                 self.logger.info("Запуск SupportBot в фоновой задаче")
                 support_task = asyncio.create_task(self.support_bot.start())
                 self.logger.info("SupportBot запущен в фоновой задаче")
@@ -280,14 +265,6 @@ class BotRunner:
                     )
 
                 try:
-                    if self.pending_startup_edit:
-                        self.logger.info(
-                            f"[Supervisor] Передача pending_startup_edit в основной бот: {self.pending_startup_edit}",
-                        )
-                    self.bot.pending_startup_edit = self.pending_startup_edit
-                except Exception as e:
-                    self.logger.error(f"[Supervisor] Ошибка при передаче pending_startup_edit: {e}", exc_info=True)
-                try:
                     self.logger.info("[Supervisor] Получение информации о боте перед запуском")
                     bot_info = await self.bot.get_bot_info()
                     self.logger.info(f"[Supervisor] Информация о боте получена: {bot_info}")
@@ -311,18 +288,6 @@ class BotRunner:
                         "[Supervisor] Сигнал завершения при активном основном — "
                         "останавливаю основной и возвращаюсь к SupportBot",
                     )
-                    # Сохраним отложенное редактирование статуса остановки
-                    try:
-                        if hasattr(self.bot, "pending_shutdown_edit") and self.bot.pending_shutdown_edit is not None:
-                            self.logger.info(
-                                f"[Supervisor] Сохранение pending_shutdown_edit: {self.bot.pending_shutdown_edit}",
-                            )
-                            self.pending_shutdown_edit = self.bot.pending_shutdown_edit
-                    except Exception as e:
-                        self.logger.error(
-                            f"[Supervisor] Ошибка при сохранении pending_shutdown_edit: {e}",
-                            exc_info=True,
-                        )
                     self.logger.info("[Supervisor] Остановка основного бота")
                     await self._stop_bot()
                     self.bot = None
@@ -344,18 +309,6 @@ class BotRunner:
                 else:
                     # Основной завершился сам (ошибка или /stop) — возвращаемся к SupportBot
                     self.logger.warning("[Supervisor] Основной бот остановлен. Запуск SupportBot")
-                    # Сохраним отложенное редактирование статуса остановки
-                    try:
-                        if hasattr(self.bot, "pending_shutdown_edit") and self.bot.pending_shutdown_edit is not None:
-                            self.logger.info(
-                                f"[Supervisor] Сохранение pending_shutdown_edit: {self.bot.pending_shutdown_edit}",
-                            )
-                            self.pending_shutdown_edit = self.bot.pending_shutdown_edit
-                    except Exception as e:
-                        self.logger.error(
-                            f"[Supervisor] Ошибка при сохранении pending_shutdown_edit: {e}",
-                            exc_info=True,
-                        )
                     self.logger.info("[Supervisor] Остановка основного бота после его завершения")
                     await self._stop_bot()
                     self.bot = None
