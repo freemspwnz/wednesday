@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import TypedDict
+from dataclasses import dataclass
 
 from shared.protocols import IDispatchRegistry, ILogger
 
@@ -70,16 +70,21 @@ def get_undispatched_chats(
     return {chat_id for chat_id in targets if not status_map.get(chat_id, False)}
 
 
-class DispatchResult(TypedDict):
+@dataclass
+class DispatchResult:
     """Типизированный контейнер результата отправки.
 
-    Ключи:
-        - slot_date: дата слота (YYYY-MM-DD)
-        - slot_time: время слота (HH:MM)
-        - total_targets: всего целевых чатов
-        - success_count: количество успешных отправок
-        - failed_count: количество неуспешных отправок (по Telegram/программным ошибкам)
-        - used_fallback: использован ли fallback‑сценарий вместо свежей генерации
+    Использует dataclass для явной мутации полей (frozen=False по умолчанию).
+    Это более безопасно, чем TypedDict, так как обеспечивает валидацию типов
+    и предотвращает добавление несуществующих полей.
+
+    Attributes:
+        slot_date: Дата слота в формате YYYY-MM-DD.
+        slot_time: Время слота в формате HH:MM.
+        total_targets: Всего целевых чатов.
+        success_count: Количество успешных отправок.
+        failed_count: Количество неуспешных отправок (по Telegram/программным ошибкам).
+        used_fallback: Использован ли fallback‑сценарий вместо свежей генерации.
     """
 
     slot_date: str

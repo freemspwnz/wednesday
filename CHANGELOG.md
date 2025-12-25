@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Улучшение типизации DispatchResult: замена TypedDict на dataclass**:
+  - Заменен `TypedDict` на `@dataclass` для `DispatchResult` в `dispatch_targets_helper.py`
+  - Обновлены все места создания `DispatchResult`: конструктор остался совместимым
+  - Обновлены все места мутации: заменено `result["key"]` на `result.key` для явного доступа к полям
+  - Обновлены все места чтения: заменено `result["key"]` на `result.key` для явного доступа к полям
+  - Улучшена типобезопасность: dataclass предотвращает добавление несуществующих полей
+  - Улучшена читаемость: явный доступ к полям через атрибуты вместо индексации
+  - Улучшена валидация: mypy может проверять типы полей на этапе компиляции
+  - Соответствие принципу явности: dataclass явно показывает мутабельную структуру данных
+  - Соответствие архитектуре: изменение не нарушает слои, остается в app layer
+
 - **Явная типизация connection в Unit of Work через TypeVar**:
   - Добавлен TypeVar `ConnectionType` в `shared/protocols.py` для generic типизации connection в Unit of Work
   - Обновлен протокол `IDatabaseUnitOfWork`: теперь использует `Protocol[ConnectionType]` для явной типизации connection

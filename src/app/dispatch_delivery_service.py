@@ -199,7 +199,7 @@ class DispatchDeliveryService(BaseService):
                         )
                         # Отправка успешна, но регистрация не удалась
                         # Это менее критично, чем сама отправка
-                    current_result["success_count"] += 1
+                    current_result.success_count += 1
 
             except AppError as send_error:
                 # Ожидаемые ошибки приложения при отправке fallback сообщений
@@ -211,7 +211,7 @@ class DispatchDeliveryService(BaseService):
                     error_message=str(send_error),
                     chat_id=target_chat,
                 )
-                current_result["failed_count"] += 1
+                current_result.failed_count += 1
             except BaseException as send_error:
                 # Действительно неожиданные ошибки при отправке fallback
                 # Системные ошибки обрабатываются внутри handle_unexpected_error
@@ -291,7 +291,7 @@ class DispatchDeliveryService(BaseService):
                     slot_date=slot_date,
                     slot_time=slot_time,
                 )
-                result["success_count"] += 1  # Считаем как успех (идемпотентность)
+                result.success_count += 1  # Считаем как успех (идемпотентность)
                 return True
 
             # 2. Бронь получена - отправляем изображение
@@ -309,7 +309,7 @@ class DispatchDeliveryService(BaseService):
             # Запись в dispatch_registry уже создана при бронировании
             # Ничего дополнительного делать не нужно
 
-            result["success_count"] += 1
+            result.success_count += 1
             self.logger.info(f"Жаба отправлена в чат {target_chat}")
             return True
 
@@ -457,4 +457,4 @@ class DispatchDeliveryService(BaseService):
                 await self._metrics.increment_dispatch_failed_with_pool()
         except ServiceError:  # pragma: no cover
             pass
-        result["failed_count"] += 1
+        result.failed_count += 1

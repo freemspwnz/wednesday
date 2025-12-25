@@ -102,7 +102,7 @@ class DispatchService(BaseService):
             targets = await self._target_preparation_service.prepare_targets(
                 main_chat_id=main_chat_id,
             )
-            result["total_targets"] = len(targets)
+            result.total_targets = len(targets)
 
             if not targets:
                 return result
@@ -175,7 +175,7 @@ class DispatchService(BaseService):
                 targets = await self._target_preparation_service.prepare_targets(
                     main_chat_id=main_chat_id,
                 )
-                result["total_targets"] = len(targets)
+                result.total_targets = len(targets)
 
             return await self._handle_dispatch_unexpected_error(
                 error=e,
@@ -191,7 +191,7 @@ class DispatchService(BaseService):
                 targets = await self._target_preparation_service.prepare_targets(
                     main_chat_id=main_chat_id,
                 )
-                result["total_targets"] = len(targets)
+                result.total_targets = len(targets)
 
             # Логируем действительно неожиданную ошибку
             unexpected_error = self.handle_unexpected_error(
@@ -242,7 +242,7 @@ class DispatchService(BaseService):
                 error_details=error_details,
             )
 
-        result["used_fallback"] = True
+        result.used_fallback = True
 
         # Пытаемся отправить fallback
         await self._dispatch_delivery_service.send_fallback_to_targets(
@@ -291,7 +291,7 @@ class DispatchService(BaseService):
                 traceback_str=full_error,
             )
 
-        result["used_fallback"] = True
+        result.used_fallback = True
 
         # Пытаемся отправить fallback
         await self._dispatch_delivery_service.send_fallback_to_targets(
