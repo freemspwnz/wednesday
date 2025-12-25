@@ -540,6 +540,50 @@ def _should_retry_telegram_error(retry_state: RetryCallState) -> bool:
     return False
 
 
+class _MockOutcome:
+    """Mock-объект для имитации outcome в retry_state.
+
+    Используется для проверки предиката _should_retry_telegram_error
+    без зависимости от полного retry_state из tenacity.
+    """
+
+    def __init__(self, exc: Exception) -> None:
+        """Инициализирует mock outcome.
+
+        Args:
+            exc: Исключение, которое произошло.
+        """
+        self._exc = exc
+        self.failed = True
+
+    def exception(self) -> Exception | None:
+        """Возвращает исключение.
+
+        Returns:
+            Исключение, которое произошло.
+        """
+        return self._exc
+
+
+class _MockRetryState:
+    """Mock-объект для имитации retry_state из tenacity.
+
+    Используется для проверки предиката _should_retry_telegram_error
+    без зависимости от полного retry_state из tenacity.
+    """
+
+    def __init__(self, attempt_num: int, exc: Exception) -> None:
+        """Инициализирует mock retry_state.
+
+        Args:
+            attempt_num: Номер попытки.
+            exc: Исключение, которое произошло.
+        """
+        self.attempt_number = attempt_num
+        self.outcome: _MockOutcome = _MockOutcome(exc)
+        self.next_action = None
+
+
 async def retry_on_connect_error(
     func: Callable[..., Awaitable[T]],
     *args: object,
@@ -582,21 +626,8 @@ async def retry_on_connect_error(
 
             # Создаём mock retry_state для проверки предиката
             # Это нужно для использования _should_retry_telegram_error
-            class MockOutcome:
-                def __init__(self, exc: Exception) -> None:
-                    self._exc = exc
-                    self.failed = True
-
-                def exception(self) -> Exception | None:
-                    return self._exc
-
-            class MockRetryState:
-                def __init__(self, attempt_num: int, exc: Exception) -> None:
-                    self.attempt_number = attempt_num
-                    self.outcome: MockOutcome = MockOutcome(exc)
-                    self.next_action = None
-
-            retry_state: Any = MockRetryState(attempt, e)
+            # Используем предопределенные классы вместо создания их на каждой итерации
+            retry_state: Any = _MockRetryState(attempt, e)
 
             # Проверяем, нужно ли делать retry
             if not _should_retry_telegram_error(retry_state):
