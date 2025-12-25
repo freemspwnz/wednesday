@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+### Рефакторинг
+
+- **Рефакторинг WednesdayBot для соблюдения Single Responsibility Principle (SRP)**:
+  - Создан `BotErrorHandler` (`src/bot/bot_error_handler.py`): обработка ошибок PTB хендлеров
+  - Создан `BotChatAccessValidator` (`src/bot/bot_chat_access_validator.py`): валидация доступа к чатам с таймаутом
+  - Создан `BotLifecycleManager` (`src/bot/bot_lifecycle_manager.py`): управление жизненным циклом PTB Application (start/stop/shutdown) с retry-логикой
+  - Создан `BotStateCoordinator` (`src/bot/bot_state_coordinator.py`): координация состояния между WednesdayBot и SupportBot через редактирование статусных сообщений
+  - Обновлен `WednesdayBot`: делегирование ответственности новым компонентам вместо выполнения всех задач в одном классе
+  - Улучшена модульность: каждый компонент отвечает за одну задачу (SRP)
+  - Улучшена тестируемость: компоненты можно тестировать независимо
+  - Улучшена читаемость: WednesdayBot стал координатором высокого уровня вместо монолита
+  - Соблюдение принципов SOLID, DRY и Clean Architecture
+  - Исправление проблемы из `BOT_LAYER_AUDIT_REPORT.md` (нарушение SRP в WednesdayBot, строки 105-143)
+
+- **Перенос логики lifecycle-уведомлений в AdminNotificationService**:
+  - Удален `BotLifecycleNotificationHelper` (`src/bot/bot_lifecycle_notification_helper.py`)
+  - Добавлен метод `notify_lifecycle_event()` в `AdminNotificationService`: отправка уведомлений в основной чат и администраторам
+  - Обновлен `WednesdayBot`: использует `AdminNotificationService.notify_lifecycle_event()` вместо helper'а
+  - Исправлена синтаксическая ошибка в `admin_notification_service.py` (обломок кода на строке 127)
+  - Улучшена архитектура: убран лишний слой абстракции, логика уведомлений в одном месте
+  - Улучшена консистентность: единая точка отправки lifecycle-уведомлений в app-слое
+  - Соблюдение границ слоёв: `app/` не зависит от `bot/`, `bot/` использует `app/` через DI
+
+- **Обновление SupportBot для использования новых bot-компонентов**:
+  - Добавлен `BotStateCoordinator` в `SupportBot` для координации состояния с основным ботом
+  - Расширен `BotStateCoordinator`: добавлены методы `handle_support_startup_edit()` и `handle_support_shutdown_edit()` для специфичной логики SupportBot
+  - Обновлен `SupportBot.start()`: использует `state_coordinator.handle_support_startup_edit()` вместо дублирования логики
+  - Обновлен `SupportBot.stop()`: использует `state_coordinator.handle_support_shutdown_edit()` вместо дублирования логики
+  - Улучшена консистентность: единая реализация координации состояния между ботами
+  - Улучшена поддерживаемость: изменения в логике редактирования статусных сообщений теперь в одном месте
+  - Соблюдение принципа DRY: устранено дублирование логики редактирования сообщений
+
 ### Исправлено
 
 - **Оптимизация основного цикла бота: замена busy-wait на asyncio.Event**:

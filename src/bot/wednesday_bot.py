@@ -10,10 +10,14 @@ from telegram import Update
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
+from bot.bot_chat_access_validator import BotChatAccessValidator
+from bot.bot_error_handler import BotErrorHandler
+from bot.bot_lifecycle_manager import BotLifecycleManager
+from bot.bot_state_coordinator import BotStateCoordinator, BotStateData
 from bot.handlers_admin import AdminHandlers
 from bot.handlers_models import ModelHandlers
 from bot.handlers_user import UserHandlers
-from infra.logging.logger import get_logger, log_all_methods, log_event
+from infra.logging.logger import get_logger, log_all_methods
 from shared.bot_services import BotServices
 from shared.config import Config
 
@@ -30,8 +34,6 @@ FROG_THRESHOLD_DEFAULT = 70
 TIMEOUT_SHORT_SECONDS = 5.0
 TIMEOUT_MEDIUM_SECONDS = 30.0
 TIMEOUT_BOT_INFO_SECONDS = 30.0
-MAX_POLLING_ATTEMPTS = 3  # максимальное количество попыток запуска polling
-LAST_POLLING_ATTEMPT_INDEX = 2  # индекс последней попытки (0-based: 2 = 3-я попытка)
 
 
 @log_all_methods()
@@ -133,6 +135,23 @@ class WednesdayBot:
         # ID чата для отправки сообщений
         self.chat_id: str | None = config.telegram.chat_id
         self.logger.info(f"Chat ID установлен: {self.chat_id}")
+
+        # Инициализация компонентов для управления жизненным циклом
+        self.error_handler = BotErrorHandler(self.logger)
+        self.chat_validator = BotChatAccessValidator(self.logger, timeout=TIMEOUT_MEDIUM_SECONDS)
+        self.lifecycle_manager = BotLifecycleManager(self.logger)
+
+        # Инициализация state coordinator для координации с SupportBot
+        admin_chat_id_int = None
+        if self.services.settings and self.services.settings.admin_chat_id:
+            try:
+                admin_chat_id_int = int(self.services.settings.admin_chat_id)
+            except (ValueError, TypeError):
+                pass
+        self.state_coordinator = BotStateCoordinator(
+            logger=self.logger,
+            admin_chat_id=admin_chat_id_int,
+        )
 
         # Флаг состояния бота
         self.is_running: bool = False
@@ -242,7 +261,7 @@ class WednesdayBot:
         # В проде объект Application всегда имеет метод add_error_handler,
         # но в юнит‑тестах может использоваться упрощённая заглушка без него.
         if hasattr(self.application, "add_error_handler"):
-            self.application.add_error_handler(self._handle_error)
+            self.application.add_error_handler(self.error_handler.handle_error)
 
     async def send_wednesday_frog(self, slot_time: str | None = None) -> None:
         """Основная функция для отправки изображения жабы по расписанию.
@@ -384,141 +403,49 @@ class WednesdayBot:
             # Настраиваем и запускаем планировщик (только если используется старый планировщик)
 
             # Проверяем доступность чата перед отправкой сообщения
-            await self._check_chat_access()
+            if self.chat_id:
+                await self.chat_validator.validate_chat_access(self.application.bot, self.chat_id)
 
-            # Инициализируем приложение асинхронно
-            await self.application.initialize()
+            # Запускаем PTB Application через lifecycle manager
+            await self.lifecycle_manager.start_application(self.application)
 
-            # Все зависимости доступны через BotServices, bot_data больше не используется для DI
-
-            # Ретраи запуска сети (start + polling)
-            delay = 3
-            for attempt in range(3):
+            # Отправляем уведомление о запуске
+            if self.services.admin_notification_service:
                 try:
-                    await self.application.start()
-                    updater = self.application.updater
-                    if updater:
-                        await updater.start_polling(
-                            allowed_updates=Update.ALL_TYPES,
-                            drop_pending_updates=True,
-                        )
-                    break
-                except Exception as e:
-                    self.logger.warning(
-                        f"Не удалось запустить polling (попытка {attempt + 1}/{MAX_POLLING_ATTEMPTS}): {e}",
+                    startup_message = (
+                        "🚀 Wednesday Frog Bot запущен!\n\n"
+                        "✅ Бот активен и готов к работе\n"
+                        "📅 Планировщик: включен (Celery)\n"
+                        "🎨 Генератор изображений: Kandinsky API\n"
+                        "📝 Логирование: включено\n\n"
+                        "🐸 Используйте команду /frog для генерации жабы!"
                     )
-                    if attempt == LAST_POLLING_ATTEMPT_INDEX:
-                        raise
-                    await asyncio.sleep(delay)
-                    delay *= 2
-
-            # Отправляем сообщение о запуске после старта
-            try:
-                startup_message = (
-                    "🚀 Wednesday Frog Bot запущен!\n\n"
-                    "✅ Бот активен и готов к работе\n"
-                    "📅 Планировщик: включен (Celery)\n"
-                    "🎨 Генератор изображений: Kandinsky API\n"
-                    "📝 Логирование: включено\n\n"
-                    "🐸 Используйте команду /frog для генерации жабы!"
-                )
-                await self.application.bot.send_message(
-                    chat_id=self.chat_id,
-                    text=startup_message,
-                )
-                # Дублируем в админ-чат, если задан, избегая повтора, если CHAT_ID совпадает
-                try:
-                    from shared.config import Config
-
-                    # Используем глобальный config из модуля
-                    if isinstance(config, Config):
-                        admin_chat_id_env = config.telegram.admin_chat_id
-                    else:
-                        admin_chat_id_env = getattr(config, "admin_chat_id", None)
-                    if admin_chat_id_env:
-                        try:
-                            admin_chat_id_val = int(str(admin_chat_id_env))
-                            chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None
-                            if chat_id_val != admin_chat_id_val:
-                                await self.application.bot.send_message(
-                                    chat_id=admin_chat_id_val,
-                                    text=startup_message,
-                                )
-                        except Exception:
-                            pass
-                    else:
-                        # Если ADMIN_CHAT_ID не задан, разошлем всем админам из хранилища (без дубля с CHAT_ID)
-                        try:
-                            # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
-                            if self.services.admins_repo is None:
-                                self.logger.error(
-                                    "admins_repo недоступен в BotServices. "
-                                    "Убедитесь, что репозиторий передаётся через Dependency Injection."
-                                )
-                                raise RuntimeError("admins_repo не инициализирован в BotServices")
-
-                            admins = await self.services.admins_repo.list_all_admins()
-                            for admin_id in admins:
-                                try:
-                                    chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None
-                                    if chat_id_val is not None and admin_id == chat_id_val:
-                                        continue
-                                    await self.application.bot.send_message(
-                                        chat_id=admin_id,
-                                        text=startup_message,
-                                    )
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                self.logger.info("Сообщение о запуске отправлено")
-            except Exception as send_error:
-                self.logger.warning(f"Не удалось отправить сообщение о запуске: {send_error}")
-                self.logger.info("Бот запущен, но не удалось отправить уведомление в чат")
+                    chat_id_int = int(self.chat_id) if self.chat_id else None
+                    admin_chat_id_str = (
+                        str(self.services.settings.admin_chat_id)
+                        if self.services.settings and self.services.settings.admin_chat_id
+                        else None
+                    )
+                    await self.services.admin_notification_service.notify_lifecycle_event(
+                        message=startup_message,
+                        chat_id=chat_id_int,
+                        admin_chat_id=admin_chat_id_str,
+                        exclude_chat_id=chat_id_int,
+                    )
+                except Exception as send_error:
+                    self.logger.warning(f"Не удалось отправить сообщение о запуске: {send_error}")
+                    self.logger.info("Бот запущен, но не удалось отправить уведомление в чат")
 
             # Если был передан статус от SupportBot — дополняем его финальным состоянием основного
-            try:
-                if isinstance(self.pending_startup_edit, dict):
-                    chat_id = self.pending_startup_edit.get("chat_id")
-                    message_id = self.pending_startup_edit.get("message_id")
-                    # Не редактируем сообщение в админском чате — оно предназначено для других чатов
-                    skip_admin_edit = False
-                    try:
-                        from shared.config import Config
-
-                        # Используем глобальный config из модуля
-                        if isinstance(config, Config):
-                            admin_chat_id_env = config.telegram.admin_chat_id
-                        else:
-                            admin_chat_id_env = getattr(config, "admin_chat_id", None)
-                            if admin_chat_id_env:
-                                try:
-                                    admin_chat_str: str = str(admin_chat_id_env)
-                                    chat_id_str: str = str(chat_id) if chat_id is not None else ""
-                                    if admin_chat_str and chat_id_str:
-                                        skip_admin_edit = int(admin_chat_str) == int(chat_id_str)
-                                    else:
-                                        skip_admin_edit = False
-                                except Exception:
-                                    skip_admin_edit = False
-                    except Exception:
-                        skip_admin_edit = False
-
-                    if chat_id and message_id and not skip_admin_edit:
-                        # Финальный текст после фактической остановки Support Bot и запуска основного
-                        final_text = "🛑 Support Bot остановлен\n✅ Wednesday Frog Bot запущен"
-                        await self.application.bot.edit_message_text(
-                            chat_id=chat_id,
-                            message_id=message_id,
-                            text=final_text,
-                        )
-                        self.logger.info("Основной бот подтвердил запуск в сообщение SupportBot")
-                    elif chat_id and skip_admin_edit:
-                        self.logger.info("Пропускаю редактирование статусного сообщения в админском чате")
-            except Exception as e:
-                self.logger.warning(f"Не удалось обновить статусное сообщение SupportBot: {e}")
+            if isinstance(self.pending_startup_edit, dict):
+                state_data = BotStateData(
+                    chat_id=self.pending_startup_edit.get("chat_id"),
+                    message_id=self.pending_startup_edit.get("message_id"),
+                )
+                await self.state_coordinator.handle_startup_edit(
+                    bot=self.application.bot,
+                    state_data=state_data,
+                )
 
             # Celery используется для планирования задач
             self.logger.info("Celery используется для планирования задач")
@@ -538,55 +465,6 @@ class WednesdayBot:
         except Exception as e:
             self.logger.error(f"Ошибка при запуске бота: {e}")
             raise
-
-    async def _handle_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Глобальный обработчик ошибок PTB.
-
-        Централизованный обработчик всех необработанных исключений из обработчиков
-        команд и сообщений. Обеспечивает логирование, отправку в Sentry (если включен)
-        и структурированное логирование для дальнейшего анализа.
-
-        Args:
-            update: Объект обновления Telegram, которое вызвало ошибку
-                (может быть любого типа в зависимости от события).
-            context: Контекст бота, содержащий информацию об ошибке через
-                context.error и другие метаданные.
-
-        Side Effects:
-            - Логирует ошибку с полным стеком через logger.error().
-            - Отправляет исключение в Sentry через sentry_sdk.capture_exception()
-              (если SDK инициализирован).
-            - Записывает структурированное событие через log_event() для анализа.
-        """
-        error = getattr(context, "error", None)
-        self.logger.error(f"Необработанное исключение в обработчике PTB: {error!r}", exc_info=True)
-
-        # Отправляем исключение в Sentry, если SDK инициализирован.
-        if error is not None:
-            try:
-                import sentry_sdk
-
-                sentry_sdk.capture_exception(error)
-            except Exception:
-                # Ошибки в интеграции Sentry не должны ломать основной поток.
-                pass
-
-        # Логируем структурированное событие для унифицированного JSON‑логирования.
-        try:
-            log_event(
-                event="unhandled_exception",
-                status="error",
-                extra={
-                    "where": "ptb_error_handler",
-                    "error": repr(error),
-                    "update_repr": repr(update),
-                },
-                level="error",
-                message="Необработанное исключение в обработчике PTB",
-            )
-        except Exception:
-            # Любые ошибки логирования здесь игнорируем, чтобы не усугублять ситуацию.
-            pass
 
     async def on_my_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик событий изменения статуса бота в чатах.
@@ -704,102 +582,47 @@ class WednesdayBot:
             self.is_running = False
             self._stop_event.set()  # Разблокирует await self._stop_event.wait() в start()
 
-            # Безопасная остановка updater'а
-            try:
-                if hasattr(self.application, "updater") and self.application.updater:
-                    await self.application.updater.stop()
-            except Exception as e:
-                self.logger.warning(f"Ошибка при остановке updater'а: {e}")
-            # Небольшая пауза, чтобы освободить соединения пула перед отправкой финальных сообщений
-            try:
-                await asyncio.sleep(0.2)
-            except Exception:
-                pass
+            # Останавливаем PTB Application через lifecycle manager
+            await self.lifecycle_manager.stop_application(self.application)
 
-            # Отправляем сообщение об остановке в CHAT_ID после остановки polling (во избежание Pool timeout)
-            try:
-                if self.application and self.application.bot and hasattr(self.application.bot, "send_message"):
-                    has_pending_edit = hasattr(self, "pending_shutdown_edit") and isinstance(
-                        self.pending_shutdown_edit,
-                        dict,
+            # Отправляем уведомление об остановке
+            if self.services.admin_notification_service and not self._stop_message_sent:
+                try:
+                    shutdown_message = (
+                        "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
                     )
-                    if (not has_pending_edit) and (not self._stop_message_sent):
-                        shutdown_message = (
-                            "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
-                        )
-                        await asyncio.wait_for(
-                            self.application.bot.send_message(
-                                chat_id=self.chat_id,
-                                text=shutdown_message,
-                            ),
-                            timeout=TIMEOUT_SHORT_SECONDS,
-                        )
-                        self.logger.info("Сообщение об остановке отправлено")
-                        self._stop_message_sent = True
-            except TimeoutError:
-                self.logger.warning("Таймаут при отправке сообщения об остановке")
-            except Exception as send_error:
-                self.logger.debug(
-                    f"Не удалось отправить сообщение об остановке (возможно, соединение уже закрыто): {send_error}",
+                    chat_id_int = int(self.chat_id) if self.chat_id else None
+                    admin_chat_id_str = (
+                        str(self.services.settings.admin_chat_id)
+                        if self.services.settings and self.services.settings.admin_chat_id
+                        else None
+                    )
+                    await self.services.admin_notification_service.notify_lifecycle_event(
+                        message=shutdown_message,
+                        chat_id=chat_id_int,
+                        admin_chat_id=admin_chat_id_str,
+                        exclude_chat_id=chat_id_int,
+                    )
+                    self._stop_message_sent = True
+                except Exception as send_error:
+                    self.logger.debug(
+                        f"Не удалось отправить сообщение об остановке (возможно, соединение уже закрыто): {send_error}",
+                    )
+
+            # Обновляем статусное сообщение от SupportBot
+            if isinstance(self.pending_shutdown_edit, dict):
+                state_data = BotStateData(
+                    chat_id=self.pending_shutdown_edit.get("chat_id"),
+                    message_id=self.pending_shutdown_edit.get("message_id"),
+                )
+                await self.state_coordinator.handle_shutdown_edit(
+                    bot=self.application.bot,
+                    state_data=state_data,
                 )
 
-            # Обновляем статусное сообщение в чате-источнике: основной бот остановлен (кроме админ-чата)
-            try:
-                if hasattr(self, "pending_shutdown_edit") and isinstance(self.pending_shutdown_edit, dict):
-                    chat_id = self.pending_shutdown_edit.get("chat_id")
-                    message_id = self.pending_shutdown_edit.get("message_id")
-                    # Не редактируем в админском чате
-                    skip_admin_edit = False
-                    try:
-                        from shared.config import Config
-
-                        # Используем глобальный config из модуля
-                        if isinstance(config, Config):
-                            admin_chat_id_env = config.telegram.admin_chat_id
-                        else:
-                            admin_chat_id_env = getattr(config, "admin_chat_id", None)
-                            if admin_chat_id_env:
-                                try:
-                                    admin_chat_str: str = str(admin_chat_id_env)
-                                    chat_id_str: str = str(chat_id) if chat_id is not None else ""
-                                    if admin_chat_str and chat_id_str:
-                                        skip_admin_edit = int(admin_chat_str) == int(chat_id_str)
-                                    else:
-                                        skip_admin_edit = False
-                                except Exception:
-                                    skip_admin_edit = False
-                    except Exception:
-                        skip_admin_edit = False
-
-                    if chat_id and message_id and not skip_admin_edit:
-                        await self.application.bot.edit_message_text(
-                            chat_id=chat_id,
-                            message_id=message_id,
-                            text=("🛑 Wednesday Frog Bot остановлен!"),
-                        )
-                        self.logger.info("Статусное сообщение обновлено: основной бот остановлен")
-                    elif chat_id and skip_admin_edit:
-                        self.logger.info(
-                            "Пропускаю редактирование статусного сообщения в админском чате (остановка основного)",
-                        )
-            except Exception as e:
-                self.logger.warning(f"Не удалось обновить статусное сообщение об остановке: {e}")
-            finally:
-                # Очистим данные, чтобы не переиспользовать их при последующих переключениях
-                self.pending_shutdown_edit = None
-                self.pending_startup_edit = None
-
-            # Безопасная остановка приложения
-            try:
-                await self.application.stop()
-            except Exception as e:
-                self.logger.warning(f"Ошибка при остановке приложения: {e}")
-
-            # Финальный шаг жизненного цикла PTB: корректный shutdown приложения
-            try:
-                await self.application.shutdown()
-            except Exception as e:
-                self.logger.warning(f"Ошибка при shutdown приложения: {e}")
+            # Очистим данные, чтобы не переиспользовать их при последующих переключениях
+            self.pending_shutdown_edit = None
+            self.pending_startup_edit = None
 
             # Закрываем все ресурсы через BotServices
             try:
@@ -813,68 +636,8 @@ class WednesdayBot:
         except Exception as e:
             self.logger.error(f"Ошибка при остановке бота: {e}")
         finally:
-            # Рассылка длинного сообщения об остановке также в админ-чат(ы), избегая дубля с CHAT_ID
-            try:
-                shutdown_message = (
-                    "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
-                )
-                from shared.config import Config
-
-                # Используем глобальный config из модуля
-                if isinstance(config, Config):
-                    admin_chat_id_env = config.telegram.admin_chat_id
-                else:
-                    admin_chat_id_env = getattr(config, "admin_chat_id", None)
-                has_pending_edit = hasattr(self, "pending_shutdown_edit") and isinstance(
-                    self.pending_shutdown_edit,
-                    dict,
-                )
-                if admin_chat_id_env and (not self._stop_message_sent):
-                    try:
-                        admin_chat_id_val = int(str(admin_chat_id_env))
-                        chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None
-                        # Если админ-чат совпадает с CHAT_ID и сообщение уже отправлено в try — пропускаем
-                        if chat_id_val == admin_chat_id_val and self._stop_message_sent:
-                            # Сообщение уже отправлено в CHAT_ID, пропускаем дубль
-                            pass
-                        elif has_pending_edit or (chat_id_val != admin_chat_id_val):
-                            await self.application.bot.send_message(
-                                chat_id=admin_chat_id_val,
-                                text=shutdown_message,
-                            )
-                            self._stop_message_sent = True
-                    except Exception:
-                        pass
-                else:
-                    # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
-                    if self.services.admins_repo is None:
-                        self.logger.error(
-                            "admins_repo недоступен в BotServices. "
-                            "Убедитесь, что репозиторий передаётся через Dependency Injection."
-                        )
-                        raise RuntimeError("admins_repo не инициализирован в BotServices")
-
-                    admins = await self.services.admins_repo.list_all_admins()
-                    for admin_id in admins:
-                        try:
-                            chat_id_val = int(str(self.chat_id)) if self.chat_id is not None else None
-                            # Если был pending edit — не пропускаем даже если это тот же чат;
-                            # иначе избегаем дубля с CHAT_ID
-                            if not has_pending_edit:
-                                if chat_id_val is not None and admin_id == chat_id_val:
-                                    continue
-                            await self.application.bot.send_message(
-                                chat_id=admin_id,
-                                text=shutdown_message,
-                            )
-                            self._stop_message_sent = True
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-            finally:
-                # Дополнительно защитимся от повторных отправок в жизненном цикле объекта
-                self._stop_message_sent = True
+            # Дополнительно защитимся от повторных отправок в жизненном цикле объекта
+            self._stop_message_sent = True
 
     async def get_bot_info(self) -> dict[str, Any]:
         """Получает информацию о боте.

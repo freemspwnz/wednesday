@@ -13,6 +13,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from telegram.request import HTTPXRequest
 
 from bot.base_handlers import BaseHandlers
+from bot.bot_state_coordinator import BotStateCoordinator, BotStateData
 
 # Константы для магических чисел (импортируем из wednesday_bot для консистентности)
 from bot.wednesday_bot import (
@@ -189,6 +190,13 @@ class SupportBot(BaseHandlers):
         # Инициализируем BaseHandlers с services (создает self.logger и self.admins_store)
         super().__init__(services)
 
+        # Инициализация state coordinator для координации с основным ботом
+        admin_chat_id_int = self.settings.admin_chat_id if self.settings else None
+        self.state_coordinator = BotStateCoordinator(
+            logger=self.logger,
+            admin_chat_id=admin_chat_id_int,
+        )
+
     def setup_handlers(self) -> None:
         """Настраивает обработчики команд для SupportBot.
 
@@ -309,42 +317,15 @@ class SupportBot(BaseHandlers):
                 delay *= 1.5
 
         # Если есть сообщение о статусе остановки — редактируем его на финальное (кроме админ-чата)
-        try:
-            if isinstance(self.pending_shutdown_edit, dict):
-                chat_id = self.pending_shutdown_edit.get("chat_id")
-                message_id = self.pending_shutdown_edit.get("message_id")
-                # Пропускаем редактирование, если это админ-чат
-                skip_admin_edit = False
-                try:
-                    if self.settings.admin_chat_id and chat_id is not None:
-                        try:
-                            skip_admin_edit = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
-                        except (ValueError, TypeError, AttributeError):
-                            skip_admin_edit = False
-                except (ValueError, TypeError, AttributeError):
-                    skip_admin_edit = False
-
-                if chat_id and message_id and not skip_admin_edit:
-                    # Компактный финальный текст для не-админ чатов
-                    final_text = "🛑  Wednesday Frog Bot остановлен\n✅ Резервный бот запущен"
-                    try:
-                        await self.application.bot.edit_message_text(
-                            chat_id=chat_id,
-                            message_id=message_id,
-                            text=final_text,
-                        )
-                        self.logger.info("Сообщение об остановке обновлено в чате-источнике")
-                    except (TelegramError, _TNetworkError, _TTimedOut) as edit_err:
-                        # Игнорируем ошибку "Message is not modified" — это нормально, если текст уже установлен
-                        error_str = str(edit_err).lower()
-                        if "message is not modified" in error_str or "not modified" in error_str:
-                            self.logger.debug("Сообщение уже имеет нужный текст, пропускаем редактирование")
-                        else:
-                            self.logger.warning(f"Не удалось обновить сообщение об остановке: {edit_err}")
-                elif chat_id and skip_admin_edit:
-                    self.logger.info("SupportBot: пропускаю редактирование статусного сообщения в админском чате")
-        except Exception as e:
-            self.logger.warning(f"Не удалось обновить сообщение об остановке: {e}", exc_info=True)
+        if isinstance(self.pending_shutdown_edit, dict):
+            state_data = BotStateData(
+                chat_id=self.pending_shutdown_edit.get("chat_id"),
+                message_id=self.pending_shutdown_edit.get("message_id"),
+            )
+            await self.state_coordinator.handle_support_startup_edit(
+                bot=self.application.bot,
+                state_data=state_data,
+            )
 
         # Сообщим админам о запуске SupportBot
         try:
@@ -391,34 +372,17 @@ class SupportBot(BaseHandlers):
         self.logger.info("Остановка бота-поддержки")
         self.is_running = False
         # Если был запуск основного через статусное сообщение — добавим строку про остановку Support Bot
-        try:
-            if isinstance(self.pending_startup_edit, dict):
-                chat_id = self.pending_startup_edit.get("chat_id")
-                message_id = self.pending_startup_edit.get("message_id")
-                # Пропускаем для админского чата
-                is_admin_chat = False
-                try:
-                    if self.settings.admin_chat_id and chat_id is not None:
-                        try:
-                            is_admin_chat = int(str(self.settings.admin_chat_id)) == int(str(chat_id))
-                        except (ValueError, TypeError, AttributeError):
-                            is_admin_chat = False
-                except (ValueError, TypeError, AttributeError):
-                    is_admin_chat = False
-                if chat_id and message_id and not is_admin_chat:
-                    interim_text = "🚀 Запускаю основной бот...\n🛑 Support Bot остановлен"
-                    try:
-                        await self.application.bot.edit_message_text(
-                            chat_id=chat_id,
-                            message_id=message_id,
-                            text=interim_text,
-                        )
-                    except (TelegramError, _TNetworkError, _TTimedOut):
-                        pass
-                # Очистим ссылку, чтобы не переиспользовать
-                self.pending_startup_edit = None
-        except Exception:
-            pass
+        if isinstance(self.pending_startup_edit, dict):
+            state_data = BotStateData(
+                chat_id=self.pending_startup_edit.get("chat_id"),
+                message_id=self.pending_startup_edit.get("message_id"),
+            )
+            await self.state_coordinator.handle_support_shutdown_edit(
+                bot=self.application.bot,
+                state_data=state_data,
+            )
+            # Очистим ссылку, чтобы не переиспользовать
+            self.pending_startup_edit = None
         # Сначала останавливаем polling, чтобы освободить соединения
         try:
             if hasattr(self.application, "updater") and self.application.updater:

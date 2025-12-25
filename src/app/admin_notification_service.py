@@ -125,6 +125,143 @@ class AdminNotificationService(BaseService):
                 },
             )
 
+    async def notify_lifecycle_event(
+        self,
+        message: str,
+        chat_id: int | None = None,
+        admin_chat_id: str | None = None,
+        exclude_chat_id: int | None = None,
+    ) -> None:
+        """Отправляет уведомление о жизненном цикле бота.
+
+        Отправляет сообщение:
+        1. В основной чат (chat_id), если задан.
+        2. Администраторам (через admin_chat_id или всем из репозитория).
+
+        Args:
+            message: Текст сообщения для отправки.
+            chat_id: ID основного чата для отправки уведомления (опционально).
+            admin_chat_id: ID админ-чата (если задан, отправляет туда вместо всех админов).
+            exclude_chat_id: ID чата для исключения из отправки админам (чтобы избежать дубля с основным чатом).
+        """
+        # Отправляем в основной чат
+        if chat_id:
+            try:
+                await self._messaging.send_message(
+                    chat_id=chat_id,
+                    text=message,
+                )
+                self.logger.info(f"Lifecycle уведомление отправлено в основной чат {chat_id}")
+            except MessagingError as e:
+                self.logger.warning(f"Не удалось отправить lifecycle уведомление в основной чат {chat_id}: {e}")
+
+        # Отправляем администраторам
+        await self.notify_lifecycle_to_admins(
+            message=message,
+            admin_chat_id=admin_chat_id,
+            exclude_chat_id=exclude_chat_id,
+        )
+
+    async def notify_lifecycle_to_admins(
+        self,
+        message: str,
+        admin_chat_id: str | None = None,
+        exclude_chat_id: int | None = None,
+    ) -> None:
+        """Отправляет уведомление о жизненном цикле бота администраторам.
+
+        Отправляет сообщение администраторам в следующем порядке:
+        1. Если задан admin_chat_id и он не исключён - отправляет туда и завершает.
+        2. Иначе отправляет всем админам из репозитория, исключая exclude_chat_id.
+
+        Args:
+            message: Текст сообщения для отправки.
+            admin_chat_id: ID админ-чата (если задан, отправляет туда вместо всех админов).
+            exclude_chat_id: ID чата для исключения (чтобы избежать дубля с основным чатом).
+        """
+        try:
+            exclude_ids: set[int] = {exclude_chat_id} if exclude_chat_id else set()
+
+            # Если задан admin_chat_id и он не исключён - отправляем туда
+            if admin_chat_id:
+                try:
+                    admin_chat_id_int = int(str(admin_chat_id))
+                    if admin_chat_id_int not in exclude_ids:
+                        await self._messaging.send_message(
+                            chat_id=admin_chat_id_int,
+                            text=message,
+                        )
+                        self.logger.info(
+                            f"Lifecycle уведомление отправлено в админ-чат {admin_chat_id_int}",
+                            event="admin_lifecycle_notification_sent",
+                            status="ok",
+                            admin_chat_id=admin_chat_id_int,
+                        )
+                        return  # Отправили в админ-чат, больше не отправляем
+                except (ValueError, MessagingError) as e:
+                    # Если не удалось отправить в admin_chat_id, продолжаем отправку всем админам
+                    self.logger.warning(
+                        f"Не удалось отправить в админ-чат {admin_chat_id}: {e}",
+                        event="admin_chat_send_failed",
+                        status="warning",
+                        error_type=type(e).__name__,
+                    )
+
+            # Отправляем всем админам из репозитория (исключая exclude_ids)
+            all_admins = await self._admins_repo.list_all_admins()
+            if not all_admins:
+                self.logger.warning(
+                    "Нет администраторов для уведомления",
+                    event="admin_lifecycle_notification_skipped",
+                    status="warning",
+                )
+                return
+
+            for admin_id in all_admins:
+                if admin_id in exclude_ids:
+                    continue
+                try:
+                    await self._messaging.send_message(
+                        chat_id=admin_id,
+                        text=message,
+                    )
+                    self.logger.info(
+                        f"Lifecycle уведомление отправлено администратору {admin_id}",
+                        event="admin_lifecycle_notification_sent",
+                        status="ok",
+                        admin_id=admin_id,
+                    )
+                except MessagingError as e:
+                    # Ошибка отправки конкретному админу - логируем, но продолжаем
+                    self.logger.error(
+                        f"Не удалось отправить lifecycle уведомление админу {admin_id}: {e}",
+                        event="admin_lifecycle_notification_failed",
+                        status="error",
+                        admin_id=admin_id,
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                    )
+        except RepoError as e:
+            # Ошибка получения списка админов - критично, но не падаем
+            self.logger.error(
+                f"Ошибка при получении списка администраторов для lifecycle уведомления: {e}",
+                event="admin_repo_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+        except BaseException as e:
+            # Неожиданная ошибка - логируем через handle_unexpected_error
+            # Уведомления не критичны, поэтому не пробрасываем, только логируем
+            self.handle_unexpected_error(
+                e,
+                UnexpectedAppError,
+                message=f"Неожиданная ошибка при отправке lifecycle уведомления администраторам: {e}",
+                context={
+                    "event": "admin_lifecycle_notification_unexpected_error",
+                },
+            )
+
     async def notify_dispatch_failure(
         self,
         slot_date: str,
