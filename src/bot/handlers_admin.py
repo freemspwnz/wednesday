@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from telegram import Bot, Chat, Update
+from telegram import Bot, Chat, Update, User
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
@@ -1025,17 +1025,25 @@ class AdminHandlers(BaseHandlers):
                         continue
 
                     # Формируем имя с разумным fallback
-                    name_parts = []
-                    if hasattr(chat, "full_name") and chat.full_name:
-                        name_parts.append(chat.full_name)
-                    elif hasattr(chat, "first_name") and chat.first_name:
-                        name_parts.append(chat.first_name)
-                    name = " ".join(name_parts) if name_parts else "Unknown"
-
-                    # Добавляем username если есть
-                    username_text = ""
-                    if hasattr(chat, "username") and chat.username:
-                        username_text = f" (@{chat.username})"
+                    # Используем проверку типов вместо hasattr для лучшей типизации
+                    if isinstance(chat, User):
+                        # User имеет свойство full_name, которое объединяет first_name и last_name
+                        name = chat.full_name or chat.first_name or "Unknown"
+                        username_text = f" (@{chat.username})" if chat.username else ""
+                    elif isinstance(chat, Chat):
+                        # Chat для пользователя имеет first_name, last_name, но не full_name
+                        name_parts = []
+                        if chat.first_name:
+                            name_parts.append(chat.first_name)
+                        if chat.last_name:
+                            name_parts.append(chat.last_name)
+                        # Для Chat также может быть title (для групп/каналов)
+                        name = " ".join(name_parts) if name_parts else (chat.title or "Unknown")
+                        username_text = f" (@{chat.username})" if chat.username else ""
+                    else:
+                        # Fallback для неизвестных типов
+                        name = "Unknown"
+                        username_text = ""
 
                     admin_list.append(f"• ID: {admin_id} ({name}{username_text}){is_main}")
 
