@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes
@@ -53,9 +54,10 @@ class BotErrorHandler:
                 import sentry_sdk
 
                 sentry_sdk.capture_exception(error)
-            except Exception:
+            except Exception as sentry_error:
                 # Ошибки в интеграции Sentry не должны ломать основной поток.
-                pass
+                # Но логируем для диагностики проблем с мониторингом
+                self.logger.warning(f"Ошибка при отправке в Sentry: {sentry_error}", exc_info=False)
 
         # Логируем структурированное событие для унифицированного JSON‑логирования.
         try:
@@ -70,6 +72,10 @@ class BotErrorHandler:
                 level="error",
                 message="Необработанное исключение в обработчике PTB",
             )
-        except Exception:
-            # Любые ошибки логирования здесь игнорируем, чтобы не усугублять ситуацию.
-            pass
+        except Exception as log_error:
+            # Критическая ошибка - не можем даже залогировать
+            # Используем print как последний резерв (будет видно в stdout/stderr)
+            print(
+                f"КРИТИЧЕСКАЯ ОШИБКА: не удалось залогировать событие: {log_error}",
+                file=sys.stderr,
+            )

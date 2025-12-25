@@ -158,10 +158,18 @@ class SupportBot(BaseHandlers):
                         max_retries=3,
                         delay=2.0,
                     )
-                except (TelegramError, _TNetworkError, _TTimedOut):
-                    pass
-        except Exception:
-            pass
+                except (TelegramError, _TNetworkError, _TTimedOut) as e:
+                    # Временные сетевые ошибки - логируем, но не критично
+                    self.logger.debug(f"Не удалось отправить уведомление админу {admin_id}: {e}")
+                except Exception as e:
+                    # Другие ошибки - логируем с предупреждением
+                    self.logger.warning(
+                        f"Неожиданная ошибка при отправке уведомления админу {admin_id}: {e}",
+                        exc_info=True,
+                    )
+        except Exception as e:
+            # Ошибка при получении списка админов - логируем, но не критично
+            self.logger.warning(f"Не удалось получить список администраторов для уведомления: {e}", exc_info=True)
 
         self.is_running = True
         self._stop_event.clear()
@@ -210,10 +218,21 @@ class SupportBot(BaseHandlers):
                                 max_retries=3,
                                 delay=2.0,
                             )
-                        except (TelegramError, _TNetworkError, _TTimedOut):
-                            pass
-            except Exception:
-                pass
+                        except (TelegramError, _TNetworkError, _TTimedOut) as e:
+                            # Временные сетевые ошибки - логируем, но не критично
+                            self.logger.debug(f"Не удалось отправить уведомление админу {admin_id}: {e}")
+                        except Exception as e:
+                            # Другие ошибки - логируем с предупреждением
+                            self.logger.warning(
+                                f"Неожиданная ошибка при отправке уведомления админу {admin_id}: {e}",
+                                exc_info=True,
+                            )
+            except Exception as e:
+                # Ошибка при получении списка админов - логируем, но не критично
+                self.logger.warning(
+                    f"Не удалось получить список администраторов для уведомления об остановке: {e}",
+                    exc_info=True,
+                )
 
             # Останавливаем PTB Application через lifecycle manager
             await self.lifecycle_manager.stop_application(self.application)
