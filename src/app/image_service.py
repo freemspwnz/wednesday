@@ -40,8 +40,8 @@ class ImageService(BaseService):
         prompt_service: PromptService,
         generation_coordinator: ImageGenerationCoordinator,
         storage_coordinator: ImageStorageCoordinator,
+        image_storage: IImageStorage,
         caption_service: CaptionService | None = None,
-        image_storage: IImageStorage | None = None,
         *,
         logger: ILogger,
     ) -> None:
@@ -51,30 +51,36 @@ class ImageService(BaseService):
             prompt_service: Сервис генерации промптов (обязателен).
             generation_coordinator: Координатор генерации изображений (обязателен).
             storage_coordinator: Координатор сохранения изображений (обязателен).
+            image_storage: Сервис хранения изображений для fallback (обязателен).
+                Используется для получения случайных сохраненных изображений через
+                get_random_saved_image() при ошибках генерации. Без этого сервиса
+                fallback функциональность не работает.
             caption_service: Сервис работы с подписями (опционально).
-            image_storage: Сервис хранения изображений для fallback (опционально).
+                Если None, используется пустая подпись. Не критично для основной
+                функциональности генерации изображений.
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
         self._prompt_service = prompt_service
         self._generation_coordinator = generation_coordinator
         self._storage_coordinator = storage_coordinator
-        self._caption_service = caption_service
         self._storage = image_storage
+        self._caption_service = caption_service
 
     async def get_random_saved_image(self) -> tuple[bytes, str] | None:
         """Возвращает случайное сохранённое изображение из файлового хранилища.
 
         Используется как fallback, когда генерация нового изображения недоступна.
-        Если хранилище недоступно или произошла ошибка при чтении — возвращает None.
+        Если произошла ошибка при чтении — возвращает None.
 
         Returns:
             Кортеж (байты изображения, подпись) или None, если изображение недоступно.
-        """
-        if self._storage is None:
-            self.logger.warning("ImageStorageService недоступен для получения сохранённого изображения")
-            return None
 
+        Note:
+            image_storage является обязательной зависимостью, поэтому этот метод
+            всегда будет пытаться получить изображение. None возвращается только
+            при ошибках чтения или отсутствии сохраненных изображений.
+        """
         try:
             return await self._storage.get_random()
         except StorageError as e:

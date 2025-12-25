@@ -265,8 +265,8 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
         prompt_service=prompt_service,
         generation_coordinator=generation_coordinator,
         storage_coordinator=storage_coordinator,
-        caption_service=caption_service,
         image_storage=image_storage,
+        caption_service=caption_service,
         logger=app_logger,
     )
 
