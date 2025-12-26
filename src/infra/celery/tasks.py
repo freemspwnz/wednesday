@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from infra.celery.context import ServicesContext
 
 from infra.celery.app import celery_app
-from infra.celery.context import _ensure_pools_initialized, get_services_context
+from infra.celery.context import get_services_context
 from infra.logging.logger import get_logger, log_event
 from infra.metrics.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,
@@ -450,9 +450,9 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
         Exception: При ошибке сбора статистики.
     """
     try:
-        # Инициализируем пулы подключений (для доступа к сервисам)
+        # Получаем контекст сервисов (инициализирует пулы подключений)
         # Возвращаемые значения не используются, так как пулы не нужны в этой задаче
-        _ = await _ensure_pools_initialized()
+        _ = await get_services_context()
 
         # Здесь можно добавить логику сбора статистики
         # Например, агрегация метрик из metrics_events

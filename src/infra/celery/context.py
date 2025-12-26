@@ -61,7 +61,44 @@ _redis_factory: RedisClientFactory | None = None
 _init_lock = asyncio.Lock()
 
 
+async def _get_redis_client(
+    redis_factory: RedisClientFactory,
+    config_obj: Config,
+) -> RedisClient:
+    """Создаёт Redis клиент через фабрику с использованием конфигурации.
+
+    Args:
+        redis_factory: Фабрика для создания Redis клиента.
+        config_obj: Экземпляр Config для получения параметров подключения.
+
+    Returns:
+        Инициализированный Redis клиент.
+
+    Raises:
+        Exception: Если не удалось создать Redis клиент.
+    """
+    if isinstance(config_obj, Config):
+        if config_obj.redis.url:
+            return await redis_factory.get_client(url=config_obj.redis.url)
+        return await redis_factory.get_client(
+            host=config_obj.redis.host,
+            port=config_obj.redis.port,
+            db=config_obj.redis.db,
+            password=config_obj.redis.password,
+        )
+    if config_obj.redis_url:
+        return await redis_factory.get_client(url=config_obj.redis_url)
+    return await redis_factory.get_client(
+        host=config_obj.redis_host,
+        port=config_obj.redis_port,
+        db=config_obj.redis_db,
+        password=config_obj.redis_password,
+    )
+
+
 async def _ensure_pools_initialized(
+    pool_factory: PostgresPoolFactory | None = None,
+    redis_factory: RedisClientFactory | None = None,
     config_obj: Config | None = None,
 ) -> tuple[asyncpg.Pool, RedisClient]:
     """Инициализирует пулы подключений Redis и Postgres.
@@ -71,6 +108,8 @@ async def _ensure_pools_initialized(
     - Отсутствие race conditions.
 
     Args:
+        pool_factory: Фабрика для создания Postgres пула. Если None, создаётся новая.
+        redis_factory: Фабрика для создания Redis клиента. Если None, создаётся новая.
         config_obj: Экземпляр Config. Если None, используется глобальный config.
 
     Returns:
@@ -87,29 +126,18 @@ async def _ensure_pools_initialized(
         # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
         global _pool_factory, _redis_factory  # noqa: PLW0603
 
+        # Создаём фабрики только если не переданы (fallback для обратной совместимости)
+        if redis_factory is None:
+            redis_factory = RedisClientFactory(config=config_obj)
+        _redis_factory = redis_factory
+
+        if pool_factory is None:
+            pool_factory = PostgresPoolFactory(config=config_obj)
+        _pool_factory = pool_factory
+
         redis_client: RedisClient
         try:
-            # Создаём фабрику Redis клиента
-            _redis_factory = RedisClientFactory(config=config_obj)
-            if isinstance(config_obj, Config):
-                if config_obj.redis.url:
-                    redis_client = await _redis_factory.get_client(url=config_obj.redis.url)
-                else:
-                    redis_client = await _redis_factory.get_client(
-                        host=config_obj.redis.host,
-                        port=config_obj.redis.port,
-                        db=config_obj.redis.db,
-                        password=config_obj.redis.password,
-                    )
-            elif config_obj.redis_url:
-                redis_client = await _redis_factory.get_client(url=config_obj.redis_url)
-            else:
-                redis_client = await _redis_factory.get_client(
-                    host=config_obj.redis_host,
-                    port=config_obj.redis_port,
-                    db=config_obj.redis_db,
-                    password=config_obj.redis_password,
-                )
+            redis_client = await _get_redis_client(redis_factory, config_obj)
         except Exception as exc:
             # Redis критичен для Celery worker — пробрасываем ошибку
             logger.error(
@@ -119,9 +147,7 @@ async def _ensure_pools_initialized(
             )
             raise
 
-        # Создаём фабрику пула Postgres
-        _pool_factory = PostgresPoolFactory(config=config_obj)
-        postgres_pool = await _pool_factory.get_pool(min_size=1, max_size=10)
+        postgres_pool = await pool_factory.get_pool(min_size=1, max_size=10)
         await ensure_schema(pool=postgres_pool)
 
         logger.info(
@@ -132,13 +158,19 @@ async def _ensure_pools_initialized(
         return (postgres_pool, redis_client)
 
 
-async def get_services_context(config_obj: Config | None = None) -> ServicesContext:
+async def get_services_context(
+    pool_factory: PostgresPoolFactory | None = None,
+    redis_factory: RedisClientFactory | None = None,
+    config_obj: Config | None = None,
+) -> ServicesContext:
     """Получает контекст сервисов для использования в Celery задачах.
 
     Инициализирует пулы подключений и создаёт экземпляры сервисов при первом вызове.
     Использует dependency injection вместо глобального состояния.
 
     Args:
+        pool_factory: Фабрика для создания Postgres пула. Если None, создаётся новая.
+        redis_factory: Фабрика для создания Redis клиента. Если None, создаётся новая.
         config_obj: Экземпляр Config. Если None, используется глобальный config.
 
     Returns:
@@ -167,7 +199,11 @@ async def get_services_context(config_obj: Config | None = None) -> ServicesCont
             return cast("ServicesContext", _services_context)
 
         # Инициализируем пулы и получаем их явно (без использования приватных функций)
-        postgres_pool, redis_client = await _ensure_pools_initialized(config_obj=config_obj)
+        postgres_pool, redis_client = await _ensure_pools_initialized(
+            pool_factory=pool_factory,
+            redis_factory=redis_factory,
+            config_obj=config_obj,
+        )
 
         # Ленивый импорт для избежания циклических зависимостей
         from infra.container import build_bot
