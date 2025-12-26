@@ -100,6 +100,49 @@ def is_retryable_error(error: Exception) -> bool:
     return any(keyword in error_str for keyword in retryable_keywords)
 
 
+def with_services_context(
+    func: Callable[..., Awaitable[R]],
+) -> Callable[..., Awaitable[R]]:
+    """Декоратор для автоматического получения контекста сервисов в Celery задачах.
+
+    Автоматически получает контекст сервисов через get_services_context() и передаёт
+    его в задачу как именованный параметр 'context'. Устраняет дублирование кода
+    получения контекста в каждой задаче.
+
+    Args:
+        func: Асинхронная функция задачи Celery.
+
+    Returns:
+        Обёрнутая функция, которая автоматически получает и передаёт context.
+
+    Example:
+        @with_services_context
+        async def my_task(self: Task, context: ServicesContext, param: int) -> dict:
+            service = context.get("my_service")
+            ...
+    """
+
+    async def wrapper(self: Task, *args: object, **kwargs: object) -> R:
+        # Получаем фабрики (кэшируются на worker процесс)
+        from shared.config import Config
+
+        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
+
+        # Получаем контекст сервисов через DI
+        context = await get_services_context(
+            pool_factory=pool_factory,
+            redis_factory=redis_factory,
+            config_obj=config_obj,
+        )
+
+        # Передаём context в задачу через kwargs
+        kwargs["context"] = context
+
+        return await func(self, *args, **kwargs)
+
+    return wrapper
+
+
 # Декоратор для логирования Celery задач
 # Используем Any для args/kwargs, так как Celery задачи имеют разные сигнатуры
 def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[R]]], Callable[..., Awaitable[R]]]:
@@ -211,7 +254,13 @@ def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[R]]], C
     options={"queue": "wednesday"},  # Явно указываем очередь
 )
 @log_celery_task("send_wednesday_frog")
-async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> dict[str, Any]:
+@with_services_context
+async def send_wednesday_frog_task(
+    self: Task,
+    slot_time: str | None = None,
+    *,
+    context: ServicesContext,
+) -> dict[str, Any]:
     """Celery задача для отправки изображения жабы.
 
     Выполняет отправку изображения жабы всем подписанным пользователям в указанное
@@ -220,6 +269,7 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
     Args:
         self: Экземпляр Celery Task.
         slot_time: Время слота в формате "HH:MM" или None для текущего времени.
+        context: Контекст сервисов (автоматически инжектируется декоратором).
 
     Returns:
         Словарь с результатом выполнения, содержащий:
@@ -231,17 +281,6 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем фабрики (кэшируются на worker процесс)
-        from shared.config import Config
-
-        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
-
-        # Получаем контекст сервисов через DI
-        context = await get_services_context(
-            pool_factory=pool_factory,
-            redis_factory=redis_factory,
-            config_obj=config_obj,
-        )
         bot = _get_wednesday_bot(context)
         await bot.send_wednesday_frog(slot_time=slot_time)
 
@@ -276,7 +315,13 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
     acks_late=True,
 )
 @log_celery_task("generate_frog_image")
-async def generate_frog_image_task(self: Task, user_id: int | None = None) -> dict[str, Any]:
+@with_services_context
+async def generate_frog_image_task(
+    self: Task,
+    user_id: int | None = None,
+    *,
+    context: ServicesContext,
+) -> dict[str, Any]:
     """Celery задача для генерации изображения жабы.
 
     Выполняет генерацию изображения жабы через ImageService. Использует dependency
@@ -285,6 +330,7 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
     Args:
         self: Экземпляр Celery Task.
         user_id: ID пользователя, для которого выполняется генерация (опционально).
+        context: Контекст сервисов (автоматически инжектируется декоратором).
 
     Returns:
         Словарь с результатом генерации, содержащий:
@@ -296,18 +342,6 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем фабрики (кэшируются на worker процесс)
-        from shared.config import Config
-
-        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
-
-        # Получаем контекст сервисов через DI
-        context = await get_services_context(
-            pool_factory=pool_factory,
-            redis_factory=redis_factory,
-            config_obj=config_obj,
-        )
-
         # Получаем image_service из контекста (создан через DI)
         image_service = context.get("image_service")
         if not isinstance(image_service, IImageService):
@@ -351,12 +385,15 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
     options={"queue": "wednesday"},
 )
 @log_celery_task("send_frog_manual")
-async def send_frog_manual(
+@with_services_context
+async def send_frog_manual(  # noqa: PLR0913
     self: Task,
     chat_id: int,
     user_id: int,
     status_message_id: int | None = None,
     idempotency_key: str | None = None,
+    *,
+    context: ServicesContext,
 ) -> FrogRequestResult:
     """Celery задача для отправки изображения жабы по ручной команде /frog.
 
@@ -370,6 +407,7 @@ async def send_frog_manual(
         status_message_id: ID статусного сообщения для удаления (опционально).
         idempotency_key: Ключ идемпотентности для предотвращения дубликатов (опционально).
             Если не указан, генерируется автоматически на основе параметров.
+        context: Контекст сервисов (автоматически инжектируется декоратором).
 
     Returns:
         FrogRequestResult с результатом выполнения.
@@ -379,18 +417,6 @@ async def send_frog_manual(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем фабрики (кэшируются на worker процесс)
-        from shared.config import Config
-
-        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
-
-        # Получаем контекст сервисов через DI
-        context = await get_services_context(
-            pool_factory=pool_factory,
-            redis_factory=redis_factory,
-            config_obj=config_obj,
-        )
-
         # Получаем сервисы из контекста (созданы через DI)
         idempotency_service = context.get("idempotency_service")
         if not isinstance(idempotency_service, IIdempotencyService):
@@ -439,7 +465,12 @@ async def send_frog_manual(
     time_limit=720,  # 12 минут
 )
 @log_celery_task("daily_cleanup")
-async def daily_cleanup_task(self: Task) -> dict[str, Any]:
+@with_services_context
+async def daily_cleanup_task(
+    self: Task,
+    *,
+    context: ServicesContext,
+) -> dict[str, Any]:
     """Ежедневная задача очистки старых данных.
 
     Выполняет очистку устаревших данных через DataCleanupService:
@@ -449,6 +480,7 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
 
     Args:
         self: Экземпляр Celery Task.
+        context: Контекст сервисов (автоматически инжектируется декоратором).
 
     Returns:
         Словарь с результатом выполнения, содержащий:
@@ -459,18 +491,6 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем фабрики (кэшируются на worker процесс)
-        from shared.config import Config
-
-        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
-
-        # Получаем контекст сервисов через DI
-        context = await get_services_context(
-            pool_factory=pool_factory,
-            redis_factory=redis_factory,
-            config_obj=config_obj,
-        )
-
         # Получаем data_cleanup_service из контекста (создан через DI)
         from shared.protocols import IDataCleanupService
 
@@ -504,7 +524,12 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
     time_limit=360,  # 6 минут
 )
 @log_celery_task("daily_statistics")
-async def daily_statistics_task(self: Task) -> dict[str, Any]:
+@with_services_context
+async def daily_statistics_task(  # noqa: RUF029
+    self: Task,
+    *,
+    context: ServicesContext,
+) -> dict[str, Any]:
     """Ежедневная задача сбора статистики.
 
     Выполняет сбор и агрегацию статистики за день:
@@ -514,6 +539,7 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
 
     Args:
         self: Экземпляр Celery Task.
+        context: Контекст сервисов (автоматически инжектируется декоратором).
 
     Returns:
         Словарь с результатом выполнения, содержащий:
@@ -524,21 +550,9 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем фабрики (кэшируются на worker процесс)
-        from shared.config import Config
-
-        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
-
-        # Получаем контекст сервисов через DI
-        # Возвращаемые значения не используются, так как пулы не нужны в этой задаче
-        _ = await get_services_context(
-            pool_factory=pool_factory,
-            redis_factory=redis_factory,
-            config_obj=config_obj,
-        )
-
         # Здесь можно добавить логику сбора статистики
         # Например, агрегация метрик из metrics_events
+        # Контекст доступен через параметр context, если понадобится
 
         logger.info("Daily statistics task completed successfully")
         return {"status": "success"}
