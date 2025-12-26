@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from infra.celery.app import celery_app
@@ -48,7 +49,9 @@ class CeleryTaskQueue:
             Exception: При ошибке постановки задачи в очередь Celery.
         """
         try:
-            self.celery_app.send_task(
+            # Обёртываем синхронный send_task() в asyncio.to_thread() для избежания блокировки event loop
+            await asyncio.to_thread(
+                self.celery_app.send_task,
                 CeleryTaskNames.WEDNESDAY_SEND_FROG_MANUAL,
                 args=[chat_id, user_id, status_message_id, idempotency_key],
             )
