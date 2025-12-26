@@ -69,45 +69,30 @@ _worker_redis_factory: RedisClientFactory | None = None
 _worker_config: Config | None = None
 _shutdown_task: asyncio.Task[None] | None = None
 
-# Кэш для locks (создаются лениво в текущем event loop)
-_init_locks: dict[int, asyncio.Lock] = {}
-_worker_factories_locks: dict[int, asyncio.Lock] = {}
+_init_lock: asyncio.Lock | None = None
+_factories_lock: asyncio.Lock | None = None
 
 
 def _get_init_lock() -> asyncio.Lock:
-    """Получает lock для инициализации контекста (создаётся в текущем event loop).
+    """Получает lock для инициализации контекста (создаётся лениво в текущем event loop).
 
     Для celery[asyncio] locks должны создаваться в том же event loop, где используются.
-    Эта функция создаёт lock лениво при первом вызове в текущем loop.
-
-    Returns:
-        asyncio.Lock для текущего event loop.
     """
-    loop = asyncio.get_running_loop()
-    loop_id = id(loop)
-
-    if loop_id not in _init_locks:
-        _init_locks[loop_id] = asyncio.Lock()
-
-    return _init_locks[loop_id]
+    global _init_lock  # noqa: PLW0603
+    if _init_lock is None:
+        _init_lock = asyncio.Lock()
+    return _init_lock
 
 
 def _get_worker_factories_lock() -> asyncio.Lock:
-    """Получает lock для фабрик worker (создаётся в текущем event loop).
+    """Получает lock для фабрик worker (создаётся лениво в текущем event loop).
 
     Для celery[asyncio] locks должны создаваться в том же event loop, где используются.
-    Эта функция создаёт lock лениво при первом вызове в текущем loop.
-
-    Returns:
-        asyncio.Lock для текущего event loop.
     """
-    loop = asyncio.get_running_loop()
-    loop_id = id(loop)
-
-    if loop_id not in _worker_factories_locks:
-        _worker_factories_locks[loop_id] = asyncio.Lock()
-
-    return _worker_factories_locks[loop_id]
+    global _factories_lock  # noqa: PLW0603
+    if _factories_lock is None:
+        _factories_lock = asyncio.Lock()
+    return _factories_lock
 
 
 async def get_or_create_worker_factories(
@@ -140,14 +125,14 @@ async def get_or_create_worker_factories(
 
     async with _get_worker_factories_lock():
         if _worker_pool_factory is None or _worker_redis_factory is None:
-            _worker_pool_factory = PostgresPoolFactory(config=config)
-            _worker_redis_factory = RedisClientFactory(config=config)
-            _worker_config = config
-            logger.info("Фабрики созданы и кэшированы в worker процессе")
+            _worker_config = config or Config()
+            _worker_pool_factory = PostgresPoolFactory(config=_worker_config)
+            _worker_redis_factory = RedisClientFactory(config=_worker_config)
+            logger.info("Фабрики инициализированы в asyncio воркере")
 
-        # Гарантируем, что config не None (явная проверка вместо assert для работы с -O)
-        if _worker_config is None:
-            raise RuntimeError("Worker config must be set after factory creation")
+        # Гарантируем, что все значения не None (явная проверка вместо assert для работы с -O)
+        if _worker_config is None or _worker_pool_factory is None or _worker_redis_factory is None:
+            raise RuntimeError("Worker factories and config must be set after factory creation")
         return _worker_pool_factory, _worker_redis_factory, _worker_config
 
 
@@ -333,17 +318,15 @@ async def get_services_context(
 async def shutdown_services() -> None:
     """Graceful shutdown для async ресурсов.
 
-    Закрывает все соединения при остановке worker через CleanupService:
-    - ML-клиенты (ImageClientContainer, TextClientContainer) через aclose()
-    - aiohttp sessions через закрытие клиентов
-    - redis pool через фабрику
-    - postgres pool через фабрику
+    Закрывает все соединения при остановке worker через CleanupService.
+    Детали закрытия (ML-клиенты, Redis, Postgres) инкапсулированы в CleanupService.
 
-    ⚠️ ВАЖНО: Вызывается автоматически через сигнал worker_shutdown
+    ⚠️ ВАЖНО: Вызывается автоматически через сигнал worker_shutdown.
     """
     global _services_context, _cleanup_service, _pool_factory, _redis_factory  # noqa: PLW0603
+    global _worker_pool_factory, _worker_redis_factory, _worker_config  # noqa: PLW0603
 
-    if _services_context is None:
+    if _services_context is None and _cleanup_service is None:
         return
 
     logger.info(
@@ -353,43 +336,25 @@ async def shutdown_services() -> None:
     )
 
     try:
-        # Используем CleanupService для закрытия всех ресурсов
         if _cleanup_service is not None:
+            # CleanupService сам закроет всё: и ML-клиентов, и пулы через фабрики
             await _cleanup_service.cleanup_all()
         else:
             logger.warning(
-                "CleanupService не инициализирован, пропускаю этап очистки ресурсов",
+                "CleanupService не инициализирован, глубокая очистка ресурсов невозможна",
                 event="celery_cleanup_service_missing",
                 status="warning",
             )
-
-        # Закрываем фабрики пулов (используем worker фабрики, если они есть)
-        global _worker_pool_factory, _worker_redis_factory  # noqa: PLW0603
-
-        factory_to_close = _pool_factory or _worker_pool_factory
-        if factory_to_close is not None:
-            try:
-                await factory_to_close.close()
-                logger.info("Postgres pool закрыт через фабрику в Celery worker")
-            except Exception as e:
-                logger.warning(f"Ошибка при закрытии Postgres pool: {e}")
-
-        redis_factory_to_close = _redis_factory or _worker_redis_factory
-        if redis_factory_to_close is not None:
-            try:
-                await redis_factory_to_close.close()
-                logger.info("Redis клиент закрыт через фабрику в Celery worker")
-            except Exception as e:
-                logger.warning(f"Ошибка при закрытии Redis клиента: {e}")
     except Exception as e:
         logger.error(
-            f"Ошибка во время graceful shutdown сервисов Celery: {e}",
+            f"Критическая ошибка во время cleanup_all: {e}",
             event="celery_shutdown_error",
             status="error",
             error_type=type(e).__name__,
             error_message=str(e),
         )
     finally:
+        # Обнуляем все глобальные ссылки, чтобы избежать утечек памяти
         _services_context = None
         _cleanup_service = None
         _pool_factory = None
@@ -397,6 +362,7 @@ async def shutdown_services() -> None:
         _worker_pool_factory = None
         _worker_redis_factory = None
         _worker_config = None
+
         logger.info(
             "Graceful shutdown сервисов Celery завершён",
             event="celery_shutdown_completed",
@@ -407,21 +373,10 @@ async def shutdown_services() -> None:
 # Регистрируем shutdown handler
 @worker_shutdown.connect
 def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
-    """Обработчик сигнала остановки worker для graceful shutdown.
+    """Обработчик остановки. Гарантирует выполнение shutdown_services.
 
-    Вызывается автоматически при остановке Celery worker. Выполняет graceful
-    shutdown всех async ресурсов:
-    - ML-клиенты (ImageClientContainer, TextClientContainer) через aclose()
-    - HTTP-сессии (aiohttp) через закрытие клиентов
-    - Redis и Postgres пулы подключений
-
-    Args:
-        sender: Отправитель сигнала (обычно Celery app).
-        **kwargs: Дополнительные аргументы сигнала.
-
-    Note:
-        Для celery[asyncio] всегда есть running event loop, поэтому используем create_task().
-        asyncio.run() не может быть вызван из running loop и вызовет RuntimeError.
+    Для celery[asyncio] всегда есть running event loop, поэтому используем create_task().
+    asyncio.run() не может быть вызван из running loop и вызовет RuntimeError.
     """
     global _shutdown_task  # noqa: PLW0603
 
@@ -430,7 +385,7 @@ def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
         loop = asyncio.get_running_loop()
         if not loop.is_closed():
             # Создаём задачу для graceful shutdown
-            _shutdown_task = asyncio.create_task(shutdown_services())
+            _shutdown_task = loop.create_task(shutdown_services())
             # Сохраняем ссылку в глобальной переменной, чтобы задача не была удалена сборщиком мусора
         else:
             logger.warning(

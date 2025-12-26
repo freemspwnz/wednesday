@@ -518,10 +518,16 @@ def build_cleanup_service(
     """
     from infra.celery.cleanup_service import CleanupService
 
+    # Получаем контейнеры ML-клиентов для закрытия при shutdown
+    image_container = get_image_client_container()
+    text_container = get_text_client_container()
+
     return CleanupService(
         logger=logger,
         pool_factory=pool_factory,
         redis_factory=redis_factory,
+        image_container=image_container,
+        text_container=text_container,
     )
 
 

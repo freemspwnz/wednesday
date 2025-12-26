@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Исправления для корректной работы с asyncio pool**:
+  - Обновлён `build_cleanup_service()` для передачи `image_container` и `text_container`
+  - Исправлен shutdown handler: улучшена обработка ошибок и логирование
+  - Исправлен формат версии `celery-pool-asyncio` в requirements.txt и pyproject.toml (==0.2.0)
+  - ML-клиенты теперь корректно закрываются при shutdown через CleanupService
+  - Улучшена надёжность: добавлена проверка состояния event loop перед созданием задачи
+
 - **Адаптация Celery для работы с asyncio pool (--pool=asyncio)**:
   - Удалены глобальные `asyncio.Lock()` на уровне модуля (несовместимы с asyncio pool)
   - Реализована ленивая инициализация locks через `_get_init_lock()` и `_get_worker_factories_lock()`
