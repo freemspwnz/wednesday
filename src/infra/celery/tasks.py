@@ -352,16 +352,20 @@ async def send_frog_manual(
     chat_id: int,
     user_id: int,
     status_message_id: int | None = None,
+    idempotency_key: str | None = None,
 ) -> FrogRequestResult:
     """Celery задача для отправки изображения жабы по ручной команде /frog.
 
     Теперь только оркестрирует выполнение, вся бизнес-логика в FrogProcessingService.
+    Поддерживает идемпотентность через Redis кэширование результатов.
 
     Args:
         self: Экземпляр Celery Task.
         chat_id: ID чата для отправки изображения.
         user_id: ID пользователя.
         status_message_id: ID статусного сообщения для удаления (опционально).
+        idempotency_key: Ключ идемпотентности для предотвращения дубликатов (опционально).
+            Если не указан, генерируется автоматически на основе параметров.
 
     Returns:
         FrogRequestResult с результатом выполнения.
@@ -383,6 +387,34 @@ async def send_frog_manual(
             config_obj=config_obj,
         )
 
+        redis_client = context["redis_client"]
+
+        # Генерируем ключ идемпотентности, если не передан
+        if idempotency_key is None:
+            idempotency_key = f"frog_manual:{chat_id}:{user_id}:{status_message_id}"
+
+        # Проверяем, не выполнялась ли уже эта задача (идемпотентность)
+        cache_key = f"celery:idempotency:{idempotency_key}"
+        cached_result = await redis_client.get(cache_key)
+        if cached_result:
+            logger.info(
+                f"Task already executed (idempotency_key={idempotency_key}), returning cached result",
+                event="celery_task_idempotency_hit",
+                status="success",
+                task_name="send_frog_manual",
+            )
+            # Десериализуем результат из JSON
+            import json
+
+            cached_data: dict[str, Any] = json.loads(cached_result)
+            # Проверяем наличие обязательных полей для TypedDict
+            if "status" not in cached_data or "error" not in cached_data:
+                raise ValueError("Invalid cached result format")
+            return FrogRequestResult(
+                status=cached_data["status"],
+                error=cached_data.get("error"),
+            )
+
         # Получаем FrogProcessingService из контекста (создан через DI)
         frog_processing = context.get("frog_processing")
         if not isinstance(frog_processing, IFrogProcessingService):
@@ -393,6 +425,20 @@ async def send_frog_manual(
             chat_id=chat_id,
             user_id=user_id,
             status_message_id=status_message_id,
+        )
+
+        # Кэшируем результат на 1 час для идемпотентности
+        # Используем set с параметром ex вместо setex для совместимости с _InMemoryRedis
+        import json
+
+        result_dict: dict[str, Any] = {
+            "status": result["status"],
+            "error": result.get("error"),
+        }
+        await redis_client.set(
+            cache_key,
+            json.dumps(result_dict),
+            ex=3600,  # 1 час
         )
 
         return result
@@ -410,6 +456,11 @@ async def send_frog_manual(
 @celery_app.task(
     bind=True,
     name="wednesday.daily_cleanup",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 2, "countdown": 300},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
     soft_time_limit=600,  # 10 минут
     time_limit=720,  # 12 минут
 )
@@ -417,10 +468,10 @@ async def send_frog_manual(
 async def daily_cleanup_task(self: Task) -> dict[str, Any]:
     """Ежедневная задача очистки старых данных.
 
-    Выполняет очистку устаревших данных:
+    Выполняет очистку устаревших данных через DataCleanupService:
     - Очистка старых записей dispatch_registry.
-    - Очистка временных файлов.
-    - Очистка кэша.
+    - Очистка временных файлов (если добавлено в будущем).
+    - Очистка кэша (если добавлено в будущем).
 
     Args:
         self: Экземпляр Celery Task.
@@ -431,6 +482,7 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
 
     Raises:
         Exception: При ошибке выполнения очистки.
+        Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
         # Получаем фабрики (кэшируются на worker процесс)
@@ -444,17 +496,24 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
             redis_factory=redis_factory,
             config_obj=config_obj,
         )
-        postgres_pool = context["postgres_pool"]
 
-        # Очистка старых записей dispatch_registry
-        from infra.repos.dispatch_registry import DispatchRegistry
+        # Получаем data_cleanup_service из контекста (создан через DI)
+        from shared.protocols import IDataCleanupService
 
-        registry = DispatchRegistry(pool=postgres_pool)
-        await registry.cleanup_old()
+        data_cleanup_service = context.get("data_cleanup_service")
+        if not isinstance(data_cleanup_service, IDataCleanupService):
+            raise RuntimeError("DataCleanupService is not available in context")
+
+        # Выполняем очистку через сервис (соблюдение границ слоёв)
+        await data_cleanup_service.cleanup_all()
 
         logger.info("Daily cleanup task completed successfully")
         return {"status": "success"}
     except Exception as e:
+        # Обработка ошибок и retry логика
+        if is_retryable_error(e):
+            CELERY_TASK_RETRIES_TOTAL.labels(task_name="daily_cleanup").inc()
+            raise self.retry(exc=e) from e
         logger.error(f"Error in daily cleanup task: {e}")
         raise
 
@@ -462,6 +521,11 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
 @celery_app.task(
     bind=True,
     name="wednesday.daily_statistics",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 2, "countdown": 300},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
     soft_time_limit=300,  # 5 минут
     time_limit=360,  # 6 минут
 )
@@ -483,6 +547,7 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
 
     Raises:
         Exception: При ошибке сбора статистики.
+        Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
         # Получаем фабрики (кэшируются на worker процесс)
@@ -504,6 +569,10 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
         logger.info("Daily statistics task completed successfully")
         return {"status": "success"}
     except Exception as e:
+        # Обработка ошибок и retry логика
+        if is_retryable_error(e):
+            CELERY_TASK_RETRIES_TOTAL.labels(task_name="daily_statistics").inc()
+            raise self.retry(exc=e) from e
         logger.error(f"Error in daily statistics task: {e}")
         raise
 

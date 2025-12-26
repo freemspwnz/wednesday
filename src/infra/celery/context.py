@@ -21,11 +21,11 @@ from shared.config import Config
 
 if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
-    from infra.cleanup_service import CleanupService
+    from infra.celery.cleanup_service import CleanupService
     from infra.redis.redis_client import RedisClient
     from infra.repos.usage_tracker import UsageTracker
 
-from shared.protocols import IFrogProcessingService, IImageService
+from shared.protocols import IDataCleanupService, IFrogProcessingService, IImageService
 
 logger = get_logger(__name__)
 
@@ -48,6 +48,7 @@ class ServicesContext(TypedDict, total=False):
     image_service: IImageService
     usage_tracker: UsageTracker
     frog_processing: IFrogProcessingService
+    data_cleanup_service: IDataCleanupService
 
 
 # Context для хранения инициализированных сервисов в worker процессе
@@ -71,6 +72,11 @@ async def get_or_create_worker_factories(
     между задачами. Это безопасно, так как каждая задача выполняется
     в том же worker процессе после fork.
 
+    ⚠️ ВАЖНО: Фабрики используются ТОЛЬКО для создания пулов.
+    После создания пулов через factory.get_pool() / factory.get_client(),
+    пулы передаются в build_celery_services_context(), которая создаёт сервисы.
+    Сервисы получают пулы через Dependency Injection, а не фабрики.
+
     Эта функция должна вызываться в Celery задачах для получения фабрик,
     которые затем передаются в get_services_context().
 
@@ -92,8 +98,9 @@ async def get_or_create_worker_factories(
             _worker_config = config
             logger.info("Фабрики созданы и кэшированы в worker процессе")
 
-        # Гарантируем, что config не None
-        assert _worker_config is not None, "Worker config must be set after factory creation"
+        # Гарантируем, что config не None (явная проверка вместо assert для работы с -O)
+        if _worker_config is None:
+            raise RuntimeError("Worker config must be set after factory creation")
         return _worker_pool_factory, _worker_redis_factory, _worker_config
 
 
@@ -194,6 +201,13 @@ async def get_services_context(
 
     Инициализирует пулы подключений и создаёт экземпляры сервисов при первом вызове.
     Использует dependency injection через build_celery_services_context() из container.py.
+
+    ⚠️ ВАЖНО: Архитектура использования фабрик и пулов:
+    1. Фабрики (pool_factory, redis_factory) используются ТОЛЬКО для создания пулов
+    2. Пулы создаются ПОСЛЕ fork worker процесса (для fork safety)
+    3. Созданные пулы передаются в build_celery_services_context(), которая создаёт сервисы
+    4. Сервисы получают пулы через Dependency Injection, а не фабрики
+    5. Фабрики сохраняются для cleanup service, который закрывает пулы при shutdown
 
     Фабрики должны быть переданы явно - это соблюдает принцип DI.
     Для получения фабрик используйте get_or_create_worker_factories().

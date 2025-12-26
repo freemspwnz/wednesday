@@ -33,6 +33,7 @@ class CeleryTaskQueue:
         chat_id: int,
         user_id: int,
         status_message_id: int | None,
+        idempotency_key: str | None = None,
     ) -> None:
         """Ставит задачу генерации и отправки жабы в очередь Celery.
 
@@ -40,6 +41,8 @@ class CeleryTaskQueue:
             chat_id: ID чата для отправки изображения.
             user_id: ID пользователя, запросившего генерацию (для логирования).
             status_message_id: ID статусного сообщения для удаления после отправки (опционально).
+            idempotency_key: Ключ идемпотентности для предотвращения дубликатов (опционально).
+                Если не указан, будет сгенерирован автоматически в задаче.
 
         Raises:
             Exception: При ошибке постановки задачи в очередь Celery.
@@ -47,7 +50,7 @@ class CeleryTaskQueue:
         try:
             self.celery_app.send_task(
                 CeleryTaskNames.WEDNESDAY_SEND_FROG_MANUAL,
-                args=[chat_id, user_id, status_message_id],
+                args=[chat_id, user_id, status_message_id, idempotency_key],
             )
             self.logger.info(f"Задача send_frog_manual поставлена в очередь для пользователя {user_id}")
         except Exception as e:

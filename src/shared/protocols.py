@@ -1009,6 +1009,34 @@ class IDispatchRegistry(Protocol):
         """
         ...
 
+    async def cleanup_old(self) -> None:
+        """Удаляет старые записи реестра старше retention_days.
+
+        Удаляет все записи, у которых created_at меньше текущей даты
+        минус retention_days дней.
+
+        Raises:
+            Exception: При ошибке доступа к базе данных PostgreSQL.
+        """
+        ...
+
+
+@runtime_checkable
+class IDataCleanupService(Protocol):
+    """Протокол для сервиса очистки устаревших данных."""
+
+    async def cleanup_all(self) -> None:
+        """Выполняет очистку всех типов устаревших данных.
+
+        Выполняет:
+        - Очистку старых записей dispatch_registry
+        - Другие операции очистки (если добавлены в будущем)
+
+        Raises:
+            Exception: При ошибке выполнения очистки.
+        """
+        ...
+
 
 @runtime_checkable
 class IDatabaseUnitOfWork(Protocol[ConnectionType]):

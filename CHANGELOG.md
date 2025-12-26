@@ -4,6 +4,20 @@
 
 ### Изменено
 
+- **Улучшена архитектура Celery задач: соблюдение границ слоёв и добавлена идемпотентность**:
+  - Создан `DataCleanupService` в application-слое для инкапсуляции логики очистки данных
+  - Создан протокол `IDataCleanupService` для соблюдения границ слоёв
+  - Добавлен метод `cleanup_old()` в протокол `IDispatchRegistry`
+  - Обновлена `daily_cleanup_task` для использования `DataCleanupService` через протокол вместо прямого обращения к репозиторию
+  - Обновлён `ServicesContext` для использования протокола `IDataCleanupService` вместо конкретного типа
+  - Добавлена retry политика для `daily_cleanup_task` и `daily_statistics_task` с exponential backoff
+  - Добавлена поддержка идемпотентности в `send_frog_manual` через Redis кэширование результатов
+  - Обновлён `CeleryTaskQueue` для поддержки опционального `idempotency_key` параметра
+  - Добавлен `DataCleanupService` в `build_celery_services_context` для использования в Celery задачах
+  - Улучшено соблюдение границ слоёв: задачи используют протоколы application-сервисов, а не конкретные реализации
+  - Улучшена надёжность: задачи теперь автоматически повторяются при сетевых ошибках
+  - Улучшена идемпотентность: предотвращены дубликаты выполнения при retry
+
 - **Рефакторинг Celery задач для использования единого DI-подхода**:
   - Добавлена функция `build_celery_services_context()` в `container.py` для создания сервисов через DI
   - Реализовано кэширование фабрик на worker процесс через `get_or_create_worker_factories()` в `context.py`

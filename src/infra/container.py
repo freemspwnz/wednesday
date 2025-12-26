@@ -18,9 +18,10 @@ if TYPE_CHECKING:
     from app.admin_access_service import AdminAccessService
     from app.admin_command_service import AdminCommandService
     from app.admin_notification_service import AdminNotificationService
+    from app.data_cleanup_service import DataCleanupService
     from app.frog_processing_service import FrogProcessingService
     from bot.wednesday_bot import WednesdayBot
-    from infra.cleanup_service import CleanupService
+    from infra.celery.cleanup_service import CleanupService
     from infra.database.postgres_client import PostgresPoolFactory
     from infra.redis.redis_client import RedisClient, RedisClientFactory
 
@@ -66,6 +67,7 @@ from shared.protocols import (
     IAdminsRepo,
     IChatsRepo,
     ICircuitBreaker,
+    IDispatchRegistry,
     ILogger,
     IMessagingService,
     IMetrics,
@@ -471,6 +473,27 @@ def build_frog_processing_service(
     )
 
 
+def build_data_cleanup_service(
+    dispatch_registry: IDispatchRegistry,
+    logger: ILogger,
+) -> DataCleanupService:
+    """Создаёт DataCleanupService с зависимостями.
+
+    Args:
+        dispatch_registry: Репозиторий для работы с dispatch_registry (через протокол).
+        logger: Логгер.
+
+    Returns:
+        Настроенный DataCleanupService.
+    """
+    from app.data_cleanup_service import DataCleanupService
+
+    return DataCleanupService(
+        dispatch_registry=dispatch_registry,
+        logger=logger,
+    )
+
+
 def build_cleanup_service(
     logger: ILogger,
     pool_factory: PostgresPoolFactory | None = None,
@@ -478,15 +501,22 @@ def build_cleanup_service(
 ) -> CleanupService:
     """Создаёт CleanupService с зависимостями.
 
+    ⚠️ ВАЖНО: CleanupService принимает ФАБРИКИ, а не пулы, потому что:
+    - Фабрики инкапсулируют состояние пулов
+    - При закрытии нужно вызвать factory.close(), который закроет все пулы
+    - Это единственное место, где фабрики передаются в сервисы (для cleanup)
+
+    Для всех остальных сервисов используются пулы через DI, а не фабрики.
+
     Args:
         logger: Логгер.
-        pool_factory: Фабрика пула Postgres (опционально).
-        redis_factory: Фабрика Redis клиента (опционально).
+        pool_factory: Фабрика пула Postgres (опционально, нужна для закрытия пула).
+        redis_factory: Фабрика Redis клиента (опционально, нужна для закрытия клиента).
 
     Returns:
         Настроенный CleanupService.
     """
-    from infra.cleanup_service import CleanupService
+    from infra.celery.cleanup_service import CleanupService
 
     return CleanupService(
         logger=logger,
@@ -738,14 +768,22 @@ def build_support_bot_components(
 def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: RedisClient) -> BotServices:
     """Собирает контейнер BotServices для основного бота.
 
+    ⚠️ ВАЖНО: Эта функция принимает УЖЕ СОЗДАННЫЕ пулы (db_pool, redis_client),
+    а не фабрики. Пулы должны быть созданы через фабрики в main.py.
+
+    Архитектура:
+    - Фабрики (PostgresPoolFactory, RedisClientFactory) используются ТОЛЬКО для создания пулов
+    - Сервисы получают пулы через Dependency Injection (эта функция)
+    - Cleanup service получает фабрики для закрытия пулов при shutdown
+
     На этом этапе:
     - image_service создаётся через build_image_stack();
     - остальные сервисы повторяют существующую инициализацию из WednesdayBot.
 
     Args:
         config: Экземпляр Config для создания сервисов и настроек.
-        db_pool: Пул подключений PostgreSQL.
-        redis_client: Redis-клиент для использования в сервисах.
+        db_pool: Пул подключений PostgreSQL (уже инициализирован через фабрику).
+        redis_client: Redis-клиент для использования в сервисах (уже инициализирован через фабрику).
 
     Returns:
         Настроенный экземпляр BotServices.
@@ -1029,10 +1067,19 @@ def build_celery_services_context(
     Аналог build_bot_services(), но для Celery worker процесса.
     Использует те же build_* функции для соблюдения единого стиля DI.
 
+    ⚠️ ВАЖНО: Эта функция принимает УЖЕ СОЗДАННЫЕ пулы (db_pool, redis_client),
+    а не фабрики. Пулы должны быть созданы через фабрики в get_services_context()
+    из infra/celery/context.py ПОСЛЕ fork worker процесса (для fork safety).
+
+    Архитектура:
+    - Фабрики (PostgresPoolFactory, RedisClientFactory) используются ТОЛЬКО для создания пулов
+    - Сервисы получают пулы через Dependency Injection (эта функция)
+    - Cleanup service получает фабрики для закрытия пулов при shutdown
+
     Args:
         config: Экземпляр Config для создания сервисов.
-        db_pool: Пул подключений PostgreSQL (уже инициализирован).
-        redis_client: Redis-клиент (уже инициализирован).
+        db_pool: Пул подключений PostgreSQL (уже инициализирован через фабрику).
+        redis_client: Redis-клиент (уже инициализирован через фабрику).
 
     Returns:
         Словарь с сервисами для Celery задач:
@@ -1100,6 +1147,15 @@ def build_celery_services_context(
         logger=app_logger,
     )
 
+    # Создаём dispatch registry для data cleanup service
+    dispatch_registry = DispatchRegistry(pool=db_pool)
+
+    # Создаём data cleanup service через DI
+    data_cleanup_service = build_data_cleanup_service(
+        dispatch_registry=dispatch_registry,
+        logger=app_logger,
+    )
+
     return {
         "bot": bot,
         "postgres_pool": db_pool,
@@ -1107,6 +1163,7 @@ def build_celery_services_context(
         "image_service": image_service,
         "usage_tracker": usage_tracker,
         "frog_processing": frog_processing,
+        "data_cleanup_service": data_cleanup_service,
     }
 
 
