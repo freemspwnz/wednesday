@@ -45,11 +45,13 @@ class ServicesContext(TypedDict, total=False):
         Все зависимости используют TYPE_CHECKING для избежания циклических зависимостей.
         total=False означает, что все поля опциональны (для совместимости с dict[str, object]).
         Используются протоколы вместо конкретных классов для соблюдения границ слоёв.
+
+        ⚠️ ВАЖНО: Пулы БД (postgres_pool, redis_client) НЕ включены в контекст,
+        так как все операции с БД должны идти через сервисы и репозитории.
+        Пулы используются только для создания сервисов через DI (fork-safe).
     """
 
     bot: WednesdayBot
-    postgres_pool: asyncpg.Pool
-    redis_client: RedisClient
     image_service: IImageService
     usage_tracker: UsageTracker
     frog_processing: IFrogProcessingService
@@ -226,11 +228,15 @@ async def get_services_context(
     Returns:
         Словарь с сервисами:
         - bot: Экземпляр WednesdayBot
-        - postgres_pool: Пул подключений PostgreSQL (для прямого использования в задачах)
-        - redis_client: Redis-клиент (для прямого использования в задачах)
         - image_service: Экземпляр ImageService для генерации изображений
         - usage_tracker: Экземпляр UsageTracker для отслеживания использования
         - frog_processing: Экземпляр FrogProcessingService для обработки запросов /frog
+        - data_cleanup_service: Экземпляр DataCleanupService для очистки данных
+        - idempotency_service: Экземпляр IdempotencyService для идемпотентности
+
+        ⚠️ ВАЖНО: postgres_pool и redis_client НЕ включены в контекст.
+        Все операции с БД должны выполняться через сервисы и репозитории.
+        Пулы используются только для создания сервисов через DI (fork-safe).
 
     Raises:
         RuntimeError: Если не удалось инициализировать сервисы.
