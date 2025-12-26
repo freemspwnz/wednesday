@@ -67,8 +67,47 @@ _redis_factory: RedisClientFactory | None = None
 _worker_pool_factory: PostgresPoolFactory | None = None
 _worker_redis_factory: RedisClientFactory | None = None
 _worker_config: Config | None = None
-_init_lock = asyncio.Lock()
-_worker_factories_lock = asyncio.Lock()
+_shutdown_task: asyncio.Task[None] | None = None
+
+# Кэш для locks (создаются лениво в текущем event loop)
+_init_locks: dict[int, asyncio.Lock] = {}
+_worker_factories_locks: dict[int, asyncio.Lock] = {}
+
+
+def _get_init_lock() -> asyncio.Lock:
+    """Получает lock для инициализации контекста (создаётся в текущем event loop).
+
+    Для celery[asyncio] locks должны создаваться в том же event loop, где используются.
+    Эта функция создаёт lock лениво при первом вызове в текущем loop.
+
+    Returns:
+        asyncio.Lock для текущего event loop.
+    """
+    loop = asyncio.get_running_loop()
+    loop_id = id(loop)
+
+    if loop_id not in _init_locks:
+        _init_locks[loop_id] = asyncio.Lock()
+
+    return _init_locks[loop_id]
+
+
+def _get_worker_factories_lock() -> asyncio.Lock:
+    """Получает lock для фабрик worker (создаётся в текущем event loop).
+
+    Для celery[asyncio] locks должны создаваться в том же event loop, где используются.
+    Эта функция создаёт lock лениво при первом вызове в текущем loop.
+
+    Returns:
+        asyncio.Lock для текущего event loop.
+    """
+    loop = asyncio.get_running_loop()
+    loop_id = id(loop)
+
+    if loop_id not in _worker_factories_locks:
+        _worker_factories_locks[loop_id] = asyncio.Lock()
+
+    return _worker_factories_locks[loop_id]
 
 
 async def get_or_create_worker_factories(
@@ -99,7 +138,7 @@ async def get_or_create_worker_factories(
     if config is None:
         config = Config()
 
-    async with _worker_factories_lock:
+    async with _get_worker_factories_lock():
         if _worker_pool_factory is None or _worker_redis_factory is None:
             _worker_pool_factory = PostgresPoolFactory(config=config)
             _worker_redis_factory = RedisClientFactory(config=config)
@@ -169,7 +208,7 @@ async def _ensure_pools_initialized(
     Raises:
         RuntimeError: Если не удалось инициализировать пулы подключений.
     """
-    async with _init_lock:
+    async with _get_init_lock():
         # Инициализируем Redis и Postgres (async)
         # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
         global _pool_factory, _redis_factory  # noqa: PLW0603
@@ -247,7 +286,7 @@ async def get_services_context(
     if _services_context is not None:
         return cast("ServicesContext", _services_context)
 
-    async with _init_lock:
+    async with _get_init_lock():
         if _services_context is not None:
             return cast("ServicesContext", _services_context)
 
@@ -381,24 +420,36 @@ def _on_worker_shutdown(sender: object | None = None, **kwargs: object) -> None:
         **kwargs: Дополнительные аргументы сигнала.
 
     Note:
-        Для celery[asyncio] worker_shutdown может быть вызван в контексте async,
-        но сигнал сам по себе синхронный. Используем безопасный подход с проверкой
-        наличия event loop.
+        Для celery[asyncio] всегда есть running event loop, поэтому используем create_task().
+        asyncio.run() не может быть вызван из running loop и вызовет RuntimeError.
     """
+    global _shutdown_task  # noqa: PLW0603
+
     try:
-        # Пытаемся получить текущий event loop
-        try:
-            loop = asyncio.get_running_loop()
-            # Если loop запущен, создаём задачу (для celery[asyncio])
-            if not loop.is_closed():
-                task = asyncio.create_task(shutdown_services())
-                # Сохраняем ссылку на задачу, чтобы она не была удалена сборщиком мусора
-                _ = task
-            else:
-                # Loop закрыт, создаём новый
-                asyncio.run(shutdown_services())
-        except RuntimeError:
-            # Нет запущенного loop, создаём новый
-            asyncio.run(shutdown_services())
+        # Для celery[asyncio] всегда есть running event loop
+        loop = asyncio.get_running_loop()
+        if not loop.is_closed():
+            # Создаём задачу для graceful shutdown
+            _shutdown_task = asyncio.create_task(shutdown_services())
+            # Сохраняем ссылку в глобальной переменной, чтобы задача не была удалена сборщиком мусора
+        else:
+            logger.warning(
+                "Event loop is closed, cannot perform graceful shutdown",
+                event="celery_shutdown_loop_closed",
+                status="warning",
+            )
+    except RuntimeError:
+        # Нет running loop - это не должно происходить в asyncio pool
+        logger.warning(
+            "No running event loop, cannot perform graceful shutdown",
+            event="celery_shutdown_no_loop",
+            status="warning",
+        )
     except Exception as e:
-        logger.error(f"Ошибка при вызове shutdown в worker_shutdown handler: {e}")
+        logger.error(
+            f"Ошибка при вызове shutdown в worker_shutdown handler: {e}",
+            event="celery_shutdown_handler_error",
+            status="error",
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )

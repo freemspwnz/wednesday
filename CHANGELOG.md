@@ -4,6 +4,16 @@
 
 ### Изменено
 
+- **Адаптация Celery для работы с asyncio pool (--pool=asyncio)**:
+  - Удалены глобальные `asyncio.Lock()` на уровне модуля (несовместимы с asyncio pool)
+  - Реализована ленивая инициализация locks через `_get_init_lock()` и `_get_worker_factories_lock()`
+  - Locks теперь создаются в том же event loop, где используются (требование asyncio pool)
+  - Исправлен shutdown handler: убран `asyncio.run()` (несовместим с running event loop)
+  - Shutdown handler теперь использует только `asyncio.create_task()` для asyncio pool
+  - Упрощён `CeleryTaskQueue.send_frog_manual_task()`: убран `asyncio.to_thread()` (не нужен в asyncio pool)
+  - Улучшена совместимость: код теперь корректно работает с `celery[asyncio]` и `--pool=asyncio`
+  - Улучшена производительность: убраны лишние обёртки для синхронных вызовов
+
 - **Унифицирована генерация ключей идемпотентности в Celery задачах**:
   - Создана универсальная функция `generate_idempotency_key()` для генерации ключей с параметрами
   - Обновлена `send_wednesday_frog_task` для использования helper-функции с учетом `slot_time`
