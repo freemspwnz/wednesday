@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
     from infra.celery.context import ServicesContext
 
+from datetime import datetime
+
 from infra.celery.app import celery_app
 from infra.celery.context import get_or_create_worker_factories, get_services_context
 from infra.logging.logger import get_logger, log_event
@@ -293,10 +295,27 @@ async def send_wednesday_frog_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        bot = _get_wednesday_bot(context)
-        await bot.send_wednesday_frog(slot_time=slot_time)
+        # Получаем idempotency_service из контекста (создан через DI)
+        idempotency_service = context.get("idempotency_service")
+        if not isinstance(idempotency_service, IIdempotencyService):
+            raise RuntimeError("IdempotencyService is not available in context")
 
-        return {"status": "success", "slot_time": slot_time}
+        # Генерируем ключ идемпотентности на основе slot_time или текущей даты
+        if slot_time:
+            idempotency_key = f"send_wednesday_frog:{slot_time}"
+        else:
+            # Используем текущую дату для уникальности
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            idempotency_key = f"send_wednesday_frog:{current_date}"
+
+        # Выполняем отправку с идемпотентностью через сервис
+        result = await idempotency_service.execute_with_idempotency(
+            key=idempotency_key,
+            ttl=86400,  # 24 часа (чтобы не повторять отправку в течение дня)
+            operation=lambda: _send_wednesday_frog_operation(context, slot_time),
+        )
+
+        return result
     except Exception as e:
         # ⚠️ ВАЖНО: Кастомная фильтрация retryable ошибок
         if is_retryable_error(e):
@@ -308,6 +327,26 @@ async def send_wednesday_frog_task(
             # Бизнес-логические ошибки не retry, сразу падаем
             # После max_retries задача уйдёт в DLQ
             raise
+
+
+async def _send_wednesday_frog_operation(
+    context: ServicesContext,
+    slot_time: str | None,
+) -> dict[str, Any]:
+    """Вспомогательная функция для выполнения отправки жабы.
+
+    Вынесена отдельно для использования в idempotency_service.
+
+    Args:
+        context: Контекст сервисов.
+        slot_time: Время слота в формате "HH:MM" или None.
+
+    Returns:
+        Словарь с результатом выполнения.
+    """
+    bot = _get_wednesday_bot(context)
+    await bot.send_wednesday_frog(slot_time=slot_time)
+    return {"status": "success", "slot_time": slot_time}
 
 
 @celery_app.task(
@@ -354,17 +393,27 @@ async def generate_frog_image_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем image_service из контекста (создан через DI)
-        image_service = context.get("image_service")
-        if not isinstance(image_service, IImageService):
-            raise RuntimeError("ImageService is not available in context")
+        # Получаем idempotency_service из контекста (создан через DI)
+        idempotency_service = context.get("idempotency_service")
+        if not isinstance(idempotency_service, IIdempotencyService):
+            raise RuntimeError("IdempotencyService is not available in context")
 
-        image_data, _caption = await image_service.generate_frog_image(user_id=user_id)
+        # Генерируем ключ идемпотентности на основе user_id или текущей даты/времени
+        if user_id is not None:
+            idempotency_key = f"generate_frog_image:{user_id}"
+        else:
+            # Если user_id не указан, используем текущую дату/время для уникальности
+            current_datetime = datetime.now().strftime("%Y-%m-%d_%H:%M")
+            idempotency_key = f"generate_frog_image:{current_datetime}"
 
-        return {
-            "status": "success",
-            "image_size": len(image_data),
-        }
+        # Выполняем генерацию с идемпотентностью через сервис
+        result = await idempotency_service.execute_with_idempotency(
+            key=idempotency_key,
+            ttl=3600,  # 1 час (чтобы не генерировать повторно для того же пользователя)
+            operation=lambda: _generate_frog_image_operation(context, user_id),
+        )
+
+        return result
     except Exception as e:
         # ⚠️ ВАЖНО: Кастомная фильтрация retryable ошибок
         if is_retryable_error(e):
@@ -376,6 +425,33 @@ async def generate_frog_image_task(
             # Бизнес-логические ошибки не retry, сразу падаем
             # После max_retries задача уйдёт в DLQ
             raise
+
+
+async def _generate_frog_image_operation(
+    context: ServicesContext,
+    user_id: int | None,
+) -> dict[str, Any]:
+    """Вспомогательная функция для выполнения генерации изображения.
+
+    Вынесена отдельно для использования в idempotency_service.
+
+    Args:
+        context: Контекст сервисов.
+        user_id: ID пользователя (опционально).
+
+    Returns:
+        Словарь с результатом генерации.
+    """
+    image_service = context.get("image_service")
+    if not isinstance(image_service, IImageService):
+        raise RuntimeError("ImageService is not available in context")
+
+    image_data, _caption = await image_service.generate_frog_image(user_id=user_id)
+
+    return {
+        "status": "success",
+        "image_size": len(image_data),
+    }
 
 
 @celery_app.task(
@@ -503,18 +579,24 @@ async def daily_cleanup_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем data_cleanup_service из контекста (создан через DI)
-        from shared.protocols import IDataCleanupService
+        # Получаем idempotency_service из контекста (создан через DI)
+        idempotency_service = context.get("idempotency_service")
+        if not isinstance(idempotency_service, IIdempotencyService):
+            raise RuntimeError("IdempotencyService is not available in context")
 
-        data_cleanup_service = context.get("data_cleanup_service")
-        if not isinstance(data_cleanup_service, IDataCleanupService):
-            raise RuntimeError("DataCleanupService is not available in context")
+        # Генерируем ключ идемпотентности на основе текущей даты
+        # Это гарантирует, что очистка выполнится только раз в день
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        idempotency_key = f"daily_cleanup:{current_date}"
 
-        # Выполняем очистку через сервис (соблюдение границ слоёв)
-        await data_cleanup_service.cleanup_all()
+        # Выполняем очистку с идемпотентностью через сервис
+        result = await idempotency_service.execute_with_idempotency(
+            key=idempotency_key,
+            ttl=86400,  # 24 часа (чтобы не повторять очистку в течение дня)
+            operation=lambda: _daily_cleanup_operation(context),
+        )
 
-        logger.info("Daily cleanup task completed successfully")
-        return {"status": "success"}
+        return result
     except Exception as e:
         # Обработка ошибок и retry логика
         if is_retryable_error(e):
@@ -522,6 +604,32 @@ async def daily_cleanup_task(
             raise self.retry(exc=e) from e
         logger.error(f"Error in daily cleanup task: {e}")
         raise
+
+
+async def _daily_cleanup_operation(
+    context: ServicesContext,
+) -> dict[str, Any]:
+    """Вспомогательная функция для выполнения ежедневной очистки.
+
+    Вынесена отдельно для использования в idempotency_service.
+
+    Args:
+        context: Контекст сервисов.
+
+    Returns:
+        Словарь с результатом выполнения.
+    """
+    from shared.protocols import IDataCleanupService
+
+    data_cleanup_service = context.get("data_cleanup_service")
+    if not isinstance(data_cleanup_service, IDataCleanupService):
+        raise RuntimeError("DataCleanupService is not available in context")
+
+    # Выполняем очистку через сервис (соблюдение границ слоёв)
+    await data_cleanup_service.cleanup_all()
+
+    logger.info("Daily cleanup task completed successfully")
+    return {"status": "success"}
 
 
 @celery_app.task(
@@ -537,7 +645,7 @@ async def daily_cleanup_task(
 )
 @log_celery_task("daily_statistics")
 @with_services_context
-async def daily_statistics_task(  # noqa: RUF029
+async def daily_statistics_task(
     self: Task,
     *,
     context: ServicesContext,
@@ -562,12 +670,24 @@ async def daily_statistics_task(  # noqa: RUF029
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Здесь можно добавить логику сбора статистики
-        # Например, агрегация метрик из metrics_events
-        # Контекст доступен через параметр context, если понадобится
+        # Получаем idempotency_service из контекста (создан через DI)
+        idempotency_service = context.get("idempotency_service")
+        if not isinstance(idempotency_service, IIdempotencyService):
+            raise RuntimeError("IdempotencyService is not available in context")
 
-        logger.info("Daily statistics task completed successfully")
-        return {"status": "success"}
+        # Генерируем ключ идемпотентности на основе текущей даты
+        # Это гарантирует, что сбор статистики выполнится только раз в день
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        idempotency_key = f"daily_statistics:{current_date}"
+
+        # Выполняем сбор статистики с идемпотентностью через сервис
+        result = await idempotency_service.execute_with_idempotency(
+            key=idempotency_key,
+            ttl=86400,  # 24 часа (чтобы не повторять сбор статистики в течение дня)
+            operation=lambda: _daily_statistics_operation(context),
+        )
+
+        return result
     except Exception as e:
         # Обработка ошибок и retry логика
         if is_retryable_error(e):
@@ -575,6 +695,27 @@ async def daily_statistics_task(  # noqa: RUF029
             raise self.retry(exc=e) from e
         logger.error(f"Error in daily statistics task: {e}")
         raise
+
+
+async def _daily_statistics_operation(  # noqa: RUF029
+    context: ServicesContext,
+) -> dict[str, Any]:
+    """Вспомогательная функция для выполнения ежедневного сбора статистики.
+
+    Вынесена отдельно для использования в idempotency_service.
+
+    Args:
+        context: Контекст сервисов.
+
+    Returns:
+        Словарь с результатом выполнения.
+    """
+    # Здесь можно добавить логику сбора статистики
+    # Например, агрегация метрик из metrics_events
+    # Контекст доступен через параметр context, если понадобится
+
+    logger.info("Daily statistics task completed successfully")
+    return {"status": "success"}
 
 
 @celery_app.task(
