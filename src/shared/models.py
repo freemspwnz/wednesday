@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal, TypedDict
 
 
 @dataclass(frozen=True)
@@ -86,3 +87,18 @@ class PromptRecordDTO:
     prompt_hash: str
     created_at: datetime
     ab_group: str | None
+
+
+class FrogRequestResult(TypedDict):
+    """Типизированный результат обработки запроса генерации жабы.
+
+    Использует TypedDict для неизменяемой структуры данных (только для передачи).
+    Стандарт: TypedDict для неизменяемых структур, Dataclass для мутабельных DTO.
+
+    Attributes:
+        status: Статус обработки запроса ("success" или "failed").
+        error: Описание ошибки, если status="failed", иначе None.
+    """
+
+    status: Literal["success", "failed"]
+    error: str | None

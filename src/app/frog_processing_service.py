@@ -9,8 +9,6 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
-
 from app.admin_notification_service import AdminNotificationService
 from app.frog_delivery_service import FrogDeliveryService
 from app.image_service import ImageService
@@ -23,22 +21,8 @@ from shared.base.exceptions import (
     NetworkError,
     UnexpectedImageError,
 )
+from shared.models import FrogRequestResult
 from shared.protocols import ILogger, IUsageTracker
-
-
-class FrogRequestResult(TypedDict):
-    """Типизированный результат обработки запроса генерации жабы.
-
-    Использует TypedDict для неизменяемой структуры данных (только для передачи).
-    Стандарт: TypedDict для неизменяемых структур, Dataclass для мутабельных DTO.
-
-    Attributes:
-        status: Статус обработки запроса ("success" или "failed").
-        error: Описание ошибки, если status="failed", иначе None.
-    """
-
-    status: Literal["success", "failed"]
-    error: str | None
 
 
 class FrogProcessingService(BaseService):

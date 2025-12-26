@@ -20,12 +20,12 @@ from infra.redis.redis_client import init_redis_pool
 from shared.config import Config
 
 if TYPE_CHECKING:
-    from app.frog_processing_service import FrogProcessingService
-    from app.image_service import ImageService
     from bot.wednesday_bot import WednesdayBot
     from infra.cleanup_service import CleanupService
     from infra.redis.redis_client import RedisClient
     from infra.repos.usage_tracker import UsageTracker
+
+from shared.protocols import IFrogProcessingService, IImageService
 
 # Создаём экземпляр Config при импорте модуля
 config: Config = Config()
@@ -42,14 +42,15 @@ class ServicesContext(TypedDict, total=False):
     Note:
         Все зависимости используют TYPE_CHECKING для избежания циклических зависимостей.
         total=False означает, что все поля опциональны (для совместимости с dict[str, object]).
+        Используются протоколы вместо конкретных классов для соблюдения границ слоёв.
     """
 
     bot: WednesdayBot
     postgres_pool: asyncpg.Pool
     redis_client: RedisClient
-    image_service: ImageService
+    image_service: IImageService
     usage_tracker: UsageTracker
-    frog_processing: FrogProcessingService
+    frog_processing: IFrogProcessingService
 
 
 # Context для хранения инициализированных сервисов в worker процессе

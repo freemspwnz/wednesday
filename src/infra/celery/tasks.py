@@ -18,8 +18,6 @@ if TYPE_CHECKING:
     from bot.wednesday_bot import WednesdayBot
     from infra.celery.context import ServicesContext
 
-from app.frog_processing_service import FrogProcessingService, FrogRequestResult
-from app.image_service import ImageService
 from infra.celery.app import celery_app
 from infra.celery.context import _ensure_pools_initialized, get_services_context
 from infra.logging.logger import get_logger, log_event
@@ -29,6 +27,8 @@ from infra.metrics.prometheus_metrics import (
     CELERY_TASK_RETRIES_TOTAL,
     CELERY_TASKS_TOTAL,
 )
+from shared.models import FrogRequestResult
+from shared.protocols import IFrogProcessingService, IImageService
 
 R = TypeVar("R")
 
@@ -288,7 +288,7 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
 
         # Получаем image_service из контекста (создан через DI)
         image_service = context.get("image_service")
-        if not isinstance(image_service, ImageService):
+        if not isinstance(image_service, IImageService):
             raise RuntimeError("ImageService is not available in context")
 
         image_data, _caption = await image_service.generate_frog_image(user_id=user_id)
@@ -358,7 +358,7 @@ async def send_frog_manual(
 
         # Получаем FrogProcessingService из контекста (создан через DI)
         frog_processing = context.get("frog_processing")
-        if not isinstance(frog_processing, FrogProcessingService):
+        if not isinstance(frog_processing, IFrogProcessingService):
             raise RuntimeError("FrogProcessingService is not available in context")
 
         # Выполняем обработку запроса
