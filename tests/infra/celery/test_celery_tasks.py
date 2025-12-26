@@ -13,7 +13,6 @@ from infra.celery.tasks import (
     daily_cleanup_task,
     daily_statistics_task,
     generate_frog_image_task,
-    is_retryable_error,
     send_wednesday_frog_task,
 )
 from shared.config import Config
@@ -69,30 +68,6 @@ async def test_services_context_lazy_init(reset_singletons: Any) -> None:
         assert context is context2  # Должен вернуть тот же контекст
         assert mock_schema.call_count == 1
         assert mock_build_bot.call_count == 1
-
-
-@pytest.mark.asyncio
-async def test_is_retryable_error() -> None:
-    """Тест функции определения retryable ошибок."""
-    # Сетевые ошибки должны быть retryable
-    assert is_retryable_error(aiohttp.ClientError()) is True
-    assert is_retryable_error(aiohttp.ClientConnectorError(MagicMock(), MagicMock())) is True
-    assert is_retryable_error(aiohttp.ServerTimeoutError()) is True
-    assert is_retryable_error(TimeoutError()) is True
-    assert is_retryable_error(ConnectionError()) is True
-    assert is_retryable_error(OSError("Connection refused")) is True
-
-    # Бизнес-логические ошибки не должны быть retryable
-    assert is_retryable_error(ValueError("Invalid input")) is False
-    assert is_retryable_error(KeyError("missing key")) is False
-    assert is_retryable_error(TypeError("wrong type")) is False
-
-    # Проверка строкового представления
-    connection_error = Exception("Connection timeout occurred")
-    assert is_retryable_error(connection_error) is True
-
-    business_error = Exception("Invalid user ID")
-    assert is_retryable_error(business_error) is False
 
 
 @pytest.mark.asyncio

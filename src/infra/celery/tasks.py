@@ -27,7 +27,6 @@ from infra.logging.logger import get_logger, log_event
 from infra.metrics.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,
     CELERY_TASK_FAILURES_TOTAL,
-    CELERY_TASK_RETRIES_TOTAL,
     CELERY_TASKS_TOTAL,
 )
 from shared.models import FrogRequestResult
@@ -62,45 +61,6 @@ def _get_wednesday_bot(context: ServicesContext) -> WednesdayBot:
     if not isinstance(bot, WednesdayBot):
         raise RuntimeError("Failed to get WednesdayBot from context")
     return bot
-
-
-def is_retryable_error(error: Exception) -> bool:
-    """
-    Определяет, является ли ошибка retryable (сетевые ошибки).
-
-    Args:
-        error: Исключение для проверки
-
-    Returns:
-        True если ошибка retryable, False иначе
-    """
-    retryable_types = (
-        aiohttp.ClientError,
-        aiohttp.ClientConnectorError,
-        aiohttp.ServerTimeoutError,
-        TimeoutError,
-        ConnectionError,
-        OSError,  # Сетевые ошибки на уровне ОС
-    )
-
-    # Проверяем тип исключения
-    if isinstance(error, retryable_types):
-        return True
-
-    # Проверяем строковое представление для дополнительных случаев
-    error_str = str(error).lower()
-    retryable_keywords = (
-        "connection",
-        "timeout",
-        "network",
-        "temporary",
-        "retry",
-        "503",  # Service Unavailable
-        "502",  # Bad Gateway
-        "504",  # Gateway Timeout
-    )
-
-    return any(keyword in error_str for keyword in retryable_keywords)
 
 
 def with_services_context(
@@ -251,13 +211,14 @@ def log_celery_task(task_name: str) -> Callable[[Callable[..., Awaitable[R]]], C
 @celery_app.task(
     bind=True,
     name="wednesday.send_frog",
-    # ⚠️ УЛУЧШЕНО: retry только для сетевых ошибок, не для всех Exception
+    # Retry только для сетевых ошибок
     autoretry_for=(
         aiohttp.ClientError,
         aiohttp.ClientConnectorError,
         aiohttp.ServerTimeoutError,
         TimeoutError,
         ConnectionError,
+        OSError,  # Сетевые ошибки на уровне ОС
     ),
     retry_kwargs={"max_retries": 3, "countdown": 60},
     retry_backoff=True,
@@ -316,17 +277,10 @@ async def send_wednesday_frog_task(
         )
 
         return result
-    except Exception as e:
-        # ⚠️ ВАЖНО: Кастомная фильтрация retryable ошибок
-        if is_retryable_error(e):
-            # Обновляем метрики retry
-            CELERY_TASK_RETRIES_TOTAL.labels(task_name="send_wednesday_frog").inc()
-            # Retry только для сетевых ошибок
-            raise self.retry(exc=e) from e
-        else:
-            # Бизнес-логические ошибки не retry, сразу падаем
-            # После max_retries задача уйдёт в DLQ
-            raise
+    except Exception:
+        # Исключения пробрасываются для автоматического retry через autoretry_for
+        # Celery автоматически обработает retry для сетевых ошибок, указанных в autoretry_for
+        raise
 
 
 async def _send_wednesday_frog_operation(
@@ -352,8 +306,15 @@ async def _send_wednesday_frog_operation(
 @celery_app.task(
     bind=True,
     name="wednesday.generate_image",
-    # ⚠️ УЛУЧШЕНО: retry только для сетевых ошибок через кастомную логику
-    autoretry_for=(Exception,),  # Принимаем все, но фильтруем через is_retryable_error
+    # Retry только для сетевых ошибок
+    autoretry_for=(
+        aiohttp.ClientError,
+        aiohttp.ClientConnectorError,
+        aiohttp.ServerTimeoutError,
+        TimeoutError,
+        ConnectionError,
+        OSError,  # Сетевые ошибки на уровне ОС
+    ),
     retry_kwargs={"max_retries": 2, "countdown": 30},
     retry_backoff=True,
     retry_backoff_max=300,
@@ -414,17 +375,10 @@ async def generate_frog_image_task(
         )
 
         return result
-    except Exception as e:
-        # ⚠️ ВАЖНО: Кастомная фильтрация retryable ошибок
-        if is_retryable_error(e):
-            # Обновляем метрики retry
-            CELERY_TASK_RETRIES_TOTAL.labels(task_name="generate_frog_image").inc()
-            # Retry только для сетевых ошибок
-            raise self.retry(exc=e) from e
-        else:
-            # Бизнес-логические ошибки не retry, сразу падаем
-            # После max_retries задача уйдёт в DLQ
-            raise
+    except Exception:
+        # Исключения пробрасываются для автоматического retry через autoretry_for
+        # Celery автоматически обработает retry для сетевых ошибок, указанных в autoretry_for
+        raise
 
 
 async def _generate_frog_image_operation(
@@ -463,6 +417,7 @@ async def _generate_frog_image_operation(
         aiohttp.ServerTimeoutError,
         TimeoutError,
         ConnectionError,
+        OSError,  # Сетевые ошибки на уровне ОС
     ),
     retry_kwargs={"max_retries": 3, "countdown": 60},
     retry_backoff=True,
@@ -530,21 +485,23 @@ async def send_frog_manual(  # noqa: PLR0913
         )
 
         return result
-
-    except Exception as e:
-        # Обработка ошибок и retry логика остается здесь
-        if is_retryable_error(e):
-            CELERY_TASK_RETRIES_TOTAL.labels(task_name="send_frog_manual").inc()
-            raise self.retry(exc=e) from e
-        else:
-            # Бизнес-логические ошибки не retry
-            raise
+    except Exception:
+        # Исключения пробрасываются для автоматического retry через autoretry_for
+        # Celery автоматически обработает retry для сетевых ошибок, указанных в autoretry_for
+        raise
 
 
 @celery_app.task(
     bind=True,
     name="wednesday.daily_cleanup",
-    autoretry_for=(Exception,),
+    autoretry_for=(
+        aiohttp.ClientError,
+        aiohttp.ClientConnectorError,
+        aiohttp.ServerTimeoutError,
+        TimeoutError,
+        ConnectionError,
+        OSError,  # Сетевые ошибки на уровне ОС
+    ),
     retry_kwargs={"max_retries": 2, "countdown": 300},
     retry_backoff=True,
     retry_backoff_max=600,
@@ -598,10 +555,8 @@ async def daily_cleanup_task(
 
         return result
     except Exception as e:
-        # Обработка ошибок и retry логика
-        if is_retryable_error(e):
-            CELERY_TASK_RETRIES_TOTAL.labels(task_name="daily_cleanup").inc()
-            raise self.retry(exc=e) from e
+        # Исключения пробрасываются для автоматического retry через autoretry_for
+        # Celery автоматически обработает retry для сетевых ошибок, указанных в autoretry_for
         logger.error(f"Error in daily cleanup task: {e}")
         raise
 
@@ -689,10 +644,8 @@ async def daily_statistics_task(
 
         return result
     except Exception as e:
-        # Обработка ошибок и retry логика
-        if is_retryable_error(e):
-            CELERY_TASK_RETRIES_TOTAL.labels(task_name="daily_statistics").inc()
-            raise self.retry(exc=e) from e
+        # Исключения пробрасываются для автоматического retry через autoretry_for
+        # Celery автоматически обработает retry для сетевых ошибок, указанных в autoretry_for
         logger.error(f"Error in daily statistics task: {e}")
         raise
 
