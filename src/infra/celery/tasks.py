@@ -7,6 +7,7 @@ Celery задачи для Wednesday Frog Bot.
 
 from __future__ import annotations
 
+import functools
 import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -109,6 +110,9 @@ def with_services_context(
     его в задачу как именованный параметр 'context'. Устраняет дублирование кода
     получения контекста в каждой задаче.
 
+    ⚠️ ВАЖНО: Задача должна быть объявлена с @celery_app.task(bind=True), так как
+    декоратор ожидает self: Task первым аргументом.
+
     Args:
         func: Асинхронная функция задачи Celery.
 
@@ -116,12 +120,20 @@ def with_services_context(
         Обёрнутая функция, которая автоматически получает и передаёт context.
 
     Example:
+        @celery_app.task(bind=True, name="my.task")
+        @log_celery_task("my_task")
         @with_services_context
-        async def my_task(self: Task, context: ServicesContext, param: int) -> dict:
+        async def my_task(self: Task, param: int, *, context: ServicesContext) -> dict:
             service = context.get("my_service")
             ...
+
+    Note:
+        Использует @functools.wraps для сохранения метаданных функции (имя, docstring),
+        что критично для корректной регистрации задачи в Celery и работы инструментов
+        мониторинга (Sentry, логирование и т.д.).
     """
 
+    @functools.wraps(func)
     async def wrapper(self: Task, *args: object, **kwargs: object) -> R:
         # Получаем фабрики (кэшируются на worker процесс)
         from shared.config import Config
@@ -135,7 +147,7 @@ def with_services_context(
             config_obj=config_obj,
         )
 
-        # Передаём context в задачу через kwargs
+        # Инъекция контекста через kwargs
         kwargs["context"] = context
 
         return await func(self, *args, **kwargs)
