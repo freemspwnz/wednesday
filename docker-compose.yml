@@ -226,7 +226,7 @@ services:
     # - Подходит для I/O-bound задач (HTTP запросы, БД)
     # ВАЖНО: get_redis_url() в celery/app.py читает REDIS_HOST из переменных окружения,
     # которые установлены в секции environment выше (REDIS_HOST=redis)
-    command: celery -A infrastructure.celery worker --pool=threads --loglevel=info --concurrency=8 -Q wednesday,images,maintenance
+    command: celery -A infrastructure.celery worker --pool=threads --loglevel=info --concurrency=4 -Q wednesday,images,maintenance
     volumes:
       - frog_images:/app/data/frogs
       - prompt_storage:/app/data/prompts

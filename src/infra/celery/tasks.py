@@ -97,6 +97,34 @@ def generate_daily_idempotency_key(task_name: str) -> str:
     return f"{task_name}:{current_date}"
 
 
+def generate_idempotency_key(task_name: str, **params: object) -> str:
+    """Генерирует ключ идемпотентности на основе имени задачи и параметров.
+
+    Универсальная функция для генерации ключей идемпотентности.
+    Если параметры не переданы, использует ежедневный ключ.
+
+    Args:
+        task_name: Имя задачи для включения в ключ.
+        **params: Параметры для включения в ключ (сортируются для консистентности).
+
+    Returns:
+        Ключ идемпотентности в формате "{task_name}:{param1=value1}:{param2=value2}..."
+        или "{task_name}:{YYYY-MM-DD}" если параметры не переданы.
+
+    Examples:
+        >>> generate_idempotency_key("my_task", user_id=123, chat_id=456)
+        "my_task:chat_id=456:user_id=123"
+        >>> generate_idempotency_key("daily_task")
+        "daily_task:2025-01-01"
+    """
+    if not params:
+        return generate_daily_idempotency_key(task_name)
+
+    # Сортируем параметры для консистентности ключей
+    sorted_params = ":".join(f"{k}={v}" for k, v in sorted(params.items()) if v is not None)
+    return f"{task_name}:{sorted_params}"
+
+
 async def execute_with_idempotency(
     context: ServicesContext,
     key: str,
@@ -344,11 +372,7 @@ async def send_wednesday_frog_task(
     """
     try:
         # Генерируем ключ идемпотентности на основе slot_time или текущей даты
-        if slot_time:
-            idempotency_key = f"send_wednesday_frog:{slot_time}"
-        else:
-            # Используем текущую дату для уникальности
-            idempotency_key = generate_daily_idempotency_key("send_wednesday_frog")
+        idempotency_key = generate_idempotency_key("send_wednesday_frog", slot_time=slot_time)
 
         # Выполняем отправку с идемпотентностью через helper-функцию
         result = await execute_with_idempotency(
@@ -436,13 +460,8 @@ async def generate_frog_image_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Генерируем ключ идемпотентности на основе user_id или текущей даты/времени
-        if user_id is not None:
-            idempotency_key = f"generate_frog_image:{user_id}"
-        else:
-            # Если user_id не указан, используем текущую дату/время для уникальности
-            current_datetime = datetime.now().strftime("%Y-%m-%d_%H:%M")
-            idempotency_key = f"generate_frog_image:{current_datetime}"
+        # Генерируем ключ идемпотентности на основе user_id через helper-функцию
+        idempotency_key = generate_idempotency_key("generate_frog_image", user_id=user_id)
 
         # Выполняем генерацию с идемпотентностью через helper-функцию
         result = await execute_with_idempotency(
@@ -545,7 +564,12 @@ async def send_frog_manual(  # noqa: PLR0913
 
         # Генерируем ключ идемпотентности, если не передан
         if idempotency_key is None:
-            idempotency_key = f"frog_manual:{chat_id}:{user_id}:{status_message_id}"
+            idempotency_key = generate_idempotency_key(
+                "frog_manual",
+                chat_id=chat_id,
+                user_id=user_id,
+                status_message_id=status_message_id,
+            )
 
         # Выполняем обработку запроса с идемпотентностью через helper-функцию
         result = await execute_with_idempotency(
