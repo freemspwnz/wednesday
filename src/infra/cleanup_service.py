@@ -11,8 +11,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from shared.base.base_service import BaseService
 from shared.protocols import ILogger
+
+if TYPE_CHECKING:
+    from infra.database.postgres_client import PostgresPoolFactory
+    from infra.redis.redis_client import RedisClientFactory
 
 
 class CleanupService(BaseService):
@@ -21,13 +27,23 @@ class CleanupService(BaseService):
     Ошибки при shutdown логируются, но не мешают завершению процесса.
     """
 
-    def __init__(self, *, logger: ILogger) -> None:
+    def __init__(
+        self,
+        *,
+        logger: ILogger,
+        pool_factory: PostgresPoolFactory | None = None,
+        redis_factory: RedisClientFactory | None = None,
+    ) -> None:
         """Инициализирует сервис cleanup.
 
         Args:
             logger: Экземпляр логгера.
+            pool_factory: Фабрика пула Postgres (опционально).
+            redis_factory: Фабрика Redis клиента (опционально).
         """
         super().__init__(logger)
+        self._pool_factory = pool_factory
+        self._redis_factory = redis_factory
 
     async def cleanup_all(self) -> None:
         """Закрывает все async-ресурсы.
@@ -40,8 +56,6 @@ class CleanupService(BaseService):
         Ошибки логируются и игнорируются, чтобы не блокировать shutdown.
         """
         from infra.clients import get_image_client_container, get_text_client_container
-        from infra.database.postgres_client import close_postgres_pool
-        from infra.redis.redis_client import close_redis
 
         # Закрываем ML-клиенты
         try:
@@ -82,35 +96,37 @@ class CleanupService(BaseService):
                 error_message=str(e),
             )
 
-        # Закрываем пулы подключений
-        try:
-            await close_redis()
-            self.logger.info(
-                "Пул подключений Redis успешно закрыт",
-                event="cleanup_redis_pool_closed",
-                status="success",
-            )
-        except Exception as e:
-            self.logger.warning(
-                f"Ошибка при закрытии пула Redis: {e}",
-                event="cleanup_redis_pool_error",
-                status="warning",
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
+        # Закрываем пулы подключений через фабрики (если переданы)
+        if self._redis_factory is not None:
+            try:
+                await self._redis_factory.close()
+                self.logger.info(
+                    "Пул подключений Redis успешно закрыт",
+                    event="cleanup_redis_pool_closed",
+                    status="success",
+                )
+            except Exception as e:
+                self.logger.warning(
+                    f"Ошибка при закрытии пула Redis: {e}",
+                    event="cleanup_redis_pool_error",
+                    status="warning",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
 
-        try:
-            await close_postgres_pool()
-            self.logger.info(
-                "Пул подключений PostgreSQL успешно закрыт",
-                event="cleanup_postgres_pool_closed",
-                status="success",
-            )
-        except Exception as e:
-            self.logger.warning(
-                f"Ошибка при закрытии пула PostgreSQL: {e}",
-                event="cleanup_postgres_pool_error",
-                status="warning",
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
+        if self._pool_factory is not None:
+            try:
+                await self._pool_factory.close()
+                self.logger.info(
+                    "Пул подключений PostgreSQL успешно закрыт",
+                    event="cleanup_postgres_pool_closed",
+                    status="success",
+                )
+            except Exception as e:
+                self.logger.warning(
+                    f"Ошибка при закрытии пула PostgreSQL: {e}",
+                    event="cleanup_postgres_pool_error",
+                    status="warning",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )

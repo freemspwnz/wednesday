@@ -179,13 +179,13 @@ async def ensure_schema(pool: asyncpg.Pool) -> None:
 if __name__ == "__main__":
     import asyncio
 
-    from infra.database.postgres_client import close_postgres_pool, init_postgres_pool
+    from infra.database.postgres_client import PostgresPoolFactory
 
     async def _main() -> None:
         # Инициализируем пул соединений на основе переменных окружения
-
-        pool = await init_postgres_pool(min_size=1, max_size=2)
+        factory = PostgresPoolFactory()
+        pool = await factory.get_pool(min_size=1, max_size=2)
         await ensure_schema(pool=pool)
-        await close_postgres_pool()
+        await factory.close()
 
     asyncio.run(_main())

@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, TypedDict, cast
 import asyncpg
 from celery.signals import worker_shutdown
 
-from infra.database.postgres_client import init_postgres_pool
+from infra.database.postgres_client import PostgresPoolFactory
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger
-from infra.redis.redis_client import init_redis_pool
+from infra.redis.redis_client import RedisClientFactory, _InMemoryRedis
 from shared.config import Config
 
 if TYPE_CHECKING:
@@ -56,6 +56,8 @@ class ServicesContext(TypedDict, total=False):
 # Context для хранения инициализированных сервисов в worker процессе
 _services_context: dict[str, object] | None = None
 _cleanup_service: CleanupService | None = None
+_pool_factory: PostgresPoolFactory | None = None
+_redis_factory: RedisClientFactory | None = None
 _init_lock = asyncio.Lock()
 
 
@@ -83,22 +85,26 @@ async def _ensure_pools_initialized(
     async with _init_lock:
         # Инициализируем Redis и Postgres (async)
         # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
+        global _pool_factory, _redis_factory  # noqa: PLW0603
+
         redis_client: RedisClient
         try:
+            # Создаём фабрику Redis клиента
+            _redis_factory = RedisClientFactory(config=config_obj)
             if isinstance(config_obj, Config):
                 if config_obj.redis.url:
-                    redis_client = await init_redis_pool(url=config_obj.redis.url)
+                    redis_client = await _redis_factory.get_client(url=config_obj.redis.url)
                 else:
-                    redis_client = await init_redis_pool(
+                    redis_client = await _redis_factory.get_client(
                         host=config_obj.redis.host,
                         port=config_obj.redis.port,
                         db=config_obj.redis.db,
                         password=config_obj.redis.password,
                     )
             elif config_obj.redis_url:
-                redis_client = await init_redis_pool(url=config_obj.redis_url)
+                redis_client = await _redis_factory.get_client(url=config_obj.redis_url)
             else:
-                redis_client = await init_redis_pool(
+                redis_client = await _redis_factory.get_client(
                     host=config_obj.redis_host,
                     port=config_obj.redis_port,
                     db=config_obj.redis_db,
@@ -111,12 +117,15 @@ async def _ensure_pools_initialized(
                 event="celery_redis_unavailable",
                 status="warning",
             )
+            # Создаём фабрику с fallback
+            if _redis_factory is None:
+                _redis_factory = RedisClientFactory(config=config_obj)
             # Создаем in-memory fallback напрямую
-            from infra.redis.redis_client import _InMemoryRedis
-
             redis_client = _InMemoryRedis()
 
-        postgres_pool = await init_postgres_pool(min_size=1, max_size=10, config=config_obj)
+        # Создаём фабрику пула Postgres
+        _pool_factory = PostgresPoolFactory(config=config_obj)
+        postgres_pool = await _pool_factory.get_pool(min_size=1, max_size=10)
         await ensure_schema(pool=postgres_pool)
 
         logger.info(
@@ -229,7 +238,11 @@ async def get_services_context(config_obj: Config | None = None) -> ServicesCont
         from infra.container import build_cleanup_service
 
         global _cleanup_service  # noqa: PLW0603
-        _cleanup_service = build_cleanup_service(logger=logger)
+        _cleanup_service = build_cleanup_service(
+            logger=logger,
+            pool_factory=_pool_factory,
+            redis_factory=_redis_factory,
+        )
 
         _services_context = {
             "bot": bot,
@@ -254,12 +267,12 @@ async def shutdown_services() -> None:
     Закрывает все соединения при остановке worker через CleanupService:
     - ML-клиенты (ImageClientContainer, TextClientContainer) через aclose()
     - aiohttp sessions через закрытие клиентов
-    - redis pool
-    - postgres pool
+    - redis pool через фабрику
+    - postgres pool через фабрику
 
     ⚠️ ВАЖНО: Вызывается автоматически через сигнал worker_shutdown
     """
-    global _services_context, _cleanup_service  # noqa: PLW0603
+    global _services_context, _cleanup_service, _pool_factory, _redis_factory  # noqa: PLW0603
 
     if _services_context is None:
         return
@@ -280,6 +293,21 @@ async def shutdown_services() -> None:
                 event="celery_cleanup_service_missing",
                 status="warning",
             )
+
+        # Закрываем фабрики пулов
+        if _pool_factory is not None:
+            try:
+                await _pool_factory.close()
+                logger.info("Postgres pool закрыт через фабрику в Celery worker")
+            except Exception as e:
+                logger.warning(f"Ошибка при закрытии Postgres pool: {e}")
+
+        if _redis_factory is not None:
+            try:
+                await _redis_factory.close()
+                logger.info("Redis клиент закрыт через фабрику в Celery worker")
+            except Exception as e:
+                logger.warning(f"Ошибка при закрытии Redis клиента: {e}")
     except Exception as e:
         logger.error(
             f"Ошибка во время graceful shutdown сервисов Celery: {e}",
@@ -291,6 +319,8 @@ async def shutdown_services() -> None:
     finally:
         _services_context = None
         _cleanup_service = None
+        _pool_factory = None
+        _redis_factory = None
         logger.info(
             "Graceful shutdown сервисов Celery завершён",
             event="celery_shutdown_completed",

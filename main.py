@@ -16,14 +16,13 @@ from prometheus_client import start_http_server
 
 from bot.support_bot import SupportBot
 from infra.container import build_bot
-from infra.database.postgres_client import init_postgres_pool
+from infra.database.postgres_client import PostgresPoolFactory
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger, log_event
 from infra.redis.redis_client import (
     RedisClient,
+    RedisClientFactory,
     _InMemoryRedis,
-    init_redis_pool,
-    redis_available,
 )
 from shared.config import Config
 
@@ -59,6 +58,9 @@ class BotRunner:
         self.shutdown_event: asyncio.Event = asyncio.Event()
         self.should_stop: bool = False
         self.request_start_main_event: asyncio.Event = asyncio.Event()
+        # Фабрики для управления пулами подключений
+        self._pool_factory: PostgresPoolFactory | None = None
+        self._redis_factory: RedisClientFactory | None = None
         # Регистрируем cleanup через atexit для гарантированного вызова при завершении
         atexit.register(self._sync_cleanup)
         self.logger.info("BotRunner успешно инициализирован")
@@ -409,10 +411,11 @@ class BotRunner:
             message="Инициализация пула подключений PostgreSQL",
         )
         try:
-            postgres_pool = await init_postgres_pool(
+            # Создаём фабрику пула
+            self._pool_factory = PostgresPoolFactory(config=config)
+            postgres_pool = await self._pool_factory.get_pool(
                 min_size=1,
                 max_size=10,
-                config=config,
             )
 
             # Валидация Postgres: проверяем, что пул работает
@@ -458,11 +461,13 @@ class BotRunner:
         redis_client: RedisClient
 
         try:
+            # Создаём фабрику Redis клиента
+            self._redis_factory = RedisClientFactory(config=config)
             url = config.redis.url
             if url:
-                redis_client = await init_redis_pool(url=url)
+                redis_client = await self._redis_factory.get_client(url=url)
             else:
-                redis_client = await init_redis_pool(
+                redis_client = await self._redis_factory.get_client(
                     host=config.redis.host,
                     port=config.redis.port,
                     db=config.redis.db,
@@ -471,7 +476,7 @@ class BotRunner:
 
             # Валидация Redis: проверяем доступность
             await redis_client.ping()
-            is_real = redis_available()
+            is_real = self._redis_factory.is_available()
             mode = "real Redis" if is_real else "in-memory fallback"
             self.logger.info(
                 f"Redis успешно инициализирован и валидирован (режим: {mode})",
@@ -495,6 +500,9 @@ class BotRunner:
                 level="warning",
                 message="Redis недоступен при старте, используется in-memory fallback",
             )
+            # Создаём фабрику с fallback
+            if self._redis_factory is None:
+                self._redis_factory = RedisClientFactory(config=config)
             # Создаем in-memory fallback напрямую
             redis_client = _InMemoryRedis()
 
@@ -578,6 +586,22 @@ class BotRunner:
                 self.logger.error(f"Ошибка при остановке SupportBot: {e}", exc_info=True)
         self.support_bot = None
         self.logger.info("Ссылка на SupportBot очищена")
+
+        # Закрываем фабрики пулов
+        if self._pool_factory is not None:
+            try:
+                await self._pool_factory.close()
+                self.logger.info("Postgres pool закрыт через фабрику")
+            except Exception as e:
+                self.logger.warning(f"Ошибка при закрытии Postgres pool: {e}")
+
+        if self._redis_factory is not None:
+            try:
+                await self._redis_factory.close()
+                self.logger.info("Redis клиент закрыт через фабрику")
+            except Exception as e:
+                self.logger.warning(f"Ошибка при закрытии Redis клиента: {e}")
+
         self.logger.info("Очистка ресурсов завершена успешно")
 
     async def _wait_for_shutdown(self) -> None:

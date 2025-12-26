@@ -12,7 +12,7 @@ from typing import Any, Protocol, runtime_checkable
 import asyncpg
 
 from infra.logging.logger import get_logger
-from infra.redis.redis_client import safe_redis_call
+from infra.redis.redis_client import RedisClientFactory
 from shared.base.base_service import BaseService
 from shared.protocols import ILogger, IMetrics
 
@@ -35,6 +35,7 @@ async def record_metric(  # noqa: PLR0913
     image_hash: str | None = None,
     latency_ms: int | None = None,
     status: str | None = None,
+    redis_factory: RedisClientFactory | None = None,
 ) -> None:
     """Публикует единичное событие метрики в очередь (Redis Stream).
 
@@ -78,7 +79,14 @@ async def record_metric(  # noqa: PLR0913
             "latency_ms": latency_ms if latency_ms is not None else "",
             "status": status or "",
         }
-        await safe_redis_call("xadd", "metrics:events", fields)
+        # Используем фабрику Redis для публикации события
+        if redis_factory is not None:
+            await redis_factory.safe_call("xadd", "metrics:events", fields)
+        else:
+            # Если фабрика не передана, создаём временную для этого вызова
+            # (не рекомендуется, но для обратной совместимости)
+            temp_factory = RedisClientFactory()
+            await temp_factory.safe_call("xadd", "metrics:events", fields)
 
         # Дополнительно стараемся синхронно зафиксировать событие в таблице Postgres.
         # Это делает события наблюдаемыми через SQL (в том числе в тестах и админских
@@ -212,15 +220,23 @@ class Metrics(BaseService, IMetrics):
     текущих сценариев мониторинга.
     """
 
-    def __init__(self, pool: asyncpg.Pool, *, logger: ILogger) -> None:
+    def __init__(
+        self,
+        pool: asyncpg.Pool,
+        *,
+        logger: ILogger,
+        redis_factory: RedisClientFactory | None = None,
+    ) -> None:
         """Инициализирует репозиторий метрик.
 
         Args:
             pool: Пул подключений PostgreSQL.
             logger: Экземпляр логгера для использования в сервисе.
+            redis_factory: Фабрика Redis клиента (опционально).
         """
         super().__init__(logger)
         self._pool = pool
+        self._redis_factory = redis_factory
 
     async def _ensure_row(self) -> None:
         """Гарантирует наличие базовой строки метрик (id=1).
@@ -467,7 +483,12 @@ class Metrics(BaseService, IMetrics):
         """
         try:
             # Используем record_metric для записи события cache_hit, передавая пул явно
-            await record_metric(pool=self._pool, event_type="cache_hit", status="hit")
+            await record_metric(
+                pool=self._pool,
+                event_type="cache_hit",
+                status="hit",
+                redis_factory=self._redis_factory,
+            )
             self.logger.debug(
                 "Записана метрика: increment_cache_hit",
                 event="metric_recorded",

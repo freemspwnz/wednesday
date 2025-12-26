@@ -21,7 +21,8 @@ if TYPE_CHECKING:
     from app.frog_processing_service import FrogProcessingService
     from bot.wednesday_bot import WednesdayBot
     from infra.cleanup_service import CleanupService
-    from infra.redis.redis_client import RedisClient
+    from infra.database.postgres_client import PostgresPoolFactory
+    from infra.redis.redis_client import RedisClient, RedisClientFactory
 
 from app.admin_dashboard_service import AdminDashboardService
 from app.api_status_service import APIStatusService
@@ -226,7 +227,11 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
         cooldown=cb_config.cooldown,
     )
     # Создаём Metrics для передачи в ImageService
-    metrics = Metrics(pool=db_pool, logger=app_logger)
+    # redis_factory создаётся в main.py и передаётся через параметры
+    from infra.redis.redis_client import RedisClientFactory
+
+    redis_factory = RedisClientFactory(config=config)
+    metrics = Metrics(pool=db_pool, logger=app_logger, redis_factory=redis_factory)
 
     # Application‑сервисы
     prompt_service = PromptService(
@@ -466,18 +471,28 @@ def build_frog_processing_service(
     )
 
 
-def build_cleanup_service(logger: ILogger) -> CleanupService:
+def build_cleanup_service(
+    logger: ILogger,
+    pool_factory: PostgresPoolFactory | None = None,
+    redis_factory: RedisClientFactory | None = None,
+) -> CleanupService:
     """Создаёт CleanupService с зависимостями.
 
     Args:
         logger: Логгер.
+        pool_factory: Фабрика пула Postgres (опционально).
+        redis_factory: Фабрика Redis клиента (опционально).
 
     Returns:
         Настроенный CleanupService.
     """
     from infra.cleanup_service import CleanupService
 
-    return CleanupService(logger=logger)
+    return CleanupService(
+        logger=logger,
+        pool_factory=pool_factory,
+        redis_factory=redis_factory,
+    )
 
 
 def build_support_bot_services(
@@ -783,7 +798,10 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     chats = ChatsRepo(pool=db_pool)
     dispatch_registry = DispatchRegistry(pool=db_pool)
     # Создаём Metrics
-    metrics = Metrics(pool=db_pool, logger=app_logger)
+    from infra.redis.redis_client import RedisClientFactory
+
+    redis_factory = RedisClientFactory(config=config)
+    metrics = Metrics(pool=db_pool, logger=app_logger, redis_factory=redis_factory)
 
     prompt_cache = PromptCache(redis_client=redis_client)
     user_state_store = UserStateCache(redis_client=redis_client)

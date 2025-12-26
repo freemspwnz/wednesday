@@ -4,6 +4,24 @@
 
 ### Изменено
 
+- **Устранено глобальное состояние для пулов подключений**:
+  - Создан `PostgresPoolFactory` в `infra/database/postgres_client.py` для инкапсуляции состояния пула PostgreSQL
+  - Создан `RedisClientFactory` в `infra/redis/redis_client.py` для инкапсуляции состояния Redis клиента
+  - Удалены глобальные переменные `_pool`, `_pool_loop`, `_redis`, `_redis_lock`, `_redis_is_real`
+  - Удалены глобальные функции `init_postgres_pool()`, `close_postgres_pool()`, `init_redis_pool()`, `close_redis()`, `redis_available()`, `safe_redis_call()`
+  - Обновлён `main.py` для использования фабрик вместо глобальных функций
+  - Обновлён `infra/celery/context.py` для использования фабрик в Celery worker процессах
+  - Обновлён `infra/cleanup_service.py` для принятия фабрик через конструктор
+  - Обновлён `shared/bot_services.py` для удаления закрытия пулов (управляются через фабрики)
+  - Обновлён `infra/metrics/metrics.py` для использования фабрик через DI
+  - Обновлён `infra/container.py` для создания фабрик при создании Metrics
+  - Улучшено соблюдение принципа Dependency Injection: состояние инкапсулировано в фабриках
+  - Улучшена тестируемость: можно создавать новые фабрики для тестов с моками
+  - Улучшена архитектурная целостность: устранено глобальное состояние
+  - Сохранена функциональность: поведение приложения не изменилось, только внутренняя структура
+
+### Изменено
+
 - **Устранено нарушение границ слоёв в Celery tasks**:
   - Созданы протоколы `IImageService` и `IFrogProcessingService` в `shared/protocols.py` для абстракции сервисов
   - Перемещён `FrogRequestResult` из `app/frog_processing_service.py` в `shared/models.py` для использования между слоями

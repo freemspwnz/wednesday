@@ -2,8 +2,8 @@
 Асинхронный клиент PostgreSQL с пулом подключений для всего приложения.
 
 Дизайн:
-- Используем единый пул `asyncpg.Pool` на всё время жизни процесса.
-- Инициализация выполняется один раз через `init_postgres_pool(...)` (обычно при старте в `main.py`).
+- Используем фабрику PostgresPoolFactory для создания и управления пулом подключений.
+- Фабрика инкапсулирует состояние пула вместо использования глобальных переменных.
 - Остальной код получает пул через Dependency Injection из container.py или main.py.
 
 Поведение при ошибках:
@@ -23,144 +23,142 @@ from shared.config import Config
 
 logger = get_logger(__name__)
 
-_pool: asyncpg.Pool | None = None
-_pool_loop: asyncio.AbstractEventLoop | None = None
 
+class PostgresPoolFactory:
+    """Фабрика для создания и управления пулом подключений PostgreSQL.
 
-async def init_postgres_pool(
-    *,
-    min_size: int = 1,
-    max_size: int = 10,
-    config: Config | None = None,
-    **connect_kwargs: object,
-) -> asyncpg.Pool:
+    Инкапсулирует состояние пула вместо использования глобальных переменных.
+    Обеспечивает singleton-поведение в рамках одного экземпляра фабрики.
     """
-    Инициализирует глобальный пул подключений к PostgreSQL.
 
-    Автоматически создаёт базу данных, если она не существует.
+    def __init__(self, config: Config | None = None) -> None:
+        """Инициализирует фабрику пула.
 
-    Параметры подключения берутся из переменных окружения:
-    - POSTGRES_USER
-    - POSTGRES_PASSWORD
-    - POSTGRES_DB
-    - POSTGRES_HOST
-    - POSTGRES_PORT
+        Args:
+            config: Конфигурация для создания пула. Если None, используется глобальный Config.
+        """
+        self._config = config
+        self._pool: asyncpg.Pool | None = None
+        self._pool_loop: asyncio.AbstractEventLoop | None = None
+        self._lock = asyncio.Lock()
 
-    Args:
-        min_size: минимальное количество подключений в пуле
-        max_size: максимальное количество подключений в пуле
-        **connect_kwargs: дополнительные параметры для asyncpg.create_pool
+    async def get_pool(
+        self,
+        *,
+        min_size: int = 1,
+        max_size: int = 10,
+        **connect_kwargs: object,
+    ) -> asyncpg.Pool:
+        """Получает или создаёт пул подключений.
 
-    Returns:
-        Инициализированный пул подключений.
+        Args:
+            min_size: Минимальный размер пула.
+            max_size: Максимальный размер пула.
+            **connect_kwargs: Дополнительные параметры для asyncpg.create_pool.
 
-    Raises:
-        Exception: при ошибке подключения или проверки соединения.
-    """
-    global _pool, _pool_loop  # noqa: PLW0603
+        Returns:
+            Инициализированный пул подключений.
 
-    # Проверяем, был ли пул создан в другом event loop
-    current_loop = asyncio.get_running_loop()
-    if _pool is not None and _pool_loop is not None and _pool_loop is not current_loop:
-        # Пул был создан в другом loop - это нормально для healthcheck в отдельном потоке
-        # НЕ пересоздаём пул, чтобы не конфликтовать с основным потоком
-        # Healthcheck будет использовать временный пул
-        logger.debug("Пул Postgres был создан в другом event loop, но не пересоздаём его")
-        # Возвращаем существующий пул - healthcheck обработает это отдельно
-        return _pool
+        Raises:
+            Exception: При ошибке подключения или проверки соединения.
+        """
+        async with self._lock:
+            if self._pool is not None:
+                # Проверяем, что пул создан в текущем event loop
+                current_loop = asyncio.get_running_loop()
+                if self._pool_loop is not None and self._pool_loop is current_loop:
+                    return self._pool
+                # Если пул создан в другом loop, возвращаем его (для совместимости)
+                logger.debug("Пул Postgres был создан в другом event loop, но не пересоздаём его")
+                return self._pool
 
-    if _pool is not None:
-        return _pool
+            # Создаём новый пул
+            config = self._config
+            if config is None:
+                from shared.config import Config
 
-    # Используем Config по умолчанию
-    if config is None:
-        from shared.config import Config
+                config = Config()
 
-        config = Config()
-
-    if isinstance(config, Config):
-        user = config.postgres.user
-        password = config.postgres.password
-        database = config.postgres.db
-        host = config.postgres.host
-        port = config.postgres.port
-    else:
-        user = config.postgres_user
-        password = config.postgres_password
-        database = config.postgres_db
-        host = config.postgres_host
-        port = config.postgres_port
-
-    # Создаём базу данных, если она не существует
-    await ensure_database(config=config)
-
-    # ВАЖНО: используем database (POSTGRES_DB), а не user (POSTGRES_USER) в DSN
-    dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
-
-    logger.info(
-        f"Инициализация пула Postgres (host={host}, port={port}, min_size={min_size}, max_size={max_size})",
-    )
-
-    try:
-        _pool = await asyncpg.create_pool(
-            dsn=dsn,
-            min_size=min_size,
-            max_size=max_size,
-            **connect_kwargs,
-        )
-
-        # Быстрая проверка соединения
-        async with _pool.acquire() as conn:
-            await conn.execute("SELECT 1;")
-
-        # Сохраняем ссылку на event loop, в котором был создан пул
-        _pool_loop = current_loop
-
-        logger.info("Пул подключений Postgres успешно инициализирован")
-        return _pool
-    except Exception as exc:  # pragma: no cover - защитное логирование
-        logger.error(f"Не удалось инициализировать пул Postgres: {exc}")
-        # На всякий случай обнуляем пул, чтобы не оставить битое состояние
-        _pool = None
-        raise
-
-
-async def close_postgres_pool() -> None:
-    """
-    Закрывает пул подключений к PostgreSQL, если он был инициализирован.
-    """
-    global _pool, _pool_loop  # noqa: PLW0603
-
-    if _pool is not None:
-        try:
-            # Проверяем, что event loop еще работает
-            try:
-                loop = asyncio.get_running_loop()
-                if loop.is_closed():
-                    logger.warning("Event loop уже закрыт, пропускаем закрытие пула Postgres")
-                    _pool = None
-                    _pool_loop = None
-                    return
-            except RuntimeError:
-                # Нет работающего event loop
-                logger.warning("Нет работающего event loop, пропускаем закрытие пула Postgres")
-                _pool = None
-                _pool_loop = None
-                return
-
-            await _pool.close()
-            logger.info("Пул Postgres успешно закрыт")
-        except RuntimeError as exc:
-            error_msg = str(exc)
-            if "Event loop is closed" in error_msg:
-                logger.warning("Event loop закрыт во время закрытия пула Postgres — это нормально при shutdown")
+            if isinstance(config, Config):
+                user = config.postgres.user
+                password = config.postgres.password
+                database = config.postgres.db
+                host = config.postgres.host
+                port = config.postgres.port
             else:
-                logger.error(f"RuntimeError при закрытии пула Postgres: {exc}")
-        except Exception as exc:  # pragma: no cover - защитное логирование
-            logger.error(f"Ошибка при закрытии пула Postgres: {exc}")
-        finally:
-            _pool = None
-            _pool_loop = None
+                user = config.postgres_user
+                password = config.postgres_password
+                database = config.postgres_db
+                host = config.postgres_host
+                port = config.postgres_port
+
+            # Создаём базу данных, если она не существует
+            await ensure_database(config=config)
+
+            # ВАЖНО: используем database (POSTGRES_DB), а не user (POSTGRES_USER) в DSN
+            dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
+
+            logger.info(
+                f"Инициализация пула Postgres (host={host}, port={port}, min_size={min_size}, max_size={max_size})",
+            )
+
+            try:
+                self._pool = await asyncpg.create_pool(
+                    dsn=dsn,
+                    min_size=min_size,
+                    max_size=max_size,
+                    **connect_kwargs,
+                )
+
+                # Быстрая проверка соединения
+                async with self._pool.acquire() as conn:
+                    await conn.execute("SELECT 1;")
+
+                # Сохраняем ссылку на event loop, в котором был создан пул
+                current_loop = asyncio.get_running_loop()
+                self._pool_loop = current_loop
+
+                logger.info("Пул подключений Postgres успешно инициализирован")
+                return self._pool
+            except Exception as exc:  # pragma: no cover - защитное логирование
+                logger.error(f"Не удалось инициализировать пул Postgres: {exc}")
+                # На всякий случай обнуляем пул, чтобы не оставить битое состояние
+                self._pool = None
+                raise
+
+    async def close(self) -> None:
+        """Закрывает пул подключений."""
+        async with self._lock:
+            if self._pool is not None:
+                try:
+                    # Проверяем, что event loop еще работает
+                    try:
+                        loop = asyncio.get_running_loop()
+                        if loop.is_closed():
+                            logger.warning("Event loop уже закрыт, пропускаем закрытие пула Postgres")
+                            self._pool = None
+                            self._pool_loop = None
+                            return
+                    except RuntimeError:
+                        # Нет работающего event loop
+                        logger.warning("Нет работающего event loop, пропускаем закрытие пула Postgres")
+                        self._pool = None
+                        self._pool_loop = None
+                        return
+
+                    await self._pool.close()
+                    logger.info("Пул Postgres успешно закрыт")
+                except RuntimeError as exc:
+                    error_msg = str(exc)
+                    if "Event loop is closed" in error_msg:
+                        logger.warning("Event loop закрыт во время закрытия пула Postgres — это нормально при shutdown")
+                    else:
+                        logger.error(f"RuntimeError при закрытии пула Postgres: {exc}")
+                except Exception as exc:  # pragma: no cover - защитное логирование
+                    logger.error(f"Ошибка при закрытии пула Postgres: {exc}")
+                finally:
+                    self._pool = None
+                    self._pool_loop = None
 
 
 @dataclass

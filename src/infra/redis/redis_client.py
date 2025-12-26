@@ -2,8 +2,8 @@
 Единый асинхронный клиент Redis для всего приложения.
 
 Дизайн:
-- Используем один экземпляр клиента `redis.asyncio.Redis` на всё время жизни приложения.
-- Инициализация выполняется один раз через `init_redis_pool(...)` (обычно при старте в `main.py`).
+- Используем фабрику RedisClientFactory для создания и управления Redis клиентом.
+- Фабрика инкапсулирует состояние клиента вместо использования глобальных переменных.
 - Остальной код получает клиент через Dependency Injection из container.py или main.py.
 - При недоступности Redis используется лёгкий in‑memory fallback c поддержкой TTL.
 
@@ -312,126 +312,166 @@ class _InMemoryRedis:
 RedisClient: TypeAlias = redis.Redis | _InMemoryRedis
 
 
-_redis: redis.Redis | _InMemoryRedis = _InMemoryRedis()
-_redis_lock = asyncio.Lock()
-_redis_is_real: bool = False
+class RedisClientFactory:
+    """Фабрика для создания и управления Redis клиентом.
 
-
-async def init_redis_pool(
-    url: str | None = None,
-    *,
-    host: str = "localhost",
-    port: int = 6379,
-    db: int = 0,
-    password: str | None = None,
-    **kwargs: object,
-) -> redis.Redis:
+    Инкапсулирует состояние клиента вместо использования глобальных переменных.
+    Обеспечивает singleton-поведение в рамках одного экземпляра фабрики.
     """
-    Инициализирует глобальный Redis‑клиент (один на всё приложение).
 
-    Предпочтительный способ создания:
-    - Использовать `REDIS_URL` (например: redis://localhost:6379/0).
-    - При отсутствии `url` используются параметры `host/port/db/password`.
+    def __init__(self, config: Config | None = None) -> None:
+        """Инициализирует фабрику Redis клиента.
 
-    При успешной инициализации выполняется `PING`, чтобы убедиться в доступности сервиса.
-    В случае ошибки логируем исключение и пробрасываем его дальше — вызывающий код
-    решает, считать ли Redis критичным или перейти в режим fallback.
-    """
-    global _redis, _redis_is_real  # noqa: PLW0603
+        Args:
+            config: Конфигурация для создания клиента. Если None, используется глобальный Config.
+        """
+        self._config = config
+        self._client: redis.Redis | _InMemoryRedis = _InMemoryRedis()
+        self._lock = asyncio.Lock()
+        self._is_real: bool = False
 
-    async with _redis_lock:
-        # Если уже инициализирован реальный клиент — просто возвращаем его.
-        if isinstance(_redis, redis.Redis) and _redis_is_real:
-            return _redis
+    async def get_client(
+        self,
+        url: str | None = None,
+        *,
+        host: str = "localhost",
+        port: int = 6379,
+        db: int = 0,
+        password: str | None = None,
+        **kwargs: object,
+    ) -> redis.Redis:
+        """Получает или создаёт Redis клиент.
 
-        try:
-            if url:
-                client = cast(redis.Redis, redis.from_url(url, decode_responses=True, **kwargs))
-            else:
-                client = redis.Redis(
-                    host=host,
-                    port=port,
-                    db=db,
-                    password=password,
-                    decode_responses=True,
-                    **cast(dict[str, Any], kwargs),
+        Args:
+            url: URL Redis (приоритет над host/port/db/password).
+            host: Хост Redis.
+            port: Порт Redis.
+            db: Номер базы данных.
+            password: Пароль Redis.
+            **kwargs: Дополнительные параметры для redis.Redis.
+
+        Returns:
+            Инициализированный Redis клиент.
+
+        Raises:
+            Exception: При ошибке подключения к Redis.
+        """
+        async with self._lock:
+            if isinstance(self._client, redis.Redis) and self._is_real:
+                return self._client
+
+            try:
+                config = self._config
+                if config is None:
+                    from shared.config import Config
+
+                    config = Config()
+
+                # Используем переданные параметры или берём из config
+                if url is None:
+                    if isinstance(config, Config):
+                        url = config.redis.url
+                        if url is None:
+                            DEFAULT_REDIS_PORT = 6379
+                            host = host if host != "localhost" else config.redis.host
+                            port = port if port != DEFAULT_REDIS_PORT else config.redis.port
+                            db = db if db != 0 else config.redis.db
+                            password = password if password is not None else config.redis.password
+                    else:
+                        url = getattr(config, "redis_url", None)
+                        if url is None:
+                            DEFAULT_REDIS_PORT = 6379
+                            host = host if host != "localhost" else getattr(config, "redis_host", "localhost")
+                            port = (
+                                port
+                                if port != DEFAULT_REDIS_PORT
+                                else getattr(config, "redis_port", DEFAULT_REDIS_PORT)
+                            )
+                            db = db if db != 0 else getattr(config, "redis_db", 0)
+                            password = password if password is not None else getattr(config, "redis_password", None)
+
+                if url:
+                    client = cast(redis.Redis, redis.from_url(url, decode_responses=True, **kwargs))
+                else:
+                    client = redis.Redis(
+                        host=host,
+                        port=port,
+                        db=db,
+                        password=password,
+                        decode_responses=True,
+                        **cast(dict[str, Any], kwargs),
+                    )
+
+                await client.ping()
+                self._client = client
+                self._is_real = True
+                logger.info(
+                    f"Подключение к Redis установлено (url={url!r}, host={host!r}, port={port!r}, db={db!r})",
                 )
+                return client
+            except Exception as exc:
+                # ВАЖНО: не обнуляем `_client`, чтобы сохранить in‑memory fallback.
+                logger.error(f"Не удалось инициализировать Redis‑клиент: {exc!s}", exc_info=True)
+                self._is_real = False
+                raise
 
-            await client.ping()
-            _redis = client
-            _redis_is_real = True
-            logger.info(
-                f"Подключение к Redis установлено (url={url!r}, host={host!r}, port={port!r}, db={db!r})",
-            )
-            return client
-        except Exception as exc:
-            # ВАЖНО: не обнуляем `_redis`, чтобы сохранить in‑memory fallback.
-            logger.error(f"Не удалось инициализировать Redis‑клиент: {exc!s}", exc_info=True)
-            _redis_is_real = False
-            raise
+    async def close(self) -> None:
+        """Закрывает Redis клиент."""
+        async with self._lock:
+            if isinstance(self._client, redis.Redis):
+                try:
+                    await self._client.close()
+                    logger.info("Соединение с Redis закрыто")
+                except Exception:
+                    logger.error("Ошибка при закрытии соединения с Redis", exc_info=True)
+            self._is_real = False
+            # Не обнуляем _client: оставляем in-memory fallback
 
+    def is_available(self) -> bool:
+        """Проверяет, используется ли реальный Redis клиент.
 
-async def close_redis() -> None:
-    """
-    Закрывает подключение к Redis, если оно было установлено.
-    Для in‑memory fallback делать ничего не нужно.
-    """
-    global _redis_is_real  # noqa: PLW0603
+        Returns:
+            True если используется реальный Redis, False если in-memory fallback.
+        """
+        return self._is_real
 
-    if isinstance(_redis, redis.Redis):
+    async def safe_call(self, func_name: str, *args: object, **kwargs: object) -> object:
+        """Безопасный вызов операции Redis с fallback на in-memory.
+
+        Args:
+            func_name: Имя метода Redis.
+            *args: Позиционные аргументы для метода.
+            **kwargs: Именованные аргументы для метода.
+
+        Returns:
+            Результат выполнения операции.
+
+        Raises:
+            AttributeError: Если метод не поддерживается.
+            Exception: При ошибке выполнения операции.
+        """
+        client = self._client
+        method = getattr(client, func_name, None)
+        if method is None:
+            raise AttributeError(f"Redis backend не поддерживает метод {func_name!r}")
+
         try:
-            await _redis.close()
-            logger.info("Соединение с Redis закрыто")
-        except Exception:
-            logger.error("Ошибка при закрытии соединения с Redis", exc_info=True)
-    _redis_is_real = False
-    # Не обнуляем `_redis`: оставляем in‑memory fallback.
-
-
-def redis_available() -> bool:
-    """
-    Возвращает True, если в данный момент используется реальный Redis‑клиент.
-
-    Этот флаг можно использовать в метриках/логах, чтобы понимать,
-    работает ли приложение в "боевом" режиме Redis или в деградированном in‑memory режиме.
-    """
-    return _redis_is_real
-
-
-async def safe_redis_call(func_name: str, *args: object, **kwargs: object) -> object:
-    """
-    Вспомогательная обёртка для безопасного вызова операций Redis.
-
-    Используется в сервисах, где важно:
-    - корретно залогировать ошибку Redis;
-    - НЕ падать при недоступности Redis (деградация до in‑memory поведения).
-
-    Параметр `func_name` — имя метода Redis (например, "set", "get", "incr").
-    Остальные аргументы передаются как есть в метод клиента.
-    """
-    global _redis, _redis_is_real  # noqa: PLW0603
-    client = _redis
-    method = getattr(client, func_name, None)
-    if method is None:
-        raise AttributeError(f"Redis backend не поддерживает метод {func_name!r}")
-
-    try:
-        return await method(*args, **kwargs)
-    except RedisError as exc:
-        logger.warning(
-            "RedisError в safe_redis_call "
-            f"({func_name}) — backend={type(client).__name__}, переходим к in‑memory режиму: {exc!s}",
-        )
-        # При ошибке реального Redis переключаемся на in‑memory backend.
-        if isinstance(_redis, redis.Redis):
-            _redis = _InMemoryRedis()
-            _redis_is_real = False
-        # Повторяем операцию уже на in‑memory backend (ошибки пробрасываем).
-        fallback = _redis
-        fallback_method = getattr(fallback, func_name, None)
-        if fallback_method is None:
-            raise
-        return await fallback_method(*args, **kwargs)
+            return await method(*args, **kwargs)
+        except RedisError as exc:
+            logger.warning(
+                "RedisError в safe_call "
+                f"({func_name}) — backend={type(client).__name__}, переходим к in‑memory режиму: {exc!s}",
+            )
+            # При ошибке реального Redis переключаемся на in-memory backend
+            if isinstance(self._client, redis.Redis):
+                self._client = _InMemoryRedis()
+                self._is_real = False
+            # Повторяем операцию уже на in-memory backend
+            fallback = self._client
+            fallback_method = getattr(fallback, func_name, None)
+            if fallback_method is None:
+                raise
+            return await fallback_method(*args, **kwargs)
 
 
 def get_redis_url(config: Config | None = None) -> str | None:
