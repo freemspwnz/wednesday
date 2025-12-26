@@ -37,6 +37,7 @@ from shared.protocols import (
 )
 
 R = TypeVar("R")
+T = TypeVar("T")
 
 logger = get_logger(__name__)
 
@@ -61,6 +62,92 @@ def _get_wednesday_bot(context: ServicesContext) -> WednesdayBot:
     if not isinstance(bot, WednesdayBot):
         raise RuntimeError("Failed to get WednesdayBot from context")
     return bot
+
+
+def _get_idempotency_service(context: ServicesContext) -> IIdempotencyService:
+    """Получает IdempotencyService из контекста с проверкой типа.
+
+    Args:
+        context: Контекст сервисов из get_services_context().
+
+    Returns:
+        Экземпляр IIdempotencyService.
+
+    Raises:
+        RuntimeError: Если IdempotencyService не найден в контексте или имеет неправильный тип.
+    """
+    idempotency_service = context.get("idempotency_service")
+    if not isinstance(idempotency_service, IIdempotencyService):
+        raise RuntimeError("IdempotencyService is not available in context")
+    return idempotency_service
+
+
+def generate_daily_idempotency_key(task_name: str) -> str:
+    """Генерирует ключ идемпотентности на основе текущей даты.
+
+    Используется для ежедневных задач, которые должны выполняться только раз в день.
+
+    Args:
+        task_name: Имя задачи для включения в ключ.
+
+    Returns:
+        Ключ идемпотентности в формате "{task_name}:{YYYY-MM-DD}".
+    """
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    return f"{task_name}:{current_date}"
+
+
+async def execute_with_idempotency(
+    context: ServicesContext,
+    key: str,
+    ttl: int,
+    operation: Callable[[], Awaitable[T]],
+) -> T:
+    """Выполняет операцию с идемпотентностью через IdempotencyService.
+
+    Helper-функция для упрощения использования идемпотентности в задачах.
+    Устраняет дублирование кода получения сервиса из контекста.
+
+    Args:
+        context: Контекст сервисов.
+        key: Ключ идемпотентности.
+        ttl: Время жизни кэша в секундах.
+        operation: Асинхронная операция для выполнения.
+
+    Returns:
+        Результат выполнения операции.
+    """
+    idempotency_service = _get_idempotency_service(context)
+    return await idempotency_service.execute_with_idempotency(
+        key=key,
+        ttl=ttl,
+        operation=operation,
+    )
+
+
+async def execute_daily_task_with_idempotency(
+    context: ServicesContext,
+    task_name: str,
+    operation: Callable[[], Awaitable[T]],
+) -> T:
+    """Выполняет ежедневную задачу с идемпотентностью (TTL=24 часа).
+
+    Упрощённый helper для ежедневных задач, которые должны выполняться только раз в день.
+
+    Args:
+        context: Контекст сервисов.
+        task_name: Имя задачи (используется для генерации ключа идемпотентности).
+        operation: Асинхронная операция для выполнения.
+
+    Returns:
+        Результат выполнения операции.
+    """
+    return await execute_with_idempotency(
+        context=context,
+        key=generate_daily_idempotency_key(task_name),
+        ttl=86400,  # 24 часа
+        operation=operation,
+    )
 
 
 def with_services_context(
@@ -256,21 +343,16 @@ async def send_wednesday_frog_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем idempotency_service из контекста (создан через DI)
-        idempotency_service = context.get("idempotency_service")
-        if not isinstance(idempotency_service, IIdempotencyService):
-            raise RuntimeError("IdempotencyService is not available in context")
-
         # Генерируем ключ идемпотентности на основе slot_time или текущей даты
         if slot_time:
             idempotency_key = f"send_wednesday_frog:{slot_time}"
         else:
             # Используем текущую дату для уникальности
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            idempotency_key = f"send_wednesday_frog:{current_date}"
+            idempotency_key = generate_daily_idempotency_key("send_wednesday_frog")
 
-        # Выполняем отправку с идемпотентностью через сервис
-        result = await idempotency_service.execute_with_idempotency(
+        # Выполняем отправку с идемпотентностью через helper-функцию
+        result = await execute_with_idempotency(
+            context=context,
             key=idempotency_key,
             ttl=86400,  # 24 часа (чтобы не повторять отправку в течение дня)
             operation=lambda: _send_wednesday_frog_operation(context, slot_time),
@@ -354,11 +436,6 @@ async def generate_frog_image_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем idempotency_service из контекста (создан через DI)
-        idempotency_service = context.get("idempotency_service")
-        if not isinstance(idempotency_service, IIdempotencyService):
-            raise RuntimeError("IdempotencyService is not available in context")
-
         # Генерируем ключ идемпотентности на основе user_id или текущей даты/времени
         if user_id is not None:
             idempotency_key = f"generate_frog_image:{user_id}"
@@ -367,8 +444,9 @@ async def generate_frog_image_task(
             current_datetime = datetime.now().strftime("%Y-%m-%d_%H:%M")
             idempotency_key = f"generate_frog_image:{current_datetime}"
 
-        # Выполняем генерацию с идемпотентностью через сервис
-        result = await idempotency_service.execute_with_idempotency(
+        # Выполняем генерацию с идемпотентностью через helper-функцию
+        result = await execute_with_idempotency(
+            context=context,
             key=idempotency_key,
             ttl=3600,  # 1 час (чтобы не генерировать повторно для того же пользователя)
             operation=lambda: _generate_frog_image_operation(context, user_id),
@@ -460,11 +538,7 @@ async def send_frog_manual(  # noqa: PLR0913
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем сервисы из контекста (созданы через DI)
-        idempotency_service = context.get("idempotency_service")
-        if not isinstance(idempotency_service, IIdempotencyService):
-            raise RuntimeError("IdempotencyService is not available in context")
-
+        # Получаем frog_processing из контекста (создан через DI)
         frog_processing = context.get("frog_processing")
         if not isinstance(frog_processing, IFrogProcessingService):
             raise RuntimeError("FrogProcessingService is not available in context")
@@ -473,8 +547,9 @@ async def send_frog_manual(  # noqa: PLR0913
         if idempotency_key is None:
             idempotency_key = f"frog_manual:{chat_id}:{user_id}:{status_message_id}"
 
-        # Выполняем обработку запроса с идемпотентностью через сервис
-        result = await idempotency_service.execute_with_idempotency(
+        # Выполняем обработку запроса с идемпотентностью через helper-функцию
+        result = await execute_with_idempotency(
+            context=context,
             key=idempotency_key,
             ttl=3600,  # 1 час
             operation=lambda: frog_processing.process_frog_request(
@@ -536,20 +611,10 @@ async def daily_cleanup_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем idempotency_service из контекста (создан через DI)
-        idempotency_service = context.get("idempotency_service")
-        if not isinstance(idempotency_service, IIdempotencyService):
-            raise RuntimeError("IdempotencyService is not available in context")
-
-        # Генерируем ключ идемпотентности на основе текущей даты
-        # Это гарантирует, что очистка выполнится только раз в день
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        idempotency_key = f"daily_cleanup:{current_date}"
-
-        # Выполняем очистку с идемпотентностью через сервис
-        result = await idempotency_service.execute_with_idempotency(
-            key=idempotency_key,
-            ttl=86400,  # 24 часа (чтобы не повторять очистку в течение дня)
+        # Выполняем очистку с идемпотентностью через helper-функцию для ежедневных задач
+        result = await execute_daily_task_with_idempotency(
+            context=context,
+            task_name="daily_cleanup",
             operation=lambda: _daily_cleanup_operation(context),
         )
 
@@ -625,20 +690,10 @@ async def daily_statistics_task(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Получаем idempotency_service из контекста (создан через DI)
-        idempotency_service = context.get("idempotency_service")
-        if not isinstance(idempotency_service, IIdempotencyService):
-            raise RuntimeError("IdempotencyService is not available in context")
-
-        # Генерируем ключ идемпотентности на основе текущей даты
-        # Это гарантирует, что сбор статистики выполнится только раз в день
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        idempotency_key = f"daily_statistics:{current_date}"
-
-        # Выполняем сбор статистики с идемпотентностью через сервис
-        result = await idempotency_service.execute_with_idempotency(
-            key=idempotency_key,
-            ttl=86400,  # 24 часа (чтобы не повторять сбор статистики в течение дня)
+        # Выполняем сбор статистики с идемпотентностью через helper-функцию для ежедневных задач
+        result = await execute_daily_task_with_idempotency(
+            context=context,
+            task_name="daily_statistics",
             operation=lambda: _daily_statistics_operation(context),
         )
 
