@@ -4,6 +4,19 @@
 
 ### Изменено
 
+- **Рефакторинг Celery задач для использования единого DI-подхода**:
+  - Добавлена функция `build_celery_services_context()` в `container.py` для создания сервисов через DI
+  - Реализовано кэширование фабрик на worker процесс через `get_or_create_worker_factories()` в `context.py`
+  - Фабрики теперь обязательные параметры в `get_services_context()` - соблюдение принципа DI
+  - Фабрики получаются через `get_or_create_worker_factories()` в задачах и передаются явно в `get_services_context()`
+  - Удалена функция `create_factories()` и неиспользуемый импорт `Config` из `tasks.py`
+  - Обновлены тесты для использования `get_or_create_worker_factories()` вместо `create_factories()`
+  - Улучшено соблюдение принципа DRY: логика создания сервисов централизована в `container.py`
+  - Улучшено соблюдение принципов SOLID и DI: фабрики передаются явно, не создаются внутри функций
+  - Сохранена fork-safety: фабрики создаются после fork и кэшируются на worker процесс
+
+### Изменено
+
 - **Полностью мигрировано на явную передачу зависимостей в Celery context**:
   - Убрана глобальная переменная `config` из `context.py`
   - Все параметры (`pool_factory`, `redis_factory`, `config_obj`) теперь обязательные в `get_services_context()` и `_ensure_pools_initialized()`

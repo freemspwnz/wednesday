@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from infra.celery.context import ServicesContext
 
 from infra.celery.app import celery_app
-from infra.celery.context import create_factories, get_services_context
+from infra.celery.context import get_or_create_worker_factories, get_services_context
 from infra.logging.logger import get_logger, log_event
 from infra.metrics.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,
@@ -27,7 +27,6 @@ from infra.metrics.prometheus_metrics import (
     CELERY_TASK_RETRIES_TOTAL,
     CELERY_TASKS_TOTAL,
 )
-from shared.config import Config
 from shared.models import FrogRequestResult
 from shared.protocols import IFrogProcessingService, IImageService
 
@@ -228,11 +227,12 @@ async def send_wednesday_frog_task(self: Task, slot_time: str | None = None) -> 
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Создаём фабрики явно (после fork, для fork-safety)
-        config_obj = Config()
-        pool_factory, redis_factory = create_factories(config_obj)
+        # Получаем фабрики (кэшируются на worker процесс)
+        from shared.config import Config
 
-        # Получаем контекст сервисов (инициализация происходит внутри, после fork)
+        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
+
+        # Получаем контекст сервисов через DI
         context = await get_services_context(
             pool_factory=pool_factory,
             redis_factory=redis_factory,
@@ -292,11 +292,12 @@ async def generate_frog_image_task(self: Task, user_id: int | None = None) -> di
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Создаём фабрики явно (после fork, для fork-safety)
-        config_obj = Config()
-        pool_factory, redis_factory = create_factories(config_obj)
+        # Получаем фабрики (кэшируются на worker процесс)
+        from shared.config import Config
 
-        # Получаем контекст сервисов (инициализация происходит внутри, после fork)
+        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
+
+        # Получаем контекст сервисов через DI
         context = await get_services_context(
             pool_factory=pool_factory,
             redis_factory=redis_factory,
@@ -370,11 +371,12 @@ async def send_frog_manual(
         Retry: При сетевых ошибках (автоматический retry через Celery).
     """
     try:
-        # Создаём фабрики явно (после fork, для fork-safety)
-        config_obj = Config()
-        pool_factory, redis_factory = create_factories(config_obj)
+        # Получаем фабрики (кэшируются на worker процесс)
+        from shared.config import Config
 
-        # Получаем контекст сервисов
+        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
+
+        # Получаем контекст сервисов через DI
         context = await get_services_context(
             pool_factory=pool_factory,
             redis_factory=redis_factory,
@@ -431,14 +433,12 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
         Exception: При ошибке выполнения очистки.
     """
     try:
-        # Создаём фабрики явно (после fork, для fork-safety)
-        config_obj = Config()
-        pool_factory, redis_factory = create_factories(config_obj)
+        # Получаем фабрики (кэшируются на worker процесс)
+        from shared.config import Config
 
-        # Получаем контекст сервисов (инициализирует пулы подключений)
-        from infra.celery.context import get_services_context
-        from infra.repos.dispatch_registry import DispatchRegistry
+        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
 
+        # Получаем контекст сервисов через DI
         context = await get_services_context(
             pool_factory=pool_factory,
             redis_factory=redis_factory,
@@ -447,6 +447,8 @@ async def daily_cleanup_task(self: Task) -> dict[str, Any]:
         postgres_pool = context["postgres_pool"]
 
         # Очистка старых записей dispatch_registry
+        from infra.repos.dispatch_registry import DispatchRegistry
+
         registry = DispatchRegistry(pool=postgres_pool)
         await registry.cleanup_old()
 
@@ -483,11 +485,12 @@ async def daily_statistics_task(self: Task) -> dict[str, Any]:
         Exception: При ошибке сбора статистики.
     """
     try:
-        # Создаём фабрики явно (после fork, для fork-safety)
-        config_obj = Config()
-        pool_factory, redis_factory = create_factories(config_obj)
+        # Получаем фабрики (кэшируются на worker процесс)
+        from shared.config import Config
 
-        # Получаем контекст сервисов (инициализирует пулы подключений)
+        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(Config())
+
+        # Получаем контекст сервисов через DI
         # Возвращаемые значения не используются, так как пулы не нужны в этой задаче
         _ = await get_services_context(
             pool_factory=pool_factory,

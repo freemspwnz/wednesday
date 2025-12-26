@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from infra.celery.context import create_factories, get_services_context
+from infra.celery.context import get_or_create_worker_factories, get_services_context
 from infra.celery.tasks import (
     daily_cleanup_task,
     daily_statistics_task,
@@ -47,7 +47,7 @@ async def test_services_context_lazy_init(reset_singletons: Any) -> None:
         mock_build_bot.return_value = mock_bot_instance
 
         config_obj = Config()
-        pool_factory, redis_factory = create_factories(config_obj)
+        pool_factory, redis_factory, config_obj = await get_or_create_worker_factories(config_obj)
 
         # Первый вызов должен инициализировать
         context = await get_services_context(

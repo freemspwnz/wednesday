@@ -55,24 +55,46 @@ _services_context: dict[str, object] | None = None
 _cleanup_service: CleanupService | None = None
 _pool_factory: PostgresPoolFactory | None = None
 _redis_factory: RedisClientFactory | None = None
+_worker_pool_factory: PostgresPoolFactory | None = None
+_worker_redis_factory: RedisClientFactory | None = None
+_worker_config: Config | None = None
 _init_lock = asyncio.Lock()
+_worker_factories_lock = asyncio.Lock()
 
 
-def create_factories(config_obj: Config) -> tuple[PostgresPoolFactory, RedisClientFactory]:
-    """Создаёт фабрики для Postgres и Redis с использованием конфигурации.
+async def get_or_create_worker_factories(
+    config: Config | None = None,
+) -> tuple[PostgresPoolFactory, RedisClientFactory, Config]:
+    """Получает или создаёт фабрики для worker процесса (кэширует).
 
-    Helper функция для явного создания фабрик в Celery задачах.
-    Фабрики должны создаваться ПОСЛЕ fork worker процесса для fork-safety.
+    Фабрики создаются один раз на worker процесс и переиспользуются
+    между задачами. Это безопасно, так как каждая задача выполняется
+    в том же worker процессе после fork.
+
+    Эта функция должна вызываться в Celery задачах для получения фабрик,
+    которые затем передаются в get_services_context().
 
     Args:
-        config_obj: Экземпляр Config для создания фабрик.
+        config: Экземпляр Config для создания фабрик. Если None, создаётся новый.
 
     Returns:
-        Кортеж (pool_factory, redis_factory) с созданными фабриками.
+        Кортеж (pool_factory, redis_factory, config) с кэшированными фабриками.
     """
-    pool_factory = PostgresPoolFactory(config=config_obj)
-    redis_factory = RedisClientFactory(config=config_obj)
-    return (pool_factory, redis_factory)
+    global _worker_pool_factory, _worker_redis_factory, _worker_config  # noqa: PLW0603
+
+    if config is None:
+        config = Config()
+
+    async with _worker_factories_lock:
+        if _worker_pool_factory is None or _worker_redis_factory is None:
+            _worker_pool_factory = PostgresPoolFactory(config=config)
+            _worker_redis_factory = RedisClientFactory(config=config)
+            _worker_config = config
+            logger.info("Фабрики созданы и кэшированы в worker процессе")
+
+        # Гарантируем, что config не None
+        assert _worker_config is not None, "Worker config must be set after factory creation"
+        return _worker_pool_factory, _worker_redis_factory, _worker_config
 
 
 async def _get_redis_client(
@@ -171,7 +193,10 @@ async def get_services_context(
     """Получает контекст сервисов для использования в Celery задачах.
 
     Инициализирует пулы подключений и создаёт экземпляры сервисов при первом вызове.
-    Использует dependency injection вместо глобального состояния.
+    Использует dependency injection через build_celery_services_context() из container.py.
+
+    Фабрики должны быть переданы явно - это соблюдает принцип DI.
+    Для получения фабрик используйте get_or_create_worker_factories().
 
     Args:
         pool_factory: Фабрика для создания Postgres пула (обязательна).
@@ -200,67 +225,25 @@ async def get_services_context(
         if _services_context is not None:
             return cast("ServicesContext", _services_context)
 
-        # Инициализируем пулы и получаем их явно (без использования приватных функций)
+        # Сохраняем фабрики для cleanup
+        global _pool_factory, _redis_factory  # noqa: PLW0603
+        _pool_factory = pool_factory
+        _redis_factory = redis_factory
+
+        # Инициализируем пулы
         postgres_pool, redis_client = await _ensure_pools_initialized(
             pool_factory=pool_factory,
             redis_factory=redis_factory,
             config_obj=config_obj,
         )
 
-        # Ленивый импорт для избежания циклических зависимостей
-        # Создаём сервисы через DI-контейнер (без зависимости от bot.services)
-        from infra.container import (
-            build_admin_notification_service,
-            build_bot,
-            build_frog_processing_service,
-            build_image_stack,
-        )
-        from infra.messaging.ptb import PTBMessagingService
-        from infra.repos import AdminsRepo
-        from infra.repos.usage_tracker import UsageTracker
+        # Создаём сервисы через DI-контейнер (единый стиль с container.py)
+        from infra.container import build_celery_services_context
 
-        # Создаём image_service через DI-контейнер
-        image_service = build_image_stack(
+        _services_context = build_celery_services_context(
             config=config_obj,
             db_pool=postgres_pool,
             redis_client=redis_client,
-        )
-
-        # Создаём usage_tracker через DI
-        usage_tracker = UsageTracker(
-            pool=postgres_pool,
-            monthly_quota=100,
-            frog_threshold=70,
-        )
-
-        # Передаём пулы явно в build_bot (bot нужен для некоторых задач)
-        bot = build_bot(
-            config=config_obj,
-            db_pool=postgres_pool,
-            redis_client=redis_client,
-        )
-
-        # Создаём messaging service
-        messaging_service = PTBMessagingService(bot=bot.application.bot)
-
-        # Создаём admin notifier
-        from shared.config import TelegramConfig
-
-        telegram_config = TelegramConfig()
-        admins_repo = AdminsRepo(pool=postgres_pool, admin_chat_id=telegram_config.admin_chat_id)
-        admin_notifier = build_admin_notification_service(
-            messaging_service=messaging_service,
-            admins_repo=admins_repo,
-            logger=logger,
-        )
-
-        # Создаём frog processing service через DI (без зависимости от bot.services)
-        frog_processing = build_frog_processing_service(
-            image_service=image_service,
-            messaging_service=messaging_service,
-            usage_tracker=usage_tracker,
-            admin_notifier=admin_notifier,
-            logger=logger,
         )
 
         # Создаём cleanup service для graceful shutdown
@@ -269,18 +252,10 @@ async def get_services_context(
         global _cleanup_service  # noqa: PLW0603
         _cleanup_service = build_cleanup_service(
             logger=logger,
-            pool_factory=_pool_factory,
-            redis_factory=_redis_factory,
+            pool_factory=pool_factory,
+            redis_factory=redis_factory,
         )
 
-        _services_context = {
-            "bot": bot,
-            "postgres_pool": postgres_pool,  # Добавляем в контекст
-            "redis_client": redis_client,  # Добавляем в контекст
-            "image_service": image_service,  # Добавляем в контекст
-            "usage_tracker": usage_tracker,  # Добавляем в контекст
-            "frog_processing": frog_processing,  # Добавляем в контекст
-        }
         logger.info(
             "Контекст сервисов Celery создан в worker-процессе",
             event="celery_services_context_created",
@@ -323,17 +298,21 @@ async def shutdown_services() -> None:
                 status="warning",
             )
 
-        # Закрываем фабрики пулов
-        if _pool_factory is not None:
+        # Закрываем фабрики пулов (используем worker фабрики, если они есть)
+        global _worker_pool_factory, _worker_redis_factory  # noqa: PLW0603
+
+        factory_to_close = _pool_factory or _worker_pool_factory
+        if factory_to_close is not None:
             try:
-                await _pool_factory.close()
+                await factory_to_close.close()
                 logger.info("Postgres pool закрыт через фабрику в Celery worker")
             except Exception as e:
                 logger.warning(f"Ошибка при закрытии Postgres pool: {e}")
 
-        if _redis_factory is not None:
+        redis_factory_to_close = _redis_factory or _worker_redis_factory
+        if redis_factory_to_close is not None:
             try:
-                await _redis_factory.close()
+                await redis_factory_to_close.close()
                 logger.info("Redis клиент закрыт через фабрику в Celery worker")
             except Exception as e:
                 logger.warning(f"Ошибка при закрытии Redis клиента: {e}")
@@ -350,6 +329,9 @@ async def shutdown_services() -> None:
         _cleanup_service = None
         _pool_factory = None
         _redis_factory = None
+        _worker_pool_factory = None
+        _worker_redis_factory = None
+        _worker_config = None
         logger.info(
             "Graceful shutdown сервисов Celery завершён",
             event="celery_shutdown_completed",

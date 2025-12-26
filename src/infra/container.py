@@ -1019,6 +1019,97 @@ def build_dispatch_services(  # noqa: PLR0913, PLR0917
     return target_preparation_service, dispatch_delivery_service, dispatch_service, admin_notifier
 
 
+def build_celery_services_context(
+    config: Config,
+    db_pool: asyncpg.Pool,
+    redis_client: RedisClient,
+) -> dict[str, object]:
+    """Создаёт контекст сервисов для Celery задач через DI.
+
+    Аналог build_bot_services(), но для Celery worker процесса.
+    Использует те же build_* функции для соблюдения единого стиля DI.
+
+    Args:
+        config: Экземпляр Config для создания сервисов.
+        db_pool: Пул подключений PostgreSQL (уже инициализирован).
+        redis_client: Redis-клиент (уже инициализирован).
+
+    Returns:
+        Словарь с сервисами для Celery задач:
+        - bot: Экземпляр WednesdayBot
+        - postgres_pool: Пул подключений PostgreSQL
+        - redis_client: Redis-клиент
+        - image_service: Экземпляр ImageService
+        - usage_tracker: Экземпляр UsageTracker
+        - frog_processing: Экземпляр FrogProcessingService
+
+    Raises:
+        ValueError: Если обязательные параметры не переданы.
+    """
+    # Валидация параметров
+    if config is None:
+        raise ValueError("config не может быть None")
+    if db_pool is None:
+        raise ValueError("db_pool не может быть None")
+    if redis_client is None:
+        raise ValueError("redis_client не может быть None")
+
+    app_logger = get_logger("app")
+
+    # Создаём сервисы через DI (как в build_bot_services)
+    image_service = build_image_stack(
+        config=config,
+        db_pool=db_pool,
+        redis_client=redis_client,
+    )
+
+    usage_tracker = UsageTracker(
+        pool=db_pool,
+        monthly_quota=100,
+        frog_threshold=70,
+    )
+
+    bot = build_bot(
+        config=config,
+        db_pool=db_pool,
+        redis_client=redis_client,
+    )
+
+    # Создаём messaging service
+    from infra.messaging.ptb import PTBMessagingService
+
+    messaging_service = PTBMessagingService(bot=bot.application.bot)
+
+    # Создаём admin notifier
+    from shared.config import TelegramConfig
+
+    telegram_config = TelegramConfig()
+    admins_repo = AdminsRepo(pool=db_pool, admin_chat_id=telegram_config.admin_chat_id)
+    admin_notifier = build_admin_notification_service(
+        messaging_service=messaging_service,
+        admins_repo=admins_repo,
+        logger=app_logger,
+    )
+
+    # Создаём frog processing service через DI
+    frog_processing = build_frog_processing_service(
+        image_service=image_service,
+        messaging_service=messaging_service,
+        usage_tracker=usage_tracker,
+        admin_notifier=admin_notifier,
+        logger=app_logger,
+    )
+
+    return {
+        "bot": bot,
+        "postgres_pool": db_pool,
+        "redis_client": redis_client,
+        "image_service": image_service,
+        "usage_tracker": usage_tracker,
+        "frog_processing": frog_processing,
+    }
+
+
 def build_bot(
     config: Config,
     db_pool: asyncpg.Pool,
