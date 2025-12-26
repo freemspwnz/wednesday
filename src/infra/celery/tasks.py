@@ -28,7 +28,11 @@ from infra.metrics.prometheus_metrics import (
     CELERY_TASKS_TOTAL,
 )
 from shared.models import FrogRequestResult
-from shared.protocols import IFrogProcessingService, IImageService
+from shared.protocols import (
+    IFrogProcessingService,
+    IIdempotencyService,
+    IImageService,
+)
 
 R = TypeVar("R")
 
@@ -387,58 +391,28 @@ async def send_frog_manual(
             config_obj=config_obj,
         )
 
-        redis_client = context["redis_client"]
+        # Получаем сервисы из контекста (созданы через DI)
+        idempotency_service = context.get("idempotency_service")
+        if not isinstance(idempotency_service, IIdempotencyService):
+            raise RuntimeError("IdempotencyService is not available in context")
+
+        frog_processing = context.get("frog_processing")
+        if not isinstance(frog_processing, IFrogProcessingService):
+            raise RuntimeError("FrogProcessingService is not available in context")
 
         # Генерируем ключ идемпотентности, если не передан
         if idempotency_key is None:
             idempotency_key = f"frog_manual:{chat_id}:{user_id}:{status_message_id}"
 
-        # Проверяем, не выполнялась ли уже эта задача (идемпотентность)
-        cache_key = f"celery:idempotency:{idempotency_key}"
-        cached_result = await redis_client.get(cache_key)
-        if cached_result:
-            logger.info(
-                f"Task already executed (idempotency_key={idempotency_key}), returning cached result",
-                event="celery_task_idempotency_hit",
-                status="success",
-                task_name="send_frog_manual",
-            )
-            # Десериализуем результат из JSON
-            import json
-
-            cached_data: dict[str, Any] = json.loads(cached_result)
-            # Проверяем наличие обязательных полей для TypedDict
-            if "status" not in cached_data or "error" not in cached_data:
-                raise ValueError("Invalid cached result format")
-            return FrogRequestResult(
-                status=cached_data["status"],
-                error=cached_data.get("error"),
-            )
-
-        # Получаем FrogProcessingService из контекста (создан через DI)
-        frog_processing = context.get("frog_processing")
-        if not isinstance(frog_processing, IFrogProcessingService):
-            raise RuntimeError("FrogProcessingService is not available in context")
-
-        # Выполняем обработку запроса
-        result = await frog_processing.process_frog_request(
-            chat_id=chat_id,
-            user_id=user_id,
-            status_message_id=status_message_id,
-        )
-
-        # Кэшируем результат на 1 час для идемпотентности
-        # Используем set с параметром ex вместо setex для совместимости с _InMemoryRedis
-        import json
-
-        result_dict: dict[str, Any] = {
-            "status": result["status"],
-            "error": result.get("error"),
-        }
-        await redis_client.set(
-            cache_key,
-            json.dumps(result_dict),
-            ex=3600,  # 1 час
+        # Выполняем обработку запроса с идемпотентностью через сервис
+        result = await idempotency_service.execute_with_idempotency(
+            key=idempotency_key,
+            ttl=3600,  # 1 час
+            operation=lambda: frog_processing.process_frog_request(
+                chat_id=chat_id,
+                user_id=user_id,
+                status_message_id=status_message_id,
+            ),
         )
 
         return result

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
@@ -250,6 +251,40 @@ class ITaskQueue(Protocol):
 
         Raises:
             Exception: При ошибке постановки задачи в очередь.
+        """
+        ...
+
+
+@runtime_checkable
+class IIdempotencyService(Protocol):
+    """Протокол для сервиса идемпотентности операций.
+
+    Обеспечивает выполнение операций с проверкой идемпотентности через кэширование результатов.
+    Используется для предотвращения дублирования выполнения задач в Celery.
+    """
+
+    async def execute_with_idempotency(
+        self,
+        key: str,
+        ttl: int,
+        operation: Callable[[], Awaitable[T]],
+    ) -> T:
+        """Выполняет операцию с проверкой идемпотентности.
+
+        Если операция с данным ключом уже выполнялась и результат кэширован,
+        возвращает кэшированный результат. Иначе выполняет операцию и кэширует результат.
+
+        Args:
+            key: Уникальный ключ идемпотентности для операции.
+            ttl: Время жизни кэшированного результата в секундах.
+            operation: Асинхронная операция для выполнения (callable без аргументов).
+
+        Returns:
+            Результат выполнения операции (из кэша или новый).
+
+        Raises:
+            ValueError: Если формат кэшированного результата невалиден.
+            Exception: При ошибке выполнения операции или работы с кэшем.
         """
         ...
 

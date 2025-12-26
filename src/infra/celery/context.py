@@ -25,7 +25,12 @@ if TYPE_CHECKING:
     from infra.redis.redis_client import RedisClient
     from infra.repos.usage_tracker import UsageTracker
 
-from shared.protocols import IDataCleanupService, IFrogProcessingService, IImageService
+from shared.protocols import (
+    IDataCleanupService,
+    IFrogProcessingService,
+    IIdempotencyService,
+    IImageService,
+)
 
 logger = get_logger(__name__)
 
@@ -49,6 +54,7 @@ class ServicesContext(TypedDict, total=False):
     usage_tracker: UsageTracker
     frog_processing: IFrogProcessingService
     data_cleanup_service: IDataCleanupService
+    idempotency_service: IIdempotencyService
 
 
 # Context для хранения инициализированных сервисов в worker процессе

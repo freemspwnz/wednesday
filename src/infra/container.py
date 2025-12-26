@@ -1156,6 +1156,14 @@ def build_celery_services_context(
         logger=app_logger,
     )
 
+    # Создаём idempotency service через DI
+    from app.idempotency_service import IdempotencyService
+
+    idempotency_service = IdempotencyService(
+        redis_client=redis_client,
+        logger=app_logger,
+    )
+
     return {
         "bot": bot,
         "postgres_pool": db_pool,
@@ -1164,6 +1172,7 @@ def build_celery_services_context(
         "usage_tracker": usage_tracker,
         "frog_processing": frog_processing,
         "data_cleanup_service": data_cleanup_service,
+        "idempotency_service": idempotency_service,
     }
 
 
