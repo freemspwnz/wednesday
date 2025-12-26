@@ -27,9 +27,6 @@ if TYPE_CHECKING:
 
 from shared.protocols import IFrogProcessingService, IImageService
 
-# Создаём экземпляр Config при импорте модуля
-config: Config = Config()
-
 logger = get_logger(__name__)
 
 
@@ -59,6 +56,23 @@ _cleanup_service: CleanupService | None = None
 _pool_factory: PostgresPoolFactory | None = None
 _redis_factory: RedisClientFactory | None = None
 _init_lock = asyncio.Lock()
+
+
+def create_factories(config_obj: Config) -> tuple[PostgresPoolFactory, RedisClientFactory]:
+    """Создаёт фабрики для Postgres и Redis с использованием конфигурации.
+
+    Helper функция для явного создания фабрик в Celery задачах.
+    Фабрики должны создаваться ПОСЛЕ fork worker процесса для fork-safety.
+
+    Args:
+        config_obj: Экземпляр Config для создания фабрик.
+
+    Returns:
+        Кортеж (pool_factory, redis_factory) с созданными фабриками.
+    """
+    pool_factory = PostgresPoolFactory(config=config_obj)
+    redis_factory = RedisClientFactory(config=config_obj)
+    return (pool_factory, redis_factory)
 
 
 async def _get_redis_client(
@@ -97,9 +111,9 @@ async def _get_redis_client(
 
 
 async def _ensure_pools_initialized(
-    pool_factory: PostgresPoolFactory | None = None,
-    redis_factory: RedisClientFactory | None = None,
-    config_obj: Config | None = None,
+    pool_factory: PostgresPoolFactory,
+    redis_factory: RedisClientFactory,
+    config_obj: Config,
 ) -> tuple[asyncpg.Pool, RedisClient]:
     """Инициализирует пулы подключений Redis и Postgres.
 
@@ -108,9 +122,9 @@ async def _ensure_pools_initialized(
     - Отсутствие race conditions.
 
     Args:
-        pool_factory: Фабрика для создания Postgres пула. Если None, создаётся новая.
-        redis_factory: Фабрика для создания Redis клиента. Если None, создаётся новая.
-        config_obj: Экземпляр Config. Если None, используется глобальный config.
+        pool_factory: Фабрика для создания Postgres пула (обязательна).
+        redis_factory: Фабрика для создания Redis клиента (обязательна).
+        config_obj: Экземпляр Config (обязателен).
 
     Returns:
         Кортеж (postgres_pool, redis_client) с инициализированными пулами.
@@ -118,22 +132,13 @@ async def _ensure_pools_initialized(
     Raises:
         RuntimeError: Если не удалось инициализировать пулы подключений.
     """
-    if config_obj is None:
-        config_obj = config
-
     async with _init_lock:
         # Инициализируем Redis и Postgres (async)
         # ВАЖНО: это происходит ПОСЛЕ fork, в worker процессе
         global _pool_factory, _redis_factory  # noqa: PLW0603
 
-        # Создаём фабрики только если не переданы (fallback для обратной совместимости)
-        if redis_factory is None:
-            redis_factory = RedisClientFactory(config=config_obj)
-        _redis_factory = redis_factory
-
-        if pool_factory is None:
-            pool_factory = PostgresPoolFactory(config=config_obj)
         _pool_factory = pool_factory
+        _redis_factory = redis_factory
 
         redis_client: RedisClient
         try:
@@ -159,9 +164,9 @@ async def _ensure_pools_initialized(
 
 
 async def get_services_context(
-    pool_factory: PostgresPoolFactory | None = None,
-    redis_factory: RedisClientFactory | None = None,
-    config_obj: Config | None = None,
+    pool_factory: PostgresPoolFactory,
+    redis_factory: RedisClientFactory,
+    config_obj: Config,
 ) -> ServicesContext:
     """Получает контекст сервисов для использования в Celery задачах.
 
@@ -169,9 +174,9 @@ async def get_services_context(
     Использует dependency injection вместо глобального состояния.
 
     Args:
-        pool_factory: Фабрика для создания Postgres пула. Если None, создаётся новая.
-        redis_factory: Фабрика для создания Redis клиента. Если None, создаётся новая.
-        config_obj: Экземпляр Config. Если None, используется глобальный config.
+        pool_factory: Фабрика для создания Postgres пула (обязательна).
+        redis_factory: Фабрика для создания Redis клиента (обязательна).
+        config_obj: Экземпляр Config (обязателен).
 
     Returns:
         Словарь с сервисами:
@@ -186,9 +191,6 @@ async def get_services_context(
         RuntimeError: Если не удалось инициализировать сервисы.
     """
     global _services_context  # noqa: PLW0603
-
-    if config_obj is None:
-        config_obj = config
 
     # Проверяем, инициализирован ли контекст (только чтение, без global)
     if _services_context is not None:
@@ -206,15 +208,10 @@ async def get_services_context(
         )
 
         # Ленивый импорт для избежания циклических зависимостей
-        from infra.container import build_bot
-
-        # Convert to Config if needed
-        if not isinstance(config_obj, Config):
-            config_obj = Config()
-
         # Создаём сервисы через DI-контейнер (без зависимости от bot.services)
         from infra.container import (
             build_admin_notification_service,
+            build_bot,
             build_frog_processing_service,
             build_image_stack,
         )

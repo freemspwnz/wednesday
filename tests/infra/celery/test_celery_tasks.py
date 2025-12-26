@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from infra.celery.context import get_services_context
+from infra.celery.context import create_factories, get_services_context
 from infra.celery.tasks import (
     daily_cleanup_task,
     daily_statistics_task,
@@ -16,6 +16,7 @@ from infra.celery.tasks import (
     is_retryable_error,
     send_wednesday_frog_task,
 )
+from shared.config import Config
 
 pytestmark = [pytest.mark.unit]
 
@@ -25,28 +26,48 @@ async def test_services_context_lazy_init(reset_singletons: Any) -> None:
     """Тест lazy инициализации services context."""
 
     with (
-        patch("infra.celery.context.init_redis_pool") as mock_redis,
-        patch("infra.celery.context.init_postgres_pool") as mock_pg,
+        patch("infra.celery.context.PostgresPoolFactory") as mock_pool_factory_class,
+        patch("infra.celery.context.RedisClientFactory") as mock_redis_factory_class,
         patch("infra.celery.context.ensure_schema") as mock_schema,
         patch("infra.celery.context.build_bot") as mock_build_bot,
     ):
+        # Создаём моки фабрик
+        mock_pool_factory = MagicMock()
+        mock_redis_factory = MagicMock()
+        mock_pool_factory_class.return_value = mock_pool_factory
+        mock_redis_factory_class.return_value = mock_redis_factory
+
+        # Моки для пулов
+        mock_postgres_pool = AsyncMock()
+        mock_redis_client = AsyncMock()
+        mock_pool_factory.get_pool = AsyncMock(return_value=mock_postgres_pool)
+        mock_redis_factory.get_client = AsyncMock(return_value=mock_redis_client)
+
         mock_bot_instance = MagicMock()
         mock_build_bot.return_value = mock_bot_instance
 
+        config_obj = Config()
+        pool_factory, redis_factory = create_factories(config_obj)
+
         # Первый вызов должен инициализировать
-        context = await get_services_context()
+        context = await get_services_context(
+            pool_factory=pool_factory,
+            redis_factory=redis_factory,
+            config_obj=config_obj,
+        )
         assert "bot" in context
 
-        mock_redis.assert_called_once()
-        mock_pg.assert_called_once()
         mock_schema.assert_called_once()
         mock_build_bot.assert_called_once()
 
         # Второй вызов не должен повторно инициализировать
-        context2 = await get_services_context()
+        context2 = await get_services_context(
+            pool_factory=pool_factory,
+            redis_factory=redis_factory,
+            config_obj=config_obj,
+        )
         assert context is context2  # Должен вернуть тот же контекст
-        assert mock_redis.call_count == 1
-        assert mock_pg.call_count == 1
+        assert mock_schema.call_count == 1
         assert mock_build_bot.call_count == 1
 
 
