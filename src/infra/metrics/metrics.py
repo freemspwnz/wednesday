@@ -80,13 +80,9 @@ async def record_metric(  # noqa: PLR0913
             "status": status or "",
         }
         # Используем фабрику Redis для публикации события
-        if redis_factory is not None:
-            await redis_factory.safe_call("xadd", "metrics:events", fields)
-        else:
-            # Если фабрика не передана, создаём временную для этого вызова
-            # (не рекомендуется, но для обратной совместимости)
-            temp_factory = RedisClientFactory()
-            await temp_factory.safe_call("xadd", "metrics:events", fields)
+        if redis_factory is None:
+            raise ValueError("redis_factory is required for record_metric")
+        await redis_factory.safe_call("xadd", "metrics:events", fields)
 
         # Дополнительно стараемся синхронно зафиксировать событие в таблице Postgres.
         # Это делает события наблюдаемыми через SQL (в том числе в тестах и админских

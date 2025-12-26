@@ -16,7 +16,7 @@ from celery.signals import worker_shutdown
 from infra.database.postgres_client import PostgresPoolFactory
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger
-from infra.redis.redis_client import RedisClientFactory, _InMemoryRedis
+from infra.redis.redis_client import RedisClientFactory
 from shared.config import Config
 
 if TYPE_CHECKING:
@@ -111,17 +111,13 @@ async def _ensure_pools_initialized(
                     password=config_obj.redis_password,
                 )
         except Exception as exc:
-            # Redis не критичен для Celery worker — продолжаем с fallback
-            logger.warning(
+            # Redis критичен для Celery worker — пробрасываем ошибку
+            logger.error(
                 f"Redis недоступен при инициализации Celery worker: {exc!s}",
                 event="celery_redis_unavailable",
-                status="warning",
+                status="error",
             )
-            # Создаём фабрику с fallback
-            if _redis_factory is None:
-                _redis_factory = RedisClientFactory(config=config_obj)
-            # Создаем in-memory fallback напрямую
-            redis_client = _InMemoryRedis()
+            raise
 
         # Создаём фабрику пула Postgres
         _pool_factory = PostgresPoolFactory(config=config_obj)

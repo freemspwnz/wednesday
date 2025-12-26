@@ -210,12 +210,13 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
     или упадут с ошибкой (в CI) с понятным сообщением.
     """
     import asyncpg
-    from infra.database.postgres_client import close_postgres_pool, init_postgres_pool
+    from infra.database.postgres_client import PostgresPoolFactory
     from shared.config import Config, config
 
+    factory = PostgresPoolFactory(config=config)
     try:
         # Создаём пул с минимальными параметрами для тестов
-        pool = await init_postgres_pool(min_size=1, max_size=2, config=config)
+        pool = await factory.get_pool(min_size=1, max_size=2)
         # Убеждаемся в наличии схемы, используя созданный пул напрямую
         from infra.database.postgres_schema import _DDL_STATEMENTS
         async with pool.acquire() as conn:
@@ -250,7 +251,7 @@ async def async_postgres_pool() -> AsyncIterator[Any]:
         # Используем wait_for для таймаута, чтобы не зависнуть на закрытии
         try:
             loop = asyncio.get_running_loop()
-            await asyncio.wait_for(close_postgres_pool(), timeout=5.0)
+            await asyncio.wait_for(factory.close(), timeout=5.0)
         except asyncio.TimeoutError:
             # Если закрытие пула занимает слишком много времени, продолжаем
             # (это может произойти, если есть зависшие соединения)
@@ -291,16 +292,7 @@ async def cleanup_tables() -> AsyncIterator[None]:
     """
     # Используем session-пул напрямую из фикстуры async_postgres_pool
     # Схема уже инициализирована в async_postgres_pool
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        error_msg = (
-            "Postgres pool не инициализирован. Запустите `make test-up` "
-            "или экспортируйте корректные POSTGRES_* переменные."
-        )
-        _handle_postgres_error(RuntimeError("Pool not initialized"), error_msg)
-
-    pool = _pool
+    pool = async_postgres_pool
 
     # Очищаем таблицы ПЕРЕД тестом
     try:
@@ -382,16 +374,7 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
 
     # Используем session-пул напрямую из фикстуры async_postgres_pool
     # Схема уже инициализирована в async_postgres_pool
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        error_msg = (
-            "Postgres pool не инициализирован. Запустите `make test-up` "
-            "или экспортируйте корректные POSTGRES_* переменные."
-        )
-        _handle_postgres_error(RuntimeError("Pool not initialized"), error_msg)
-
-    pool = _pool
+    pool = async_postgres_pool
 
     # Получаем соединение и начинаем транзакцию
     transaction_conn = await pool.acquire()
@@ -399,8 +382,8 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
         # Начинаем транзакцию
         await transaction_conn.execute("BEGIN")
 
-        # Патчим глобальную переменную _pool чтобы возвращал патченный пул
-        # Это позволяет использовать транзакцию во всех местах, где используется пул
+        # Патчим фикстуру async_postgres_pool для использования транзакции
+        # Это позволяет использовать транзакцию во всех местах, где используется пул из фикстуры
         from infra.database import postgres_client
 
         class PatchedPool:
@@ -426,10 +409,11 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
                 return getattr(self._original_pool, name)
 
         patched_pool = PatchedPool(pool, transaction_conn)
-        # Сохраняем оригинальный пул для восстановления
-        original_pool = postgres_client._pool
-        # Патчим глобальную переменную _pool
-        monkeypatch.setattr("infra.database.postgres_client._pool", patched_pool)
+        # Патчим фикстуру async_postgres_pool для использования транзакции
+        # Это позволяет использовать транзакцию во всех местах, где используется пул из фикстуры
+        # Сохраняем оригинальную фикстуру для восстановления
+        original_fixture = async_postgres_pool
+        monkeypatch.setattr("tests.conftest.async_postgres_pool", lambda: patched_pool)
 
         yield
     finally:
@@ -440,8 +424,6 @@ async def postgres_transaction(monkeypatch: Any) -> AsyncIterator[None]:
             # Игнорируем ошибки при rollback (например, если транзакция уже закрыта)
             pass
         finally:
-            # Восстанавливаем оригинальный пул
-            monkeypatch.setattr("infra.database.postgres_client._pool", original_pool)
             # Возвращаем соединение в пул
             await pool.release(transaction_conn)
 

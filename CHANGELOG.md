@@ -4,6 +4,16 @@
 
 ### Изменено
 
+- **Удалены fallback и обратная совместимость после рефакторинга пулов**:
+  - Удалён fallback на `_InMemoryRedis` в `infra/celery/context.py` - Redis теперь критичен для Celery worker
+  - Удалена обратная совместимость в `infra/metrics/metrics.py` - `redis_factory` теперь обязателен
+  - Обновлены все тесты для использования фикстуры `async_postgres_pool` вместо глобальной переменной `_pool`
+  - Обновлён `tests/conftest.py` для использования `PostgresPoolFactory` вместо глобальных функций
+  - Обновлены тесты миграций для использования фикстуры `async_postgres_pool`
+  - Обновлены все тесты в `tests/bot/test_handlers.py` для использования фикстуры `async_postgres_pool`
+  - Улучшено соблюдение принципа Dependency Injection: все зависимости передаются явно
+  - Улучшена архитектурная целостность: устранены все fallback, нарушающие границы слоёв
+
 - **Устранено глобальное состояние для пулов подключений**:
   - Создан `PostgresPoolFactory` в `infra/database/postgres_client.py` для инкапсуляции состояния пула PostgreSQL
   - Создан `RedisClientFactory` в `infra/redis/redis_client.py` для инкапсуляции состояния Redis клиента

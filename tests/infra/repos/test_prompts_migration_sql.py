@@ -15,7 +15,9 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-async def test_prompts_migration_up_and_down_applies_successfully(cleanup_tables: Any) -> None:
+async def test_prompts_migration_up_and_down_applies_successfully(
+    cleanup_tables: Any, async_postgres_pool: Any
+) -> None:
     """
     Проверяем, что SQL-миграции для таблицы prompts применяются и откатываются без ошибок.
     """
@@ -29,12 +31,7 @@ async def test_prompts_migration_up_and_down_applies_successfully(cleanup_tables
     up_sql = up_path.read_text(encoding="utf-8")
     down_sql = down_path.read_text(encoding="utf-8")
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    assert _pool is not None  # Для type checker
-    pool = _pool
+    pool = async_postgres_pool
     async with pool.acquire() as conn:
         # Начинаем с чистого состояния: удаляем таблицу, если она уже есть.
         await conn.execute("DROP TABLE IF EXISTS prompts CASCADE;")

@@ -899,6 +899,7 @@ async def test_mod_command_success(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест успешного выполнения команды /mod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -914,12 +915,8 @@ async def test_mod_command_success(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
     # Используем реальный AdminsRepo для теста
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    admins = AdminsRepo(pool=async_postgres_pool)
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
     fake_context.args = ["99999"]
@@ -968,6 +965,7 @@ async def test_unmod_command_success(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест успешного выполнения команды /unmod (обновленный для супер-админа)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -983,12 +981,8 @@ async def test_unmod_command_success(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
     # Используем реальный AdminsRepo для теста
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    admins = AdminsRepo(pool=async_postgres_pool)
     await admins.add_admin(99999)
     handler.admins_store = admins
     fake_context.application.bot_data["admins"] = admins
@@ -1014,6 +1008,7 @@ async def test_unmod_command_no_args_shows_list(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест команды /unmod без аргументов (теперь показывает список админов)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1027,11 +1022,8 @@ async def test_unmod_command_no_args_shows_list(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     handler.admins_store = admins
     fake_context.args = []
     fake_update.message.reply_to_message = None
@@ -1063,6 +1055,7 @@ async def test_list_mods_command_success(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     # Импортируем реальный AdminsRepo напрямую из модуля, обходя патч
     import infra.repos.admins_repo as admins_repo_module
@@ -1076,12 +1069,8 @@ async def test_list_mods_command_success(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
     # Используем реальный AdminsRepo для теста
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    admins = AdminsRepo(pool=async_postgres_pool)
     # Делаем пользователя 42 администратором
     await admins.add_admin(fake_update.effective_user.id)
     await admins.add_admin(11111)
@@ -1255,6 +1244,7 @@ async def test_mod_command_non_super_admin_denied(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест отказа команды /mod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
@@ -1268,11 +1258,8 @@ async def test_mod_command_non_super_admin_denied(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     await admins.add_admin(fake_update.effective_user.id)  # Делаем пользователя 42 админом, но не супер-админом
     handler.admins_store = admins
     fake_context.args = ["99999"]
@@ -1296,6 +1283,7 @@ async def test_mod_command_with_reply(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест команды /mod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1309,11 +1297,8 @@ async def test_mod_command_with_reply(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     handler.admins_store = admins
     fake_context.args = []
 
@@ -1342,6 +1327,7 @@ async def test_mod_command_with_args(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест команды /mod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1355,11 +1341,8 @@ async def test_mod_command_with_args(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     handler.admins_store = admins
     fake_context.args = ["54321"]
     fake_update.message.reply_to_message = None
@@ -1384,6 +1367,7 @@ async def test_unmod_command_non_super_admin_denied(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест отказа команды /unmod от не-супер-админа."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "999998")  # Другой ID, не 42
@@ -1397,11 +1381,8 @@ async def test_unmod_command_non_super_admin_denied(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     await admins.add_admin(fake_update.effective_user.id)
     handler.admins_store = admins
     fake_context.args = ["99999"]
@@ -1425,6 +1406,7 @@ async def test_unmod_command_with_reply(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест команды /unmod с reply на сообщение."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1438,11 +1420,8 @@ async def test_unmod_command_with_reply(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     await admins.add_admin(12345)  # Добавляем админа для удаления
     handler.admins_store = admins
     fake_context.args = []
@@ -1473,6 +1452,7 @@ async def test_unmod_command_with_args(  # noqa: PLR0913, PLR0917
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест команды /unmod с аргументом user_id."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1486,11 +1466,8 @@ async def test_unmod_command_with_args(  # noqa: PLR0913, PLR0917
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     await admins.add_admin(54321)
     handler.admins_store = admins
     fake_context.args = ["54321"]
@@ -1516,6 +1493,7 @@ async def test_unmod_command_cannot_remove_super_admin(  # noqa: PLR0913, PLR091
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест попытки удалить главного администратора (должен быть отказ)."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1529,11 +1507,8 @@ async def test_unmod_command_cannot_remove_super_admin(  # noqa: PLR0913, PLR091
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     handler.admins_store = admins
     fake_context.args = ["42"]  # Пытаемся удалить самого себя (главного админа)
     fake_update.message.reply_to_message = None
@@ -1557,6 +1532,7 @@ async def test_unmod_command_shows_admin_list_when_no_args(  # noqa: PLR0913, PL
     cleanup_tables: Any,
     monkeypatch: Any,
     mock_logger: Any,
+    async_postgres_pool: Any,
 ) -> None:
     """Тест показа списка админов при вызове /unmod без аргументов."""
     monkeypatch.setenv("ADMIN_CHAT_ID", "42")  # Пользователь 42 - супер-админ
@@ -1570,11 +1546,8 @@ async def test_unmod_command_shows_admin_list_when_no_args(  # noqa: PLR0913, PL
     handler = AdminHandlers(services=services, logger=mock_logger)
     async_retry_stub(handler)
 
-    from infra.database.postgres_client import _pool
-
-    if _pool is None:
-        pytest.skip("Postgres pool not initialized")
-    admins = AdminsRepo(pool=_pool)
+    # Используем реальный AdminsRepo для теста
+    admins = AdminsRepo(pool=async_postgres_pool)
     await admins.add_admin(11111)
     await admins.add_admin(22222)
     handler.admins_store = admins
