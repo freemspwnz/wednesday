@@ -7,9 +7,11 @@ Celery задачи для Wednesday Frog Bot.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import aiohttp
@@ -754,7 +756,7 @@ async def _daily_statistics_operation(  # noqa: RUF029
     bind=True,
     name="wednesday.beat_heartbeat",
 )
-def beat_heartbeat(self: Task) -> dict[str, Any]:
+async def beat_heartbeat(self: Task) -> dict[str, Any]:
     """Задача для heartbeat Beat (touch файл в tmpfs).
 
     Создаёт или обновляет файл heartbeat для мониторинга работы Celery Beat.
@@ -771,15 +773,11 @@ def beat_heartbeat(self: Task) -> dict[str, Any]:
         Ошибки при создании файла игнорируются, так как healthcheck сам проверит
         наличие файла.
     """
-    import os
-
-    heartbeat_path = "/tmp/beat-hb"
+    heartbeat_path = Path("/tmp/beat-hb")  # Работаем через Path объект
     try:
-        # Touch файл (создать или обновить mtime)
-        with open(heartbeat_path, "a", encoding="utf-8"):
-            os.utime(heartbeat_path, None)
-    except Exception:
-        # Игнорируем ошибки - healthcheck сам проверит наличие файла
-        pass
-
+        # [TODO: AIOFILES] Используем asyncio.to_thread() как временное решение
+        # Передаем саму функцию touch и именованный аргумент exist_ok
+        await asyncio.to_thread(heartbeat_path.touch, exist_ok=True)
+    except Exception as e:
+        logger.error(f"Ошибка выполнения heartbeat: {e}")
     return {"status": "ok"}

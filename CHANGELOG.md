@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Исправлены блокирующие операции в Celery задачах для asyncio pool**:
+  - Исправлен `beat_heartbeat`: синхронный `open()` заменён на `asyncio.to_thread()` с `Path.touch()`
+  - Исправлена валидация изображений в `KandinskyClient`: `PIL.Image.open()` вынесен в `asyncio.to_thread()`
+  - Функция `_validate_img` вынесена на уровень модуля для корректной работы с `asyncio.to_thread()`
+  - Добавлен импорт `Path` в `tasks.py` для работы с файловой системой
+  - Устранено замораживание Event Loop при файловых операциях и CPU-bound операциях
+
 - **Исправления для корректной работы с asyncio pool**:
   - Обновлён `build_cleanup_service()` для передачи `image_container` и `text_container`
   - Исправлен shutdown handler: улучшена обработка ошибок и логирование

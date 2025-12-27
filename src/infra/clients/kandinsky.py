@@ -59,6 +59,21 @@ MAX_STATUS_ATTEMPTS: Final[int] = 10
 STATUS_POLL_DELAY_SECONDS: Final[int] = 10
 
 
+def _validate_img(data: bytes) -> None:
+    """Валидирует изображение на основе PIL.
+
+    Синхронная функция для использования в asyncio.to_thread().
+
+    Args:
+        data: Байты изображения для валидации.
+
+    Raises:
+        Exception: Если данные не являются валидным изображением.
+    """
+    with Image.open(BytesIO(data)) as img:
+        img.verify()
+
+
 class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     """HTTP‑клиент Kandinsky, реализующий интерфейс `ITextToImageClient`.
 
@@ -617,7 +632,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
 
                         # Валидация, что это действительно изображение.
                         try:
-                            Image.open(BytesIO(image_data))
+                            await asyncio.to_thread(_validate_img, image_data)
                         except Exception as exc:
                             bound.bind(error=str(exc)).error(
                                 "Полученные данные от Kandinsky не являются валидным изображением",
