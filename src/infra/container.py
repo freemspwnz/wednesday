@@ -518,16 +518,10 @@ def build_cleanup_service(
     """
     from infra.celery.cleanup_service import CleanupService
 
-    # Получаем контейнеры ML-клиентов для закрытия при shutdown
-    image_container = get_image_client_container()
-    text_container = get_text_client_container()
-
     return CleanupService(
         logger=logger,
         pool_factory=pool_factory,
         redis_factory=redis_factory,
-        image_container=image_container,
-        text_container=text_container,
     )
 
 
@@ -1090,15 +1084,11 @@ def build_celery_services_context(
     Returns:
         Словарь с сервисами для Celery задач:
         - bot: Экземпляр WednesdayBot
+        - postgres_pool: Пул подключений PostgreSQL
+        - redis_client: Redis-клиент
         - image_service: Экземпляр ImageService
         - usage_tracker: Экземпляр UsageTracker
         - frog_processing: Экземпляр FrogProcessingService
-        - data_cleanup_service: Экземпляр DataCleanupService
-        - idempotency_service: Экземпляр IdempotencyService
-
-        ⚠️ ВАЖНО: postgres_pool и redis_client НЕ возвращаются в контексте.
-        Пулы используются только для создания сервисов через DI.
-        Все операции с БД должны выполняться через сервисы и репозитории.
 
     Raises:
         ValueError: Если обязательные параметры не переданы.
@@ -1176,6 +1166,8 @@ def build_celery_services_context(
 
     return {
         "bot": bot,
+        "postgres_pool": db_pool,
+        "redis_client": redis_client,
         "image_service": image_service,
         "usage_tracker": usage_tracker,
         "frog_processing": frog_processing,

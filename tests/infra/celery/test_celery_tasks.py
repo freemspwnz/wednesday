@@ -259,10 +259,16 @@ async def test_daily_cleanup_task_success(reset_singletons: Any) -> None:
     mock_self.request = MagicMock()
     mock_self.request.id = "test-task-id"
 
-    with patch("infra.celery.context.get_services_context") as mock_get_context:
-        mock_data_cleanup_service = AsyncMock()
-        mock_data_cleanup_service.cleanup_all = AsyncMock()
-        mock_get_context.return_value = {"data_cleanup_service": mock_data_cleanup_service}
+    with (
+        patch("infra.celery.context.get_services_context") as mock_get_context,
+        patch("infra.repos.dispatch_registry.DispatchRegistry") as mock_registry_class,
+    ):
+        mock_pool = MagicMock()
+        mock_get_context.return_value = {"postgres_pool": mock_pool}
+
+        mock_registry = AsyncMock()
+        mock_registry.cleanup_old = AsyncMock()
+        mock_registry_class.return_value = mock_registry
 
         task_func = daily_cleanup_task
         if hasattr(task_func, '__wrapped__'):
@@ -274,7 +280,7 @@ async def test_daily_cleanup_task_success(reset_singletons: Any) -> None:
         result = await task_func(mock_self)
 
         assert result["status"] == "success"
-        mock_data_cleanup_service.cleanup_all.assert_called_once()
+        mock_registry.cleanup_old.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -312,29 +318,20 @@ async def test_services_context_shutdown() -> None:
 
     celery_context_module._services_context = {
         "bot": mock_bot,
+        "postgres_pool": MagicMock(),
+        "redis_client": MagicMock(),
     }
 
-    mock_cleanup_service = AsyncMock()
-    mock_cleanup_service.cleanup_all = AsyncMock()
-    celery_context_module._cleanup_service = mock_cleanup_service
+    with (
+        patch("infra.celery.context.close_postgres_pool", new_callable=AsyncMock) as mock_close_pg,
+        patch("infra.celery.context.close_redis", new_callable=AsyncMock) as mock_close_redis,
+    ):
+        await shutdown_services()
 
-    mock_pool_factory = AsyncMock()
-    mock_pool_factory.close = AsyncMock()
-    celery_context_module._pool_factory = mock_pool_factory
+        # Проверяем, что ресурсы были закрыты
+        mock_close_pg.assert_awaited_once()
+        mock_close_redis.assert_awaited_once()
+        mock_bot.services.cleanup.assert_awaited_once()
 
-    mock_redis_factory = AsyncMock()
-    mock_redis_factory.close = AsyncMock()
-    celery_context_module._redis_factory = mock_redis_factory
-
-    await shutdown_services()
-
-    # Проверяем, что ресурсы были закрыты
-    mock_cleanup_service.cleanup_all.assert_awaited_once()
-    mock_pool_factory.close.assert_awaited_once()
-    mock_redis_factory.close.assert_awaited_once()
-
-    # Проверяем, что состояние сброшено
-    assert celery_context_module._services_context is None
-    assert celery_context_module._cleanup_service is None
-    assert celery_context_module._pool_factory is None
-    assert celery_context_module._redis_factory is None
+        # Проверяем, что состояние сброшено
+        assert celery_context_module._services_context is None

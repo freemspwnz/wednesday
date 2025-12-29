@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- **Добавлен упрощенный Composition Root (new_main.py) для High-Load/Low-RAM систем**:
+  - Создан новый модуль `new_main.py` с чистой точкой входа для управления ресурсами
+  - Использует новые модули `new_wednesday_bot.WednesdayBot` и `new_container.Container`
+  - Оптимизирован для серверов с ограниченной памятью (max_size=5 для Postgres pool)
+  - Упрощенная структура без supervisor паттерна и SupportBot
+  - Реализует чистый Composition Root паттерн для управления жизненным циклом ресурсов
+  - Использует async with для гарантированного закрытия HTTP сессии
+  - Все ресурсы (PostgresPool, Redis, aiohttp, Celery) управляются централизованно
+
 ### Изменено
 
 - **Исправлены блокирующие операции в Celery задачах для asyncio pool**:

@@ -48,8 +48,6 @@ class CeleryTaskQueue:
             Exception: При ошибке постановки задачи в очередь Celery.
         """
         try:
-            # Для celery[asyncio] send_task() можно вызывать напрямую, так как есть event loop
-            # В asyncio pool синхронные вызовы не блокируют event loop
             self.celery_app.send_task(
                 CeleryTaskNames.WEDNESDAY_SEND_FROG_MANUAL,
                 args=[chat_id, user_id, status_message_id, idempotency_key],
