@@ -14,7 +14,7 @@ from shared.config import GigaChatConfig, KandinskyConfig
 from shared.protocols import IModelsRepo, ITextToImageClient, ITextToTextClient
 
 if TYPE_CHECKING:
-    pass
+    import aiohttp
 
 logger = get_logger(__name__)
 
@@ -44,19 +44,21 @@ class ClientManagementService:
         self,
         config: KandinskyConfig,
         models_repo: IModelsRepo,
+        session: "aiohttp.ClientSession",
     ) -> ITextToImageClient:
         """Создаёт клиент для генерации изображений.
 
         Args:
             config: Конфигурация Kandinsky клиента.
             models_repo: Репозиторий моделей (обязательный).
+            session: HTTP сессия для использования (обязательна).
 
         Returns:
             Экземпляр KandinskyClient, реализующий ITextToImageClient.
         """
         from infra.clients.kandinsky import KandinskyClient
 
-        client = KandinskyClient(config=config, models_repo=models_repo)
+        client = KandinskyClient(config=config, models_repo=models_repo, session=session)
 
         self._logger.info(
             "Создан клиент генерации изображений",
@@ -70,12 +72,14 @@ class ClientManagementService:
         self,
         config: GigaChatConfig,
         models_repo: IModelsRepo,
+        session: "aiohttp.ClientSession",
     ) -> ITextToTextClient | None:
         """Создаёт клиент для генерации текста.
 
         Args:
             config: Конфигурация GigaChat клиента.
             models_repo: Репозиторий моделей (обязательный).
+            session: HTTP сессия для использования (обязательна).
 
         Returns:
             Экземпляр GigaChatTextClient, реализующий ITextToTextClient,
@@ -89,7 +93,7 @@ class ClientManagementService:
 
         from infra.clients.gigachat_text import GigaChatTextClient
 
-        client = GigaChatTextClient(config=config, models_repo=models_repo)
+        client = GigaChatTextClient(config=config, models_repo=models_repo, session=session)
 
         self._logger.info(
             "Создан текстовый клиент",

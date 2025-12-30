@@ -59,6 +59,21 @@ MAX_STATUS_ATTEMPTS: Final[int] = 10
 STATUS_POLL_DELAY_SECONDS: Final[int] = 10
 
 
+def _validate_img(data: bytes) -> None:
+    """Валидирует изображение на основе PIL.
+
+    Синхронная функция для использования в asyncio.to_thread().
+
+    Args:
+        data: Байты изображения для валидации.
+
+    Raises:
+        Exception: Если данные не являются валидным изображением.
+    """
+    with Image.open(BytesIO(data)) as img:
+        img.verify()
+
+
 class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     """HTTP‑клиент Kandinsky, реализующий интерфейс `ITextToImageClient`.
 
@@ -79,36 +94,36 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     ENDPOINT_PIPELINE_RUN = "key/api/v1/pipeline/run"
     ENDPOINT_PIPELINE_STATUS = "key/api/v1/pipeline/status"
 
-    def __init__(self, config: KandinskyConfig, models_repo: IModelsRepo) -> None:
+    def __init__(
+        self,
+        config: KandinskyConfig,
+        models_repo: IModelsRepo,
+        session: aiohttp.ClientSession,
+    ) -> None:
         """Инициализация клиента Kandinsky.
 
         Args:
             config: Конфигурация Kandinsky клиента (обязательна).
             models_repo: Репозиторий моделей для сохранения/получения настроек моделей.
+            session: HTTP сессия для использования (обязательна). Клиент не управляет
+                жизненным циклом сессии - она должна быть передана извне и закрыта извне.
+
+        Raises:
+            ValueError: Если session не передана.
         """
+        if session is None:
+            raise ValueError("session обязательна для KandinskyClient")
+
         self._api_key: str | None = config.api_key
         self._secret_key: str | None = config.secret_key
         self._base_url: str = config.base_url
         self._proxy_url: str | None = None
         self._models_repo: IModelsRepo = models_repo
         self._config: KandinskyConfig = config
-
-        # Proxy берём из стандартных переменных окружения, как и в старой реализации.
-        import os
-
-        self._proxy_url = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
+        self._session = session
 
         # Настройка timeout для сессии (используем таймауты генерации как основные)
         self._timeout = config.generation_timeout.to_client_timeout()
-
-        # Создаём connector (один раз для переиспользования)
-        connector: aiohttp.BaseConnector | None = None
-        if self._proxy_url:
-            # ProxyConnector не типизирован стабильно в aiohttp, поэтому игнорируем attr‑check.
-            connector = aiohttp.ProxyConnector.from_url(self._proxy_url)  # type: ignore[attr-defined]
-
-        # Создаём сессию для переиспользования во всех методах
-        self._session = aiohttp.ClientSession(timeout=self._timeout, connector=connector)
 
         # Инициализируем базовый класс
         super().__init__(
@@ -617,7 +632,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
 
                         # Валидация, что это действительно изображение.
                         try:
-                            Image.open(BytesIO(image_data))
+                            await asyncio.to_thread(_validate_img, image_data)
                         except Exception as exc:
                             bound.bind(error=str(exc)).error(
                                 "Полученные данные от Kandinsky не являются валидным изображением",
@@ -705,16 +720,11 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
     async def aclose(self) -> None:
         """Закрывает клиент и освобождает ресурсы.
 
-        Закрывает HTTP-сессию и освобождает все связанные ресурсы.
-        Должен вызываться при завершении работы приложения.
+        ⚠️ ВАЖНО: Клиент НЕ закрывает HTTP-сессию, так как она управляется извне.
+        Сессия должна быть закрыта через AsyncExitStack или другой механизм управления ресурсами.
         """
-        if hasattr(self, "_session") and self._session:
-            try:
-                await self._session.close()
-            except Exception as exc:
-                logger.warning(f"Ошибка при закрытии сессии KandinskyClient: {exc}")
-            finally:
-                self._session = None  # type: ignore[assignment]
+        # Клиент не управляет жизненным циклом сессии - она закрывается извне
+        pass
 
     async def __aenter__(self) -> Self:
         """Вход в контекстный менеджер.

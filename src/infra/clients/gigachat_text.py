@@ -123,13 +123,22 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         self,
         config: GigaChatConfig,
         models_repo: IModelsRepo,
+        session: aiohttp.ClientSession,
     ) -> None:
         """Инициализация клиента GigaChat.
 
         Args:
             config: Конфигурация GigaChat клиента (обязательна).
             models_repo: Репозиторий моделей для сохранения/получения настроек моделей.
+            session: HTTP сессия для использования (обязательна). Клиент не управляет
+                жизненным циклом сессии - она должна быть передана извне и закрыта извне.
+
+        Raises:
+            ValueError: Если session не передана.
         """
+        if session is None:
+            raise ValueError("session обязательна для GigaChatTextClient")
+
         self._auth_url: str = config.auth_url
         self._api_url: str = config.api_url
         self._models_url: str = config.models_url
@@ -139,6 +148,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         self._model: str = config.model
         self._models_repo: IModelsRepo = models_repo
         self._config: GigaChatConfig = config
+        self._session = session
 
         # Кэш токена
         self._access_token: str | None = None
@@ -150,13 +160,6 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         import asyncio
 
         self._token_lock: asyncio.Lock = asyncio.Lock()
-
-        # Общий aiohttp.ClientSession на жизненный цикл клиента.
-        # Таймауты и SSL‑контекст задаются один раз.
-        self._timeout = config.prompt_timeout.to_client_timeout()
-        ssl_context = self._get_ssl_context()
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
-        self._session = aiohttp.ClientSession(timeout=self._timeout, connector=connector)
 
         # Инициализируем базовый класс
         # Используем api_url как base_url для базового класса
@@ -463,19 +466,13 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
     #
 
     async def aclose(self) -> None:
-        """Явно закрывает внутренний aiohttp.ClientSession.
+        """Закрывает клиент и освобождает ресурсы.
 
-        Закрывает HTTP-сессию и освобождает все связанные ресурсы. Рекомендуется
-        вызывать при завершении приложения, чтобы избежать предупреждений о
-        незакрытых соединениях.
-
-        Note:
-            Ошибки при закрытии логируются, но не пробрасываются наружу.
+        ⚠️ ВАЖНО: Клиент НЕ закрывает HTTP-сессию, так как она управляется извне.
+        Сессия должна быть закрыта через AsyncExitStack или другой механизм управления ресурсами.
         """
-        try:
-            await self._session.close()
-        except Exception as exc:  # pragma: no cover - защитное логирование
-            logger.warning(f"Не удалось корректно закрыть GigaChatTextClient session: {exc!s}")
+        # Клиент не управляет жизненным циклом сессии - она закрывается извне
+        pass
 
     async def __aenter__(self) -> Self:
         """Вход в контекстный менеджер.
