@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Рефакторинг IMessagingService: улучшение абстракции для поддержки различных мессенджеров**:
+  - Изменены типы `chat_id` и `message_id` с `int` на `str | int` во всех методах протокола для поддержки WhatsApp, VK, Max
+  - Обновлены возвращаемые типы: `send_reply()` возвращает `str | int`, `get_chat_info_safe()` возвращает `tuple[str | int, str]`
+  - Удалены дублирующие методы из протокола: `get_chat_info()` и `get_chat()`, оставлен только универсальный `get_chat_details()`
+  - Удалены методы с бизнес-логикой: `send_error_message()`, `send_user_friendly_error()` и `send_fallback_image()` из протокола и реализации
+  - Бизнес-логика форматирования сообщений об ошибках перенесена в application layer
+  - Обновлены все использования: `dispatch_delivery_service.py`, `target_preparation_service.py` используют `send_message()` и `send_image()`
+  - Обновлен `ChatInfoService`: `get_chat_info_safe()` и `get_chat_safe()` теперь используют `get_chat_details()` внутри
+  - Обновлен `base.py`: `_send_log_file()` использует `messaging_service.send_file()` вместо прямого вызова `bot.send_document()`
+  - Обновлена реализация `PTBMessagingService`: добавлена конвертация `str` → `int` для совместимости с Telegram API
+  - Улучшена абстракция: протокол содержит только базовые операции мессенджера без бизнес-логики
+
 - **Рефакторинг структуры bot/: удаление SupportBot и реорганизация handlers**:
   - Удален SupportBot и все связанные файлы: `support_bot.py`, `handlers_support.py`, `support_bot_handlers_registry.py`
   - Удалены устаревшие компоненты жизненного цикла: `bot_lifecycle_manager.py`, `bot_lifecycle_mixin.py`, `bot_state_coordinator.py`, `bot_application_factory.py`

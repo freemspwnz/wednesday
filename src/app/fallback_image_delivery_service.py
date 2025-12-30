@@ -72,7 +72,7 @@ class FallbackImageDeliveryService(BaseService):
         """
         # 1. Отправка дружелюбного сообщения (если указано)
         if send_friendly_message_func is not None:
-            # Используем кастомную функцию (например, send_user_friendly_error для dispatch)
+            # Используем кастомную функцию для отправки дружелюбного сообщения
             try:
                 await send_friendly_message_func(chat_id)
             except MessagingError as e:

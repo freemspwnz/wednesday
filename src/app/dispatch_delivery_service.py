@@ -156,7 +156,11 @@ class DispatchDeliveryService(BaseService):
             try:
                 # Callback для отправки дружелюбного сообщения (специфично для dispatch)
                 async def send_user_friendly_error_callback(chat_id: int) -> None:
-                    await self._messaging.send_user_friendly_error(chat_id)
+                    friendly_message = (
+                        "🐸 К сожалению, не удалось сгенерировать новую картинку.\n"
+                        "Но не расстраивайтесь! Вот случайная картинка из архива! 🎲"
+                    )
+                    await self._messaging.send_message(chat_id=chat_id, text=friendly_message)
 
                 # Callback для отправки fallback изображения (специфично для dispatch)
                 async def send_fallback_image_callback(
@@ -164,11 +168,15 @@ class DispatchDeliveryService(BaseService):
                     image_data: bytes,
                     caption: str,
                 ) -> bool:
-                    return await self._messaging.send_fallback_image(
-                        chat_id=chat_id,
-                        image_data=image_data,
-                        caption=caption,
-                    )
+                    try:
+                        await self._messaging.send_image(
+                            chat_id=chat_id,
+                            image=image_data,
+                            caption=caption,
+                        )
+                        return True
+                    except (MessagingNetworkError, MessagingAPIError):
+                        return False
 
                 # Атомарная отправка дружелюбного сообщения и fallback изображения
                 # через общий сервис (текст + фото отправляются вместе)
@@ -446,9 +454,10 @@ class DispatchDeliveryService(BaseService):
         """
         if main_chat_id is not None:
             try:
-                await self._messaging.send_error_message(
-                    main_chat_id=main_chat_id,
-                    message=error_message,
+                formatted_message = f"⚠️ {error_message}\nПопробуем в следующий раз! 🐸"
+                await self._messaging.send_message(
+                    chat_id=main_chat_id,
+                    text=formatted_message,
                 )
             except ServiceError:  # pragma: no cover - уведомление не критично
                 pass

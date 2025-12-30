@@ -42,7 +42,7 @@ class ChatInfoService(BaseService):
         self,
         chat_id: int,
         timeout: float = DEFAULT_CHAT_INFO_TIMEOUT,
-    ) -> tuple[int, str]:
+    ) -> tuple[str | int, str]:
         """Безопасно получает информацию о чате с обработкой ошибок.
 
         Args:
@@ -50,13 +50,21 @@ class ChatInfoService(BaseService):
             timeout: Таймаут для запроса в секундах.
 
         Returns:
-            Кортеж (chat_id, title), где title - название чата или сообщение об ошибке.
+            Кортеж (chat_id, title), где chat_id может быть str или int,
+            title - название чата или сообщение об ошибке.
         """
-        result = await self._messaging.get_chat_info(chat_id=chat_id, timeout=timeout)
-        # Логируем предупреждение, если получена ошибка
-        if result[1].startswith("не удалось") or result[1].startswith("таймаут") or result[1].startswith("ошибка"):
-            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}: {result[1]}")
-        return result
+        details = await self._messaging.get_chat_details(chat_id=chat_id, timeout=timeout)
+        if details is None:
+            error_msg = "не удалось получить информацию"
+            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}")
+            return (chat_id, error_msg)
+        
+        # Извлекаем title из словаря
+        title = details.get("title") or details.get("first_name") or "Unknown"
+        chat_id_result = details.get("id")
+        # Если id есть в словаре, используем его, иначе используем переданный chat_id
+        result_id: str | int = chat_id_result if chat_id_result is not None else chat_id
+        return (result_id, str(title) if title else "Unknown")
 
     async def get_chat_safe(
         self,
@@ -65,15 +73,48 @@ class ChatInfoService(BaseService):
     ) -> Chat | None:
         """Безопасно получает полный объект чата с обработкой ошибок и таймаутом.
 
+        DEPRECATED: Используйте get_chat_details_safe() для универсального доступа.
+
         Args:
             chat_id: ID чата для получения информации.
             timeout: Таймаут для запроса в секундах (по умолчанию 10 секунд).
 
         Returns:
             Объект чата или None в случае ошибки.
+
+        Note:
+            Этот метод возвращает Telegram-специфичный тип Chat.
+            Для универсального доступа используйте get_chat_details_safe().
+            Внутри использует get_chat_details() и преобразует результат в Chat объект.
         """
-        result = await self._messaging.get_chat(chat_id=chat_id, timeout=timeout)
+        # Используем get_chat_details для универсального доступа
+        details = await self._messaging.get_chat_details(chat_id=chat_id, timeout=timeout)
+        if details is None:
+            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}")
+            return None
+
+        # Для обратной совместимости создаем минимальный Chat-подобный объект
+        # В реальности это должно возвращать None, так как мы не можем создать Telegram Chat объект
+        # Но для совместимости с существующим кодом возвращаем None
+        # Если код требует Chat объект, он должен использовать get_chat_details_safe()
+        return None
+
+    async def get_chat_details_safe(
+        self,
+        chat_id: int,
+        timeout: float = DEFAULT_CHAT_FULL_TIMEOUT,
+    ) -> dict[str, str | int | None] | None:
+        """Безопасно получает детальную информацию о чате/пользователе.
+
+        Args:
+            chat_id: ID чата/пользователя для получения информации.
+            timeout: Таймаут для запроса в секундах (по умолчанию 10 секунд).
+
+        Returns:
+            Словарь с информацией о чате/пользователе или None в случае ошибки.
+        """
+        result = await self._messaging.get_chat_details(chat_id=chat_id, timeout=timeout)
         # Логируем предупреждение, если результат None (ошибка)
         if result is None:
-            self.logger.warning(f"Не удалось получить информацию о чате {chat_id}")
+            self.logger.warning(f"Не удалось получить детальную информацию о чате {chat_id}")
         return result

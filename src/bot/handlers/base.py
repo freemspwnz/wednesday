@@ -72,14 +72,19 @@ class BaseHandlers:
 
         data = await loop.run_in_executor(None, _read_bytes, path)
 
+        # Используем messaging_service из services для соблюдения абстракции
+        if self.services.messaging_service is None:
+            raise RuntimeError("messaging_service не инициализирован в BotServices")
+        messaging_service = self.services.messaging_service
+
         # Получаем rate limiter через services (если доступен)
         rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
 
-        async def _send_document() -> None:
+        async def _send_file() -> None:
             await retry_on_connect_error(
-                bot.send_document,
+                messaging_service.send_file,
                 chat_id=chat_id,
-                document=data,
+                file=data,
                 filename=path.name,
                 max_retries=3,
                 delay=2,
@@ -87,10 +92,10 @@ class BaseHandlers:
             )
 
         if rate_limiter:
-            await rate_limiter.execute_with_rate_limit(_send_document)
+            await rate_limiter.execute_with_rate_limit(_send_file)
         else:
             # Fallback без rate limiting (для обратной совместимости)
-            await _send_document()
+            await _send_file()
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
@@ -649,7 +654,7 @@ class BaseHandlers:
 
         Side Effects:
             - Читает файлы логов из директории logs/.
-            - Отправляет файлы логов в чат через context.bot.send_document().
+            - Отправляет файлы логов в чат через messaging_service.send_file().
             - Проверяет права администратора через admins_store.is_admin().
         """
         if not update.message or not update.effective_user or not update.effective_chat:

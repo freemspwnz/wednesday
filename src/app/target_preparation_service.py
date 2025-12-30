@@ -62,9 +62,10 @@ class TargetPreparationService(BaseService):
             if main_chat_id:
                 try:
                     main_chat_id_int = int(str(main_chat_id))
-                    await self._messaging.send_error_message(
-                        main_chat_id=main_chat_id_int,
-                        message="Нет настроенных чатов для отправки",
+                    error_message = "⚠️ Нет настроенных чатов для отправки\nПопробуем в следующий раз! 🐸"
+                    await self._messaging.send_message(
+                        chat_id=main_chat_id_int,
+                        text=error_message,
                     )
                 except (ValueError, TypeError):
                     pass

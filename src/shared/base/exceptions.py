@@ -25,6 +25,16 @@ class MessagingAPIError(MessagingError):
     pass
 
 
+class MessagingFeatureNotSupported(MessagingError):
+    """Ошибка, когда мессенджер не поддерживает запрашиваемую функцию.
+
+    Используется для случаев, когда вызывается метод, который не поддерживается
+    конкретным мессенджером (например, edit_message в WhatsApp).
+    """
+
+    pass
+
+
 class ImageGenerationError(AppError):
     """Ошибки генерации изображений."""
 

@@ -796,14 +796,14 @@ class IMessagingService(Protocol):
 
     async def send_image(
         self,
-        chat_id: int,
+        chat_id: str | int,
         image: bytes,
         caption: str,
     ) -> None:
         """Отправляет фото в указанный чат.
 
         Args:
-            chat_id: ID чата для отправки.
+            chat_id: ID чата для отправки (может быть str или int).
             image: Байты изображения.
             caption: Подпись к изображению.
 
@@ -815,13 +815,13 @@ class IMessagingService(Protocol):
 
     async def send_message(
         self,
-        chat_id: int,
+        chat_id: str | int,
         text: str,
     ) -> None:
         """Отправляет текстовое сообщение в указанный чат.
 
         Args:
-            chat_id: ID чата для отправки.
+            chat_id: ID чата для отправки (может быть str или int).
             text: Текст сообщения.
 
         Raises:
@@ -832,14 +832,14 @@ class IMessagingService(Protocol):
 
     async def delete_message(
         self,
-        chat_id: int,
-        message_id: int,
+        chat_id: str | int,
+        message_id: str | int,
     ) -> None:
         """Удаляет сообщение из чата.
 
         Args:
-            chat_id: ID чата.
-            message_id: ID сообщения для удаления.
+            chat_id: ID чата (может быть str или int).
+            message_id: ID сообщения для удаления (может быть str или int).
 
         Raises:
             MessagingNetworkError: При сетевых ошибках.
@@ -847,103 +847,94 @@ class IMessagingService(Protocol):
         """
         ...
 
-    async def send_error_message(
+    async def get_chat_details(
         self,
-        main_chat_id: int,
-        message: str,
-    ) -> None:
-        """Отправляет сообщение об ошибке в основной чат.
-
-        Добавляет стандартный префикс и эмодзи к сообщению об ошибке.
-
-        Args:
-            main_chat_id: ID основного чата для отправки.
-            message: Текст сообщения об ошибке.
-
-        Raises:
-            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
-            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
-        """
-        ...
-
-    async def send_user_friendly_error(
-        self,
-        chat_id: int,
-    ) -> None:
-        """Отправляет дружелюбное сообщение об ошибке в указанный чат.
-
-        Отправляет стандартное сообщение об ошибке, которое не раскрывает
-        технических деталей пользователю.
-
-        Args:
-            chat_id: ID чата для отправки сообщения.
-
-        Raises:
-            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
-            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
-        """
-        ...
-
-    async def send_fallback_image(
-        self,
-        chat_id: int,
-        image_data: bytes,
-        caption: str,
-    ) -> bool:
-        """Отправляет fallback изображение в указанный чат.
-
-        Args:
-            chat_id: ID чата для отправки изображения.
-            image_data: Байты изображения.
-            caption: Подпись к изображению.
-
-        Returns:
-            True если изображение успешно отправлено, False если произошла ошибка.
-
-        Raises:
-            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
-            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
-        """
-        ...
-
-    async def get_chat_info(
-        self,
-        chat_id: int,
-        timeout: float = 5.0,
-    ) -> tuple[int, str]:
-        """Получает информацию о чате (ID и название).
-
-        Args:
-            chat_id: ID чата для получения информации.
-            timeout: Таймаут для запроса в секундах.
-
-        Returns:
-            Кортеж (chat_id, title), где title - название чата
-            или сообщение об ошибке при неудаче.
-
-        Note:
-            При ошибках возвращает (chat_id, "ошибка: <тип>")
-            вместо проброса исключения для graceful degradation.
-        """
-        ...
-
-    async def get_chat(
-        self,
-        chat_id: int,
+        chat_id: str | int,
         timeout: float = 10.0,
-    ) -> object | None:
-        """Получает полный объект чата.
+    ) -> dict[str, str | int | None] | None:
+        """Получает детальную информацию о чате/пользователе.
 
         Args:
-            chat_id: ID чата для получения информации.
+            chat_id: ID чата/пользователя для получения информации (может быть str или int).
             timeout: Таймаут для запроса в секундах.
 
         Returns:
-            Объект чата или None в случае ошибки.
+            Словарь с информацией о чате/пользователе или None в случае ошибки.
+            Ключи словаря: 'id', 'title', 'first_name', 'last_name', 'username', 'type'.
+            Для чатов: 'title' заполнен, 'first_name'/'last_name' могут быть None.
+            Для пользователей: 'first_name'/'last_name' заполнены, 'title' может быть None.
 
         Note:
-            Тип возвращаемого объекта зависит от реализации мессенджера.
-            Для graceful degradation возвращает None при ошибках.
+            Универсальный метод, возвращающий структурированные данные вместо
+            специфичного объекта мессенджера. Для graceful degradation возвращает None при ошибках.
+        """
+        ...
+
+    async def send_file(
+        self,
+        chat_id: str | int,
+        file: bytes,
+        filename: str,
+    ) -> None:
+        """Отправляет файл в указанный чат.
+
+        Args:
+            chat_id: ID чата для отправки (может быть str или int).
+            file: Байты файла.
+            filename: Имя файла.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
+        """
+        ...
+
+    async def send_reply(
+        self,
+        chat_id: str | int,
+        text: str,
+        reply_to_message_id: str | int | None = None,
+    ) -> str | int:
+        """Отправляет ответ на сообщение.
+
+        Args:
+            chat_id: ID чата для отправки (может быть str или int).
+            text: Текст сообщения.
+            reply_to_message_id: ID сообщения для ответа (опционально, может быть str или int).
+                В разных мессенджерах механизм ответа может отличаться:
+                - Telegram: использует message_id напрямую
+                - WhatsApp: может требовать дополнительный контекст (thread_id)
+                - VK: может требовать дополнительные параметры
+
+        Returns:
+            ID отправленного сообщения (может быть str или int).
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права, chat_not_found).
+            MessagingFeatureNotSupported: Если мессенджер не поддерживает reply или требуется
+                дополнительный контекст, который не может быть передан через reply_to_message_id.
+        """
+        ...
+
+    async def edit_message(
+        self,
+        chat_id: str | int,
+        message_id: str | int,
+        text: str,
+    ) -> None:
+        """Редактирует существующее сообщение.
+
+        Args:
+            chat_id: ID чата (может быть str или int).
+            message_id: ID сообщения для редактирования (может быть str или int).
+            text: Новый текст сообщения.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (сообщение не найдено, нет прав).
+            MessagingFeatureNotSupported: Если мессенджер не поддерживает редактирование сообщений
+                (например, WhatsApp не поддерживает редактирование).
         """
         ...
 

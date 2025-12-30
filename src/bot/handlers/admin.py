@@ -57,7 +57,7 @@ class AdminHandlers(BaseHandlers):
         bot: Bot,
         chat_id: int,
         timeout: float = 5.0,
-    ) -> tuple[int, str]:
+    ) -> tuple[str | int, str]:
         """Безопасно получает информацию о чате с обработкой ошибок и rate limiting.
 
         Делегирует выполнение в ChatInfoService для соблюдения архитектурных границ.
@@ -69,18 +69,19 @@ class AdminHandlers(BaseHandlers):
             timeout: Таймаут для запроса в секундах.
 
         Returns:
-            Кортеж (chat_id, title), где title - название чата или сообщение об ошибке.
+            Кортеж (chat_id, title), где chat_id может быть str или int,
+            title - название чата или сообщение об ошибке.
         """
         # Получаем rate limiter через services (если доступен)
         rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
 
         if rate_limiter:
             # Используем проактивную защиту через rate limiter
-            async def _get_info() -> tuple[int, str]:
+            async def _get_info() -> tuple[str | int, str]:
                 result = await self._chat_info_service.get_chat_info_safe(chat_id, timeout)
                 return result
 
-            result: tuple[int, str] = await rate_limiter.execute_with_rate_limit(_get_info)
+            result: tuple[str | int, str] = await rate_limiter.execute_with_rate_limit(_get_info)
             return result
         else:
             # Fallback без rate limiting (для обратной совместимости)
@@ -190,7 +191,7 @@ class AdminHandlers(BaseHandlers):
 
         Side Effects:
             - Читает файлы логов из директории logs/.
-            - Отправляет файлы логов в чат через context.bot.send_document().
+            - Отправляет файлы логов в чат через messaging_service.send_file().
             - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         await self._send_logs_command(update, context, max_days=MAX_LOG_DAYS)
