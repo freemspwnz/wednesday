@@ -2,7 +2,7 @@
 
 Координирует работу:
 - CircuitBreaker (проверка и обновление состояния)
-- ICache (кэширование изображений)
+- ImageExistenceService (проверка существования изображений)
 - ImageGenerationService (доменная генерация)
 - IMetrics (метрики генерации)
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from time import perf_counter
 
+from app.image_existence_service import ImageExistenceService
 from domain.image_generation import ImageGenerationService
 from domain.value_objects import UserID
 from shared.base.base_service import BaseService
@@ -21,9 +22,7 @@ from shared.base.exceptions import (
     ServiceError,
     UnexpectedImageError,
 )
-from shared.protocols import ICache, ICircuitBreaker, ILogger, IMetrics
-
-CACHE_VALUE_TUPLE_LENGTH = 2
+from shared.protocols import ICircuitBreaker, ILogger, IMetrics
 
 
 class ImageGenerationCoordinator(BaseService):
@@ -31,7 +30,7 @@ class ImageGenerationCoordinator(BaseService):
 
     Отвечает за:
     - Проверку circuit breaker перед генерацией
-    - Работу с кэшем изображений (проверка и запись)
+    - Проверку существования изображений через ImageExistenceService
     - Вызов доменного сервиса генерации
     - Запись метрик генерации (success/failed, cache hit, circuit breaker)
     """
@@ -40,7 +39,7 @@ class ImageGenerationCoordinator(BaseService):
         self,
         generation_service: ImageGenerationService,
         circuit_breaker: ICircuitBreaker | None = None,
-        image_cache: ICache[tuple[bytes, str]] | None = None,
+        image_existence_service: ImageExistenceService | None = None,
         metrics: IMetrics | None = None,
         *,
         logger: ILogger,
@@ -52,8 +51,8 @@ class ImageGenerationCoordinator(BaseService):
             circuit_breaker: Сервис circuit breaker (опционально).
                 Если None, проверка circuit breaker пропускается, генерация выполняется
                 без защиты от перегрузки API. Рекомендуется использовать в production.
-            image_cache: Сервис кэширования изображений (опционально).
-                Если None, кэширование не выполняется, каждое изображение генерируется заново.
+            image_existence_service: Сервис проверки существования изображений (опционально).
+                Если None, проверка существования не выполняется, каждое изображение генерируется заново.
                 Не критично для основной функциональности, но улучшает производительность.
             metrics: Сервис записи метрик (опционально).
                 Если None, метрики не записываются. Не критично для основной функциональности,
@@ -63,7 +62,7 @@ class ImageGenerationCoordinator(BaseService):
         super().__init__(logger)
         self._generation_service = generation_service
         self._circuit_breaker = circuit_breaker
-        self._cache = image_cache
+        self._existence_service = image_existence_service
         self._metrics = metrics
 
     async def generate_image(
@@ -71,11 +70,11 @@ class ImageGenerationCoordinator(BaseService):
         prompt: str,
         user_id: int | None = None,
     ) -> bytes:
-        """Генерирует изображение с проверкой circuit breaker и кэша.
+        """Генерирует изображение с проверкой circuit breaker и существования.
 
         Выполняет следующую последовательность:
         1. Проверяет circuit breaker (если доступен)
-        2. Проверяет кэш изображений (если доступен)
+        2. Проверяет существование изображения (если доступен)
         3. Генерирует изображение через ImageGenerationService
         4. Обновляет circuit breaker при ошибках
         5. Записывает метрики
@@ -93,7 +92,7 @@ class ImageGenerationCoordinator(BaseService):
             UnexpectedImageError: При неожиданных ошибках.
 
         Note:
-            При ошибках кэша генерация продолжается (graceful degradation).
+            При ошибках проверки существования генерация продолжается (graceful degradation).
         """
         start_time = perf_counter()
         user_id_str = str(user_id) if user_id is not None else None
@@ -101,10 +100,10 @@ class ImageGenerationCoordinator(BaseService):
         # 1. Проверяем circuit breaker
         await self._check_circuit_breaker(user_id_str)
 
-        # 2. Проверяем кэш
-        cached_image = await self._try_cache(prompt, user_id_str, start_time)
-        if cached_image is not None:
-            return cached_image
+        # 2. Проверяем существование изображения
+        existing_image = await self._try_existing_image(prompt, user_id_str, start_time)
+        if existing_image is not None:
+            return existing_image
 
         # 3. Генерируем изображение
         self.logger.info(
@@ -206,52 +205,45 @@ class ImageGenerationCoordinator(BaseService):
             # При ошибке проверки circuit breaker продолжаем генерацию
             # (fail-open стратегия для проверки circuit breaker)
 
-    async def _try_cache(
+    async def _try_existing_image(
         self,
         prompt: str,
         user_id_str: str | None,
         start_time: float,
     ) -> bytes | None:
-        """Пытается получить изображение из кэша.
+        """Пытается получить существующее изображение по промпту.
 
         Args:
-            prompt: Промпт для поиска в кэше.
+            prompt: Промпт для поиска изображения.
             user_id_str: Идентификатор пользователя для логирования.
             start_time: Время начала операции для вычисления latency.
 
         Returns:
-            Байты изображения из кэша или None, если не найдено.
+            Байты изображения или None, если не найдено.
         """
-        if self._cache is None:
+        if self._existence_service is None:
             return None
 
         try:
-            cached_obj = await self._cache.get(prompt)
-            if cached_obj:
-                # Ожидаем, что реализация ICache для изображений
-                # вернёт кортеж (image_data, caption) или совместимую структуру.
-                if isinstance(cached_obj, tuple) and len(cached_obj) == CACHE_VALUE_TUPLE_LENGTH:
-                    image_data, _cached_caption = cached_obj
-                    if image_data is not None:
-                        elapsed = perf_counter() - start_time
-                        self.logger.info(
-                            "Изображение получено из кэша",
-                            event="image_cache_hit",
-                            user_id=user_id_str,
-                            status="cached",
-                            latency_ms=round(elapsed * 1000),
-                        )
-                        await self._record_metrics("cache_hit", user_id_str)
-                        await self._record_metrics("generation_success", user_id_str)
-                        return image_data
-                else:
-                    self.logger.warning(
-                        f"Неподдерживаемый формат значения в кэше для prompt={prompt}: {cached_obj!r}",
+            result = await self._existence_service.get_image_by_prompt(prompt)
+            if result:
+                image_data, _image_hash = result
+                if image_data is not None:
+                    elapsed = perf_counter() - start_time
+                    self.logger.info(
+                        "Изображение найдено в хранилище",
+                        event="image_existence_hit",
+                        user_id=user_id_str,
+                        status="found",
+                        latency_ms=round(elapsed * 1000),
                     )
+                    await self._record_metrics("cache_hit", user_id_str)
+                    await self._record_metrics("generation_success", user_id_str)
+                    return image_data
         except CacheError as e:
             self.logger.warning(
-                f"Ошибка при проверке кэша: {e}",
-                event="cache_error",
+                f"Ошибка при проверке существования изображения: {e}",
+                event="existence_check_error",
                 status="warning",
                 error_type=type(e).__name__,
                 error_message=str(e),

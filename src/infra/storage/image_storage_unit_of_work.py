@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+from app.image_existence_service import ImageExistenceService
 from infra.storage.failed_cache_queue import FailedCacheOperation, FailedCacheQueue
 from shared.base.base_service import BaseService
-from shared.protocols import ICache, IImageStorage, ILogger
+from shared.protocols import IImageStorage, ILogger
 from shared.retry import retry_standard
 
 
@@ -27,23 +28,22 @@ class ImageSaveOperation:
 
 
 class ImageStorageUnitOfWork(BaseService):
-    """Unit of Work для управления сохранением изображений в кэш и хранилище.
+    """Unit of Work для управления сохранением изображений в хранилище.
 
     Группирует операции сохранения изображения и обеспечивает компенсационные
     действия при ошибках для улучшения согласованности данных.
 
-    Поддерживает отложенное пересоздание кэша при временных ошибках:
-    - При ошибке сохранения в кэш (но успешном сохранении в хранилище) операция
-      автоматически добавляется в очередь пересоздания
-    - Фоновая задача через asyncio.create_task пересоздаёт кэш из хранилища
+    Поддерживает отложенное сохранение в постоянное хранилище при временных ошибках:
+    - При ошибке сохранения в постоянное хранилище (но успешном сохранении в файловое хранилище)
+      операция автоматически добавляется в очередь пересоздания
+    - Фоновая задача через asyncio.create_task пересоздаёт запись в постоянном хранилище
     - Используется exponential retry механизм для обработки временных ошибок
-    - Кэш пересоздаётся даже при временных сбоях (пул исчерпан, таймауты)
     """
 
     def __init__(
         self,
         failed_cache_queue: FailedCacheQueue,
-        cache: ICache[tuple[bytes, str]] | None = None,
+        image_existence_service: ImageExistenceService | None = None,
         storage: IImageStorage | None = None,
         *,
         logger: ILogger,
@@ -52,14 +52,15 @@ class ImageStorageUnitOfWork(BaseService):
 
         Args:
             failed_cache_queue: Очередь для персистентного хранения операций
-                пересоздания кэша (обязательно). Использует Redis с автоматическим
+                пересоздания (обязательно). Использует Redis с автоматическим
                 fallback на in-memory при недоступности Redis.
-            cache: Сервис кэширования (опционально).
+            image_existence_service: Сервис проверки существования изображений (опционально).
+                Используется для сохранения в постоянное хранилище (PostgreSQL + FS).
             storage: Сервис файлового хранилища (опционально).
             logger: Экземпляр логгера для использования в сервисе.
         """
         super().__init__(logger)
-        self._cache = cache
+        self._existence_service = image_existence_service
         self._storage = storage
         self._operations: list[ImageSaveOperation] = []
         self._failed_cache_queue = failed_cache_queue
@@ -73,22 +74,22 @@ class ImageStorageUnitOfWork(BaseService):
         cache_key: str,
         storage_prefix: str = "frog",
     ) -> bool:
-        """Сохраняет изображение в кэш и хранилище.
+        """Сохраняет изображение в постоянное хранилище и файловое хранилище.
 
         Выполняет сохранение с компенсационными действиями при ошибках:
-        1. Сначала сохраняет в хранилище (более критичное)
-        2. Затем сохраняет в кэш
-        3. При ошибке хранилища - не сохраняет в кэш
-        4. При ошибке кэша после успешного сохранения в хранилище:
+        1. Сначала сохраняет в файловое хранилище (более критичное)
+        2. Затем сохраняет в постоянное хранилище (PostgreSQL + FS через ImageExistenceService)
+        3. При ошибке файлового хранилища - не сохраняет в постоянное хранилище
+        4. При ошибке постоянного хранилища после успешного сохранения в файловое:
            - Логирует предупреждение
-           - Считает операцию успешной (хранилище имеет приоритет)
-           - Автоматически добавляет операцию в очередь пересоздания кэша
-           - Запускает фоновую задачу для пересоздания кэша из хранилища
+           - Считает операцию успешной (файловое хранилище имеет приоритет)
+           - Автоматически добавляет операцию в очередь пересоздания
+           - Запускает фоновую задачу для пересоздания записи из файлового хранилища
 
         Args:
             image_data: Байты изображения.
             caption: Подпись к изображению.
-            cache_key: Ключ для кэша.
+            cache_key: Промпт для сохранения (используется как ключ).
             storage_prefix: Префикс для файлового хранилища.
 
         Returns:
@@ -102,11 +103,11 @@ class ImageStorageUnitOfWork(BaseService):
         )
         self._operations.append(operation)
 
-        # Стратегия: сначала хранилище (более критичное), потом кэш
+        # Стратегия: сначала файловое хранилище (более критичное), потом постоянное
         storage_success = False
-        cache_success = False
+        persistent_success = False
 
-        # 1. Сохранение в хранилище (приоритетное)
+        # 1. Сохранение в файловое хранилище (приоритетное)
         if self._storage:
             try:
                 storage_path = await self._storage.save(
@@ -117,34 +118,38 @@ class ImageStorageUnitOfWork(BaseService):
                 operation.storage_saved = True
                 storage_success = True
                 self.logger.debug(
-                    f"Изображение сохранено в хранилище: {storage_path}",
+                    f"Изображение сохранено в файловое хранилище: {storage_path}",
                     event="image_storage_saved",
                     status="saved",
                 )
             except Exception as e:
-                self.logger.warning(f"Ошибка при сохранении в хранилище: {e}")
-                # Если хранилище не удалось, не сохраняем в кэш (компенсация)
+                self.logger.warning(f"Ошибка при сохранении в файловое хранилище: {e}")
+                # Если файловое хранилище не удалось, не сохраняем в постоянное (компенсация)
                 return False
 
-        # 2. Сохранение в кэш (второстепенное)
-        if self._cache:
+        # 2. Сохранение в постоянное хранилище (PostgreSQL + FS)
+        if self._existence_service:
             try:
-                await self._cache.set(cache_key, (image_data, caption))
-                operation.cache_saved = True
-                cache_success = True
+                await self._existence_service.save_image_by_prompt(
+                    prompt=cache_key,
+                    image_data=image_data,
+                )
+                operation.cache_saved = True  # Используем старое поле для совместимости
+                persistent_success = True
                 self.logger.debug(
-                    f"Изображение сохранено в кэш: {cache_key}",
-                    event="image_cache_saved",
-                    status="cached",
+                    f"Изображение сохранено в постоянное хранилище: prompt={cache_key}",
+                    event="image_persistent_saved",
+                    status="saved",
                 )
             except Exception as e:
-                self.logger.warning(f"Ошибка при сохранении в кэш: {e}")
-                # Если кэш не удался, но хранилище успешно - это приемлемо
-                # Кэш может быть пересоздан позже
+                self.logger.warning(f"Ошибка при сохранении в постоянное хранилище: {e}")
+                # Если постоянное хранилище не удалось, но файловое успешно - это приемлемо
+                # Постоянное хранилище может быть пересоздано позже
                 if storage_success:
                     self.logger.info(
-                        "Изображение сохранено в хранилище, но не в кэш. Это приемлемо, кэш может быть пересоздан.",
-                        event="cache_save_failed_storage_ok",
+                        "Изображение сохранено в файловое хранилище, но не в постоянное. "
+                        "Это приемлемо, запись может быть пересоздана.",
+                        event="persistent_save_failed_storage_ok",
                         status="warning",
                         cache_key=operation.cache_key,
                         storage_path=operation.storage_path,
@@ -160,7 +165,7 @@ class ImageStorageUnitOfWork(BaseService):
                             )
                         )
                         self.logger.info(
-                            "Операция добавлена в очередь пересоздания кэша",
+                            "Операция добавлена в очередь пересоздания",
                             event="failed_cache_enqueued",
                             status="success",
                             cache_key=operation.cache_key,
@@ -171,7 +176,7 @@ class ImageStorageUnitOfWork(BaseService):
                         self._start_background_rebuild_task()
 
         # Операция считается успешной, если сохранено хотя бы в одно хранилище
-        return storage_success or cache_success
+        return storage_success or persistent_success
 
     async def commit(self) -> bool:
         """Фиксирует все операции Unit of Work.
@@ -196,17 +201,17 @@ class ImageStorageUnitOfWork(BaseService):
         Примечание: полный откат может быть невозможен для файлового хранилища.
         """
         for operation in reversed(self._operations):
-            # Компенсация: удаляем из кэша
-            if operation.cache_saved and self._cache:
-                try:
-                    await self._cache.delete(operation.cache_key)
-                    self.logger.debug(f"Откат: удалено из кэша {operation.cache_key}")
-                except Exception as e:
-                    self.logger.warning(f"Ошибка при откате кэша {operation.cache_key}: {e}")
+            # Компенсация: удаление из постоянного хранилища не поддерживается
+            # (файлы в PostgreSQL + FS не удаляются при откате)
+            if operation.cache_saved:
+                self.logger.debug(
+                    f"Откат: запись в постоянном хранилище не удалена "
+                    f"(удаление не поддерживается): {operation.cache_key}",
+                )
 
-            # Компенсация: удаляем из хранилища (если поддерживается)
-            # Примечание: мы не удаляем файлы из хранилища при ошибках сохранения кэша,
-            # так как хранилище имеет приоритет над кэшем
+            # Компенсация: удаляем из файлового хранилища (если поддерживается)
+            # Примечание: мы не удаляем файлы из хранилища при ошибках сохранения в постоянное,
+            # так как файловое хранилище имеет приоритет
             if operation.storage_saved and operation.storage_path and self._storage:
                 self.logger.debug(
                     f"Откат: файл в хранилище не удалён (хранилище имеет приоритет): {operation.storage_path}",
@@ -219,64 +224,68 @@ class ImageStorageUnitOfWork(BaseService):
         self._operations.clear()
 
     @retry_standard(
-        service_name="cache_rebuild",
-        method_name="rebuild_cache_from_storage",
+        service_name="persistent_rebuild",
+        method_name="rebuild_persistent_from_storage",
     )
-    async def rebuild_cache_from_storage(
+    async def rebuild_persistent_from_storage(
         self,
         cache_key: str,
         storage_path: str,
         caption: str,
     ) -> bool:
-        """Пересоздаёт кэш из файла в хранилище.
+        """Пересоздаёт запись в постоянном хранилище из файла в файловом хранилище.
 
         Использует exponential retry для обработки временных ошибок.
-        Используется, когда сохранение в хранилище успешно,
-        но сохранение в кэш не удалось.
+        Используется, когда сохранение в файловое хранилище успешно,
+        но сохранение в постоянное хранилище не удалось.
 
         Args:
-            cache_key: Ключ для кэша (prompt).
-            storage_path: Путь к файлу в хранилище.
+            cache_key: Промпт для сохранения.
+            storage_path: Путь к файлу в файловом хранилище.
             caption: Подпись к изображению.
 
         Returns:
-            True если кэш успешно пересоздан, False иначе.
+            True если запись успешно пересоздана, False иначе.
 
         Raises:
-            CacheError: При ошибках доступа к кэшу.
-            StorageError: При ошибках чтения из хранилища.
+            CacheError: При ошибках доступа к постоянному хранилищу.
+            StorageError: При ошибках чтения из файлового хранилища.
         """
-        if not self._cache or not self._storage:
+        if not self._existence_service or not self._storage:
             return False
 
         try:
-            # Загружаем изображение из хранилища
+            # Загружаем изображение из файлового хранилища
             image_data = await self._storage.get_by_path(storage_path)
 
-            # Сохраняем в кэш
-            await self._cache.set(cache_key, (image_data, caption))
+            # Сохраняем в постоянное хранилище
+            await self._existence_service.save_image_by_prompt(
+                prompt=cache_key,
+                image_data=image_data,
+            )
 
             self.logger.info(
-                f"Кэш пересоздан из хранилища: cache_key={cache_key}, storage_path={storage_path}",
+                f"Запись в постоянном хранилище пересоздана из файлового: "
+                f"prompt={cache_key}, storage_path={storage_path}",
             )
             return True
         except Exception as e:
             self.logger.warning(
-                f"Не удалось пересоздать кэш из хранилища: {e}",
+                f"Не удалось пересоздать запись в постоянном хранилище: {e}",
             )
             raise  # Пробрасываем для retry механизма
 
     def _start_background_rebuild_task(self) -> None:
-        """Запускает фоновую задачу для пересоздания кэша."""
+        """Запускает фоновую задачу для пересоздания записей в постоянном хранилище."""
         if self._rebuild_task is None or self._rebuild_task.done():
             self._rebuild_running = True
             self._rebuild_task = asyncio.create_task(
                 self._rebuild_failed_caches_loop(),
             )
-            self.logger.info("Запущена фоновая задача пересоздания кэша")
+            self.logger.info("Запущена фоновая задача пересоздания записей в постоянном хранилище")
 
     async def _rebuild_failed_caches_loop(self) -> None:
-        """Цикл пересоздания кэша для неудачных операций из Redis очереди."""
+        """Цикл пересоздания записей в постоянном хранилище для неудачных операций из Redis очереди."""
         consecutive_empty = 0
         max_consecutive_empty = 5  # Останавливаемся после 5 пустых проверок
 
@@ -300,15 +309,15 @@ class ImageStorageUnitOfWork(BaseService):
                     )
                     continue
 
-                success = await self.rebuild_cache_from_storage(
+                success = await self.rebuild_persistent_from_storage(
                     cache_key=failed_op.cache_key,
                     storage_path=failed_op.storage_path,
                     caption=failed_op.caption,
                 )
                 if success:
                     self.logger.info(
-                        "Кэш успешно пересоздан из очереди",
-                        event="cache_rebuild_success",
+                        "Запись в постоянном хранилище успешно пересоздана из очереди",
+                        event="persistent_rebuild_success",
                         status="success",
                         cache_key=failed_op.cache_key,
                     )
@@ -317,14 +326,14 @@ class ImageStorageUnitOfWork(BaseService):
                     await self._failed_cache_queue.enqueue(failed_op)
                     self.logger.warning(
                         "Операция возвращена в очередь после неудачи",
-                        event="cache_rebuild_requeue_persistent",
+                        event="persistent_rebuild_requeue",
                         status="warning",
                         cache_key=failed_op.cache_key,
                     )
             except Exception as e:
                 self.logger.error(
-                    f"Ошибка при пересоздании кэша для {failed_op.cache_key}: {e}",
-                    event="cache_rebuild_error",
+                    f"Ошибка при пересоздании записи в постоянном хранилище для {failed_op.cache_key}: {e}",
+                    event="persistent_rebuild_error",
                     status="error",
                     cache_key=failed_op.cache_key,
                     exc_info=True,
@@ -345,8 +354,8 @@ class ImageStorageUnitOfWork(BaseService):
 
         self._rebuild_running = False
         self.logger.info(
-            "Фоновая задача пересоздания кэша завершена",
-            event="cache_rebuild_loop_finished",
+            "Фоновая задача пересоздания записей в постоянном хранилище завершена",
+            event="persistent_rebuild_loop_finished",
             status="success",
         )
 
@@ -365,7 +374,7 @@ class ImageStorageUnitOfWork(BaseService):
         if self._rebuild_running:
             self.logger.debug(
                 "Фоновая задача пересоздания уже запущена, пропуск восстановления",
-                event="cache_rebuild_restore_skipped",
+                event="persistent_rebuild_restore_skipped",
                 status="info",
             )
             return
@@ -375,15 +384,15 @@ class ImageStorageUnitOfWork(BaseService):
 
             if not operations:
                 self.logger.debug(
-                    "Очередь пересоздания кэша пуста при восстановлении",
-                    event="cache_rebuild_restore_empty",
+                    "Очередь пересоздания записей в постоянном хранилище пуста при восстановлении",
+                    event="persistent_rebuild_restore_empty",
                     status="info",
                 )
                 return
 
             self.logger.info(
-                f"Восстановлено {len(operations)} операций из Redis очереди пересоздания кэша",
-                event="cache_rebuild_restored",
+                f"Восстановлено {len(operations)} операций из Redis очереди пересоздания",
+                event="persistent_rebuild_restored",
                 status="success",
                 count=len(operations),
             )
@@ -394,14 +403,14 @@ class ImageStorageUnitOfWork(BaseService):
             else:
                 self.logger.warning(
                     "Фоновая задача уже запущена при восстановлении очереди",
-                    event="cache_rebuild_restore_warning",
+                    event="persistent_rebuild_restore_warning",
                     status="warning",
                 )
 
         except Exception as e:
             self.logger.error(
                 f"Ошибка при восстановлении очереди из Redis: {e}",
-                event="cache_rebuild_restore_error",
+                event="persistent_rebuild_restore_error",
                 status="error",
                 exc_info=True,
             )

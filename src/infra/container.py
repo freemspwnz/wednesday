@@ -41,7 +41,7 @@ from app.target_preparation_service import TargetPreparationService
 from domain.caption_service import CaptionService
 from domain.image_generation import ImageGenerationService
 from domain.prompt_generation import PromptGenerationService
-from infra.cache.image_cache import ImageCacheService
+from app.image_existence_service import ImageExistenceService
 from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.clients.client_manager import ClientManagementService
@@ -204,9 +204,9 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
     # Инфраструктура
     images_repo = ImagesRepo(pool=db_pool)
     prompts_repo = PromptsRepo(pool=db_pool)
-    image_cache = ImageCacheService(
-        images_repo=images_repo,
+    image_existence_service = ImageExistenceService(
         prompts_repo=prompts_repo,
+        images_repo=images_repo,
         logger=app_logger,
     )
     image_storage = ImageStorageService(logger=app_logger)
@@ -250,7 +250,7 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
     # Создаём UnitOfWork для управления сохранением изображений
     image_storage_uow = ImageStorageUnitOfWork(
         failed_cache_queue=failed_cache_queue,
-        cache=image_cache,
+        image_existence_service=image_existence_service,
         storage=image_storage,
         logger=app_logger,
     )
@@ -259,7 +259,7 @@ def build_image_stack(  # noqa: PLR0913, PLR0917
     generation_coordinator = ImageGenerationCoordinator(
         generation_service=image_generation,
         circuit_breaker=circuit_breaker,
-        image_cache=image_cache,
+        image_existence_service=image_existence_service,
         metrics=metrics,
         logger=app_logger,
     )
