@@ -17,14 +17,15 @@ from typing import TYPE_CHECKING, TypeVar
 
 from celery import Task
 
-from infra.celery.app import celery_app
-from infra.celery.new_context import worker_ctx
 from infra.logging.logger import get_logger, log_event
 from infra.metrics.prometheus_metrics import (
     CELERY_TASK_DURATION_SECONDS,
     CELERY_TASK_FAILURES_TOTAL,
     CELERY_TASKS_TOTAL,
 )
+from worker import celery_app
+
+from .context import worker_ctx
 
 if TYPE_CHECKING:
     from shared.bot_services import BotServices
@@ -162,14 +163,14 @@ def with_container(func: Callable[..., Awaitable[R]]) -> Callable[..., Awaitable
 # Пример задачи: отправка жабы по расписанию
 @celery_app.task(
     bind=True,
-    name="wednesday.new_send_frog",
+    name="wednesday.send_frog",
     soft_time_limit=300,  # 5 минут
     time_limit=360,  # 6 минут (hard limit)
     options={"queue": "wednesday"},
 )
-@log_celery_task("new_send_wednesday_frog")
+@log_celery_task("send_wednesday_frog")
 @with_container
-async def new_send_frog(  # noqa: RUF029
+async def send_frog(  # noqa: RUF029
     self: Task,
     slot_time: str | None = None,
     *,
@@ -190,7 +191,7 @@ async def new_send_frog(  # noqa: RUF029
     """
     logger.info(
         f"Начало выполнения задачи отправки жабы (slot_time={slot_time})",
-        event="new_send_frog_started",
+        event="send_frog_started",
         status="in_progress",
     )
 
@@ -201,7 +202,7 @@ async def new_send_frog(  # noqa: RUF029
 
         logger.info(
             f"Задача отправки жабы выполнена успешно (slot_time={slot_time})",
-            event="new_send_frog_success",
+            event="send_frog_success",
             status="ok",
         )
 
@@ -214,7 +215,7 @@ async def new_send_frog(  # noqa: RUF029
     except Exception as e:
         logger.error(
             f"Ошибка при выполнении задачи отправки жабы: {e}",
-            event="new_send_frog_error",
+            event="send_frog_error",
             status="error",
             error_type=type(e).__name__,
             error_message=str(e),
@@ -225,14 +226,14 @@ async def new_send_frog(  # noqa: RUF029
 # Пример задачи: генерация изображения
 @celery_app.task(
     bind=True,
-    name="wednesday.new_generate_image",
+    name="wednesday.generate_image",
     soft_time_limit=180,  # 3 минуты
     time_limit=240,  # 4 минуты (hard limit)
     options={"queue": "images"},
 )
-@log_celery_task("new_generate_image")
+@log_celery_task("generate_image")
 @with_container
-async def new_generate_image(  # noqa: RUF029
+async def generate_image(  # noqa: RUF029
     self: Task,
     prompt: str,
     *,
@@ -253,7 +254,7 @@ async def new_generate_image(  # noqa: RUF029
     """
     logger.info(
         f"Начало генерации изображения (prompt={prompt[:50]}...)",
-        event="new_generate_image_started",
+        event="generate_image_started",
         status="in_progress",
     )
 
@@ -264,7 +265,7 @@ async def new_generate_image(  # noqa: RUF029
 
         logger.info(
             "Генерация изображения выполнена успешно",
-            event="new_generate_image_success",
+            event="generate_image_success",
             status="ok",
         )
 
@@ -277,7 +278,7 @@ async def new_generate_image(  # noqa: RUF029
     except Exception as e:
         logger.error(
             f"Ошибка при генерации изображения: {e}",
-            event="new_generate_image_error",
+            event="generate_image_error",
             status="error",
             error_type=type(e).__name__,
             error_message=str(e),
@@ -288,14 +289,14 @@ async def new_generate_image(  # noqa: RUF029
 # Пример задачи: ежедневная очистка
 @celery_app.task(
     bind=True,
-    name="wednesday.new_daily_cleanup",
+    name="wednesday.daily_cleanup",
     soft_time_limit=600,  # 10 минут
     time_limit=720,  # 12 минут (hard limit)
     options={"queue": "maintenance"},
 )
-@log_celery_task("new_daily_cleanup")
+@log_celery_task("daily_cleanup")
 @with_container
-async def new_daily_cleanup(  # noqa: RUF029
+async def daily_cleanup(  # noqa: RUF029
     self: Task,
     *,
     services: BotServices,
@@ -314,7 +315,7 @@ async def new_daily_cleanup(  # noqa: RUF029
     """
     logger.info(
         "Начало ежедневной очистки",
-        event="new_daily_cleanup_started",
+        event="daily_cleanup_started",
         status="in_progress",
     )
 
@@ -325,7 +326,7 @@ async def new_daily_cleanup(  # noqa: RUF029
 
         logger.info(
             "Ежедневная очистка выполнена успешно",
-            event="new_daily_cleanup_success",
+            event="daily_cleanup_success",
             status="ok",
         )
 
@@ -337,7 +338,7 @@ async def new_daily_cleanup(  # noqa: RUF029
     except Exception as e:
         logger.error(
             f"Ошибка при ежедневной очистке: {e}",
-            event="new_daily_cleanup_error",
+            event="daily_cleanup_error",
             status="error",
             error_type=type(e).__name__,
             error_message=str(e),

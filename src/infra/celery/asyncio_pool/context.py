@@ -111,7 +111,7 @@ class WorkerContext:
                 )
 
                 # Создаём TaskQueue
-                from infra.celery.celery_task_queue import CeleryTaskQueue
+                from .task_queue import CeleryTaskQueue
 
                 task_queue = CeleryTaskQueue()
 

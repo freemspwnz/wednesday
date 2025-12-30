@@ -31,6 +31,7 @@ from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_delivery_service import DispatchDeliveryService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
+from app.image_existence_service import ImageExistenceService
 from app.image_generation_coordinator import ImageGenerationCoordinator
 from app.image_service import ImageService
 from app.image_storage_coordinator import ImageStorageCoordinator
@@ -41,7 +42,6 @@ from app.target_preparation_service import TargetPreparationService
 from domain.caption_service import CaptionService
 from domain.image_generation import ImageGenerationService
 from domain.prompt_generation import PromptGenerationService
-from app.image_existence_service import ImageExistenceService
 from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.clients.client_manager import ClientManagementService
@@ -888,7 +888,7 @@ def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: Redi
     )
 
     # Ленивые импорты для избежания циклических зависимостей
-    from infra.celery.celery_task_queue import CeleryTaskQueue
+    from infra.celery.asyncio_pool.task_queue import CeleryTaskQueue
 
     # Создаём task queue для прямого использования в handlers
     task_queue = CeleryTaskQueue()
