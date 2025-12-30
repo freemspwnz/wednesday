@@ -96,6 +96,7 @@ services:
     volumes:
       - ../:/app
     healthcheck:
+      # Используем тестовый celery app для проверки healthcheck
       test: ["CMD-SHELL", "celery -A tests.common.celery_app_test inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
       interval: 5s
       timeout: 5s

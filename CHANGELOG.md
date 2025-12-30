@@ -4,6 +4,20 @@
 
 ### Добавлено
 
+- **Добавлена новая инфраструктура Celery с asyncio pool (new_app.py, new_context.py, new_tasks.py)**:
+  - Создан `new_context.py` с классом `WorkerContext` для управления жизненным циклом ресурсов через `AsyncExitStack`
+  - Реализован singleton Container для воркера с ленивой инициализацией через `get_container()`
+  - Использование `push_async_callback` для закрытия Postgres pool и Redis client вместо обёрток
+  - Все ресурсы (Postgres, Redis, HTTP сессия) управляются через `AsyncExitStack` для корректной очистки
+  - Создан `new_app.py` с оптимизациями для asyncio pool: `result_expires=3600`, обработчик `@worker_shutdown.connect`
+  - Создан `new_tasks.py` с async задачами, использующими `worker_ctx.get_container()` и декоратор `@with_container`
+  - Добавлены новые имена задач в `task_names.py`: `NEW_SEND_FROG`, `NEW_GENERATE_IMAGE`, `NEW_DAILY_CLEANUP`
+  - Добавлены методы в `celery_task_queue.py` для отправки новых задач: `send_new_frog_task()`, `send_new_generate_image_task()`, `send_new_daily_cleanup_task()`
+  - Используется только легкий `Bot` вместо `Application` для экономии RAM
+  - Порядок закрытия ресурсов (LIFO): HTTP сессия → Redis → Postgres pool
+
+### Добавлено
+
 - **Добавлен упрощенный WednesdayBot (new_wednesday_bot.py) с чистой архитектурой**:
   - Создан новый модуль `new_wednesday_bot.py` с упрощенной архитектурой бота
   - Удалено наследование от BotLifecycleMixin: класс теперь содержит только Telegram-логику
