@@ -132,15 +132,15 @@ async def main() -> None:
         status="started",
     )
     max_timeout = max(
-        config.kandinsky.generation_timeout.total_seconds(),
-        config.gigachat.prompt_timeout.total_seconds(),
+        config.kandinsky.generation_timeout.total,
+        config.gigachat.prompt_timeout.total,
     )
     http_timeout = aiohttp.ClientTimeout(
         total=max_timeout,
         connect=30,
     )
 
-    ssl_context = True
+    ssl_context: bool | ssl.SSLContext = True
     if isinstance(config.gigachat.verify_ssl, bool):
         ssl_context = config.gigachat.verify_ssl
     elif isinstance(config.gigachat.verify_ssl, str):

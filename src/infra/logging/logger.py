@@ -314,31 +314,27 @@ class LoguruLogger:
         return self._logger.add(*args, **kwargs)
 
     def _log(self, level: EventLogLevel, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Внутренний метод для логирования через log_event.
+        """Внутренний метод логирования.
 
-        Args:
-            level: Уровень логирования.
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования, может включать exc_info.
+        Упрощённый вариант:
+        - Форматирует сообщение (если переданы args)
+        - Собирает структурированный payload (event, user_id, status и т.п.)
+        - Маскирует секреты и очищает payload
+        - Делегирует непосредственно во внутренний loguru.logger
         """
-        # Если есть args для форматирования, форматируем сообщение
-        # log_event ожидает уже отформатированное сообщение
+        # 1. Форматирование сообщения
         if args:
             try:
-                # Пытаемся отформатировать сообщение через стандартный format()
                 formatted_message = message.format(*args)
             except (ValueError, IndexError, KeyError):
-                # Если форматирование не удалось (нет {} в сообщении или неправильные аргументы),
-                # используем исходное сообщение (loguru в таком случае игнорирует лишние args)
                 formatted_message = message
         else:
             formatted_message = message
 
-        # Объединяем привязанный контекст с переданными kwargs
+        # 2. Объединяем привязанный контекст с переданными kwargs
         all_kwargs = {**self._bound_context, **kwargs}
 
-        # Извлекаем специфические параметры log_event из kwargs
+        # Специальные структурированные поля
         user_id = all_kwargs.pop("user_id", None)
         prompt_hash = all_kwargs.pop("prompt_hash", None)
         image_id = all_kwargs.pop("image_id", None)
@@ -347,22 +343,51 @@ class LoguruLogger:
         event = all_kwargs.pop("event", formatted_message)
         exc_info = all_kwargs.pop("exc_info", None)
 
-        # Остальные kwargs идут в extra
-        extra = all_kwargs if all_kwargs else None
+        # 3. Собираем payload в едином формате
+        payload: dict[str, Any] = {
+            "event": event,
+            "service": os.getenv("SERVICE_NAME", "wednesday-bot"),
+            "env": os.getenv("ENV", "dev"),
+        }
+        if user_id is not None:
+            payload["user_id"] = str(user_id)
+        if prompt_hash is not None:
+            payload["prompt_hash"] = prompt_hash
+        if image_id is not None:
+            payload["image_id"] = image_id
+        if latency_ms is not None:
+            payload["latency_ms"] = float(latency_ms)
+        if status is not None:
+            payload["status"] = status
 
-        # Вызываем log_event для гарантии очистки данных
-        log_event(
-            event=event,
-            user_id=user_id,
-            prompt_hash=prompt_hash,
-            image_id=image_id,
-            latency_ms=latency_ms,
-            status=status,
-            extra=extra,
-            level=level,
-            message=formatted_message,
-            exc_info=exc_info,
-        )
+        # Остальные ключи считаем частью extra и также добавляем в payload
+        if all_kwargs:
+            for key, value in all_kwargs.items():
+                if value is not None:
+                    payload[key] = value
+
+        # 4. Маскируем секреты
+        masked_message = mask_secrets(formatted_message)
+        scrubbed_obj = scrub(payload)
+        if isinstance(scrubbed_obj, dict):
+            scrubbed_payload = scrubbed_obj
+        else:  # защитный fallback
+            scrubbed_payload = payload
+
+        # 5. Определяем базовый loguru.logger с учётом module_name
+        base_logger = self._logger
+        if self._module_name:
+            base_logger = base_logger.bind(name=self._module_name)
+
+        # Привязываем payload к логгеру
+        bound_logger = base_logger.bind(**scrubbed_payload)
+
+        # 6. Вызываем соответствующий метод loguru
+        log_method = getattr(bound_logger, level, bound_logger.info)
+        if exc_info is not None:
+            log_method(masked_message, exc_info=exc_info)
+        else:
+            log_method(masked_message)
 
 
 def get_logger(name: str | None = None) -> "ILogger":
@@ -480,63 +505,33 @@ def log_event(  # noqa: PLR0913
     message: str | None = None,
     exc_info: bool | BaseException | tuple[type[BaseException], BaseException, Any] | None = None,
 ) -> None:
+    """Высокоуровневая обёртка для структурированного логирования событий.
+
+    Упрощённый вариант:
+    - Выбирает логгер через get_logger()
+    - Передаёт структурированные поля как kwargs в методы ILogger
+    - Маскировка и scrub выполняются внутри LoguruLogger._log()
     """
-    Высокоуровневая обёртка для структурированного логирования событий.
-    Маскировка секретов выполняется здесь, перед логированием.
-    """
-    # Базовый набор полей события
-    payload: dict[str, Any] = {
-        "event": event,
-        "service": os.getenv("SERVICE_NAME", "wednesday-bot"),
-        "env": os.getenv("ENV", "dev"),
-    }
-
-    if user_id is not None:
-        payload["user_id"] = str(user_id)
-    if prompt_hash is not None:
-        payload["prompt_hash"] = prompt_hash
-    if image_id is not None:
-        payload["image_id"] = image_id
-    if latency_ms is not None:
-        payload["latency_ms"] = float(latency_ms)
-    if status is not None:
-        payload["status"] = status
-
-    # Дополнительные поля
-    if extra:
-        for key, value in extra.items():
-            if value is not None:
-                payload[key] = value
-
-    # Маскировка секретов перед логированием
-    # Применяем mask_secrets к message и scrub к payload
-    masked_message = mask_secrets(message or event)
-    scrubbed_payload_obj = scrub(payload)
-    # scrub возвращает object, но для dict мы гарантируем dict
-    if not isinstance(scrubbed_payload_obj, dict):
-        scrubbed_payload: dict[str, Any] = payload  # Fallback на исходный payload
-    else:
-        scrubbed_payload = scrubbed_payload_obj
-
-    # Получаем имя модуля вызывающего кода
+    # Определяем модуль вызывающего кода
     caller_module = _get_caller_module_name()
-    module_name = caller_module if caller_module else __name__
+    logger_instance = get_logger(caller_module or __name__)
 
-    # Используем внутренний loguru.logger напрямую для избежания циклической зависимости
-    # (get_logger теперь возвращает LoguruLogger, который вызывает log_event)
-    base_logger = logger.bind(name=module_name)
+    # Собираем kwargs для ILogger
+    log_kwargs: dict[str, Any] = {
+        "event": event,
+        "user_id": user_id,
+        "prompt_hash": prompt_hash,
+        "image_id": image_id,
+        "latency_ms": latency_ms,
+        "status": status,
+        "exc_info": exc_info,
+    }
+    if extra:
+        log_kwargs.update(extra)
 
-    # Привязываем payload к логгеру
-    bound_logger = base_logger.bind(**scrubbed_payload)
-
-    # Выбираем метод логирования
-    log_method = getattr(bound_logger, level, bound_logger.info)
-
-    # Передаем exc_info, если он указан
-    if exc_info is not None:
-        log_method(masked_message, exc_info=exc_info)
-    else:
-        log_method(masked_message)
+    # Выбираем метод по уровню и логируем
+    log_method = getattr(logger_instance, level)
+    log_method(message or event, **log_kwargs)
 
 
 # HTTP статус код для разделения успешных и ошибочных запросов
