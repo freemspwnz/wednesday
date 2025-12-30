@@ -21,11 +21,13 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 
+import aiohttp
+
 from infra.clients.client_manager import ClientManagementService
 from infra.logging.logger import get_logger
 from shared.config import KandinskyConfig
 from shared.models import APIStatusResult, SetModelResult
-from shared.protocols import IModelsRepo, ITextToImageClient
+from shared.protocols import ILogger, IModelsRepo, ITextToImageClient
 
 logger = get_logger(__name__)
 
@@ -89,6 +91,8 @@ class ImageClientContainer(ITextToImageClient):
         config: KandinskyConfig,
         client_manager: ClientManagementService,
         models_repo: IModelsRepo,
+        session: aiohttp.ClientSession,
+        logger: ILogger,
     ) -> None:
         """Заменяет активный клиент новым, созданным из конфига.
 
@@ -99,20 +103,28 @@ class ImageClientContainer(ITextToImageClient):
             config: Конфигурация для нового клиента.
             client_manager: Сервис для создания клиентов.
             models_repo: Репозиторий моделей (обязательный).
+            session: HTTP сессия для использования в клиенте (обязательна).
+            logger: Логгер для передачи в клиент (обязателен).
 
         Example:
             from infra.clients.client_manager import ClientManagementService
             from infra.clients.image_client_container import get_image_client_container
             from shared.config import KandinskyConfig
+            import aiohttp
+            from infra.logging.logger import get_logger
 
             container = get_image_client_container()
             new_config = KandinskyConfig(api_key="...", secret_key="...")
             manager = ClientManagementService(models_repo=repo)
+            session = aiohttp.ClientSession()
+            logger = get_logger(__name__)
 
             await container.replace_client(
                 config=new_config,
                 client_manager=manager,
                 models_repo=repo,
+                session=session,
+                logger=logger,
             )
         """
         async with self._lock:
@@ -120,6 +132,8 @@ class ImageClientContainer(ITextToImageClient):
             new_client = client_manager.create_image_client(
                 config=config,
                 models_repo=models_repo,
+                session=session,
+                logger=logger,
             )
 
             # Сохраняем старый клиент для закрытия

@@ -51,6 +51,15 @@
 
 ### Изменено
 
+- **Рефакторинг клиентов для использования логгера через DI**:
+  - Обновлен `GigaChatTextClient`: убран прямой импорт `logger`, добавлен параметр `logger: ILogger` в конструктор
+  - Обновлен `KandinskyClient`: убран прямой импорт `logger`, добавлен параметр `logger: ILogger` в конструктор
+  - Обновлен `ClientManagementService`: добавлен параметр `logger: ILogger` в конструктор, передача логгера в клиенты
+  - Клиенты используют `logger.bind(module="kandinsky")` и `logger.bind(module="gigachat")` для контекста модуля
+  - Обновлен `Container` в `new_container.py`: передача логгера в `ClientManagementService` и клиенты через DI
+  - Улучшена архитектура: клиенты следуют принципу Dependency Injection для логгера
+  - Вынесены неиспользуемые импорты библиотек в `TYPE_CHECKING`: `TracebackType`, `Self`, `Any` (только для типизации)
+
 - **Рефакторинг клиентов для использования единой HTTP сессии через DI**:
   - Обновлен `GigaChatTextClient`: теперь принимает `aiohttp.ClientSession` через конструктор вместо создания собственной
   - Обновлен `KandinskyClient`: теперь принимает `aiohttp.ClientSession` через конструктор вместо создания собственной

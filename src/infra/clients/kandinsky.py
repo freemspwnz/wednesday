@@ -29,11 +29,9 @@ from __future__ import annotations
 import asyncio
 import base64
 from io import BytesIO
-from types import TracebackType
-from typing import Any, Final, Self
+from typing import TYPE_CHECKING, Final
 
 import aiohttp
-from loguru import logger
 from PIL import Image
 
 from infra.clients.base import BaseHTTPClient
@@ -49,7 +47,11 @@ from infra.clients.sber_clients_exceptions import map_client_errors
 from shared.base.exceptions import APIError, NetworkError
 from shared.config import KandinskyConfig
 from shared.models import APIStatusResult, SetModelResult
-from shared.protocols import IModelsRepo, ITextToImageClient
+from shared.protocols import ILogger, IModelsRepo, ITextToImageClient
+
+if TYPE_CHECKING:
+    from types import TracebackType
+    from typing import Any, Self
 
 HTTP_STATUS_OK: Final[int] = 200
 HTTP_STATUS_UNAUTHORIZED: Final[int] = 401
@@ -99,6 +101,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         config: KandinskyConfig,
         models_repo: IModelsRepo,
         session: aiohttp.ClientSession,
+        logger: ILogger,
     ) -> None:
         """Инициализация клиента Kandinsky.
 
@@ -107,12 +110,15 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             models_repo: Репозиторий моделей для сохранения/получения настроек моделей.
             session: HTTP сессия для использования (обязательна). Клиент не управляет
                 жизненным циклом сессии - она должна быть передана извне и закрыта извне.
+            logger: Логгер для использования (обязателен). Должен быть передан через DI.
 
         Raises:
-            ValueError: Если session не передана.
+            ValueError: Если session или logger не переданы.
         """
         if session is None:
             raise ValueError("session обязательна для KandinskyClient")
+        if logger is None:
+            raise ValueError("logger обязателен для KandinskyClient")
 
         self._api_key: str | None = config.api_key
         self._secret_key: str | None = config.secret_key
@@ -121,6 +127,8 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         self._models_repo: IModelsRepo = models_repo
         self._config: KandinskyConfig = config
         self._session = session
+        # Создаём bound логгер с контекстом модуля
+        self._logger: ILogger = logger.bind(module="kandinsky")
 
         # Настройка timeout для сессии (используем таймауты генерации как основные)
         self._timeout = config.generation_timeout.to_client_timeout()
@@ -158,7 +166,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="kandinsky_generate", user_id=user_id)
+        bound = self._logger.bind(event="kandinsky_generate", user_id=user_id)
         bound.info("Запрос генерации изображения через Kandinsky API получен")
 
         try:
@@ -209,7 +217,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="kandinsky_status_check")
+        bound = self._logger.bind(event="kandinsky_status_check")
         bound.debug("Начало проверки статуса Kandinsky (save_models={})", save_models)
 
         try:
@@ -276,7 +284,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="kandinsky_get_available_models", save_models=save_models)
+        bound = self._logger.bind(event="kandinsky_get_available_models", save_models=save_models)
         bound.debug("Запрос списка доступных моделей Kandinsky")
 
         # Пытаемся получить через check_api_status, который уже возвращает список моделей
@@ -328,7 +336,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="kandinsky_set_model", model_identifier=model_identifier)
+        bound = self._logger.bind(event="kandinsky_set_model", model_identifier=model_identifier)
 
         try:
             headers = self._get_auth_headers()
@@ -487,7 +495,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         user_id: str | None = None,
     ) -> str:
         """Выбирает актуальный pipeline ID, используя сохранённую модель или первую доступную."""
-        bound = logger.bind(event="kandinsky_get_pipeline", user_id=user_id)
+        bound = self._logger.bind(event="kandinsky_get_pipeline", user_id=user_id)
         saved_pipeline_id, saved_pipeline_name = await self._models_repo.get_kandinsky_model()
 
         data_json = await self._fetch_pipelines(headers=headers)
@@ -538,7 +546,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         user_id: str | None = None,
     ) -> str:
         """Создаёт задачу генерации и возвращает UUID."""
-        bound = logger.bind(event="kandinsky_start_generation", user_id=user_id, pipeline_id=pipeline_id)
+        bound = self._logger.bind(event="kandinsky_start_generation", user_id=user_id, pipeline_id=pipeline_id)
 
         params = KandinskyGenerationRequest(
             type="GENERATE",
@@ -586,7 +594,7 @@ class KandinskyClient(BaseHTTPClient, ITextToImageClient):
         user_id: str | None = None,
     ) -> bytes:
         """Ожидает завершения задачи генерации и возвращает байты изображения."""
-        bound = logger.bind(event="kandinsky_poll_generation", user_id=user_id, task_uuid=uuid)
+        bound = self._logger.bind(event="kandinsky_poll_generation", user_id=user_id, task_uuid=uuid)
 
         last_exception: Exception | None = None
         for attempt in range(1, MAX_STATUS_ATTEMPTS + 1):

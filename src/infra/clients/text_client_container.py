@@ -21,11 +21,13 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 
+import aiohttp
+
 from infra.clients.client_manager import ClientManagementService
 from infra.logging.logger import get_logger
 from shared.config import GigaChatConfig
 from shared.models import APIStatusResult, SetModelResult
-from shared.protocols import IModelsRepo, ITextToTextClient
+from shared.protocols import ILogger, IModelsRepo, ITextToTextClient
 
 logger = get_logger(__name__)
 
@@ -90,6 +92,8 @@ class TextClientContainer(ITextToTextClient):
         config: GigaChatConfig,
         client_manager: ClientManagementService,
         models_repo: IModelsRepo,
+        session: aiohttp.ClientSession,
+        logger: ILogger,
     ) -> None:
         """Заменяет активный клиент новым, созданным из конфига.
 
@@ -100,6 +104,8 @@ class TextClientContainer(ITextToTextClient):
             config: Конфигурация для нового клиента.
             client_manager: Сервис для создания клиентов.
             models_repo: Репозиторий моделей (обязательный).
+            session: HTTP сессия для использования в клиенте (обязательна).
+            logger: Логгер для передачи в клиент (обязателен).
 
         Raises:
             ValueError: Если не удалось создать клиент (например, authorization_key не задан).
@@ -109,6 +115,8 @@ class TextClientContainer(ITextToTextClient):
             new_client = client_manager.create_text_client(
                 config=config,
                 models_repo=models_repo,
+                session=session,
+                logger=logger,
             )
 
             if new_client is None:

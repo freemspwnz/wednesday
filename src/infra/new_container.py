@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING
 
@@ -18,24 +16,17 @@ import asyncpg
 if TYPE_CHECKING:
     from app.admin_access_service import AdminAccessService
     from app.admin_command_service import AdminCommandService
-    from app.admin_notification_service import AdminNotificationService
-    from app.data_cleanup_service import DataCleanupService
-    from app.frog_processing_service import FrogProcessingService
     from bot.bot_error_handler import BotErrorHandler
     from bot.bot_handlers_registry import BotHandlersRegistry
     from bot.chat_event_handler import ChatEventHandler
     from bot.handlers_admin import AdminHandlers
     from bot.handlers_models import ModelHandlers
     from bot.handlers_user import UserHandlers
-    from bot.wednesday_bot import WednesdayBot
-    from infra.celery.cleanup_service import CleanupService
-    from infra.database.postgres_client import PostgresPoolFactory
-    from infra.redis.redis_client import RedisClient, RedisClientFactory
+    from infra.redis.redis_client import RedisClient
 
 from app.admin_dashboard_service import AdminDashboardService
 from app.api_status_service import APIStatusService
 from app.database_operations_service import DatabaseOperationsService
-from app.dispatch_delivery_service import DispatchDeliveryService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
 from app.image_existence_service import ImageExistenceService
@@ -45,7 +36,6 @@ from app.image_storage_coordinator import ImageStorageCoordinator
 from app.image_storage_unit_of_work import ImageStorageUnitOfWork
 from app.model_management_service import ModelManagementService
 from app.prompt_service import PromptService
-from app.target_preparation_service import TargetPreparationService
 from domain.caption_service import CaptionService
 from domain.image_generation import ImageGenerationService
 from domain.prompt_generation import PromptGenerationService
@@ -54,7 +44,6 @@ from infra.cache.user_state_cache import UserStateCache
 from infra.clients.client_manager import ClientManagementService
 from infra.clients.image_client_container import get_image_client_container
 from infra.clients.text_client_container import get_text_client_container
-from infra.metrics.metrics import Metrics
 from infra.rate_limiting.circuit_breaker import CircuitBreakerService
 from infra.rate_limiting.rate_limiter import RateLimiter
 from infra.repos import AdminsRepo, ChatsRepo, ImagesRepo, ModelsRepo, PromptsRepo
@@ -62,7 +51,7 @@ from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
 from infra.storage.failed_cache_queue import FailedCacheQueue
 from infra.storage.image_storage import ImageStorageService
-from shared.bot_services import BotServices, SupportBotServices
+from shared.bot_services import BotServices
 from shared.config import (
     AppSettings,
     Config,
@@ -73,9 +62,7 @@ from shared.protocols import (
     IAdminsRepo,
     IChatsRepo,
     ICircuitBreaker,
-    IDispatchRegistry,
     ILogger,
-    IMessagingService,
     IMetrics,
     IModelsRepo,
     IRateLimiter,
@@ -88,9 +75,10 @@ from shared.protocols import (
 
 if TYPE_CHECKING:
     import aiohttp
-    from celery import Celery
     from telegram import Bot
     from telegram.ext import Application
+
+    from app.telegram_api_rate_limiter_service import TelegramAPIRateLimiterService
 
 
 class Container:
@@ -177,8 +165,10 @@ class Container:
         if models_repo is None:
             models_repo = self.models_repo
 
-        logger = self._logger.bind(module="ClientManagementService")
-        return ClientManagementService(models_repo=models_repo)
+        return ClientManagementService(
+            models_repo=models_repo,
+            logger=self._logger,
+        )
 
     def _build_image_client(
         self,
@@ -206,6 +196,7 @@ class Container:
             config=kandinsky_config,
             models_repo=models_repo,
             session=self._http_session,
+            logger=self._logger,
         )
 
         # Регистрируем в контейнере
@@ -254,6 +245,7 @@ class Container:
             config=gigachat_config,
             models_repo=models_repo,
             session=self._http_session,
+            logger=self._logger,
         )
 
         if text_client is not None:
@@ -313,7 +305,6 @@ class Container:
         Returns:
             Экземпляр ImageGenerationService.
         """
-        logger = self._logger.bind(module="ImageGenerationService")
         return ImageGenerationService(image_client)
 
     def _build_prompt_generation_service(
@@ -328,7 +319,6 @@ class Container:
         Returns:
             Экземпляр PromptGenerationService.
         """
-        logger = self._logger.bind(module="PromptGenerationService")
         fallback_config = PromptFallbackConfig(
             frog_prompts=list(ImageConfig.FROG_PROMPTS),
             styles=list(ImageConfig.STYLES),
@@ -338,8 +328,6 @@ class Container:
             fallback_config=fallback_config,
         )
 
-        
-
     def _build_image_storage_service(self) -> ImageStorageService:
         """Создаёт ImageStorageService для хранения изображений.
 
@@ -348,8 +336,6 @@ class Container:
         """
         logger = self._logger.bind(module="ImageStorageService")
         return ImageStorageService(logger=logger)
-
-
 
     def _build_prompt_service(
         self,
@@ -378,7 +364,6 @@ class Container:
         Returns:
             Экземпляр CaptionService или None, если не настроен.
         """
-        logger = self._logger.bind(module="CaptionService")
         if ImageConfig.CAPTIONS:
             return CaptionService(ImageConfig.CAPTIONS)
         return None
@@ -652,8 +637,6 @@ class Container:
             logger=logger,
         )
 
-
-
     def _build_frog_rate_limiter(
         self,
     ) -> FrogRateLimiterService:
@@ -713,7 +696,6 @@ class Container:
             status="ok",
         )
         return telegram_api_rate_limiter
-
 
     def _build_database_operations_service(
         self,
@@ -822,7 +804,6 @@ class Container:
     @cached_property
     def prompt_cache(self) -> PromptCache:
         """Кэш промптов."""
-        logger = self._logger.bind(module="PromptCache")
         return PromptCache(redis_client=self._redis_client)
 
     @cached_property
@@ -833,7 +814,6 @@ class Container:
     @cached_property
     def circuit_breaker(self) -> ICircuitBreaker:
         """Circuit breaker для защиты Kandinsky API."""
-        logger = self._logger.bind(module="CircuitBreakerService")
         cb_config = self._config.circuit_breaker
         return CircuitBreakerService(
             redis_client=self._redis_client,
@@ -846,7 +826,6 @@ class Container:
     @cached_property
     def frog_global_rate_limiter(self) -> IRateLimiter:
         """Глобальный rate limiter для /frog команды."""
-        SECONDS_PER_MINUTE = 60
         return RateLimiter(
             redis_client=self._redis_client,
             prefix="frog:global:",
@@ -883,7 +862,6 @@ class Container:
     @cached_property
     def usage_tracker(self) -> UsageTracker:
         """UsageTracker для отслеживания использования."""
-        logger = self._logger.bind(module="UsageTracker")
         return UsageTracker(
             pool=self._db_pool,
             monthly_quota=100,
@@ -893,7 +871,6 @@ class Container:
     @cached_property
     def user_state_store(self) -> UserStateCache:
         """UserStateCache для хранения состояния пользователей."""
-        logger = self._logger.bind(module="UserStateCache")
         return UserStateCache(redis_client=self._redis_client)
 
     @cached_property
@@ -954,7 +931,7 @@ class Container:
 
         # Создаём базовые компоненты
         image_client, text_client = self._create_clients()
-        
+
         # Передаём prompt_cache из cached_property в _build_image_stack для переиспользования
         image_service = self._build_image_stack(
             image_client=image_client,
@@ -1031,7 +1008,7 @@ class Container:
         )
         return services
 
-    def build_handlers_registry(self, application: "Application") -> "BotHandlersRegistry":
+    def build_handlers_registry(self, application: Application) -> BotHandlersRegistry:
         """Собирает регистратор обработчиков для PTB Application.
 
         Скрывает внутри себя создание всех хендлеров (UserHandlers, AdminHandlers,
@@ -1091,7 +1068,7 @@ class Container:
 
         return registry
 
-    def _create_user_handlers(self, services: BotServices) -> "UserHandlers":
+    def _create_user_handlers(self, services: BotServices) -> UserHandlers:
         """Создает обработчики пользовательских команд."""
         from bot.handlers_user import UserHandlers
 
@@ -1111,7 +1088,7 @@ class Container:
         )
         return handlers
 
-    def _create_admin_handlers(self, services: BotServices) -> "AdminHandlers":
+    def _create_admin_handlers(self, services: BotServices) -> AdminHandlers:
         """Создает обработчики административных команд."""
         from bot.handlers_admin import AdminHandlers
 
@@ -1131,7 +1108,7 @@ class Container:
         )
         return handlers
 
-    def _create_model_handlers(self, services: BotServices) -> "ModelHandlers":
+    def _create_model_handlers(self, services: BotServices) -> ModelHandlers:
         """Создает обработчики команд управления моделями."""
         from bot.handlers_models import ModelHandlers
 
@@ -1155,7 +1132,7 @@ class Container:
         self,
         services: BotServices,
         bot: Bot,
-    ) -> "ChatEventHandler":
+    ) -> ChatEventHandler:
         """Создает обработчик событий чата."""
         from bot.chat_event_handler import ChatEventHandler
 
@@ -1176,7 +1153,7 @@ class Container:
         )
         return handler
 
-    def _create_error_handler(self) -> "BotErrorHandler":
+    def _create_error_handler(self) -> BotErrorHandler:
         """Создает глобальный обработчик ошибок."""
         from bot.bot_error_handler import BotErrorHandler
 

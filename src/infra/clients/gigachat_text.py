@@ -29,11 +29,9 @@ from __future__ import annotations
 import ssl
 import time
 import uuid
-from types import TracebackType
-from typing import Final, Self
+from typing import TYPE_CHECKING, Final
 
 import aiohttp
-from loguru import logger
 from pydantic import ValidationError
 
 from infra.clients.base import BaseHTTPClient
@@ -48,7 +46,11 @@ from infra.clients.models import (
 from infra.clients.sber_clients_exceptions import map_client_errors
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from shared.config import GigaChatConfig
-from shared.protocols import IModelsRepo, ITextToTextClient
+from shared.protocols import ILogger, IModelsRepo, ITextToTextClient
+
+if TYPE_CHECKING:
+    from types import TracebackType
+    from typing import Self
 
 HTTP_STATUS_OK: Final[int] = 200
 TOKEN_EXPIRY_BUFFER_SECONDS: Final[int] = 300
@@ -124,6 +126,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         config: GigaChatConfig,
         models_repo: IModelsRepo,
         session: aiohttp.ClientSession,
+        logger: ILogger,
     ) -> None:
         """Инициализация клиента GigaChat.
 
@@ -132,12 +135,15 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             models_repo: Репозиторий моделей для сохранения/получения настроек моделей.
             session: HTTP сессия для использования (обязательна). Клиент не управляет
                 жизненным циклом сессии - она должна быть передана извне и закрыта извне.
+            logger: Логгер для использования (обязателен). Должен быть передан через DI.
 
         Raises:
-            ValueError: Если session не передана.
+            ValueError: Если session или logger не переданы.
         """
         if session is None:
             raise ValueError("session обязательна для GigaChatTextClient")
+        if logger is None:
+            raise ValueError("logger обязателен для GigaChatTextClient")
 
         self._auth_url: str = config.auth_url
         self._api_url: str = config.api_url
@@ -149,6 +155,8 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         self._models_repo: IModelsRepo = models_repo
         self._config: GigaChatConfig = config
         self._session = session
+        # Создаём bound логгер с контекстом модуля
+        self._logger: ILogger = logger.bind(module="gigachat")
 
         # Кэш токена
         self._access_token: str | None = None
@@ -175,17 +183,20 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
         # В aiohttp мы передаём verify_ssl напрямую в TCPConnector, поэтому urllib3 не нужен для async-запросов.
         # Но оставляем логирование для консистентности с синхронным клиентом.
         if self._verify_ssl is False:
-            logger.warning("⚠️ Проверка SSL сертификатов для GigaChat отключена! Это снижает безопасность.")
+            self._logger.warning("⚠️ Проверка SSL сертификатов для GigaChat отключена! Это снижает безопасность.")
         elif isinstance(self._verify_ssl, str):
             from pathlib import Path
 
             cert_path = Path(self._verify_ssl)
             if cert_path.exists():
-                logger.info(f"✅ Используется сертификат для GigaChat: {self._verify_ssl}")
+                self._logger.info(f"✅ Используется сертификат для GigaChat: {self._verify_ssl}")
             else:
-                logger.warning(f"⚠️ Файл сертификата не найден: {self._verify_ssl}. Проверка SSL может не работать.")
+                self._logger.warning(
+                    f"⚠️ Файл сертификата не найден: {self._verify_ssl}. "
+                    "Проверка SSL может не работать."
+                )
 
-        logger.info("GigaChatTextClient инициализирован")
+        self._logger.info("GigaChatTextClient инициализирован")
 
     # ------------------------------------------------------------------ #
     # Публичный интерфейс ITextToTextClient                             #
@@ -211,7 +222,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="gigachat_generate", user_id=user_id)
+        bound = self._logger.bind(event="gigachat_generate", user_id=user_id)
         bound.info("Запрос генерации промпта через GigaChat API")
 
         access_token = await self._get_access_token()
@@ -279,7 +290,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="gigachat_check_status")
+        bound = self._logger.bind(event="gigachat_check_status")
         bound.info("Проверка статуса GigaChat API")
 
         token = await self._get_access_token()
@@ -319,7 +330,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="gigachat_get_models", save_models=save_models)
+        bound = self._logger.bind(event="gigachat_get_models", save_models=save_models)
         bound.info("Запрос списка моделей GigaChat")
 
         access_token = await self._get_access_token()
@@ -404,7 +415,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             NetworkError: При сетевых ошибках (таймаут, ошибка соединения).
             APIError: При других ошибках API (4xx, 5xx).
         """
-        bound = logger.bind(event="gigachat_set_model", model_name=model_name)
+        bound = self._logger.bind(event="gigachat_set_model", model_name=model_name)
         bound.info("Выбор модели GigaChat")
 
         available_models = await self.get_available_models(save_models=False)
@@ -545,7 +556,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
             if self._access_token and self._token_expiry_time and time.time() < self._token_expiry_time:
                 return self._access_token
 
-            bound = logger.bind(event="gigachat_get_token")
+            bound = self._logger.bind(event="gigachat_get_token")
             bound.info("Запрос нового токена доступа GigaChat")
 
             if not self._authorization_key:
