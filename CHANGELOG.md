@@ -4,6 +4,23 @@
 
 ### Изменено
 
+- **Рефакторинг структуры bot/: удаление SupportBot и реорганизация handlers**:
+  - Удален SupportBot и все связанные файлы: `support_bot.py`, `handlers_support.py`, `support_bot_handlers_registry.py`
+  - Удалены устаревшие компоненты жизненного цикла: `bot_lifecycle_manager.py`, `bot_lifecycle_mixin.py`, `bot_state_coordinator.py`, `bot_application_factory.py`
+  - Удален `bot_chat_access_validator.py` (функциональность перенесена в сервисы)
+  - Реорганизована структура handlers: все обработчики перенесены в `bot/handlers/` поддиректорию
+  - Переименованы файлы handlers для единообразия: `handlers_user.py` → `handlers/user.py`, `handlers_admin.py` → `handlers/admin.py`, `handlers_models.py` → `handlers/models.py`
+  - Переименован `base_handlers.py` → `handlers/base.py` и `chat_event_handler.py` → `handlers/chat_event.py`
+  - Переименован `bot_handlers_registry.py` → `handlers/registry.py` (перенесен в поддиректорию)
+  - Упрощен `handlers/base.py`: удалена поддержка `SupportBotServices`, используется только `BotServices`
+  - Упрощены handlers: удалены проверки `require_bot_services()` и условная логика для SupportBot
+  - Обновлены все импорты в проекте для использования новых путей: `bot.handlers.*` вместо `bot.handlers_*`
+  - Обновлен `container.py`: импорты handlers обновлены на новые пути, упрощена логика создания handlers
+  - Обновлены тесты: импорты обновлены на новые пути, удалены импорты SupportBot
+  - Обновлен `main.py`: исправлен импорт `WednesdayBot` (удален префикс `new_`)
+  - Удалены файлы `new_main.py` и `new_container.py`: функциональность перенесена в `main.py` и `container.py`
+  - Улучшена архитектура: четкое разделение между основным ботом и handlers, упрощена структура
+
 - **Рефакторинг async Celery: разделение на модули и упрощение структуры**:
   - Разделен `app.py` на три части: `config.py` (конфигурация и beat_schedule), `tasks.py` (определения задач), `worker.py` (только создание Celery и сигналы)
   - Переименованы файлы в `celery/async/`: убран префикс `celery_` (celery_task_queue → task_queue, celery_config → config)

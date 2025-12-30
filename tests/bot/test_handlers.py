@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bot.handlers_admin import AdminHandlers
-from bot.handlers_models import ModelHandlers
-from bot.handlers_user import UserHandlers
+from bot.handlers.admin import AdminHandlers
+from bot.handlers.models import ModelHandlers
+from bot.handlers.user import UserHandlers
 
 
 @pytest.mark.asyncio

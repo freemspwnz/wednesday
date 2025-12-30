@@ -4,7 +4,7 @@ from telegram import Bot, Chat, Update, User
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
-from bot.base_handlers import (
+from bot.handlers.base import (
     CHAT_INFO_TIMEOUT_DEFAULT,
     CHAT_TIMEOUT_DEFAULT,
     BaseHandlers,
@@ -14,7 +14,7 @@ from shared.base.exceptions import (
     RepoError,
     ServiceError,
 )
-from shared.bot_services import BotServices, SupportBotServices, require_bot_services
+from shared.bot_services import BotServices
 from shared.protocols import ILogger
 from shared.retry import retry_on_connect_error
 
@@ -35,12 +35,10 @@ class AdminHandlers(BaseHandlers):
 
     def __init__(
         self,
-        services: BotServices | SupportBotServices,
+        services: BotServices,
         logger: ILogger,
     ) -> None:
         super().__init__(services, logger)
-        # Валидация типа: AdminHandlers работает только с BotServices
-        self.services: BotServices = require_bot_services(services, "AdminHandlers")
         if self.services.admin_dashboard_service is None:
             raise ValueError("admin_dashboard_service must be provided in BotServices")
         if self.services.admin_access_service is None:

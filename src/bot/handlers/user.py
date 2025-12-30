@@ -4,8 +4,8 @@ from telegram import Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
-from bot.base_handlers import BaseHandlers
-from shared.bot_services import BotServices, SupportBotServices, require_bot_services
+from bot.handlers.base import BaseHandlers
+from shared.bot_services import BotServices
 from shared.protocols import ILogger
 from shared.retry import retry_on_connect_error
 
@@ -23,12 +23,10 @@ class UserHandlers(BaseHandlers):
 
     def __init__(
         self,
-        services: BotServices | SupportBotServices,
+        services: BotServices,
         logger: ILogger,
     ) -> None:
         super().__init__(services, logger)
-        # Валидация типа: UserHandlers работает только с BotServices
-        self.services: BotServices = require_bot_services(services, "UserHandlers")
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.

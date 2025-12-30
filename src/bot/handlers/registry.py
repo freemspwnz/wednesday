@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import Application, ChatMemberHandler, CommandHandler, MessageHandler, filters
 
-from bot.chat_event_handler import ChatEventHandler
-from bot.handlers_admin import AdminHandlers
-from bot.handlers_models import ModelHandlers
-from bot.handlers_user import UserHandlers
+from bot.handlers.admin import AdminHandlers
+from bot.handlers.chat_event import ChatEventHandler
+from bot.handlers.models import ModelHandlers
+from bot.handlers.user import UserHandlers
 from shared.protocols import ILogger
 
 if TYPE_CHECKING:

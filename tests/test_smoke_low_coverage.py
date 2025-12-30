@@ -8,7 +8,7 @@ import pytest
 from infrastructure import rate_limiting as rate_limiter_module
 from redis.exceptions import RedisError
 
-from bot.handlers_user import UserHandlers
+from bot.handlers.user import UserHandlers
 from infra.cache import prompt_cache as prompt_cache_module
 from infra.clients.client_manager import ClientManagementService
 from infra.redis.redis_client import _InMemoryRedis

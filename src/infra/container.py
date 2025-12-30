@@ -8,8 +8,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -17,18 +16,17 @@ import asyncpg
 if TYPE_CHECKING:
     from app.admin_access_service import AdminAccessService
     from app.admin_command_service import AdminCommandService
-    from app.admin_notification_service import AdminNotificationService
-    from app.data_cleanup_service import DataCleanupService
-    from app.frog_processing_service import FrogProcessingService
-    from bot.wednesday_bot import WednesdayBot
-    from infra.celery.cleanup_service import CleanupService
-    from infra.database.postgres_client import PostgresPoolFactory
-    from infra.redis.redis_client import RedisClient, RedisClientFactory
+    from bot.bot_error_handler import BotErrorHandler
+    from bot.handlers.admin import AdminHandlers
+    from bot.handlers.chat_event import ChatEventHandler
+    from bot.handlers.models import ModelHandlers
+    from bot.handlers.registry import BotHandlersRegistry
+    from bot.handlers.user import UserHandlers
+    from infra.redis.redis_client import RedisClient
 
 from app.admin_dashboard_service import AdminDashboardService
 from app.api_status_service import APIStatusService
 from app.database_operations_service import DatabaseOperationsService
-from app.dispatch_delivery_service import DispatchDeliveryService
 from app.dispatch_service import DispatchService
 from app.frog_limit_service import FrogRateLimiterService
 from app.image_existence_service import ImageExistenceService
@@ -38,7 +36,6 @@ from app.image_storage_coordinator import ImageStorageCoordinator
 from app.image_storage_unit_of_work import ImageStorageUnitOfWork
 from app.model_management_service import ModelManagementService
 from app.prompt_service import PromptService
-from app.target_preparation_service import TargetPreparationService
 from domain.caption_service import CaptionService
 from domain.image_generation import ImageGenerationService
 from domain.prompt_generation import PromptGenerationService
@@ -47,8 +44,6 @@ from infra.cache.user_state_cache import UserStateCache
 from infra.clients.client_manager import ClientManagementService
 from infra.clients.image_client_container import get_image_client_container
 from infra.clients.text_client_container import get_text_client_container
-from infra.logging.logger import get_logger
-from infra.metrics.metrics import Metrics
 from infra.rate_limiting.circuit_breaker import CircuitBreakerService
 from infra.rate_limiting.rate_limiter import RateLimiter
 from infra.repos import AdminsRepo, ChatsRepo, ImagesRepo, ModelsRepo, PromptsRepo
@@ -56,7 +51,7 @@ from infra.repos.dispatch_registry import DispatchRegistry
 from infra.repos.usage_tracker import UsageTracker
 from infra.storage.failed_cache_queue import FailedCacheQueue
 from infra.storage.image_storage import ImageStorageService
-from shared.bot_services import BotServices, SupportBotServices
+from shared.bot_services import BotServices
 from shared.config import (
     AppSettings,
     Config,
@@ -67,1225 +62,1112 @@ from shared.protocols import (
     IAdminsRepo,
     IChatsRepo,
     ICircuitBreaker,
-    IDispatchRegistry,
     ILogger,
-    IMessagingService,
     IMetrics,
     IModelsRepo,
     IRateLimiter,
+    ITaskQueue,
     ITextToImageClient,
     ITextToTextClient,
     IUnitOfWorkFactory,
     IUsageTracker,
 )
 
+if TYPE_CHECKING:
+    import aiohttp
+    from telegram import Bot
+    from telegram.ext import Application
 
-def _create_clients(
-    config: Config,
-    db_pool: asyncpg.Pool,
-    models_repo: IModelsRepo | None = None,
-) -> tuple[ITextToImageClient, ITextToTextClient | None]:
-    """Создаёт клиенты для внешних ML‑сервисов через Dependency Injection.
+    from app.telegram_api_rate_limiter_service import TelegramAPIRateLimiterService
 
-    Клиенты создаются через ClientManagementService и регистрируются в контейнерах
-    для поддержки runtime-замены и корректного cleanup.
 
-    Args:
-        config: Экземпляр Config для создания конфигураций клиентов.
-        db_pool: Пул подключений PostgreSQL (обязательный параметр).
-        models_repo: Репозиторий моделей для передачи в клиенты через DI.
-            Если None, создаётся новый ModelsRepo с переданным пулом.
+class Container:
+    """Composition Root для сервисов бота.
 
-    Returns:
-        Кортеж (image_client_container, text_client_container | None).
-        Контейнеры реализуют интерфейсы ITextToImageClient и ITextToTextClient
-        и обеспечивают runtime-замену клиентов.
+    Инкапсулирует сборку графа зависимостей backend-части бота.
+    Принимает уже созданные инфраструктурные ресурсы через протоколы,
+    что обеспечивает loose coupling и упрощает тестирование.
+
+    Принципы:
+    - Контейнер не знает, как создавать пулы БД или Redis
+    - Все инфраструктурные ресурсы создаются в main.py
+    - Контейнер только собирает граф зависимостей из готовых компонентов
     """
-    # Создаём models_repo, если не передан
-    if models_repo is None:
-        from infra.repos import ModelsRepo
 
-        models_repo = ModelsRepo(pool=db_pool)
+    def __init__(
+        self,
+        config: Config,
+        logger: ILogger,
+        *,
+        db_pool: asyncpg.Pool,
+        redis_client: RedisClient,
+        bot_client: Bot,
+        metrics_service: IMetrics,
+        task_queue: ITaskQueue,
+        http_session: aiohttp.ClientSession,
+    ) -> None:
+        """Инициализирует контейнер с готовыми зависимостями.
 
-    # Создаём сервис управления клиентами
-    client_manager = ClientManagementService(models_repo=models_repo)
+        Args:
+            config: Конфигурация приложения.
+            logger: Логгер для использования в сервисах.
+            db_pool: Пул подключений PostgreSQL (уже создан).
+            redis_client: Redis-клиент (уже создан).
+            bot_client: Telegram Bot клиент (уже создан).
+            metrics_service: Сервис метрик (уже создан).
+            task_queue: Очередь задач Celery (уже создана).
+            http_session: Общая HTTP сессия для клиентов (уже создана).
 
-    # Создаём клиенты через DI
-    kandinsky_config = config.kandinsky
-    image_client = client_manager.create_image_client(
-        config=kandinsky_config,
-        models_repo=models_repo,
-    )
+        Raises:
+            ValueError: Если обязательные параметры не переданы.
+        """
+        if config is None:
+            raise ValueError("config не может быть None")
+        if logger is None:
+            raise ValueError("logger не может быть None")
+        if db_pool is None:
+            raise ValueError("db_pool не может быть None")
+        if redis_client is None:
+            raise ValueError("redis_client не может быть None")
+        if bot_client is None:
+            raise ValueError("bot_client не может быть None")
+        if metrics_service is None:
+            raise ValueError("metrics_service не может быть None")
+        if task_queue is None:
+            raise ValueError("task_queue не может быть None")
+        if http_session is None:
+            raise ValueError("http_session не может быть None")
 
-    # Регистрируем в контейнере
-    image_container = get_image_client_container()
-    image_container.set_initial_client(image_client)
+        self._config = config
+        self._logger = logger
+        self._db_pool = db_pool
+        self._redis_client = redis_client
+        self._bot_client = bot_client
+        self._metrics_service = metrics_service
+        self._task_queue = task_queue
+        self._http_session = http_session
 
-    # Создаём текстовый клиент, если настроен
-    text_container: ITextToTextClient | None = None
-    gigachat_config = config.gigachat
-    if gigachat_config.authorization_key:
+        # Кэш для ленивого создания сервисов
+        self._services: BotServices | None = None
+
+    def _build_client_management_service(
+        self,
+        models_repo: IModelsRepo | None = None,
+    ) -> ClientManagementService:
+        """Создаёт ClientManagementService для управления ML-клиентами.
+
+        Args:
+            models_repo: Репозиторий моделей. Если None, используется self.models_repo.
+
+        Returns:
+            Экземпляр ClientManagementService.
+        """
+        if models_repo is None:
+            models_repo = self.models_repo
+
+        return ClientManagementService(
+            models_repo=models_repo,
+            logger=self._logger,
+        )
+
+    def _build_image_client(
+        self,
+        client_manager: ClientManagementService,
+        models_repo: IModelsRepo,
+    ) -> ITextToImageClient:
+        """Создаёт и регистрирует клиент для генерации изображений.
+
+        Args:
+            client_manager: Сервис управления клиентами.
+            models_repo: Репозиторий моделей.
+
+        Returns:
+            Контейнер с клиентом для генерации изображений.
+        """
+        logger = self._logger.bind(module="ImageClient")
+        logger.debug(
+            "Создание клиента для генерации изображений",
+            event="container_create_image_client",
+            status="started",
+        )
+
+        kandinsky_config = self._config.kandinsky
+        image_client = client_manager.create_image_client(
+            config=kandinsky_config,
+            models_repo=models_repo,
+            session=self._http_session,
+            logger=self._logger,
+        )
+
+        # Регистрируем в контейнере
+        image_container = get_image_client_container()
+        image_container.set_initial_client(image_client)
+
+        logger.debug(
+            "Клиент для генерации изображений создан",
+            event="container_image_client_created",
+            status="ok",
+        )
+        return image_container
+
+    def _build_text_client(
+        self,
+        client_manager: ClientManagementService,
+        models_repo: IModelsRepo,
+    ) -> ITextToTextClient | None:
+        """Создаёт и регистрирует клиент для генерации текста (если настроен).
+
+        Args:
+            client_manager: Сервис управления клиентами.
+            models_repo: Репозиторий моделей.
+
+        Returns:
+            Контейнер с клиентом для генерации текста или None, если не настроен.
+        """
+        logger = self._logger.bind(module="TextClient")
+        gigachat_config = self._config.gigachat
+
+        if not gigachat_config.authorization_key:
+            logger.debug(
+                "GigaChat не настроен, текстовый клиент не создан",
+                event="container_text_client_skipped",
+                status="ok",
+            )
+            return None
+
+        logger.debug(
+            "Создание клиента для генерации текста",
+            event="container_create_text_client",
+            status="started",
+        )
+
         text_client = client_manager.create_text_client(
             config=gigachat_config,
             models_repo=models_repo,
+            session=self._http_session,
+            logger=self._logger,
         )
+
         if text_client is not None:
             text_container_instance = get_text_client_container()
             text_container_instance.set_initial_client(text_client)
-            text_container = text_container_instance
 
-    return (image_container, text_container)
+            logger.debug(
+                "Клиент для генерации текста создан",
+                event="container_text_client_created",
+                status="ok",
+            )
+            return text_container_instance
 
+        logger.debug(
+            "Не удалось создать клиент для генерации текста",
+            event="container_text_client_failed",
+            status="ok",
+        )
+        return None
 
-def build_image_stack(  # noqa: PLR0913, PLR0917
-    config: Config,
-    db_pool: asyncpg.Pool,
-    redis_client: RedisClient,
-    image_client: ITextToImageClient | None = None,
-    text_client: ITextToTextClient | None = None,
-    models_repo: IModelsRepo | None = None,
-) -> ImageService:
-    """Собирает полный стек зависимостей для ImageService.
+    def _create_clients(
+        self,
+        models_repo: IModelsRepo | None = None,
+    ) -> tuple[ITextToImageClient, ITextToTextClient | None]:
+        """Создаёт клиенты для внешних ML‑сервисов через Dependency Injection.
 
-    Все клиенты, доменные и инфраструктурные сервисы создаются в одном месте,
-    чтобы упростить дальнейшее сопровождение и тестирование.
+        Клиенты создаются через ClientManagementService и регистрируются в контейнерах
+        для поддержки runtime-замены и корректного cleanup.
 
-    Args:
-        config: Экземпляр Config для создания клиентов и чтения настроек.
-        db_pool: Пул подключений PostgreSQL.
-        redis_client: Redis-клиент для использования в сервисах.
-        image_client: Опциональный клиент для генерации изображений.
-            Если None, создаётся новый через DI в _create_clients().
-        text_client: Опциональный клиент для генерации текста.
-            Если None, создаётся новый через DI в _create_clients().
-        models_repo: Репозиторий моделей для передачи в клиенты через DI.
+        Args:
+            models_repo: Репозиторий моделей для передачи в клиенты через DI.
+                Если None, используется self.models_repo.
 
-    Returns:
-        Настроенный экземпляр ImageService.
+        Returns:
+            Кортеж (image_client_container, text_client_container | None).
+            Контейнеры реализуют интерфейсы ITextToImageClient и ITextToTextClient
+            и обеспечивают runtime-замену клиентов.
+        """
+        if models_repo is None:
+            models_repo = self.models_repo
 
-    Raises:
-        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
-    """
-    # Валидация параметров
-    if config is None:
-        raise ValueError("config не может быть None")
-    if db_pool is None:
-        raise ValueError("db_pool не может быть None")
-    if redis_client is None:
-        raise ValueError("redis_client не может быть None")
+        client_manager = self._build_client_management_service(models_repo=models_repo)
+        image_client = self._build_image_client(client_manager, models_repo)
+        text_client = self._build_text_client(client_manager, models_repo)
 
-    # Инфраструктура и клиенты
-    if image_client is None or text_client is None:
-        # Используем _create_clients() вместо дублирования логики
-        created_image_client, created_text_client = _create_clients(
-            config,
-            db_pool=db_pool,
+        return (image_client, text_client)
+
+    def _build_image_generation_service(
+        self,
+        image_client: ITextToImageClient,
+    ) -> ImageGenerationService:
+        """Создаёт ImageGenerationService для генерации изображений.
+
+        Args:
+            image_client: Клиент для генерации изображений.
+
+        Returns:
+            Экземпляр ImageGenerationService.
+        """
+        return ImageGenerationService(image_client)
+
+    def _build_prompt_generation_service(
+        self,
+        text_client: ITextToTextClient | None,
+    ) -> PromptGenerationService:
+        """Создаёт PromptGenerationService для генерации промптов.
+
+        Args:
+            text_client: Клиент для генерации текста.
+
+        Returns:
+            Экземпляр PromptGenerationService.
+        """
+        fallback_config = PromptFallbackConfig(
+            frog_prompts=list(ImageConfig.FROG_PROMPTS),
+            styles=list(ImageConfig.STYLES),
+        )
+        return PromptGenerationService(
+            text_client=text_client,
+            fallback_config=fallback_config,
+        )
+
+    def _build_image_storage_service(self) -> ImageStorageService:
+        """Создаёт ImageStorageService для хранения изображений.
+
+        Returns:
+            Экземпляр ImageStorageService.
+        """
+        logger = self._logger.bind(module="ImageStorageService")
+        return ImageStorageService(logger=logger)
+
+    def _build_prompt_service(
+        self,
+        prompt_generation_service: PromptGenerationService,
+        prompt_cache: PromptCache,
+    ) -> PromptService:
+        """Создаёт PromptService для работы с промптами.
+
+        Args:
+            prompt_generation_service: Сервис генерации промптов.
+            prompt_cache: Кэш промптов.
+
+        Returns:
+            Экземпляр PromptService.
+        """
+        logger = self._logger.bind(module="PromptService")
+        return PromptService(
+            prompt_generation_service=prompt_generation_service,
+            prompt_cache=prompt_cache,
+            logger=logger,
+        )
+
+    def _build_caption_service(self) -> CaptionService | None:
+        """Создаёт CaptionService из конфигурации (если настроен).
+
+        Returns:
+            Экземпляр CaptionService или None, если не настроен.
+        """
+        if ImageConfig.CAPTIONS:
+            return CaptionService(ImageConfig.CAPTIONS)
+        return None
+
+    def _build_image_storage_uow(
+        self,
+        failed_cache_queue: FailedCacheQueue,
+        image_existence_service: ImageExistenceService,
+        image_storage: ImageStorageService,
+    ) -> ImageStorageUnitOfWork:
+        """Создаёт ImageStorageUnitOfWork для управления сохранением изображений.
+
+        Args:
+            failed_cache_queue: Очередь непересозданных записей.
+            image_existence_service: Сервис проверки существования изображений.
+            image_storage: Сервис хранения изображений.
+
+        Returns:
+            Экземпляр ImageStorageUnitOfWork.
+        """
+        logger = self._logger.bind(module="ImageStorageUnitOfWork")
+        return ImageStorageUnitOfWork(
+            failed_cache_queue=failed_cache_queue,
+            image_existence_service=image_existence_service,
+            storage=image_storage,
+            logger=logger,
+        )
+
+    def _build_image_generation_coordinator(
+        self,
+        image_generation: ImageGenerationService,
+        circuit_breaker: ICircuitBreaker,
+        image_existence_service: ImageExistenceService,
+    ) -> ImageGenerationCoordinator:
+        """Создаёт ImageGenerationCoordinator для координации генерации изображений.
+
+        Args:
+            image_generation: Сервис генерации изображений.
+            circuit_breaker: Circuit breaker для защиты от перегрузки.
+            image_existence_service: Сервис проверки существования изображений.
+
+        Returns:
+            Экземпляр ImageGenerationCoordinator.
+        """
+        logger = self._logger.bind(module="ImageGenerationCoordinator")
+        return ImageGenerationCoordinator(
+            generation_service=image_generation,
+            circuit_breaker=circuit_breaker,
+            image_existence_service=image_existence_service,
+            metrics=self._metrics_service,
+            logger=logger,
+        )
+
+    def _build_image_storage_coordinator(
+        self,
+        image_storage_uow: ImageStorageUnitOfWork,
+    ) -> ImageStorageCoordinator:
+        """Создаёт ImageStorageCoordinator для координации хранения изображений.
+
+        Args:
+            image_storage_uow: Unit of Work для хранения изображений.
+
+        Returns:
+            Экземпляр ImageStorageCoordinator.
+        """
+        logger = self._logger.bind(module="ImageStorageCoordinator")
+        return ImageStorageCoordinator(
+            storage_unit_of_work=image_storage_uow,
+            metrics=self._metrics_service,
+            logger=logger,
+        )
+
+    def _build_image_stack(
+        self,
+        image_client: ITextToImageClient | None = None,
+        text_client: ITextToTextClient | None = None,
+        models_repo: IModelsRepo | None = None,
+        prompt_cache: PromptCache | None = None,
+    ) -> ImageService:
+        """Собирает полный стек зависимостей для ImageService.
+
+        Все клиенты, доменные и инфраструктурные сервисы создаются через приватные фабрики.
+
+        Args:
+            image_client: Опциональный клиент для генерации изображений.
+                Если None, создаётся новый через DI в _create_clients().
+            text_client: Опциональный клиент для генерации текста.
+                Если None, создаётся новый через DI в _create_clients().
+            models_repo: Репозиторий моделей для передачи в клиенты через DI.
+                Если None, используется self.models_repo.
+            prompt_cache: Кэш промптов для переиспользования. Если None, создаётся новый.
+
+        Returns:
+            Настроенный экземпляр ImageService.
+        """
+        # Инфраструктура и клиенты
+        if image_client is None or text_client is None:
+            created_image_client, created_text_client = self._create_clients(
+                models_repo=models_repo,
+            )
+            if image_client is None:
+                image_client = created_image_client
+            if text_client is None:
+                text_client = created_text_client
+
+        # Используем переданный prompt_cache или создаём новый
+        if prompt_cache is None:
+            prompt_cache = PromptCache(redis_client=self._redis_client)
+
+        # Используем контекстный логгер для ImageService
+        app_logger = self._logger.bind(module="ImageService")
+
+        # Доменные сервисы
+        image_generation = self._build_image_generation_service(image_client)
+        prompt_generation = self._build_prompt_generation_service(text_client)
+
+        # Инфраструктура
+        image_storage = self._build_image_storage_service()
+
+        # Application‑сервисы
+        prompt_service = self._build_prompt_service(
+            prompt_generation_service=prompt_generation,
+            prompt_cache=prompt_cache,
+        )
+        caption_service = self._build_caption_service()
+
+        # Unit of Work и координаторы
+        image_storage_uow = self._build_image_storage_uow(
+            failed_cache_queue=self.failed_cache_queue,
+            image_existence_service=self.image_existence_service,
+            image_storage=image_storage,
+        )
+        generation_coordinator = self._build_image_generation_coordinator(
+            image_generation=image_generation,
+            circuit_breaker=self.circuit_breaker,
+            image_existence_service=self.image_existence_service,
+        )
+        storage_coordinator = self._build_image_storage_coordinator(
+            image_storage_uow=image_storage_uow,
+        )
+
+        # Создаём главный сервис
+        return ImageService(
+            prompt_service=prompt_service,
+            generation_coordinator=generation_coordinator,
+            storage_coordinator=storage_coordinator,
+            image_storage=image_storage,
+            caption_service=caption_service,
+            logger=app_logger,
+        )
+
+    def _build_api_status_service(
+        self,
+        image_client: ITextToImageClient,
+        text_client: ITextToTextClient | None,
+        models_repo: IModelsRepo | None = None,
+    ) -> APIStatusService:
+        """Создаёт APIStatusService для инкапсуляции проверки статуса API.
+
+        Args:
+            image_client: Клиент для генерации изображений.
+            text_client: Клиент для генерации текста.
+            models_repo: Репозиторий моделей. Если None, используется self.models_repo.
+
+        Returns:
+            Экземпляр APIStatusService.
+        """
+        logger = self._logger.bind(module="APIStatusService")
+        models_store = models_repo if models_repo is not None else self.models_repo
+
+        return APIStatusService(
+            image_client=image_client,
+            text_client=text_client,
+            models_store=models_store,
+            logger=logger,
+        )
+
+    def _build_admin_dashboard_service(
+        self,
+        usage: IUsageTracker,
+        image_client: ITextToImageClient,
+        text_client: ITextToTextClient | None,
+        models_repo: IModelsRepo | None = None,
+    ) -> AdminDashboardService:
+        """Собирает AdminDashboardService с зависимостями.
+
+        Args:
+            usage: Трекер использования для статистики.
+            image_client: Клиент для генерации изображений.
+            text_client: Клиент для генерации текста.
+            models_repo: Репозиторий моделей для передачи в APIStatusService через DI.
+                Если None, используется self.models_repo.
+
+        Returns:
+            Экземпляр AdminDashboardService с внедрёнными зависимостями.
+
+        Raises:
+            ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
+        """
+        # Валидация параметров
+        if usage is None:
+            raise ValueError("usage не может быть None")
+        if image_client is None:
+            raise ValueError("image_client не может быть None")
+
+        # Используем контекстный логгер для AdminDashboardService
+        app_logger = self._logger.bind(module="AdminDashboardService")
+
+        # Создаём APIStatusService через приватную фабрику
+        api_status_service = self._build_api_status_service(
+            image_client=image_client,
+            text_client=text_client,
             models_repo=models_repo,
         )
-        if image_client is None:
-            image_client = created_image_client
-        if text_client is None:
-            text_client = created_text_client
 
-    # Создаём общий логгер для всех сервисов
-    app_logger = get_logger("app")
-
-    # Доменные сервисы
-    image_generation = ImageGenerationService(image_client)
-    fallback_config = PromptFallbackConfig(
-        frog_prompts=list(ImageConfig.FROG_PROMPTS),
-        styles=list(ImageConfig.STYLES),
-    )
-    prompt_generation = PromptGenerationService(
-        text_client=text_client,
-        fallback_config=fallback_config,
-    )
-
-    # Инфраструктура
-    images_repo = ImagesRepo(pool=db_pool)
-    prompts_repo = PromptsRepo(pool=db_pool)
-    image_existence_service = ImageExistenceService(
-        prompts_repo=prompts_repo,
-        images_repo=images_repo,
-        logger=app_logger,
-    )
-    image_storage = ImageStorageService(logger=app_logger)
-    prompt_cache = PromptCache(redis_client=redis_client)
-
-    # Создаём очередь для непересозданных кэшей
-    failed_cache_queue = FailedCacheQueue(
-        redis_client=redis_client,
-        prefix="failed_cache:",
-        logger=app_logger,
-    )
-
-    # Получаем конфигурацию circuit breaker
-    cb_config = config.circuit_breaker
-    circuit_breaker: ICircuitBreaker = CircuitBreakerService(
-        redis_client=redis_client,
-        key="cb:kandinsky_api",
-        threshold=cb_config.threshold,
-        window=cb_config.window,
-        cooldown=cb_config.cooldown,
-    )
-    # Создаём Metrics для передачи в ImageService
-    # redis_factory создаётся в main.py и передаётся через параметры
-    from infra.redis.redis_client import RedisClientFactory
-
-    redis_factory = RedisClientFactory(config=config)
-    metrics = Metrics(pool=db_pool, logger=app_logger, redis_factory=redis_factory)
-
-    # Application‑сервисы
-    prompt_service = PromptService(
-        prompt_generation_service=prompt_generation,
-        prompt_cache=prompt_cache,
-        logger=app_logger,
-    )
-
-    # Создаём CaptionService из конфигурации
-    caption_service = None
-    if ImageConfig.CAPTIONS:
-        caption_service = CaptionService(ImageConfig.CAPTIONS)
-
-    # Создаём UnitOfWork для управления сохранением изображений
-    image_storage_uow = ImageStorageUnitOfWork(
-        failed_cache_queue=failed_cache_queue,
-        image_existence_service=image_existence_service,
-        storage=image_storage,
-        logger=app_logger,
-    )
-
-    # Создаём координаторы
-    generation_coordinator = ImageGenerationCoordinator(
-        generation_service=image_generation,
-        circuit_breaker=circuit_breaker,
-        image_existence_service=image_existence_service,
-        metrics=metrics,
-        logger=app_logger,
-    )
-
-    storage_coordinator = ImageStorageCoordinator(
-        storage_unit_of_work=image_storage_uow,
-        metrics=metrics,
-        logger=app_logger,
-    )
-
-    # Создаём главный сервис
-    return ImageService(
-        prompt_service=prompt_service,
-        generation_coordinator=generation_coordinator,
-        storage_coordinator=storage_coordinator,
-        image_storage=image_storage,
-        caption_service=caption_service,
-        logger=app_logger,
-    )
-
-
-def build_admin_dashboard_service(  # noqa: PLR0913, PLR0917
-    usage: IUsageTracker,
-    chats: IChatsRepo,
-    metrics: IMetrics,
-    image_client: ITextToImageClient,
-    text_client: ITextToTextClient | None,
-    db_pool: asyncpg.Pool,
-    models_repo: IModelsRepo | None = None,
-) -> AdminDashboardService:
-    """Собирает AdminDashboardService с зависимостями.
-
-    Args:
-        usage: Трекер использования для статистики.
-        chats: Хранилище чатов для получения списка активных чатов.
-        metrics: Метрики производительности.
-        image_client: Клиент для генерации изображений.
-        text_client: Клиент для генерации текста.
-        db_pool: Пул подключений PostgreSQL (обязательный параметр).
-        models_repo: Репозиторий моделей для передачи в APIStatusService через DI.
-
-    Returns:
-        Экземпляр AdminDashboardService с внедрёнными зависимостями.
-
-    Raises:
-        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
-    """
-    # Валидация параметров
-    if usage is None:
-        raise ValueError("usage не может быть None")
-    if chats is None:
-        raise ValueError("chats не может быть None")
-    if metrics is None:
-        raise ValueError("metrics не может быть None")
-    if image_client is None:
-        raise ValueError("image_client не может быть None")
-    if db_pool is None:
-        raise ValueError("db_pool не может быть None")
-
-    models_store = models_repo if models_repo is not None else ModelsRepo(pool=db_pool)
-
-    # Создаём общий логгер для всех сервисов
-    app_logger = get_logger("app")
-
-    # Создаём APIStatusService для инкапсуляции проверки статуса API
-    api_status_service = APIStatusService(
-        image_client=image_client,
-        text_client=text_client,
-        models_store=models_store,
-        logger=app_logger,
-    )
-
-    return AdminDashboardService(
-        usage=usage,
-        chats=chats,
-        metrics=metrics,
-        api_status_service=api_status_service,
-        logger=app_logger,
-    )
-
-
-def build_admin_access_service(
-    admins_repo: IAdminsRepo,
-    super_admin_id: int | None,
-    logger: ILogger,
-) -> AdminAccessService:
-    """Создаёт AdminAccessService с зависимостями.
-
-    Args:
-        admins_repo: Репозиторий администраторов.
-        super_admin_id: ID главного администратора (из .env).
-        logger: Логгер.
-
-    Returns:
-        Настроенный AdminAccessService.
-    """
-    from app.admin_access_service import AdminAccessService
-
-    return AdminAccessService(
-        admins_repo=admins_repo,
-        super_admin_id=super_admin_id,
-        logger=logger,
-    )
-
-
-def build_admin_notification_service(
-    messaging_service: IMessagingService,
-    admins_repo: IAdminsRepo,
-    logger: ILogger,
-) -> AdminNotificationService:
-    """Создаёт AdminNotificationService с зависимостями.
-
-    Args:
-        messaging_service: Сервис отправки сообщений.
-        admins_repo: Репозиторий администраторов.
-        logger: Логгер.
-
-    Returns:
-        Настроенный AdminNotificationService.
-    """
-    from app.admin_notification_builders import (
-        DispatchErrorNotificationBuilder,
-        GenerationErrorNotificationBuilder,
-    )
-    from app.admin_notification_service import AdminNotificationService
-
-    generation_builder = GenerationErrorNotificationBuilder()
-    dispatch_builder = DispatchErrorNotificationBuilder()
-
-    return AdminNotificationService(
-        messaging_service=messaging_service,
-        admins_repo=admins_repo,
-        generation_builder=generation_builder,
-        dispatch_builder=dispatch_builder,
-        logger=logger,
-    )
-
-
-def build_admin_command_service(
-    chats: IChatsRepo | None,
-    usage: IUsageTracker | None,
-    admins_repo: IAdminsRepo,
-    admin_access_service: AdminAccessService,
-    logger: ILogger,
-) -> AdminCommandService:
-    """Создаёт AdminCommandService с зависимостями.
-
-    Args:
-        chats: Репозиторий чатов (опционально).
-        usage: Трекер использования (опционально).
-        admins_repo: Репозиторий администраторов.
-        admin_access_service: Сервис проверки прав администратора.
-        logger: Логгер.
-
-    Returns:
-        Настроенный AdminCommandService.
-    """
-    from app.admin_command_service import AdminCommandService
-
-    return AdminCommandService(
-        chats=chats,
-        usage=usage,
-        admins_repo=admins_repo,
-        admin_access_service=admin_access_service,
-        logger=logger,
-    )
-
-
-def build_frog_processing_service(
-    image_service: ImageService,
-    messaging_service: IMessagingService,
-    usage_tracker: IUsageTracker | None,
-    admin_notifier: AdminNotificationService | None,
-    logger: ILogger,
-) -> FrogProcessingService:
-    """Создаёт FrogProcessingService с зависимостями.
-
-    Args:
-        image_service: Сервис генерации изображений.
-        messaging_service: Сервис отправки сообщений.
-        usage_tracker: Трекер использования.
-        admin_notifier: Сервис уведомления администраторов.
-        logger: Логгер.
-
-    Returns:
-        Настроенный FrogProcessingService.
-    """
-    from app.fallback_image_delivery_service import FallbackImageDeliveryService
-    from app.frog_delivery_service import FrogDeliveryService
-    from app.frog_processing_service import FrogProcessingService
-
-    # Создаём FallbackImageDeliveryService для переиспользования логики fallback
-    fallback_delivery = FallbackImageDeliveryService(
-        image_provider=image_service,
-        messaging_service=messaging_service,
-        logger=logger,
-    )
-
-    delivery_service = FrogDeliveryService(
-        fallback_delivery=fallback_delivery,
-        messaging_service=messaging_service,
-        logger=logger,
-    )
-
-    return FrogProcessingService(
-        image_service=image_service,
-        delivery_service=delivery_service,
-        usage_tracker=usage_tracker,
-        admin_notifier=admin_notifier,
-        logger=logger,
-    )
-
-
-def build_data_cleanup_service(
-    dispatch_registry: IDispatchRegistry,
-    logger: ILogger,
-) -> DataCleanupService:
-    """Создаёт DataCleanupService с зависимостями.
-
-    Args:
-        dispatch_registry: Репозиторий для работы с dispatch_registry (через протокол).
-        logger: Логгер.
-
-    Returns:
-        Настроенный DataCleanupService.
-    """
-    from app.data_cleanup_service import DataCleanupService
-
-    return DataCleanupService(
-        dispatch_registry=dispatch_registry,
-        logger=logger,
-    )
-
-
-def build_cleanup_service(
-    logger: ILogger,
-    pool_factory: PostgresPoolFactory | None = None,
-    redis_factory: RedisClientFactory | None = None,
-) -> CleanupService:
-    """Создаёт CleanupService с зависимостями.
-
-    ⚠️ ВАЖНО: CleanupService принимает ФАБРИКИ, а не пулы, потому что:
-    - Фабрики инкапсулируют состояние пулов
-    - При закрытии нужно вызвать factory.close(), который закроет все пулы
-    - Это единственное место, где фабрики передаются в сервисы (для cleanup)
-
-    Для всех остальных сервисов используются пулы через DI, а не фабрики.
-
-    Args:
-        logger: Логгер.
-        pool_factory: Фабрика пула Postgres (опционально, нужна для закрытия пула).
-        redis_factory: Фабрика Redis клиента (опционально, нужна для закрытия клиента).
-
-    Returns:
-        Настроенный CleanupService.
-    """
-    from infra.celery.cleanup_service import CleanupService
-
-    return CleanupService(
-        logger=logger,
-        pool_factory=pool_factory,
-        redis_factory=redis_factory,
-    )
-
-
-def build_support_bot_services(
-    db_pool: asyncpg.Pool,
-    redis_client: RedisClient,
-) -> SupportBotServices:
-    """Собирает минимальный контейнер SupportBotServices для резервного бота.
-
-    Создает только необходимые зависимости для SupportBot:
-    - admins_repo для проверки прав администратора
-    - chats для обработки событий чата
-    - settings для конфигурации
-
-    Cleanup ресурсов выполняется через глобальные функции close_postgres_pool()
-    и close_redis(), поэтому инфраструктурные объекты не хранятся в контейнере.
-
-    Args:
-        db_pool: Пул подключений PostgreSQL.
-        redis_client: Redis-клиент для использования в сервисах.
-
-    Returns:
-        Настроенный экземпляр SupportBotServices.
-
-    Raises:
-        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
-    """
-    from shared.bot_services import SupportBotServices
-    from shared.config import AppSettings, TelegramConfig
-
-    # Валидация параметров
-    if db_pool is None:
-        raise ValueError("db_pool не может быть None")
-    if redis_client is None:
-        raise ValueError("redis_client не может быть None")
-
-    # Создаём AppSettings из Config
-    app_settings = AppSettings()
-
-    # Создаём AdminsRepo для admin сервисов
-    # Используем исходное значение из TelegramConfig (str), а не из AppSettings (int)
-    telegram_config = TelegramConfig()
-    admins_repo = AdminsRepo(pool=db_pool, admin_chat_id=telegram_config.admin_chat_id)
-
-    # Создаём ChatsRepo для обработки событий чата
-    chats = ChatsRepo(pool=db_pool)
-
-    return SupportBotServices(
-        admins_repo=admins_repo,
-        chats=chats,
-        settings=app_settings,
-    )
-
-
-if TYPE_CHECKING:
-    from telegram.ext import Application
-
-    from bot.bot_chat_access_validator import BotChatAccessValidator
-    from bot.bot_error_handler import BotErrorHandler
-    from bot.bot_handlers_registry import BotHandlersRegistry
-    from bot.bot_lifecycle_manager import BotLifecycleManager
-    from bot.chat_event_handler import ChatEventHandler
-    from bot.handlers_admin import AdminHandlers
-    from bot.handlers_models import ModelHandlers
-    from bot.handlers_user import UserHandlers
-    from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
-
-
-@dataclass
-class BotComponents:
-    """Контейнер компонентов для WednesdayBot.
-
-    Инкапсулирует все компоненты, необходимые для работы основного бота.
-    Используется для соблюдения принципа Dependency Injection и SRP.
-    """
-
-    user_handlers: UserHandlers
-    admin_handlers: AdminHandlers
-    model_handlers: ModelHandlers
-    error_handler: BotErrorHandler
-    chat_validator: BotChatAccessValidator
-    lifecycle_manager: BotLifecycleManager
-    chat_event_handler: ChatEventHandler
-    handlers_registry: BotHandlersRegistry
-
-
-@dataclass
-class SupportBotComponents:
-    """Контейнер компонентов для SupportBot.
-
-    Инкапсулирует все компоненты, необходимые для работы резервного бота.
-    Используется для соблюдения принципа Dependency Injection и SRP.
-    """
-
-    error_handler: BotErrorHandler
-    chat_validator: BotChatAccessValidator
-    lifecycle_manager: BotLifecycleManager
-    chat_event_handler: ChatEventHandler
-    handlers_registry: SupportBotHandlersRegistry | None  # None для разрешения циклической зависимости
-
-
-def build_bot_components(
-    services: BotServices,
-    application: Application,
-    logger: ILogger,
-) -> BotComponents:
-    """Создает все компоненты для WednesdayBot.
-
-    Фабрика компонентов для соблюдения принципа Dependency Injection.
-    Все компоненты создаются в composition root, а не внутри WednesdayBot.
-
-    Args:
-        services: Контейнер сервисов бота.
-        application: PTB Application для регистрации обработчиков.
-        logger: Экземпляр логгера.
-
-    Returns:
-        Контейнер BotComponents с созданными компонентами.
-    """
-    from bot.bot_chat_access_validator import BotChatAccessValidator
-    from bot.bot_error_handler import BotErrorHandler
-    from bot.bot_handlers_registry import BotHandlersRegistry
-    from bot.bot_lifecycle_manager import BotLifecycleManager
-    from bot.chat_event_handler import ChatEventHandler
-    from bot.handlers_admin import AdminHandlers
-    from bot.handlers_models import ModelHandlers
-    from bot.handlers_user import UserHandlers
-
-    # Константы
-    TIMEOUT_MEDIUM_SECONDS = 30.0
-
-    # Создаем обработчики команд
-    user_handlers = UserHandlers(services, logger=logger)
-    admin_handlers = AdminHandlers(services, logger=logger)
-    model_handlers = ModelHandlers(services, logger=logger)
-
-    # Создаем компоненты для управления жизненным циклом
-    error_handler = BotErrorHandler(logger)
-    chat_validator = BotChatAccessValidator(logger, timeout=TIMEOUT_MEDIUM_SECONDS)
-    lifecycle_manager = BotLifecycleManager(logger)
-    chat_event_handler = ChatEventHandler(
-        services=services,
-        bot=application.bot,
-        logger=logger,
-    )
-
-    # Создаем регистратор обработчиков
-    handlers_registry = BotHandlersRegistry(
-        application=application,
-        user_handlers=user_handlers,
-        admin_handlers=admin_handlers,
-        model_handlers=model_handlers,
-        chat_event_handler=chat_event_handler,
-        error_handler=error_handler,
-        logger=logger,
-    )
-
-    return BotComponents(
-        user_handlers=user_handlers,
-        admin_handlers=admin_handlers,
-        model_handlers=model_handlers,
-        error_handler=error_handler,
-        chat_validator=chat_validator,
-        lifecycle_manager=lifecycle_manager,
-        chat_event_handler=chat_event_handler,
-        handlers_registry=handlers_registry,
-    )
-
-
-def build_support_bot_components(
-    services: SupportBotServices,
-    application: Application,
-    logger: ILogger,
-) -> tuple[SupportBotComponents, Callable[[Callable], SupportBotHandlersRegistry]]:
-    """Создает все компоненты для SupportBot.
-
-    Фабрика компонентов для соблюдения принципа Dependency Injection.
-    Все компоненты создаются в composition root, а не внутри SupportBot.
-
-    Note:
-        handlers_registry создается отдельно после создания SupportBot из-за
-        того, что требуется request_start_main callback.
-
-    Args:
-        services: Контейнер сервисов для SupportBot.
-        application: PTB Application для регистрации обработчиков.
-        logger: Экземпляр логгера.
-
-    Returns:
-        Кортеж (SupportBotComponents без handlers_registry, функция для создания handlers_registry).
-    """
-    from bot.bot_chat_access_validator import BotChatAccessValidator
-    from bot.bot_error_handler import BotErrorHandler
-    from bot.bot_lifecycle_manager import BotLifecycleManager
-    from bot.chat_event_handler import ChatEventHandler
-
-    # Константы
-    TIMEOUT_MEDIUM_SECONDS = 30.0
-
-    # Создаем компоненты для управления жизненным циклом
-    error_handler = BotErrorHandler(logger)
-    chat_validator = BotChatAccessValidator(logger, timeout=TIMEOUT_MEDIUM_SECONDS)
-    lifecycle_manager = BotLifecycleManager(logger)
-    chat_event_handler = ChatEventHandler(
-        services=services,
-        bot=application.bot,
-        logger=logger,
-    )
-
-    # Функция для создания handlers_registry после создания SupportBot
-    def create_handlers_registry(request_start_main: Callable | None = None) -> SupportBotHandlersRegistry:
-        """Создает handlers_registry с переданным request_start_main callback."""
-        from bot.handlers_support import SupportBotHandlers
-        from bot.support_bot_handlers_registry import SupportBotHandlersRegistry
-
-        # Создаем обработчики команд
-        support_handlers = SupportBotHandlers(
-            services=services,
-            logger=logger,
-            request_start_main=request_start_main,
+        return AdminDashboardService(
+            usage=usage,
+            chats=self.chats_repo,
+            metrics=self._metrics_service,
+            api_status_service=api_status_service,
+            logger=app_logger,
         )
 
-        return SupportBotHandlersRegistry(
+    def _build_admin_access_service(
+        self,
+        super_admin_id: int | None,
+    ) -> AdminAccessService:
+        """Создаёт AdminAccessService с зависимостями.
+
+        Args:
+            super_admin_id: ID главного администратора (из .env).
+
+        Returns:
+            Настроенный AdminAccessService.
+        """
+        from app.admin_access_service import AdminAccessService
+
+        # Используем контекстный логгер для AdminAccessService
+        logger = self._logger.bind(module="AdminAccessService")
+
+        return AdminAccessService(
+            admins_repo=self.admins_repo,
+            super_admin_id=super_admin_id,
+            logger=logger,
+        )
+
+    def _build_admin_command_service(
+        self,
+        usage: IUsageTracker,
+        admin_access_service: AdminAccessService,
+    ) -> AdminCommandService:
+        """Создаёт AdminCommandService с зависимостями.
+
+        Args:
+            usage: Трекер использования.
+            admin_access_service: Сервис проверки прав администратора.
+
+        Returns:
+            Настроенный AdminCommandService.
+        """
+        from app.admin_command_service import AdminCommandService
+
+        # Используем контекстный логгер для AdminCommandService
+        logger = self._logger.bind(module="AdminCommandService")
+
+        return AdminCommandService(
+            chats=self.chats_repo,
+            usage=usage,
+            admins_repo=self.admins_repo,
+            admin_access_service=admin_access_service,
+            logger=logger,
+        )
+
+    def _build_frog_rate_limiter(
+        self,
+    ) -> FrogRateLimiterService:
+        """Создаёт FrogRateLimiterService для ограничения частоты запросов /frog.
+
+        Returns:
+            Экземпляр FrogRateLimiterService.
+        """
+        logger = self._logger.bind(module="FrogRateLimiterService")
+        logger.debug(
+            "Создание rate limiters для /frog",
+            event="container_create_frog_rate_limiters",
+            status="started",
+        )
+
+        frog_rate_limiter = FrogRateLimiterService(
+            settings=self.app_settings,
+            global_limiter=self.frog_global_rate_limiter,
+            user_limiter=self.frog_user_rate_limiter,
+            logger=logger,
+        )
+
+        logger.debug(
+            "Frog rate limiters созданы",
+            event="container_frog_rate_limiters_created",
+            status="ok",
+        )
+        return frog_rate_limiter
+
+    def _build_telegram_api_rate_limiter(
+        self,
+    ) -> TelegramAPIRateLimiterService:
+        """Создаёт TelegramAPIRateLimiterService для ограничения частоты запросов к Telegram API.
+
+        Returns:
+            Экземпляр TelegramAPIRateLimiterService.
+        """
+        from app.telegram_api_rate_limiter_service import TelegramAPIRateLimiterService
+
+        logger = self._logger.bind(module="TelegramAPIRateLimiterService")
+        logger.debug(
+            "Создание rate limiter для Telegram API",
+            event="container_create_telegram_api_rate_limiter",
+            status="started",
+        )
+
+        telegram_api_rate_limiter = TelegramAPIRateLimiterService(
+            settings=self.app_settings,
+            api_limiter=self.telegram_api_rate_limiter,
+            logger=logger,
+            max_parallel=self.app_settings.telegram_api_max_parallel_requests,
+        )
+
+        logger.debug(
+            "Telegram API rate limiter создан",
+            event="container_telegram_api_rate_limiter_created",
+            status="ok",
+        )
+        return telegram_api_rate_limiter
+
+    def _build_database_operations_service(
+        self,
+        usage: IUsageTracker,
+        uow_factory: IUnitOfWorkFactory,
+    ) -> DatabaseOperationsService:
+        """Создаёт DatabaseOperationsService для атомарных операций БД.
+
+        Args:
+            usage: Трекер использования.
+            uow_factory: Фабрика для создания Unit of Work.
+
+        Returns:
+            Экземпляр DatabaseOperationsService.
+        """
+        logger = self._logger.bind(module="DatabaseOperationsService")
+        logger.debug(
+            "Создание DatabaseOperationsService",
+            event="container_create_database_operations",
+            status="started",
+        )
+
+        database_operations = DatabaseOperationsService(
+            dispatch_registry=self.dispatch_registry,
+            usage_tracker=usage,
+            metrics=self._metrics_service,
+            unit_of_work_factory=uow_factory,
+            logger=logger,
+        )
+
+        logger.debug(
+            "DatabaseOperationsService создан",
+            event="container_database_operations_created",
+            status="ok",
+        )
+        return database_operations
+
+    def _build_model_management_service(
+        self,
+        image_client: ITextToImageClient,
+        text_client: ITextToTextClient | None,
+    ) -> ModelManagementService:
+        """Создаёт ModelManagementService для управления моделями.
+
+        Args:
+            image_client: Клиент для генерации изображений.
+            text_client: Клиент для генерации текста.
+
+        Returns:
+            Экземпляр ModelManagementService.
+        """
+        logger = self._logger.bind(module="ModelManagementService")
+        logger.debug(
+            "Создание ModelManagementService",
+            event="container_create_model_management",
+            status="started",
+        )
+
+        model_management_service = ModelManagementService(
+            image_client=image_client,
+            text_client=text_client,
+            models_repo=self.models_repo,
+            logger=logger,
+        )
+
+        logger.debug(
+            "ModelManagementService создан",
+            event="container_model_management_created",
+            status="ok",
+        )
+        return model_management_service
+
+    @cached_property
+    def models_repo(self) -> IModelsRepo:
+        """Репозиторий моделей."""
+        return ModelsRepo(pool=self._db_pool)
+
+    @cached_property
+    def chats_repo(self) -> IChatsRepo:
+        """Репозиторий чатов."""
+        return ChatsRepo(pool=self._db_pool)
+
+    @cached_property
+    def admins_repo(self) -> IAdminsRepo:
+        """Репозиторий администраторов."""
+        from shared.config import TelegramConfig
+
+        telegram_config = TelegramConfig()
+        return AdminsRepo(pool=self._db_pool, admin_chat_id=telegram_config.admin_chat_id)
+
+    @cached_property
+    def images_repo(self) -> ImagesRepo:
+        """Репозиторий изображений."""
+        return ImagesRepo(pool=self._db_pool)
+
+    @cached_property
+    def prompts_repo(self) -> PromptsRepo:
+        """Репозиторий промптов."""
+        return PromptsRepo(pool=self._db_pool)
+
+    @cached_property
+    def dispatch_registry(self) -> DispatchRegistry:
+        """Реестр отправок."""
+        return DispatchRegistry(pool=self._db_pool)
+
+    @cached_property
+    def prompt_cache(self) -> PromptCache:
+        """Кэш промптов."""
+        return PromptCache(redis_client=self._redis_client)
+
+    @cached_property
+    def app_settings(self) -> AppSettings:
+        """Настройки приложения."""
+        return AppSettings()
+
+    @cached_property
+    def circuit_breaker(self) -> ICircuitBreaker:
+        """Circuit breaker для защиты Kandinsky API."""
+        cb_config = self._config.circuit_breaker
+        return CircuitBreakerService(
+            redis_client=self._redis_client,
+            key="cb:kandinsky_api",
+            threshold=cb_config.threshold,
+            window=cb_config.window,
+            cooldown=cb_config.cooldown,
+        )
+
+    @cached_property
+    def frog_global_rate_limiter(self) -> IRateLimiter:
+        """Глобальный rate limiter для /frog команды."""
+        return RateLimiter(
+            redis_client=self._redis_client,
+            prefix="frog:global:",
+            window=self.app_settings.frog_rate_limit_window_seconds,
+            limit=self.app_settings.frog_rate_limit_max_requests,
+        )
+
+    @cached_property
+    def frog_user_rate_limiter(self) -> IRateLimiter:
+        """Rate limiter для пользователей /frog команды."""
+        SECONDS_PER_MINUTE = 60
+        return RateLimiter(
+            redis_client=self._redis_client,
+            prefix="frog:user:",
+            window=self.app_settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
+            limit=1,
+        )
+
+    @cached_property
+    def telegram_api_rate_limiter(self) -> IRateLimiter:
+        """Rate limiter для Telegram API."""
+        from app.telegram_api_rate_limiter_service import (
+            TELEGRAM_API_MAX_REQUESTS_PER_SECOND,
+            TELEGRAM_API_WINDOW_SECONDS,
+        )
+
+        return RateLimiter(
+            redis_client=self._redis_client,
+            prefix="telegram_api:",
+            window=TELEGRAM_API_WINDOW_SECONDS,
+            limit=TELEGRAM_API_MAX_REQUESTS_PER_SECOND,
+        )
+
+    @cached_property
+    def usage_tracker(self) -> UsageTracker:
+        """UsageTracker для отслеживания использования."""
+        return UsageTracker(
+            pool=self._db_pool,
+            monthly_quota=100,
+            frog_threshold=70,
+        )
+
+    @cached_property
+    def user_state_store(self) -> UserStateCache:
+        """UserStateCache для хранения состояния пользователей."""
+        return UserStateCache(redis_client=self._redis_client)
+
+    @cached_property
+    def uow_factory(self) -> IUnitOfWorkFactory:
+        """Фабрика для Unit of Work."""
+        from infra.database.database_unit_of_work import DatabaseUnitOfWork
+
+        logger = self._logger.bind(module="UnitOfWorkFactory")
+
+        def create_unit_of_work() -> DatabaseUnitOfWork:
+            return DatabaseUnitOfWork(pool=self._db_pool, logger=logger)
+
+        return create_unit_of_work
+
+    @cached_property
+    def image_existence_service(self) -> ImageExistenceService:
+        """Сервис проверки существования изображений."""
+        logger = self._logger.bind(module="ImageExistenceService")
+        return ImageExistenceService(
+            prompts_repo=self.prompts_repo,
+            images_repo=self.images_repo,
+            logger=logger,
+        )
+
+    @cached_property
+    def failed_cache_queue(self) -> FailedCacheQueue:
+        """Очередь непересозданных кэшей."""
+        logger = self._logger.bind(module="FailedCacheQueue")
+        return FailedCacheQueue(
+            redis_client=self._redis_client,
+            prefix="failed_cache:",
+            logger=logger,
+        )
+
+    def build_bot_services(self) -> BotServices:
+        """Собирает контейнер BotServices для основного бота.
+
+        Использует приватные фабрики для создания всех сервисов.
+        Реализует ленивое создание с кэшированием результата.
+
+        Returns:
+            Настроенный экземпляр BotServices (кэшируется после первого вызова).
+        """
+        # Ленивое создание с кэшированием
+        if self._services is not None:
+            self._logger.debug(
+                "Использование кэшированного BotServices",
+                event="container_use_cached_services",
+                status="ok",
+            )
+            return self._services
+
+        self._logger.debug(
+            "Начало сборки BotServices",
+            event="container_build_services_start",
+            status="started",
+        )
+
+        # Создаём базовые компоненты
+        image_client, text_client = self._create_clients()
+
+        # Передаём prompt_cache из cached_property в _build_image_stack для переиспользования
+        image_service = self._build_image_stack(
+            image_client=image_client,
+            text_client=text_client,
+            prompt_cache=self.prompt_cache,
+        )
+
+        # Создаём сервисы через приватные фабрики
+        frog_rate_limiter = self._build_frog_rate_limiter()
+        telegram_api_rate_limiter = self._build_telegram_api_rate_limiter()
+        database_operations = self._build_database_operations_service(
+            self.usage_tracker,
+            self.uow_factory,
+        )
+        model_management_service = self._build_model_management_service(
+            image_client,
+            text_client,
+        )
+        admin_dashboard_service = self._build_admin_dashboard_service(
+            usage=self.usage_tracker,
+            image_client=image_client,
+            text_client=text_client,
+        )
+
+        # Создаём admin сервисы
+        super_admin_id = None
+        if self.app_settings.admin_chat_id:
+            try:
+                super_admin_id = int(self.app_settings.admin_chat_id)
+            except (ValueError, TypeError):
+                pass
+
+        admin_access_service = self._build_admin_access_service(
+            super_admin_id=super_admin_id,
+        )
+        admin_command_service = self._build_admin_command_service(
+            usage=self.usage_tracker,
+            admin_access_service=admin_access_service,
+        )
+
+        # Собираем финальный объект BotServices
+        dispatch_service: DispatchService | None = None  # будет создан позже в bot слое
+
+        services = BotServices(
+            usage=self.usage_tracker,
+            chats=self.chats_repo,
+            dispatch_registry=self.dispatch_registry,
+            metrics=self._metrics_service,
+            prompt_cache=self.prompt_cache,
+            user_state_store=self.user_state_store,
+            settings=self.app_settings,
+            image_service=image_service,
+            frog_rate_limiter=frog_rate_limiter,
+            task_queue=self._task_queue,
+            bot_controller=None,
+            dispatch_service=dispatch_service,
+            admin_dashboard_service=admin_dashboard_service,
+            model_management_service=model_management_service,
+            admin_access_service=admin_access_service,
+            admin_command_service=admin_command_service,
+            messaging_service=None,  # будет установлен позже в bot слое
+            database_operations=database_operations,
+            admins_repo=self.admins_repo,
+            telegram_api_rate_limiter=telegram_api_rate_limiter,
+        )
+
+        # Кэшируем результат
+        self._services = services
+
+        self._logger.info(
+            "BotServices успешно собран и закэширован",
+            event="container_build_services_success",
+            status="ok",
+        )
+        return services
+
+    def build_handlers_registry(self, application: Application) -> BotHandlersRegistry:
+        """Собирает регистратор обработчиков для PTB Application.
+
+        Скрывает внутри себя создание всех хендлеров (UserHandlers, AdminHandlers,
+        ModelHandlers и прочих) и возвращает готовый объект BotHandlersRegistry.
+
+        Args:
+            application: PTB Application для регистрации обработчиков.
+
+        Returns:
+            Настроенный экземпляр BotHandlersRegistry.
+        """
+        self._logger.debug(
+            "Начало сборки BotHandlersRegistry",
+            event="container_build_handlers_start",
+            status="started",
+        )
+
+        # 1. Сначала собираем общие сервисы (BotServices)
+        services = self.build_bot_services()
+
+        # 2. Создаем регистратор, вызывая внутренние фабрики хендлеров
+        from bot.handlers.registry import BotHandlersRegistry
+
+        self._logger.debug(
+            "Создание хендлеров",
+            event="container_create_handlers",
+            status="started",
+        )
+
+        user_handlers = self._create_user_handlers(services)
+        admin_handlers = self._create_admin_handlers(services)
+        model_handlers = self._create_model_handlers(services)
+        chat_event_handler = self._create_chat_event_handler(services, self._bot_client)
+        error_handler = self._create_error_handler()
+
+        self._logger.debug(
+            "Все хендлеры созданы",
+            event="container_handlers_created",
+            status="ok",
+        )
+
+        registry = BotHandlersRegistry(
             application=application,
-            support_handlers=support_handlers,
+            user_handlers=user_handlers,
+            admin_handlers=admin_handlers,
+            model_handlers=model_handlers,
             chat_event_handler=chat_event_handler,
             error_handler=error_handler,
-            logger=logger,
+            logger=self._logger.bind(module="HandlersRegistry"),
         )
 
-    # Создаем временный заглушку для handlers_registry (будет заменена после создания бота)
-    # Используем None, так как handlers_registry создается после SupportBot
-    components = SupportBotComponents(
-        error_handler=error_handler,
-        chat_validator=chat_validator,
-        lifecycle_manager=lifecycle_manager,
-        chat_event_handler=chat_event_handler,
-        handlers_registry=None,
-    )
-
-    return components, create_handlers_registry
-
-
-def build_bot_services(config: Config, db_pool: asyncpg.Pool, redis_client: RedisClient) -> BotServices:
-    """Собирает контейнер BotServices для основного бота.
-
-    ⚠️ ВАЖНО: Эта функция принимает УЖЕ СОЗДАННЫЕ пулы (db_pool, redis_client),
-    а не фабрики. Пулы должны быть созданы через фабрики в main.py.
-
-    Архитектура:
-    - Фабрики (PostgresPoolFactory, RedisClientFactory) используются ТОЛЬКО для создания пулов
-    - Сервисы получают пулы через Dependency Injection (эта функция)
-    - Cleanup service получает фабрики для закрытия пулов при shutdown
-
-    На этом этапе:
-    - image_service создаётся через build_image_stack();
-    - остальные сервисы повторяют существующую инициализацию из WednesdayBot.
-
-    Args:
-        config: Экземпляр Config для создания сервисов и настроек.
-        db_pool: Пул подключений PostgreSQL (уже инициализирован через фабрику).
-        redis_client: Redis-клиент для использования в сервисах (уже инициализирован через фабрику).
-
-    Returns:
-        Настроенный экземпляр BotServices.
-
-    Raises:
-        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
-    """
-    # Валидация параметров
-    if config is None:
-        raise ValueError("config не может быть None")
-    if db_pool is None:
-        raise ValueError("db_pool не может быть None")
-    if redis_client is None:
-        raise ValueError("redis_client не может быть None")
-
-    # Создаём AppSettings из Config
-    from shared.config import AppSettings
-
-    app_settings = AppSettings()
-
-    # Создаём общий логгер для всех сервисов
-    app_logger = get_logger("app")
-
-    # Создаём ModelsRepo один раз для переиспользования во всех сервисах
-    models_repo = ModelsRepo(pool=db_pool)
-
-    # Создаём клиенты один раз для переиспользования во всех сервисах
-    image_client, text_client = _create_clients(
-        config,
-        db_pool=db_pool,
-        models_repo=models_repo,
-    )
-
-    # Создаём image_service с переиспользованием клиентов
-    image_service = build_image_stack(
-        config=config,
-        image_client=image_client,
-        text_client=text_client,
-        models_repo=models_repo,
-        db_pool=db_pool,
-        redis_client=redis_client,
-    )
-
-    usage = UsageTracker(
-        pool=db_pool,
-        monthly_quota=100,
-        frog_threshold=70,
-    )
-
-    chats = ChatsRepo(pool=db_pool)
-    dispatch_registry = DispatchRegistry(pool=db_pool)
-    # Создаём Metrics
-    from infra.redis.redis_client import RedisClientFactory
-
-    redis_factory = RedisClientFactory(config=config)
-    metrics = Metrics(pool=db_pool, logger=app_logger, redis_factory=redis_factory)
-
-    prompt_cache = PromptCache(redis_client=redis_client)
-    user_state_store = UserStateCache(redis_client=redis_client)
-
-    # Создаём rate limiters для команды /frog
-    SECONDS_PER_MINUTE = 60
-    global_limiter: IRateLimiter = RateLimiter(
-        redis_client=redis_client,
-        prefix="frog:global:",
-        window=app_settings.frog_rate_limit_window_seconds,
-        limit=app_settings.frog_rate_limit_max_requests,
-    )
-    user_limiter: IRateLimiter = RateLimiter(
-        redis_client=redis_client,
-        prefix="frog:user:",
-        window=app_settings.frog_rate_limit_minutes * SECONDS_PER_MINUTE,
-        limit=1,
-    )
-
-    frog_rate_limiter = FrogRateLimiterService(
-        settings=app_settings,
-        global_limiter=global_limiter,
-        user_limiter=user_limiter,
-        logger=app_logger,
-    )
-
-    # Создаём rate limiter для Telegram API
-    from app.telegram_api_rate_limiter_service import (
-        TELEGRAM_API_MAX_REQUESTS_PER_SECOND,
-        TELEGRAM_API_WINDOW_SECONDS,
-        TelegramAPIRateLimiterService,
-    )
-
-    telegram_api_limiter: IRateLimiter = RateLimiter(
-        redis_client=redis_client,
-        prefix="telegram_api:",
-        window=TELEGRAM_API_WINDOW_SECONDS,
-        limit=TELEGRAM_API_MAX_REQUESTS_PER_SECOND,
-    )
-
-    telegram_api_rate_limiter = TelegramAPIRateLimiterService(
-        settings=app_settings,
-        api_limiter=telegram_api_limiter,
-        logger=app_logger,
-        max_parallel=app_settings.telegram_api_max_parallel_requests,
-    )
-
-    # Ленивые импорты для избежания циклических зависимостей
-    from infra.celery.asyncio_pool.task_queue import CeleryTaskQueue
-
-    # Создаём task queue для прямого использования в handlers
-    task_queue = CeleryTaskQueue()
-
-    # Создаём фабрику для Unit of Work
-    from infra.database.database_unit_of_work import DatabaseUnitOfWork
-
-    def create_unit_of_work() -> DatabaseUnitOfWork:
-        return DatabaseUnitOfWork(pool=db_pool, logger=app_logger)
-
-    # Аннотируем для явности соответствия протоколу
-    uow_factory: IUnitOfWorkFactory = create_unit_of_work
-
-    # Создаём DatabaseOperationsService для атомарных операций БД
-    database_operations = DatabaseOperationsService(
-        dispatch_registry=dispatch_registry,
-        usage_tracker=usage,
-        metrics=metrics,
-        unit_of_work_factory=uow_factory,
-        logger=app_logger,
-    )
-
-    # Dispatch сервисы будут созданы позже в bot слое, когда будет доступен messaging_service
-    dispatch_service: DispatchService | None = None
-
-    admin_dashboard_service = build_admin_dashboard_service(
-        usage=usage,
-        chats=chats,
-        metrics=metrics,
-        image_client=image_client,
-        text_client=text_client,
-        db_pool=db_pool,
-        models_repo=models_repo,
-    )
-
-    # Создаём ModelManagementService для управления моделями
-    model_management_service = ModelManagementService(
-        image_client=image_client,
-        text_client=text_client,
-        models_repo=models_repo,
-        logger=app_logger,
-    )
-
-    # Создаём AdminsRepo для admin сервисов
-    # Используем исходное значение из TelegramConfig (str), а не из AppSettings (int)
-    from shared.config import TelegramConfig
-
-    telegram_config = TelegramConfig()
-    admins_repo = AdminsRepo(pool=db_pool, admin_chat_id=telegram_config.admin_chat_id)
-
-    # Создаём AdminAccessService
-    super_admin_id = None
-    if app_settings.admin_chat_id:
-        try:
-            super_admin_id = int(app_settings.admin_chat_id)
-        except (ValueError, TypeError):
-            pass
-
-    admin_access_service = build_admin_access_service(
-        admins_repo=admins_repo,
-        super_admin_id=super_admin_id,
-        logger=app_logger,
-    )
-
-    # Создаём AdminCommandService
-    admin_command_service = build_admin_command_service(
-        chats=chats,
-        usage=usage,
-        admins_repo=admins_repo,
-        admin_access_service=admin_access_service,
-        logger=app_logger,
-    )
-
-    return BotServices(
-        usage=usage,
-        chats=chats,
-        dispatch_registry=dispatch_registry,
-        metrics=metrics,
-        prompt_cache=prompt_cache,
-        user_state_store=user_state_store,
-        settings=app_settings,
-        image_service=image_service,
-        frog_rate_limiter=frog_rate_limiter,
-        task_queue=task_queue,
-        bot_controller=None,
-        dispatch_service=dispatch_service,
-        admin_dashboard_service=admin_dashboard_service,
-        model_management_service=model_management_service,
-        admin_access_service=admin_access_service,
-        admin_command_service=admin_command_service,
-        messaging_service=None,  # будет установлен позже в bot слое
-        database_operations=database_operations,
-        admins_repo=admins_repo,
-        telegram_api_rate_limiter=telegram_api_rate_limiter,
-    )
-
-
-def build_dispatch_services(  # noqa: PLR0913, PLR0917
-    messaging_service: IMessagingService,
-    chats: IChatsRepo,
-    dispatch_registry: DispatchRegistry,
-    database_operations: DatabaseOperationsService,
-    image_service: ImageService,
-    metrics: IMetrics,
-    admins_repo: IAdminsRepo,
-    logger: ILogger,
-    settings: AppSettings | None = None,
-) -> tuple[TargetPreparationService, DispatchDeliveryService, DispatchService, AdminNotificationService]:
-    """Создаёт dispatch сервисы с messaging_service.
-
-    Args:
-        messaging_service: Сервис отправки сообщений.
-        chats: Репозиторий чатов.
-        dispatch_registry: Реестр отправок.
-        database_operations: Сервис операций БД.
-        image_service: Сервис генерации изображений.
-        metrics: Сервис метрик.
-        admins_repo: Репозиторий администраторов.
-        logger: Логгер.
-        settings: Настройки приложения для определения временных слотов (опционально).
-
-    Returns:
-        Кортеж (target_preparation_service, dispatch_delivery_service, dispatch_service, admin_notification_service).
-    """
-    target_preparation_service = TargetPreparationService(
-        chats_repo=chats,
-        dispatch_registry=dispatch_registry,
-        messaging_service=messaging_service,
-        logger=logger,
-    )
-
-    # Создаём FallbackImageDeliveryService для переиспользования логики fallback
-    from app.fallback_image_delivery_service import FallbackImageDeliveryService
-
-    fallback_delivery = FallbackImageDeliveryService(
-        image_provider=image_service,
-        messaging_service=messaging_service,
-        logger=logger,
-    )
-
-    dispatch_delivery_service = DispatchDeliveryService(
-        dispatch_registry=dispatch_registry,
-        database_operations=database_operations,
-        messaging_service=messaging_service,
-        fallback_delivery=fallback_delivery,
-        metrics=metrics,
-        logger=logger,
-    )
-
-    admin_notifier = build_admin_notification_service(
-        messaging_service=messaging_service,
-        admins_repo=admins_repo,
-        logger=logger,
-    )
-
-    dispatch_service = DispatchService(
-        target_preparation_service=target_preparation_service,
-        dispatch_delivery_service=dispatch_delivery_service,
-        image_service=image_service,
-        admin_notifier=admin_notifier,
-        metrics=metrics,
-        settings=settings,
-        logger=logger,
-    )
-
-    return target_preparation_service, dispatch_delivery_service, dispatch_service, admin_notifier
-
-
-def build_celery_services_context(
-    config: Config,
-    db_pool: asyncpg.Pool,
-    redis_client: RedisClient,
-) -> dict[str, object]:
-    """Создаёт контекст сервисов для Celery задач через DI.
-
-    Аналог build_bot_services(), но для Celery worker процесса.
-    Использует те же build_* функции для соблюдения единого стиля DI.
-
-    ⚠️ ВАЖНО: Эта функция принимает УЖЕ СОЗДАННЫЕ пулы (db_pool, redis_client),
-    а не фабрики. Пулы должны быть созданы через фабрики в get_services_context()
-    из infra/celery/context.py ПОСЛЕ fork worker процесса (для fork safety).
-
-    Архитектура:
-    - Фабрики (PostgresPoolFactory, RedisClientFactory) используются ТОЛЬКО для создания пулов
-    - Сервисы получают пулы через Dependency Injection (эта функция)
-    - Cleanup service получает фабрики для закрытия пулов при shutdown
-
-    Args:
-        config: Экземпляр Config для создания сервисов.
-        db_pool: Пул подключений PostgreSQL (уже инициализирован через фабрику).
-        redis_client: Redis-клиент (уже инициализирован через фабрику).
-
-    Returns:
-        Словарь с сервисами для Celery задач:
-        - bot: Экземпляр WednesdayBot
-        - postgres_pool: Пул подключений PostgreSQL
-        - redis_client: Redis-клиент
-        - image_service: Экземпляр ImageService
-        - usage_tracker: Экземпляр UsageTracker
-        - frog_processing: Экземпляр FrogProcessingService
-
-    Raises:
-        ValueError: Если обязательные параметры не переданы.
-    """
-    # Валидация параметров
-    if config is None:
-        raise ValueError("config не может быть None")
-    if db_pool is None:
-        raise ValueError("db_pool не может быть None")
-    if redis_client is None:
-        raise ValueError("redis_client не может быть None")
-
-    app_logger = get_logger("app")
-
-    # Создаём сервисы через DI (как в build_bot_services)
-    image_service = build_image_stack(
-        config=config,
-        db_pool=db_pool,
-        redis_client=redis_client,
-    )
-
-    usage_tracker = UsageTracker(
-        pool=db_pool,
-        monthly_quota=100,
-        frog_threshold=70,
-    )
-
-    bot = build_bot(
-        config=config,
-        db_pool=db_pool,
-        redis_client=redis_client,
-    )
-
-    # Создаём messaging service
-    from infra.messaging.ptb import PTBMessagingService
-
-    messaging_service = PTBMessagingService(bot=bot.application.bot)
-
-    # Создаём admin notifier
-    from shared.config import TelegramConfig
-
-    telegram_config = TelegramConfig()
-    admins_repo = AdminsRepo(pool=db_pool, admin_chat_id=telegram_config.admin_chat_id)
-    admin_notifier = build_admin_notification_service(
-        messaging_service=messaging_service,
-        admins_repo=admins_repo,
-        logger=app_logger,
-    )
-
-    # Создаём frog processing service через DI
-    frog_processing = build_frog_processing_service(
-        image_service=image_service,
-        messaging_service=messaging_service,
-        usage_tracker=usage_tracker,
-        admin_notifier=admin_notifier,
-        logger=app_logger,
-    )
-
-    # Создаём dispatch registry для data cleanup service
-    dispatch_registry = DispatchRegistry(pool=db_pool)
-
-    # Создаём data cleanup service через DI
-    data_cleanup_service = build_data_cleanup_service(
-        dispatch_registry=dispatch_registry,
-        logger=app_logger,
-    )
-
-    # Создаём idempotency service через DI
-    from app.idempotency_service import IdempotencyService
-
-    idempotency_service = IdempotencyService(
-        redis_client=redis_client,
-        logger=app_logger,
-    )
-
-    return {
-        "bot": bot,
-        "postgres_pool": db_pool,
-        "redis_client": redis_client,
-        "image_service": image_service,
-        "usage_tracker": usage_tracker,
-        "frog_processing": frog_processing,
-        "data_cleanup_service": data_cleanup_service,
-        "idempotency_service": idempotency_service,
-    }
-
-
-def build_bot(
-    config: Config,
-    db_pool: asyncpg.Pool,
-    redis_client: RedisClient,
-    services: BotServices | None = None,
-) -> WednesdayBot:
-    """Создаёт и настраивает экземпляр WednesdayBot.
-
-    Единственная точка создания WednesdayBot в приложении. Использует
-    Dependency Injection для передачи зависимостей в бот.
-
-    Args:
-        config: Экземпляр Config для создания сервисов и зависимостей.
-        db_pool: Пул подключений PostgreSQL.
-        redis_client: Redis-клиент для использования в сервисах.
-        services: Опциональный контейнер сервисов. Если None, создаётся
-            новый через build_bot_services().
-
-    Returns:
-        Настроенный экземпляр WednesdayBot с внедрёнными зависимостями.
-
-    Raises:
-        ValueError: Если обязательные параметры не переданы или имеют недопустимые значения.
-
-    Note:
-        Эта функция является Composition Root для WednesdayBot. Все зависимости
-        создаются здесь и передаются в бот через конструктор.
-    """
-    # Валидация параметров
-    if config is None:
-        raise ValueError("config не может быть None")
-    if db_pool is None:
-        raise ValueError("db_pool не может быть None")
-    if redis_client is None:
-        raise ValueError("redis_client не может быть None")
-
-    # Ленивый импорт для избежания циклических зависимостей
-    from bot.wednesday_bot import WednesdayBot
-    from shared.config import BotTelegramConfig
-
-    if services is None:
-        services = build_bot_services(config, db_pool, redis_client)
-
-    # Извлекаем только необходимые поля для bot-слоя (соблюдение границ слоёв)
-    bot_telegram_config = BotTelegramConfig(
-        bot_token=config.telegram.bot_token or "",
-        chat_id=config.telegram.chat_id,
-    )
-
-    # Создаём логгер для bot-слоя
-    bot_logger = get_logger("bot.wednesday_bot")
-
-    # Создаём Application через фабрику
-    from bot.bot_application_factory import create_telegram_application
-
-    application = create_telegram_application(bot_telegram_config)
-
-    # Создаём компоненты бота через фабрику
-    components = build_bot_components(
-        services=services,
-        application=application,
-        logger=bot_logger,
-    )
-
-    # Создаём бот с внедрёнными зависимостями
-    bot = WednesdayBot(
-        services=services,
-        telegram_config=bot_telegram_config,
-        logger=bot_logger,
-        components=components,
-    )
-
-    # Устанавливаем обратную ссылку в composition root для избежания циклической зависимости
-    # bot_controller должен быть установлен здесь, а не в конструкторе WednesdayBot
-    services.bot_controller = bot
-
-    # Создаём messaging_service после создания бота, так как нужен bot.application.bot
-    from infra.messaging.ptb import PTBMessagingService
-
-    messaging_service = PTBMessagingService(bot=application.bot)
-    services.messaging_service = messaging_service
-
-    # Создаём chat_info_service с messaging_service для соблюдения границ слоёв
-    from app.chat_info_service import ChatInfoService
-
-    app_logger = get_logger("app")
-    chat_info_service = ChatInfoService(messaging_service=messaging_service, logger=app_logger)
-    services.chat_info_service = chat_info_service
-
-    # Создаём dispatch сервисы с messaging_service
-    if services.database_operations is not None and services.admins_repo is not None:
-        app_logger = get_logger("app")
-        _target_prep, _dispatch_delivery, dispatch, admin_notifier = build_dispatch_services(
-            messaging_service=messaging_service,
-            chats=services.chats,
-            dispatch_registry=services.dispatch_registry,
-            database_operations=services.database_operations,
-            image_service=services.image_service,
-            metrics=services.metrics,
-            admins_repo=services.admins_repo,
-            logger=app_logger,
-            settings=services.settings,
-        )
-        # Обновляем services
-        services.dispatch_service = dispatch
-        services.admin_notification_service = admin_notifier
-    else:
-        app_logger = get_logger("app")
-        app_logger.warning(
-            "database_operations или admins_repo не доступны, dispatch_service не будет создан",
+        self._logger.info(
+            "BotHandlersRegistry успешно собран",
+            event="container_build_handlers_success",
+            status="ok",
         )
 
-    return bot
+        return registry
+
+    def _create_user_handlers(self, services: BotServices) -> UserHandlers:
+        """Создает обработчики пользовательских команд."""
+        from bot.handlers.user import UserHandlers
+
+        self._logger.debug(
+            "Создание UserHandlers",
+            event="container_create_user_handlers",
+            status="started",
+        )
+        handlers = UserHandlers(
+            services=services,
+            logger=self._logger.bind(module="UserHandlers"),
+        )
+        self._logger.debug(
+            "UserHandlers создан",
+            event="container_user_handlers_created",
+            status="ok",
+        )
+        return handlers
+
+    def _create_admin_handlers(self, services: BotServices) -> AdminHandlers:
+        """Создает обработчики административных команд."""
+        from bot.handlers.admin import AdminHandlers
+
+        self._logger.debug(
+            "Создание AdminHandlers",
+            event="container_create_admin_handlers",
+            status="started",
+        )
+        handlers = AdminHandlers(
+            services=services,
+            logger=self._logger.bind(module="AdminHandlers"),
+        )
+        self._logger.debug(
+            "AdminHandlers создан",
+            event="container_admin_handlers_created",
+            status="ok",
+        )
+        return handlers
+
+    def _create_model_handlers(self, services: BotServices) -> ModelHandlers:
+        """Создает обработчики команд управления моделями."""
+        from bot.handlers.models import ModelHandlers
+
+        self._logger.debug(
+            "Создание ModelHandlers",
+            event="container_create_model_handlers",
+            status="started",
+        )
+        handlers = ModelHandlers(
+            services=services,
+            logger=self._logger.bind(module="ModelHandlers"),
+        )
+        self._logger.debug(
+            "ModelHandlers создан",
+            event="container_model_handlers_created",
+            status="ok",
+        )
+        return handlers
+
+    def _create_chat_event_handler(
+        self,
+        services: BotServices,
+        bot: Bot,
+    ) -> ChatEventHandler:
+        """Создает обработчик событий чата."""
+        from bot.handlers.chat_event import ChatEventHandler
+
+        self._logger.debug(
+            "Создание ChatEventHandler",
+            event="container_create_chat_event_handler",
+            status="started",
+        )
+        handler = ChatEventHandler(
+            services=services,
+            bot=self._bot_client,
+            logger=self._logger.bind(module="ChatEventHandler"),
+        )
+        self._logger.debug(
+            "ChatEventHandler создан",
+            event="container_chat_event_handler_created",
+            status="ok",
+        )
+        return handler
+
+    def _create_error_handler(self) -> BotErrorHandler:
+        """Создает глобальный обработчик ошибок."""
+        from bot.bot_error_handler import BotErrorHandler
+
+        self._logger.debug(
+            "Создание BotErrorHandler",
+            event="container_create_error_handler",
+            status="started",
+        )
+        handler = BotErrorHandler(
+            logger=self._logger.bind(module="BotErrorHandler"),
+        )
+        self._logger.debug(
+            "BotErrorHandler создан",
+            event="container_error_handler_created",
+            status="ok",
+        )
+        return handler

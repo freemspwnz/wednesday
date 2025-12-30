@@ -29,11 +29,9 @@ def test_imports() -> None:
 
 def test_type_annotations_exist() -> None:
     """Базовая проверка наличия аннотаций типов в ключевых классах."""
-    from bot.support_bot import SupportBot
     from bot.wednesday_bot import WednesdayBot
 
     # Проверяем, что классы существуют и имеют методы
     assert hasattr(WednesdayBot, "__init__")
-    assert hasattr(SupportBot, "__init__")
 
     assert True

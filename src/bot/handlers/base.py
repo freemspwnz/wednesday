@@ -18,7 +18,7 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from shared.base.exceptions import RepoError, ServiceError
-from shared.bot_services import BotServices, SupportBotServices
+from shared.bot_services import BotServices
 from shared.paths import LOGS_DIR
 from shared.protocols import ILogger
 from shared.retry import retry_on_connect_error
@@ -40,26 +40,21 @@ class BaseHandlers:
 
     def __init__(
         self,
-        services: BotServices | SupportBotServices,
+        services: BotServices,
         logger: ILogger,
     ) -> None:
         """Инициализирует базовый класс обработчиков.
 
         Args:
             services: Контейнер сервисов бота для доступа к зависимостям.
-                Может быть BotServices (для основного бота) или SupportBotServices (для резервного).
             logger: Экземпляр логгера для логирования операций.
         """
         self.logger = logger
-        self.services: BotServices | SupportBotServices = services
+        self.services: BotServices = services
         # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
-        # SupportBotServices всегда имеет admins_repo, BotServices может иметь None
-        if isinstance(services, SupportBotServices):
-            self.admins_store = services.admins_repo
-        elif services.admins_repo is None:
+        if services.admins_repo is None:
             raise RuntimeError("admins_repo не инициализирован в BotServices")
-        else:
-            self.admins_store = services.admins_repo
+        self.admins_store = services.admins_repo
 
     async def _send_log_file(self, bot: Bot, chat_id: int, path: Path) -> None:
         """Асинхронно читает лог‑файл с диска и отправляет его как документ.
