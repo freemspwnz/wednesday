@@ -3,26 +3,24 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+
+import redis.asyncio as redis
 
 from shared.base.exceptions import CircuitBreakerOpen
 from shared.base.redis_backend_service import RedisBackendService
-
-if TYPE_CHECKING:
-    from shared.base.redis_backend_service import RedisBackend
 
 
 class CircuitBreakerService(RedisBackendService):
     """Сервис circuit breaker для защиты от перегрузки внешних API.
 
-    Использует Redis для хранения состояния с fallback на in-memory хранилище.
+    Использует Redis для хранения состояния.
     Circuit breaker открывается при превышении порога ошибок и блокирует
     запросы на время cooldown.
     """
 
     def __init__(  # noqa: PLR0913
         self,
-        redis_client: RedisBackend,
+        redis_client: redis.Redis,
         *,
         key: str = "cb:default",
         threshold: int = 5,
@@ -33,7 +31,7 @@ class CircuitBreakerService(RedisBackendService):
         """Инициализирует circuit breaker.
 
         Args:
-            redis_client: Экземпляр Redis или совместимого клиента.
+            redis_client: Экземпляр Redis клиента.
             key: Логический ключ ресурса (например, 'kandinsky_api').
             threshold: Количество ошибок до открытия circuit-breaker (по умолчанию 5).
             window: Окно жизни счётчика ошибок в секундах через EXPIRE (по умолчанию 300).
@@ -61,14 +59,13 @@ class CircuitBreakerService(RedisBackendService):
         Returns:
             True если circuit breaker открыт и запросы блокируются,
             False если circuit breaker закрыт и запросы разрешены.
+
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
-
-        async def _get_data(backend: RedisBackend) -> dict[str, str]:
-            result = await backend.hgetall(self.key)  # type: ignore[misc]
-            return dict(result) if result else {}
-
         try:
-            data = await self._execute_with_fallback(_get_data, log_on_fallback=True)
+            result = await self._redis.hgetall(self.key)  # type: ignore[misc]
+            data = dict(result) if result else {}
         except Exception as e:
             self.logger.warning(
                 f"Ошибка при проверке состояния circuit breaker ({self.key}): {e}",
@@ -116,14 +113,13 @@ class CircuitBreakerService(RedisBackendService):
         """Регистрирует успешный запрос и сбрасывает счётчик ошибок.
 
         При успешном запросе circuit breaker может быть закрыт, если он был открыт.
+
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
-
-        async def _reset_failures(backend: RedisBackend) -> None:
-            await backend.hset(self.key, mapping={"failures": "0"})  # type: ignore[misc]
-            await backend.expire(self.key, self.window)
-
         try:
-            await self._execute_with_fallback(_reset_failures, log_on_fallback=True)
+            await self._redis.hset(self.key, mapping={"failures": "0"})  # type: ignore[misc]
+            await self._redis.expire(self.key, self.window)
             self.logger.info(
                 f"Circuit breaker {self.key}: успешный запрос зарегистрирован",
                 event="circuit_breaker_success",
@@ -152,18 +148,17 @@ class CircuitBreakerService(RedisBackendService):
 
         Raises:
             CircuitBreakerOpen: Если circuit breaker открыт после регистрации ошибки.
+            redis.RedisError: При ошибке Redis.
         """
         now_ts = self._now()
         mapping = {"last_failed_at": str(now_ts)}
 
-        async def _record_failure(backend: RedisBackend) -> int:
-            failures = await backend.hincrby(self.key, "failures", 1)  # type: ignore[misc]
-            await backend.hset(self.key, mapping=mapping)  # type: ignore[misc]
-            await backend.expire(self.key, self.window)
-            return int(failures)
-
         try:
-            failures = await self._execute_with_fallback(_record_failure, log_on_fallback=True)
+            failures = await self._redis.hincrby(self.key, "failures", 1)  # type: ignore[misc]
+            await self._redis.hset(self.key, mapping=mapping)  # type: ignore[misc]
+            await self._redis.expire(self.key, self.window)
+            failures = int(failures)
+
             self.logger.warning(
                 f"Circuit breaker {self.key}: ошибка зарегистрирована (failures={failures})",
                 event="circuit_breaker_failure",
@@ -198,18 +193,14 @@ class CircuitBreakerService(RedisBackendService):
     async def reset(self) -> None:
         """Полностью сбрасывает состояние circuit breaker.
 
-        Удаляет все данные о состоянии circuit breaker из Redis и из in-memory fallback,
+        Удаляет все данные о состоянии circuit breaker из Redis,
         сбрасывая счётчик ошибок и время последней ошибки.
 
-        Note:
-            При ошибке Redis сброс выполняется только в fallback кэше.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
-
-        async def _delete_operation(backend: RedisBackend) -> None:
-            await backend.delete(self.key)
-
         try:
-            await self._execute_with_fallback(_delete_operation, log_on_fallback=True)
+            await self._redis.delete(self.key)
         except Exception as e:
             self.logger.warning(
                 f"Ошибка при сбросе circuit breaker ({self.key}): {e}",

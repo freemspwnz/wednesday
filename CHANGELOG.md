@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Удаление in-memory fallback для Redis: Redis теперь обязательный компонент**:
+  - Удалён класс `_InMemoryRedis` из `redis_client.py` (устранена рассинхронизация между основным приложением и Celery worker)
+  - Удалён метод `_execute_with_fallback` из `RedisBackendService` - ошибки Redis теперь пробрасываются наружу
+  - Обновлены все сервисы, использующие Redis: `PromptCache`, `UserStateCache`, `CircuitBreakerService`, `RateLimiter`, `FailedCacheQueue`
+  - Все операции Redis теперь выполняются напрямую без fallback на локальные словари
+  - Обновлён `RedisClientFactory`: удалена логика создания in-memory fallback, удалён метод `safe_call`
+  - Обновлён `RedisBackendService`: убрана поддержка `_InMemoryRedis`, тип `RedisBackend` теперь только `redis.Redis`
+  - Обновлён `MetricsRecorder`: заменён `safe_call` на прямой вызов `redis_client.xadd()`
+  - Redis является критичным компонентом - при ошибках подключения исключения пробрасываются наружу
+  - Оптимизирован `docker-compose.yml` для Redis: лимит памяти 128mb, политика `allkeys-lru`, оптимизации для экономии памяти
+  - Улучшена синхронизация данных: единый источник истины (Redis) для всех компонентов системы
+
 - **Рефакторинг протоколов: разделение protocols.py на модули по доменам**:
   - Разделен большой файл `shared/protocols.py` (1370 строк) на 9 модулей по функциональности
   - Создан `infrastructure.py`: IMetrics, ICircuitBreaker, IRateLimiter, IImageStorage, ICache, ILogger

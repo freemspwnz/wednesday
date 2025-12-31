@@ -4,7 +4,6 @@
 Основные задачи:
 - Хранить недавно сгенерированные промпты (например, для Kandinsky) с TTL.
 - Давать быстрый доступ к последним успешным промптам без повторного обращения к GigaChat.
-- Работать поверх Redis, но автоматически деградировать в in‑memory режим при недоступности Redis.
 
 Дизайн:
 - Ключи в Redis формируются как `<prefix><key>`, где prefix по умолчанию `"prompt:"`.
@@ -15,27 +14,22 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
+
+import redis.asyncio as redis
 
 from shared.base.redis_backend_service import RedisBackendService
 from shared.protocols.infrastructure import ICache
 
-if TYPE_CHECKING:
-    import redis.asyncio as redis
-
-    from infra.redis.redis_client import _InMemoryRedis
-
-    RedisBackend = redis.Redis | _InMemoryRedis
-
 
 class PromptCache(RedisBackendService, ICache[dict | str]):
     """
-    Кэш промптов на базе Redis с автоматическим fallback в память.
+    Кэш промптов на базе Redis.
     """
 
     def __init__(
         self,
-        redis_client: RedisBackend,
+        redis_client: redis.Redis,
         *,
         prefix: str = "prompt:",
         default_ttl: int = 3600,
@@ -43,7 +37,7 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
         """Инициализирует кэш промптов.
 
         Args:
-            redis_client: Экземпляр redis.asyncio.Redis или совместимого клиента.
+            redis_client: Экземпляр redis.asyncio.Redis.
             prefix: Префикс для всех ключей этого кэша (по умолчанию "prompt:").
             default_ttl: Время жизни записей по умолчанию в секундах (по умолчанию 3600).
         """
@@ -53,32 +47,25 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
     async def set(self, key: str, prompt: dict | str, ttl: int | None = None) -> None:
         """Сохраняет промпт с TTL.
 
-        Сохраняет промпт в Redis с указанным временем жизни. При ошибке Redis
-        автоматически переходит на in-memory fallback.
+        Сохраняет промпт в Redis с указанным временем жизни.
 
         Args:
             key: Ключ для сохранения промпта (без префикса).
             prompt: Промпт для сохранения (словарь или строка).
             ttl: Время жизни записи в секундах. Если None, используется default_ttl.
 
-        Note:
-            Использует SET с параметром EX в Redis. При RedisError автоматически
-            переходит на in-memory fallback для обеспечения отказоустойчивости.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         full_key = self._key(key)
         payload = json.dumps(prompt, ensure_ascii=False)
         ttl_value = ttl if ttl is not None else self._default_ttl
-
-        async def _set_operation(backend: RedisBackend) -> None:
-            await backend.set(full_key, payload, ex=ttl_value)
-
-        await self._execute_with_fallback(_set_operation)
+        await self._redis.set(full_key, payload, ex=ttl_value)
 
     async def get(self, key: str) -> dict | str | None:
         """Возвращает сохранённый промпт или None.
 
-        Извлекает промпт из кэша по ключу. При ошибке Redis автоматически
-        проверяет in-memory fallback.
+        Извлекает промпт из кэша по ключу.
 
         Args:
             key: Ключ для получения промпта (без префикса).
@@ -86,16 +73,11 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
         Returns:
             Сохранённый промпт (словарь или строка) или None, если ключ не найден.
 
-        Note:
-            При ошибке Redis автоматически переходит на in-memory fallback.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         full_key = self._key(key)
-
-        async def _get_operation(backend: RedisBackend) -> bytes | str | None:
-            result = await backend.get(full_key)
-            return result
-
-        raw = await self._execute_with_fallback(_get_operation)
+        raw = await self._redis.get(full_key)
 
         if raw is None:
             return None
@@ -122,26 +104,21 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
     async def delete(self, key: str) -> None:
         """Удаляет запись из кэша.
 
-        Удаляет промпт из Redis и из in-memory fallback.
+        Удаляет промпт из Redis.
 
         Args:
             key: Ключ для удаления (без префикса).
 
-        Note:
-            При ошибке Redis удаление выполняется только в fallback кэше.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         full_key = self._key(key)
-
-        async def _delete_operation(backend: RedisBackend) -> None:
-            await backend.delete(full_key)
-
-        await self._execute_with_fallback(_delete_operation)
+        await self._redis.delete(full_key)
 
     async def exists(self, key: str) -> bool:
         """Проверяет наличие ключа в кэше.
 
-        Проверяет существование ключа в Redis. При ошибке Redis проверяет
-        in-memory fallback.
+        Проверяет существование ключа в Redis.
 
         Args:
             key: Ключ для проверки (без префикса).
@@ -149,15 +126,11 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
         Returns:
             True если ключ существует, False в противном случае.
 
-        Note:
-            При ошибке Redis проверка выполняется только в fallback кэше.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         full_key = self._key(key)
-
-        async def _exists_operation(backend: RedisBackend) -> int:
-            return await backend.exists(full_key)
-
-        exists_val = await self._execute_with_fallback(_exists_operation)
+        exists_val = await self._redis.exists(full_key)
         return bool(exists_val)
 
     async def keys(self, pattern: str = "*") -> list[str]:
@@ -177,21 +150,16 @@ class PromptCache(RedisBackendService, ICache[dict | str]):
             так как операция KEYS в Redis — потенциально тяжёлая и может блокировать
             сервер при большом количестве ключей.
 
-        Note:
-            При ошибке Redis поиск выполняется только в fallback кэше.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         prefixed_pattern = f"{self._prefix}{pattern}"
-
-        async def _keys_operation(backend: RedisBackend) -> list[bytes | str]:
-            keys = await backend.keys(prefixed_pattern)
-            # Приводим к нужному типу для mypy
-            return cast(list[bytes | str], keys)
-
-        raw_keys = await self._execute_with_fallback(_keys_operation)
+        raw_keys = await self._redis.keys(prefixed_pattern)
+        keys = cast(list[bytes | str], raw_keys)
 
         # Преобразуем bytes в str и снимаем префикс, чтобы вернуть "логические" ключи.
         result: list[str] = []
-        for k in raw_keys:
+        for k in keys:
             if isinstance(k, bytes):
                 k_str = k.decode("utf-8")
             else:

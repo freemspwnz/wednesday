@@ -1,24 +1,18 @@
 """Сервис для управления очередью непересозданных кэшей в Redis.
 
 Инфраструктурный сервис для персистентного хранения операций пересоздания кэша.
-Использует Redis List с автоматическим fallback на in-memory при недоступности Redis.
+Использует Redis List для хранения операций.
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING
+
+import redis.asyncio as redis
 
 from shared.base.redis_backend_service import RedisBackendService
 from shared.protocols.infrastructure import ILogger
-
-if TYPE_CHECKING:
-    import redis.asyncio as redis
-
-    from infra.redis.redis_client import _InMemoryRedis
-
-    RedisBackend = redis.Redis | _InMemoryRedis
 
 # Константа для ограничения длины raw_data в логах
 MAX_RAW_DATA_LOG_LENGTH = 100
@@ -81,14 +75,13 @@ class FailedCacheQueue(RedisBackendService):
     """Управление очередью непересозданных кэшей в Redis.
 
     Использует Redis List для хранения операций пересоздания кэша.
-    Автоматически переходит на in-memory fallback при недоступности Redis.
 
     Ключ в Redis: `{prefix}queue` (по умолчанию `failed_cache:queue`)
     """
 
     def __init__(
         self,
-        redis_client: RedisBackend,
+        redis_client: redis.Redis,
         *,
         prefix: str = "failed_cache:",
         logger: ILogger | None = None,
@@ -109,19 +102,12 @@ class FailedCacheQueue(RedisBackendService):
         Args:
             operation: Операция пересоздания кэша.
 
-        Note:
-            При ошибке Redis автоматически переходит на in-memory fallback.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         try:
             operation_json = operation.to_json()
-
-            async def _enqueue_operation(backend: RedisBackend) -> None:
-                await backend.rpush(self._queue_key, operation_json)  # type: ignore[misc]
-
-            await self._execute_with_fallback(
-                _enqueue_operation,
-                log_on_fallback=True,
-            )
+            await self._redis.rpush(self._queue_key, operation_json)  # type: ignore[misc]
 
             self.logger.debug(
                 "Операция добавлена в очередь пересоздания кэша",
@@ -131,7 +117,6 @@ class FailedCacheQueue(RedisBackendService):
                 storage_path=operation.storage_path,
             )
         except Exception as e:
-            # Логируем, но не пробрасываем - fallback обработает это
             self.logger.warning(
                 f"Не удалось добавить операцию в очередь пересоздания кэша: {e}",
                 event="failed_cache_enqueue_error",
@@ -149,17 +134,12 @@ class FailedCacheQueue(RedisBackendService):
 
         Note:
             При ошибке десериализации операция пропускается и логируется.
+
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         try:
-
-            async def _dequeue_operation(backend: RedisBackend) -> bytes | str | None:
-                result = await backend.lpop(self._queue_key)  # type: ignore[misc]
-                return result  # type: ignore[no-any-return]
-
-            result = await self._execute_with_fallback(
-                _dequeue_operation,
-                log_on_fallback=True,
-            )
+            result = await self._redis.lpop(self._queue_key)  # type: ignore[misc]
 
             if result is None:
                 return None
@@ -212,17 +192,13 @@ class FailedCacheQueue(RedisBackendService):
 
         Note:
             Пропускает операции с ошибками десериализации.
+
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         try:
-
-            async def _peek_operation(backend: RedisBackend) -> list[bytes | str]:
-                result = await backend.lrange(self._queue_key, 0, -1)  # type: ignore[misc]
-                return result or []
-
-            results = await self._execute_with_fallback(
-                _peek_operation,
-                log_on_fallback=True,
-            )
+            results = await self._redis.lrange(self._queue_key, 0, -1)  # type: ignore[misc]
+            results = results or []
 
             operations: list[FailedCacheOperation] = []
             skipped = 0
@@ -282,16 +258,12 @@ class FailedCacheQueue(RedisBackendService):
 
         Returns:
             Количество операций в очереди.
+
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         try:
-
-            async def _size_operation(backend: RedisBackend) -> int:
-                return await backend.llen(self._queue_key)  # type: ignore[misc,no-any-return]
-
-            return await self._execute_with_fallback(
-                _size_operation,
-                log_on_fallback=True,
-            )
+            return int(await self._redis.llen(self._queue_key))  # type: ignore[misc]
         except Exception as e:
             self.logger.warning(
                 f"Ошибка при получении размера очереди: {e}",
@@ -304,16 +276,12 @@ class FailedCacheQueue(RedisBackendService):
         """Очищает очередь.
 
         Используется для тестирования и очистки устаревших данных.
+
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         try:
-
-            async def _clear_operation(backend: RedisBackend) -> None:
-                await backend.delete(self._queue_key)
-
-            await self._execute_with_fallback(
-                _clear_operation,
-                log_on_fallback=True,
-            )
+            await self._redis.delete(self._queue_key)
 
             self.logger.info(
                 "Очередь пересоздания кэша очищена",

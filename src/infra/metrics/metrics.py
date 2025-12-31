@@ -82,7 +82,8 @@ async def record_metric(  # noqa: PLR0913
         # Используем фабрику Redis для публикации события
         if redis_factory is None:
             raise ValueError("redis_factory is required for record_metric")
-        await redis_factory.safe_call("xadd", "metrics:events", fields)
+        redis_client = await redis_factory.get_client()
+        await redis_client.xadd("metrics:events", fields)  # type: ignore[arg-type]
 
         # Дополнительно стараемся синхронно зафиксировать событие в таблице Postgres.
         # Это делает события наблюдаемыми через SQL (в том числе в тестах и админских

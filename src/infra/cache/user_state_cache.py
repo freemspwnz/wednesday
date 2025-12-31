@@ -14,16 +14,11 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+import redis.asyncio as redis
 
 from shared.base.redis_backend_service import RedisBackendService
-
-if TYPE_CHECKING:
-    import redis.asyncio as redis
-
-    from infra.redis.redis_client import _InMemoryRedis
-
-    RedisBackend = redis.Redis | _InMemoryRedis
 
 
 class UserStateCache(RedisBackendService):
@@ -33,14 +28,14 @@ class UserStateCache(RedisBackendService):
 
     def __init__(
         self,
-        redis_client: RedisBackend,
+        redis_client: redis.Redis,
         *,
         prefix: str = "user_state:",
     ) -> None:
         """Инициализирует хранилище временного состояния пользователя.
 
         Args:
-            redis_client: Экземпляр redis.asyncio.Redis или совместимого клиента.
+            redis_client: Экземпляр redis.asyncio.Redis.
             prefix: Префикс ключей для хранения состояний (по умолчанию "user_state:").
         """
         super().__init__(redis_client=redis_client, prefix=prefix)
@@ -59,8 +54,7 @@ class UserStateCache(RedisBackendService):
     async def set_state(self, user_id: int, state: dict[str, Any], ttl: int | None = None) -> None:
         """Сохраняет состояние пользователя как JSON-blob.
 
-        Сохраняет состояние пользователя в Redis в формате JSON. При ошибке Redis
-        автоматически переходит на in-memory fallback.
+        Сохраняет состояние пользователя в Redis в формате JSON.
 
         Args:
             user_id: Идентификатор пользователя в Telegram.
@@ -68,26 +62,20 @@ class UserStateCache(RedisBackendService):
             ttl: Время жизни состояния в секундах. Если None, состояние живёт
                 до явного сброса.
 
-        Note:
-            TTL применяется через EXPIRE к ключу в Redis. При ошибке Redis сохранение
-            выполняется в in-memory fallback.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         key = self._user_key(user_id)
         payload = json.dumps(state, ensure_ascii=False)
-
-        async def _set_operation(backend: RedisBackend) -> None:
-            if ttl is not None:
-                await backend.set(key, payload, ex=ttl)
-            else:
-                await backend.set(key, payload)
-
-        await self._execute_with_fallback(_set_operation)
+        if ttl is not None:
+            await self._redis.set(key, payload, ex=ttl)
+        else:
+            await self._redis.set(key, payload)
 
     async def get_state(self, user_id: int) -> dict[str, Any] | None:
         """Возвращает состояние пользователя или None.
 
-        Извлекает состояние пользователя из Redis. При ошибке Redis автоматически
-        проверяет in-memory fallback.
+        Извлекает состояние пользователя из Redis.
 
         Args:
             user_id: Идентификатор пользователя в Telegram.
@@ -96,16 +84,11 @@ class UserStateCache(RedisBackendService):
             Словарь с состоянием пользователя или None, если состояние не найдено
             или произошла ошибка декодирования JSON.
 
-        Note:
-            При ошибке Redis проверка выполняется в in-memory fallback. При ошибке
-            декодирования JSON возвращается None и логируется предупреждение.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         key = self._user_key(user_id)
-
-        async def _get_operation(backend: RedisBackend) -> bytes | str | None:
-            return await backend.get(key)
-
-        raw = await self._execute_with_fallback(_get_operation)
+        raw = await self._redis.get(key)
 
         if raw is None:
             return None
@@ -128,17 +111,13 @@ class UserStateCache(RedisBackendService):
     async def clear_state(self, user_id: int) -> None:
         """Полностью очищает состояние пользователя.
 
-        Удаляет состояние пользователя из Redis и из in-memory fallback.
+        Удаляет состояние пользователя из Redis.
 
         Args:
             user_id: Идентификатор пользователя в Telegram.
 
-        Note:
-            При ошибке Redis удаление выполняется только в fallback кэше.
+        Raises:
+            redis.RedisError: При ошибке Redis.
         """
         key = self._user_key(user_id)
-
-        async def _delete_operation(backend: RedisBackend) -> None:
-            await backend.delete(key)
-
-        await self._execute_with_fallback(_delete_operation)
+        await self._redis.delete(key)
