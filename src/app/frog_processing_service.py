@@ -22,7 +22,8 @@ from shared.base.exceptions import (
     UnexpectedImageError,
 )
 from shared.models import FrogRequestResult
-from shared.protocols import ILogger, IUsageTracker
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IUsageTracker
 
 
 class FrogProcessingService(BaseService):

@@ -11,7 +11,8 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from shared.base.base_service import BaseService
-from shared.protocols import IIdempotencyService, ILogger
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.queues import IIdempotencyService
 
 if TYPE_CHECKING:
     from infra.redis.redis_client import RedisClient

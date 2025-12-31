@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes
 
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
     pass

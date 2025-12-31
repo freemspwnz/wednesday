@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError, UnexpectedAppError
-from shared.protocols import (
-    IDispatchRegistry,
-    ILogger,
-    IMetrics,
-    IUnitOfWorkFactory,
-    IUsageTracker,
-)
+from shared.protocols.dispatch import IDispatchRegistry
+from shared.protocols.infrastructure import ILogger, IMetrics
+from shared.protocols.repositories import IUsageTracker
+from shared.protocols.uow import IUnitOfWorkFactory
 
 
 class DatabaseOperationsService(BaseService):

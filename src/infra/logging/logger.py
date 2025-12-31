@@ -17,7 +17,7 @@ from loguru import logger
 if TYPE_CHECKING:
     from loguru import Logger as LoggerType
 
-    from shared.protocols import ILogger
+    from shared.protocols.infrastructure import ILogger
 
 from shared.config import Config
 from shared.paths import LOGS_DIR

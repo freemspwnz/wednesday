@@ -20,7 +20,7 @@ from app.target_preparation_service import TargetPreparationService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CircuitBreakerOpen, ImageGenerationError, ServiceError, UnexpectedDispatchError
 from shared.config import AppSettings
-from shared.protocols import ILogger, IMetrics
+from shared.protocols.infrastructure import ILogger, IMetrics
 
 
 class DispatchService(BaseService):

@@ -6,7 +6,7 @@ import traceback
 from typing import Any, TypeVar
 
 from shared.base.exceptions import UnexpectedAppError
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 T = TypeVar("T", bound=UnexpectedAppError)
 

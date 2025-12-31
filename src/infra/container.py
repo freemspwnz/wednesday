@@ -58,20 +58,21 @@ from shared.config import (
     ImageConfig,
     PromptFallbackConfig,
 )
-from shared.protocols import (
-    IAdminsRepo,
-    IChatsRepo,
+from shared.protocols.clients import ITextToImageClient, ITextToTextClient
+from shared.protocols.infrastructure import (
     ICircuitBreaker,
     ILogger,
     IMetrics,
-    IModelsRepo,
     IRateLimiter,
-    ITaskQueue,
-    ITextToImageClient,
-    ITextToTextClient,
-    IUnitOfWorkFactory,
+)
+from shared.protocols.queues import ITaskQueue
+from shared.protocols.repositories import (
+    IAdminsRepo,
+    IChatsRepo,
+    IModelsRepo,
     IUsageTracker,
 )
+from shared.protocols.uow import IUnitOfWorkFactory
 
 if TYPE_CHECKING:
     import aiohttp

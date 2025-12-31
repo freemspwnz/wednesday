@@ -14,7 +14,7 @@ import asyncpg
 from infra.logging.logger import get_logger
 from infra.redis.redis_client import RedisClientFactory
 from shared.base.base_service import BaseService
-from shared.protocols import ILogger, IMetrics
+from shared.protocols.infrastructure import ILogger, IMetrics
 
 _logger = get_logger(__name__)
 

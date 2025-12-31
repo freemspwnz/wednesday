@@ -10,7 +10,7 @@ from redis.exceptions import RedisError
 
 from infra.redis.redis_client import _InMemoryRedis
 from shared.base.base_service import BaseService
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
     pass

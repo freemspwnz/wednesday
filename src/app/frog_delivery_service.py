@@ -9,7 +9,8 @@ from __future__ import annotations
 from app.fallback_image_delivery_service import FallbackImageDeliveryService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import MessagingError, UnexpectedAppError
-from shared.protocols import ILogger, IMessagingService
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.messaging import IMessagingService
 from shared.retry import retry_on_connect_error
 
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from shared.base.base_service import BaseService
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
     from infra.database.postgres_client import PostgresPoolFactory

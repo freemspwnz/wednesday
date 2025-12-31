@@ -30,11 +30,8 @@ from infra.metrics.prometheus_metrics import (
     CELERY_TASKS_TOTAL,
 )
 from shared.models import FrogRequestResult
-from shared.protocols import (
-    IFrogProcessingService,
-    IIdempotencyService,
-    IImageService,
-)
+from shared.protocols.queues import IIdempotencyService
+from shared.protocols.services import IFrogProcessingService, IImageService
 
 R = TypeVar("R")
 
@@ -574,7 +571,7 @@ async def _daily_cleanup_operation(
     Returns:
         Словарь с результатом выполнения.
     """
-    from shared.protocols import IDataCleanupService
+    from shared.protocols.dispatch import IDataCleanupService
 
     data_cleanup_service = context.get("data_cleanup_service")
     if not isinstance(data_cleanup_service, IDataCleanupService):

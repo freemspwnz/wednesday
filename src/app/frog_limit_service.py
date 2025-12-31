@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from shared.base.base_service import BaseService
 from shared.config import AppSettings
-from shared.protocols import ILogger, IRateLimiter
+from shared.protocols.infrastructure import ILogger, IRateLimiter
 
 # Константы
 SECONDS_PER_MINUTE = 60  # секунд в минуте

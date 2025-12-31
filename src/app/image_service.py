@@ -16,7 +16,7 @@ from app.prompt_service import PromptService
 from domain.caption_service import CaptionService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import ImageGenerationError, StorageError, UnexpectedImageError
-from shared.protocols import IImageStorage, ILogger
+from shared.protocols.infrastructure import IImageStorage, ILogger
 
 PROMPT_PREVIEW_LENGTH = 100
 

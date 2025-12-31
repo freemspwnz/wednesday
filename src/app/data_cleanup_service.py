@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 from shared.base.base_service import BaseService
-from shared.protocols import IDispatchRegistry, ILogger
+from shared.protocols.dispatch import IDispatchRegistry
+from shared.protocols.infrastructure import ILogger
 
 
 class DataCleanupService(BaseService):

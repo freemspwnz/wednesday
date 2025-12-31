@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 
 from shared.base.exceptions import ServiceError
 from shared.bot_services import BotServices
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
     pass

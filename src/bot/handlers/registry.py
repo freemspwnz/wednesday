@@ -10,7 +10,7 @@ from bot.handlers.admin import AdminHandlers
 from bot.handlers.chat_event import ChatEventHandler
 from bot.handlers.models import ModelHandlers
 from bot.handlers.user import UserHandlers
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
     from bot.bot_error_handler import BotErrorHandler

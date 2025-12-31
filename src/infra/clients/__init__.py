@@ -37,7 +37,7 @@ from shared.base.exceptions import (
     NetworkError,
     RateLimitError,
 )
-from shared.protocols import ITextToImageClient, ITextToTextClient
+from shared.protocols.clients import ITextToImageClient, ITextToTextClient
 
 __all__ = [
     "APIError",

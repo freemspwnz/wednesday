@@ -22,7 +22,7 @@ from shared.base.exceptions import (
     ServiceError,
     UnexpectedImageError,
 )
-from shared.protocols import ICircuitBreaker, ILogger, IMetrics
+from shared.protocols.infrastructure import ICircuitBreaker, ILogger, IMetrics
 
 
 class ImageGenerationCoordinator(BaseService):

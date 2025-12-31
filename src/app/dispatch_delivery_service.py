@@ -18,7 +18,9 @@ from shared.base.exceptions import (
     ServiceError,
     UnexpectedDispatchError,
 )
-from shared.protocols import IDispatchRegistry, ILogger, IMessagingService, IMetrics
+from shared.protocols.dispatch import IDispatchRegistry
+from shared.protocols.infrastructure import ILogger, IMetrics
+from shared.protocols.messaging import IMessagingService
 from shared.retry import retry_on_connect_error
 
 

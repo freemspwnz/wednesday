@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 
 from bot.handlers.base import BaseHandlers
 from shared.bot_services import BotServices
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
 
 # Константы

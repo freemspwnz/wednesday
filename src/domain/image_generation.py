@@ -15,7 +15,7 @@ from shared.base.exceptions import (
     NetworkError,
     UnexpectedImageGenerationError,
 )
-from shared.protocols import ITextToImageClient
+from shared.protocols.clients import ITextToImageClient
 
 
 class ImageGenerationService:

@@ -10,7 +10,7 @@ from pathlib import Path
 from shared.base.base_service import BaseService
 from shared.base.exceptions import StorageError
 from shared.paths import FROGS_DIR
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 MAX_FILES_DEFAULT = 30
 

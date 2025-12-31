@@ -25,12 +25,9 @@ if TYPE_CHECKING:
     from infra.redis.redis_client import RedisClient
     from infra.repos.usage_tracker import UsageTracker
 
-from shared.protocols import (
-    IDataCleanupService,
-    IFrogProcessingService,
-    IIdempotencyService,
-    IImageService,
-)
+from shared.protocols.dispatch import IDataCleanupService
+from shared.protocols.queues import IIdempotencyService
+from shared.protocols.services import IFrogProcessingService, IImageService
 
 logger = get_logger(__name__)
 

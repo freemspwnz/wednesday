@@ -26,7 +26,8 @@ from app.admin_dashboard_builders import (
 from app.api_status_service import APIStatusService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError
-from shared.protocols import IChatsRepo, ILogger, IMetrics, IUsageTracker
+from shared.protocols.infrastructure import ILogger, IMetrics
+from shared.protocols.repositories import IChatsRepo, IUsageTracker
 
 if TYPE_CHECKING:
     pass

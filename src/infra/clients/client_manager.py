@@ -10,7 +10,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from shared.config import GigaChatConfig, KandinskyConfig
-from shared.protocols import ILogger, IModelsRepo, ITextToImageClient, ITextToTextClient
+from shared.protocols.clients import ITextToImageClient, ITextToTextClient
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IModelsRepo
 
 if TYPE_CHECKING:
     import aiohttp

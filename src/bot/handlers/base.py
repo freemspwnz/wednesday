@@ -20,7 +20,7 @@ from telegram.ext import ContextTypes
 from shared.base.exceptions import RepoError, ServiceError
 from shared.bot_services import BotServices
 from shared.paths import LOGS_DIR
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:

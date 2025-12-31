@@ -9,7 +9,7 @@ from __future__ import annotations
 from domain.prompt_generation import PromptGenerationService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CacheError, PromptGenerationError, UnexpectedPromptError
-from shared.protocols import ICache, ILogger
+from shared.protocols.infrastructure import ICache, ILogger
 
 
 class PromptService(BaseService):

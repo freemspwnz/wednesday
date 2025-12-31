@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import Application
 
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
     from infra.new_container import Container

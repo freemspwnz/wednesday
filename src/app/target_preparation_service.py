@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from app.dispatch_targets_helper import are_all_dispatched, check_dispatch_status_batch
 from shared.base.base_service import BaseService
-from shared.protocols import IChatsRepo, IDispatchRegistry, ILogger, IMessagingService
+from shared.protocols.dispatch import IDispatchRegistry
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.messaging import IMessagingService
+from shared.protocols.repositories import IChatsRepo
 
 
 class TargetPreparationService(BaseService):

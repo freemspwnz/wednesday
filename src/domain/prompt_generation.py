@@ -18,7 +18,7 @@ from shared.base.exceptions import (
     PromptGenerationError,
     UnexpectedPromptGenerationError,
 )
-from shared.protocols import ITextToTextClient
+from shared.protocols.clients import ITextToTextClient
 
 if TYPE_CHECKING:
     from shared.config import PromptFallbackConfig

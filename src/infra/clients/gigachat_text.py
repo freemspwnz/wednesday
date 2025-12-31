@@ -46,7 +46,9 @@ from infra.clients.models import (
 from infra.clients.sber_clients_exceptions import map_client_errors
 from shared.base.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
 from shared.config import GigaChatConfig
-from shared.protocols import ILogger, IModelsRepo, ITextToTextClient
+from shared.protocols.clients import ITextToTextClient
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IModelsRepo
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -192,8 +194,7 @@ class GigaChatTextClient(BaseHTTPClient, ITextToTextClient):
                 self._logger.info(f"✅ Используется сертификат для GigaChat: {self._verify_ssl}")
             else:
                 self._logger.warning(
-                    f"⚠️ Файл сертификата не найден: {self._verify_ssl}. "
-                    "Проверка SSL может не работать."
+                    f"⚠️ Файл сертификата не найден: {self._verify_ssl}. Проверка SSL может не работать."
                 )
 
         self._logger.info("GigaChatTextClient инициализирован")

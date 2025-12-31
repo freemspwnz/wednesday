@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from shared.base.base_service import BaseService
-from shared.protocols import ILogger, IMessagingService
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.messaging import IMessagingService
 
 if TYPE_CHECKING:
     from telegram import Chat
@@ -58,7 +59,7 @@ class ChatInfoService(BaseService):
             error_msg = "не удалось получить информацию"
             self.logger.warning(f"Не удалось получить информацию о чате {chat_id}")
             return (chat_id, error_msg)
-        
+
         # Извлекаем title из словаря
         title = details.get("title") or details.get("first_name") or "Unknown"
         chat_id_result = details.get("id")

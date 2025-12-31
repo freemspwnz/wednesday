@@ -27,7 +27,9 @@ from infra.clients.client_manager import ClientManagementService
 from infra.logging.logger import get_logger
 from shared.config import KandinskyConfig
 from shared.models import APIStatusResult, SetModelResult
-from shared.protocols import ILogger, IModelsRepo, ITextToImageClient
+from shared.protocols.clients import ITextToImageClient
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IModelsRepo
 
 logger = get_logger(__name__)
 

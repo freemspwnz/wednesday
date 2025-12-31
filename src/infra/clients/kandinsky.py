@@ -47,7 +47,9 @@ from infra.clients.sber_clients_exceptions import map_client_errors
 from shared.base.exceptions import APIError, NetworkError
 from shared.config import KandinskyConfig
 from shared.models import APIStatusResult, SetModelResult
-from shared.protocols import ILogger, IModelsRepo, ITextToImageClient
+from shared.protocols.clients import ITextToImageClient
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IModelsRepo
 
 if TYPE_CHECKING:
     from types import TracebackType

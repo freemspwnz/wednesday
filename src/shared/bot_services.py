@@ -24,17 +24,13 @@ from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.repos.dispatch_registry import DispatchRegistry
 from shared.config import AppSettings
-from shared.protocols import (
-    IAdminsRepo,
-    IBotController,
-    IChatsRepo,
-    IMessagingService,
-    IMetrics,
-    IUsageTracker,
-)
+from shared.protocols.bot import IBotController
+from shared.protocols.infrastructure import IMetrics
+from shared.protocols.messaging import IMessagingService
+from shared.protocols.repositories import IAdminsRepo, IChatsRepo, IUsageTracker
 
 if TYPE_CHECKING:
-    from shared.protocols import ITaskQueue
+    from shared.protocols.queues import ITaskQueue
 
 
 @dataclass

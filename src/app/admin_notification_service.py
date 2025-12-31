@@ -10,7 +10,9 @@ from app.admin_notification_builders import (
 )
 from shared.base.base_service import BaseService
 from shared.base.exceptions import MessagingError, RepoError, UnexpectedAppError
-from shared.protocols import IAdminsRepo, ILogger, IMessagingService
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.messaging import IMessagingService
+from shared.protocols.repositories import IAdminsRepo
 
 
 class AdminNotificationService(BaseService):

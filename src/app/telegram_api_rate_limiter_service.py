@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from shared.base.base_service import BaseService
 from shared.config import AppSettings
-from shared.protocols import ILogger, IRateLimiter
+from shared.protocols.infrastructure import ILogger, IRateLimiter
 
 if TYPE_CHECKING:
     pass

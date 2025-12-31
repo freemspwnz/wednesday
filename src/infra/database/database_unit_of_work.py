@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncpg
 
 from shared.base.base_service import BaseService
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 
 class DatabaseUnitOfWork(BaseService):

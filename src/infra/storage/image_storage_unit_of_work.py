@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from app.image_existence_service import ImageExistenceService
 from infra.storage.failed_cache_queue import FailedCacheOperation, FailedCacheQueue
 from shared.base.base_service import BaseService
-from shared.protocols import IImageStorage, ILogger
+from shared.protocols.infrastructure import IImageStorage, ILogger
 from shared.retry import retry_standard
 
 

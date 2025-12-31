@@ -10,7 +10,8 @@ from collections.abc import Awaitable, Callable
 
 from shared.base.base_service import BaseService
 from shared.base.exceptions import MessagingError
-from shared.protocols import IFallbackImageProvider, ILogger, IMessagingService
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.messaging import IFallbackImageProvider, IMessagingService
 
 
 class FallbackImageDeliveryService(BaseService):

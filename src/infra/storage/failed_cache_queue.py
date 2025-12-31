@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
 from shared.base.redis_backend_service import RedisBackendService
-from shared.protocols import ILogger
+from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
     import redis.asyncio as redis

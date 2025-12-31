@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from shared.protocols import IDispatchRegistry, ILogger
+from shared.protocols.dispatch import IDispatchRegistry
+from shared.protocols.infrastructure import ILogger
 
 
 async def check_dispatch_status_batch(

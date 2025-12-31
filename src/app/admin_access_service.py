@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from shared.base.base_service import BaseService
 from shared.base.exceptions import AccessDeniedError
-from shared.protocols import IAdminsRepo, ILogger
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IAdminsRepo
 
 
 class AdminAccessService(BaseService):

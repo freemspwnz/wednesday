@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from shared.base.base_service import BaseService
 from shared.base.exceptions import CacheError
-from shared.protocols import IImageRepo, ILogger, IPromptRepo
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IImageRepo, IPromptRepo
 
 
 class ImageExistenceService(BaseService):

@@ -18,7 +18,7 @@ import json
 from typing import TYPE_CHECKING, Any, cast
 
 from shared.base.redis_backend_service import RedisBackendService
-from shared.protocols import ICache
+from shared.protocols.infrastructure import ICache
 
 if TYPE_CHECKING:
     import redis.asyncio as redis

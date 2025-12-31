@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from app.admin_access_service import AdminAccessService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError
-from shared.protocols import IAdminsRepo, IChatsRepo, ILogger, IUsageTracker
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IAdminsRepo, IChatsRepo, IUsageTracker
 
 
 @dataclass

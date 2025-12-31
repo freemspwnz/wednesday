@@ -4,6 +4,26 @@
 
 ### Изменено
 
+- **Рефакторинг протоколов: разделение protocols.py на модули по доменам**:
+  - Разделен большой файл `shared/protocols.py` (1370 строк) на 9 модулей по функциональности
+  - Создан `infrastructure.py`: IMetrics, ICircuitBreaker, IRateLimiter, IImageStorage, ICache, ILogger
+  - Создан `repositories.py`: IImageRepo, IPromptRepo, IUsageTracker, IChatsRepo, IAdminsRepo, IModelsRepo
+  - Создан `clients.py`: ITextToImageClient, ITextToTextClient, ICaptionProvider
+  - Создан `messaging.py`: IMessagingService, IFallbackImageProvider
+  - Создан `uow.py`: IDatabaseUnitOfWork, IUnitOfWorkFactory, IImageStorageUnitOfWork, ConnectionType
+  - Создан `queues.py`: ITaskQueue, IIdempotencyService
+  - Создан `bot.py`: IBotController, IHandlersRegistry, IChatValidator
+  - Создан `services.py`: IImageService, IFrogProcessingService
+  - Создан `dispatch.py`: IDispatchRegistry, IDataCleanupService
+  - Обновлены все импорты в 56 файлах проекта на прямые из подмодулей
+  - Улучшена организация кода: протоколы сгруппированы по доменам для лучшей навигации
+
+- **Улучшение абстракции IMessagingService: добавлена поддержка неподдерживаемых функций**:
+  - Добавлено исключение `MessagingFeatureNotSupported` для случаев, когда мессенджер не поддерживает функцию
+  - Обновлена документация `edit_message()`: добавлено исключение для мессенджеров без поддержки редактирования (например, WhatsApp)
+  - Обновлена документация `send_reply()`: добавлена информация об ограничениях и различиях между мессенджерами
+  - Улучшена абстракция: протокол явно документирует ограничения различных мессенджеров
+
 - **Рефакторинг IMessagingService: улучшение абстракции для поддержки различных мессенджеров**:
   - Изменены типы `chat_id` и `message_id` с `int` на `str | int` во всех методах протокола для поддержки WhatsApp, VK, Max
   - Обновлены возвращаемые типы: `send_reply()` возвращает `str | int`, `get_chat_info_safe()` возвращает `tuple[str | int, str]`

@@ -13,7 +13,9 @@ from shared.base.exceptions import (
     RepoError,
     UnexpectedAPIError,
 )
-from shared.protocols import ILogger, IModelsRepo, ITextToImageClient, ITextToTextClient
+from shared.protocols.clients import ITextToImageClient, ITextToTextClient
+from shared.protocols.infrastructure import ILogger
+from shared.protocols.repositories import IModelsRepo
 
 
 @dataclass
