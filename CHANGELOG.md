@@ -4,6 +4,21 @@
 
 ### Изменено
 
+- **Удаление функционала файлового логирования и команды /log**:
+  - Удалены методы `_send_log_file()` и `_send_logs_command()` из `src/bot/handlers/base.py`
+  - Удалены неиспользуемые импорты `datetime`, `timedelta`, `Path`, `LOGS_DIR` из `base.py`
+  - Удален метод `admin_log_command()` и константа `MAX_LOG_DAYS` из `src/bot/handlers/admin.py`
+  - Удалена регистрация команды `/log` из `src/bot/handlers/registry.py`
+  - Удалена логика файлового логирования из `src/infra/logging/logger.py` (блок `if log_to_file:`, создание директории логов, файловые sinks для `.log` и `.jsonl`)
+  - Удалено упоминание файлового логирования в блоке вывода статуса логгера
+  - Удалена константа `LOGS_DIR` из `src/shared/paths.py`
+  - Удалена переменная окружения `LOG_TO_FILE` из `docker-compose.yml` (сервисы `bot` и `celery-worker`)
+  - Удалено упоминание о сохранении логов в папку `logs/` из сообщения об остановке бота в `src/app/bot_notification_builders.py`
+  - Удалены тесты команды `/log`: `test_log_command_non_admin`, `test_log_command_no_logs_directory`, `test_log_command_with_args` из `tests/bot/test_support_bot.py`
+  - Удален тест `test_json_logs_do_not_contain_gigachat_key` и логика установки `LOG_TO_FILE` из `tests/infra/logging/test_logger_secrets.py`
+  - Удален тест `test_logs_dir` из `tests/shared/test_paths.py`
+  - Логирование теперь выполняется только в stdout (JSON формат), файловое логирование полностью удалено
+
 - **Удаление in-memory fallback для Redis: Redis теперь обязательный компонент**:
   - Удалён класс `_InMemoryRedis` из `redis_client.py` (устранена рассинхронизация между основным приложением и Celery worker)
   - Удалён метод `_execute_with_fallback` из `RedisBackendService` - ошибки Redis теперь пробрасываются наружу

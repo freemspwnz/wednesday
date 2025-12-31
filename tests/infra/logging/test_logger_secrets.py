@@ -25,7 +25,7 @@ def _setup_test_postgres() -> Generator[None, None, None]:
     yield
 
 
-from infra.logging.logger import log_event, mask_secrets, scrub, setup_logger  # noqa: E402
+from infra.logging.logger import mask_secrets, scrub  # noqa: E402
 
 SECRET_VALUE = "dummy-secret-for-tests"
 
@@ -103,87 +103,6 @@ def test_scrub_nested_structures_and_keywords() -> None:
     assert cleaned["nested"]["other"] == "keep"
     assert cleaned["list"][0]["secret_key"] == "****"
     assert cleaned["list"][1] == "plain"
-
-
-@pytest.mark.parametrize("testing_env", ["", "0", "false", "no"])
-def test_json_logs_do_not_contain_gigachat_key(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    testing_env: str,
-) -> None:
-    """
-    Интеграционный тест JSON‑логов:
-    - подменяем директорию логов на временную;
-    - настраиваем GIGACHAT_AUTHORIZATION_KEY на известное значение;
-    - генерируем несколько записей, где секрет явно фигурирует в extra и bind;
-    - убеждаемся, что секретное значение не попало ни в message, ни в extra.
-    """
-    # Настраиваем окружение: включаем обычный режим логгера (без TESTING=1)
-    if testing_env:
-        monkeypatch.setenv("TESTING", testing_env)
-    else:
-        # Удаляем переменную, если она была установлена
-        monkeypatch.delenv("TESTING", raising=False)
-
-    monkeypatch.setenv("GIGACHAT_AUTHORIZATION_KEY", SECRET_VALUE)
-
-    # Гарантируем, что файловые sink-и не отключены принудительно
-    monkeypatch.delenv("LOG_TO_STDOUT_ONLY", raising=False)
-    # Включаем файловые логи для теста
-    monkeypatch.setenv("LOG_TO_FILE", "1")
-
-    # Подменяем директорию логов
-    logs_dir = tmp_path / "logs"
-
-    # Патчим константу в модуле, где она используется
-    monkeypatch.setattr("utils.logger.LOGS_DIR", logs_dir)
-
-    # Переинициализируем логгер с новой конфигурацией
-    setup_logger()
-
-    # Пишем несколько событий в JSON‑sink
-    log_event(
-        event="test_secret_in_extra",
-        extra={"authorization": f"Basic {SECRET_VALUE}"},
-        level="info",
-        message="message with secret in extra",
-    )
-
-    log_event(
-        event="test_secret_nested",
-        extra={"auth": {"token": SECRET_VALUE}},
-        level="info",
-        message="nested secret",
-    )
-
-    log_event(
-        event="test_secret_bind",
-        extra={"auth": SECRET_VALUE},
-        level="info",
-        message="direct bind with secret",
-    )
-
-    jsonl_path = logs_dir / "wednesday_bot.events.jsonl"
-    records = _read_all_jsonl(jsonl_path)
-    assert records, "JSON‑лог должен содержать хотя бы одну запись"
-
-    # Проверяем, что секрет нигде не встретился и что значения по чувствительным ключам
-    # заменены на маску "****".
-    for data in records:
-        record = data.get("record", {})
-        serialized = json.dumps(record, ensure_ascii=False)
-        assert SECRET_VALUE not in serialized, "Секретное значение не должно присутствовать в JSON‑логах"
-
-        extra = record.get("extra") or {}
-        event = extra.get("event")
-
-        if event == "test_secret_in_extra":
-            # authorization должен быть замаскирован целиком
-            assert extra.get("authorization") == "****"
-        elif event == "test_secret_nested":
-            # nested токен также должен быть замаскирован
-            auth_obj = extra.get("auth") or {}
-            assert auth_obj.get("token") == "****"
 
 
 def test_scrub_large_structure_performance() -> None:

@@ -34,7 +34,7 @@ class BotLifecycleNotificationBuilder:
         Returns:
             Форматированное сообщение об остановке бота.
         """
-        return "🛑 Wednesday Frog Bot остановлен!\n\n📝 Логи сохранены в папке logs/\n👋 До свидания!"
+        return "🛑 Wednesday Frog Bot остановлен!\n\n👋 До свидания!"
 
     @staticmethod
     def build_support_startup_message() -> str:

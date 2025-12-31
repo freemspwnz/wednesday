@@ -22,7 +22,6 @@ from shared.retry import retry_on_connect_error
 MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
 MAX_ERROR_DETAILS_LENGTH = 500  # максимальная длина деталей ошибки
 PERCENT_MULTIPLIER = 100  # множитель для процентов
-MAX_LOG_DAYS = 10  # максимальное количество дней для команды /log
 TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
 
 
@@ -175,26 +174,6 @@ class AdminHandlers(BaseHandlers):
                 self.logger.info("Отправлен статус бота")
 
         await self._handle_command_errors(update, _execute_status)
-
-    async def admin_log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обработчик команды /log.
-
-        Отправляет логи администратору. Без аргумента отправляет последний файл,
-        с аргументом [count] отправляет логи за N дней (1..10).
-        Команда доступна только администраторам.
-
-        Args:
-            update: Объект обновления Telegram, содержащий информацию о сообщении,
-                пользователе и чате, из которого отправлена команда.
-            context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args и к боту для отправки файлов через context.bot.
-
-        Side Effects:
-            - Читает файлы логов из директории logs/.
-            - Отправляет файлы логов в чат через messaging_service.send_file().
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
-        """
-        await self._send_logs_command(update, context, max_days=MAX_LOG_DAYS)
 
     async def stop_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /stop.

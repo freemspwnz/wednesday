@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from shared.protocols.infrastructure import ILogger
 
 from shared.config import Config
-from shared.paths import LOGS_DIR
 
 # Создаём экземпляр Config при импорте модуля
 config: Config = Config()
@@ -183,35 +182,6 @@ def setup_logger() -> None:
         format="{message}",  # Минимальный формат, т.к. serialize=True
     )
 
-    # Опциональный файловый sink для debug/forensics
-    log_to_file = os.getenv("LOG_TO_FILE", "0").lower() in {"1", "true", "yes"}
-
-    if log_to_file:
-        log_dir = LOGS_DIR
-        log_dir.mkdir(exist_ok=True)
-
-        # Текстовый файл для человеко-читаемости
-        logger.add(
-            log_dir / "wednesday_bot.log",
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
-            level=log_level,
-            rotation="10 MB",
-            retention="7 days",
-            compression="zip",
-            backtrace=True,  # Включить для файлов
-            diagnose=True,  # Включить для файлов
-        )
-
-        # JSON файл для forensics (если нужен)
-        logger.add(
-            log_dir / "wednesday_bot.events.jsonl",
-            serialize=True,
-            level=log_level,
-            rotation="10 MB",
-            retention="7 days",
-            compression="zip",
-        )
-
     # Точечная интеграция сторонних логеров
     # НЕ трогаем root logger - это опасно и может создать рекурсию
 
@@ -233,10 +203,7 @@ def setup_logger() -> None:
     # Если библиотека логирует до setup_logger - это нормально, пусть идёт в stderr
 
     # Логируем успешную инициализацию
-    if log_to_file:
-        logger.info(f"Система логирования настроена, логи пишутся в stdout и {LOGS_DIR}")
-    else:
-        logger.info("Система логирования настроена, логи пишутся только в stdout (JSON)")
+    logger.info("Система логирования настроена, логи пишутся только в stdout (JSON)")
 
 
 class LoguruLogger:

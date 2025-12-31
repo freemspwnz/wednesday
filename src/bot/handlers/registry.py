@@ -97,7 +97,6 @@ class BotHandlersRegistry:
         self.application.add_handler(
             CommandHandler("force_send", self.admin_handlers.admin_force_send_command),
         )
-        self.application.add_handler(CommandHandler("log", self.admin_handlers.admin_log_command))
         self.application.add_handler(
             CommandHandler("add_chat", self.admin_handlers.admin_add_chat_command),
         )

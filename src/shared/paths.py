@@ -18,6 +18,3 @@ FROGS_DIR = DATA_DIR / "frogs"
 
 # Хранилище промптов GigaChat
 PROMPTS_DIR = DATA_DIR / "prompts"
-
-# Логи приложения
-LOGS_DIR = Path("logs")
