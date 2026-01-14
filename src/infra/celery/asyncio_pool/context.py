@@ -85,11 +85,7 @@ class WorkerContext:
                 redis_client = await redis_factory.get_client()
 
                 # Регистрируем callback для закрытия Redis client
-                # Используем aclose() если доступен, иначе close()
-                if hasattr(redis_client, "aclose") and asyncio.iscoroutinefunction(redis_client.aclose):
-                    self._exit_stack.push_async_callback(redis_client.aclose)
-                else:
-                    self._exit_stack.push_async_callback(redis_client.close)
+                self._exit_stack.push_async_callback(redis_client.close)
                 logger.debug("Redis client зарегистрирован для закрытия через AsyncExitStack")
 
                 # Создаём HTTP сессию через AsyncExitStack (создается на лету)

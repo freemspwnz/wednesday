@@ -1,19 +1,27 @@
-"""Билдеры application‑сервисов (админка, БД‑операции, управление моделями)."""
+"""Билдеры application‑сервисов (админка, БД‑операции, управление моделями, dispatch)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from app.admin_dashboard_service import AdminDashboardService
+from app.admin_notification_service import AdminNotificationService
 from app.api_status_service import APIStatusService
 from app.database_operations_service import DatabaseOperationsService
+from app.dispatch_delivery_service import DispatchDeliveryService
+from app.dispatch_service import DispatchService
+from app.fallback_image_delivery_service import FallbackImageDeliveryService
 from app.frog_limit_service import FrogRateLimiterService
+from app.image_service import ImageService
 from app.model_management_service import ModelManagementService
+from app.target_preparation_service import TargetPreparationService
 from infra.repos.dispatch_registry import DispatchRegistry
 from shared.config import AppSettings, Config
 from shared.protocols.clients import ITextToImageClient, ITextToTextClient
+from shared.protocols.dispatch import IDispatchRegistry
 from shared.protocols.infrastructure import ILogger, IMetrics, IRateLimiter
-from shared.protocols.repositories import IChatsRepo, IModelsRepo, IUsageTracker
+from shared.protocols.messaging import IMessagingService
+from shared.protocols.repositories import IAdminsRepo, IChatsRepo, IModelsRepo, IUsageTracker
 from shared.protocols.uow import IUnitOfWorkFactory
 
 if TYPE_CHECKING:
@@ -118,4 +126,95 @@ def build_model_management_service(
         text_client=text_client,
         models_repo=models_repo,
         logger=models_logger,
+    )
+
+
+def build_fallback_image_delivery_service(
+    *,
+    image_service: ImageService,
+    messaging_service: IMessagingService,
+    logger: ILogger,
+) -> FallbackImageDeliveryService:
+    """Создаёт `FallbackImageDeliveryService` для доставки fallback изображений."""
+    fallback_logger = logger.bind(module="FallbackImageDeliveryService")
+    return FallbackImageDeliveryService(
+        image_provider=image_service,
+        messaging_service=messaging_service,
+        logger=fallback_logger,
+    )
+
+
+def build_admin_notification_service(
+    *,
+    messaging_service: IMessagingService,
+    admins_repo: IAdminsRepo,
+    logger: ILogger,
+) -> AdminNotificationService:
+    """Создаёт `AdminNotificationService` для уведомления администраторов."""
+    admin_notif_logger = logger.bind(module="AdminNotificationService")
+    return AdminNotificationService(
+        messaging_service=messaging_service,
+        admins_repo=admins_repo,
+        logger=admin_notif_logger,
+    )
+
+
+def build_target_preparation_service(
+    *,
+    chats_repo: IChatsRepo,
+    dispatch_registry: IDispatchRegistry,
+    messaging_service: IMessagingService,
+    logger: ILogger,
+) -> TargetPreparationService:
+    """Создаёт `TargetPreparationService` для подготовки целей рассылки."""
+    target_logger = logger.bind(module="TargetPreparationService")
+    return TargetPreparationService(
+        chats_repo=chats_repo,
+        dispatch_registry=dispatch_registry,
+        messaging_service=messaging_service,
+        logger=target_logger,
+    )
+
+
+def build_dispatch_delivery_service(  # noqa: PLR0913
+    *,
+    dispatch_registry: IDispatchRegistry,
+    database_operations: DatabaseOperationsService,
+    messaging_service: IMessagingService,
+    fallback_delivery: FallbackImageDeliveryService,
+    metrics: IMetrics | None,
+    logger: ILogger,
+) -> DispatchDeliveryService:
+    """Создаёт `DispatchDeliveryService` для доставки изображений в рассылках."""
+    delivery_logger = logger.bind(module="DispatchDeliveryService")
+    return DispatchDeliveryService(
+        dispatch_registry=dispatch_registry,
+        database_operations=database_operations,
+        messaging_service=messaging_service,
+        fallback_delivery=fallback_delivery,
+        metrics=metrics,
+        logger=delivery_logger,
+    )
+
+
+def build_dispatch_service(  # noqa: PLR0913
+    *,
+    target_preparation_service: TargetPreparationService,
+    dispatch_delivery_service: DispatchDeliveryService,
+    image_service: ImageService | None,
+    admin_notifier: AdminNotificationService | None,
+    metrics: IMetrics | None,
+    settings: AppSettings,
+    logger: ILogger,
+) -> DispatchService:
+    """Создаёт `DispatchService` для координации рассылки Wednesday Frog."""
+    dispatch_logger = logger.bind(module="DispatchService")
+    return DispatchService(
+        target_preparation_service=target_preparation_service,
+        dispatch_delivery_service=dispatch_delivery_service,
+        image_service=image_service,
+        admin_notifier=admin_notifier,
+        metrics=metrics,
+        settings=settings,
+        logger=dispatch_logger,
     )

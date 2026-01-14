@@ -37,9 +37,14 @@ from infra.container.rate_limiter_builders import (
 from infra.container.repos import ContainerRepos
 from infra.container.service_builders import (
     build_admin_dashboard_service,
+    build_admin_notification_service,
     build_database_operations_service,
+    build_dispatch_delivery_service,
+    build_dispatch_service,
+    build_fallback_image_delivery_service,
     build_frog_rate_limiter_service,
     build_model_management_service,
+    build_target_preparation_service,
 )
 from infra.redis.redis_client import RedisClient
 from shared.bot_services import BotServices
@@ -231,6 +236,41 @@ class Container:
             logger=log,
         )
 
+        # --- Dispatch‑сервисы ---
+        admin_notification_service = build_admin_notification_service(
+            messaging_service=messaging_service,
+            admins_repo=self.repos.admins_repo,
+            logger=log,
+        )
+        fallback_image_delivery_service = build_fallback_image_delivery_service(
+            image_service=image_service,
+            messaging_service=messaging_service,
+            logger=log,
+        )
+        target_preparation_service = build_target_preparation_service(
+            chats_repo=self.repos.chats_repo,
+            dispatch_registry=self.repos.dispatch_registry,
+            messaging_service=messaging_service,
+            logger=log,
+        )
+        dispatch_delivery_service = build_dispatch_delivery_service(
+            dispatch_registry=self.repos.dispatch_registry,
+            database_operations=database_operations,
+            messaging_service=messaging_service,
+            fallback_delivery=fallback_image_delivery_service,
+            metrics=self._metrics_service,
+            logger=log,
+        )
+        dispatch_service = build_dispatch_service(
+            target_preparation_service=target_preparation_service,
+            dispatch_delivery_service=dispatch_delivery_service,
+            image_service=image_service,
+            admin_notifier=admin_notification_service,
+            metrics=self._metrics_service,
+            settings=app_settings,
+            logger=log,
+        )
+
         services = BotServices(
             usage=self.repos.usage_tracker,
             chats=self.repos.chats_repo,
@@ -242,11 +282,12 @@ class Container:
             image_service=image_service,
             frog_rate_limiter=frog_rate_limiter_service,
             task_queue=self._task_queue,
-            dispatch_service=None,  # создаётся на bot‑слое
+            dispatch_service=dispatch_service,
             admin_dashboard_service=admin_dashboard_service,
             model_management_service=model_management_service,
             admin_access_service=admin_access_service,
             admin_command_service=admin_command_service,
+            admin_notification_service=admin_notification_service,
             messaging_service=messaging_service,
             database_operations=database_operations,
             admins_repo=self.repos.admins_repo,

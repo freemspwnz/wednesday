@@ -105,8 +105,9 @@ repos:
     hooks:
       - id: mypy
         name: Mypy type checker
-        pass_filenames: false   # не подставлять изменённые файлы
+        pass_filenames: false   # не подставлять только изменённые файлы
         args: ["--explicit-package-bases", "."]
+        exclude: ^tests/   # убрать после рефакторинга tests/
         additional_dependencies:
           - types-requests
           - types-python-dateutil

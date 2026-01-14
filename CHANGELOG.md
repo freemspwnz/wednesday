@@ -4,6 +4,12 @@
 
 ### Изменено
 
+- **Рефакторинг dispatch-сервисов: перенос создания в composition root**:
+  - Добавлены билдеры dispatch-стека в `src/infra/container/service_builders.py` (`build_fallback_image_delivery_service`, `build_admin_notification_service`, `build_target_preparation_service`, `build_dispatch_delivery_service`, `build_dispatch_service`)
+  - Обновлён `src/infra/container/container.py`: `DispatchService` и связанные dispatch-сервисы теперь создаются в `Container.build_bot_services()` и передаются в `BotServices` вместо инициализации на bot-слое
+  - Улучшено соблюдение границ слоёв: bot-слой и Celery задачи используют `DispatchService` только через DI (`BotServices`), без знания деталей его сборки
+  - Celery `WorkerContext` инициализирует все необходимые сервисы через `container.build_bot_services()`, что упрощает использование dispatch-логики из фоновых задач
+
 - **Удаление легаси функционала `bot_controller` и команды `/stop`**:
   - Удалён метод `stop_command()` из `src/bot/handlers/admin.py` (команда `/stop` больше не актуальна, так как теперь используется только один бот)
   - Удалена регистрация команды `/stop` из `src/bot/handlers/registry.py`
@@ -138,6 +144,12 @@
   - Проверяет существование изображений перед генерацией для избежания дублирования
   - Возвращает изображения из постоянного хранилища, если они уже были сгенерированы ранее
   - Интегрирован в `ImageGenerationCoordinator` и `ImageStorageUnitOfWork` вместо временного кэша
+
+### Изменено
+
+- **Упрощение закрытия Redis клиента в Celery WorkerContext**:
+  - Обновлён `src/infra/celery/asyncio_pool/context.py`: для Redis клиента используется единый асинхронный `close()` через `push_async_callback` вместо условной проверки наличия `aclose()`
+  - Поведение закрытия ресурсов унифицировано с Postgres pool и HTTP-сессией, что упрощает поддержку и снижает риск некорректного shutdown
 
 ### Добавлено
 
