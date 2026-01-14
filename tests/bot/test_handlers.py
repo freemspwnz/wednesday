@@ -697,55 +697,6 @@ async def test_list_chats_command_no_chats(
 
 
 @pytest.mark.asyncio
-async def test_stop_command_non_admin(
-    fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
-) -> None:
-    services = MagicMock()
-    services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, logger=mock_logger)
-    async_retry_stub(handler)
-
-    class _AdminNo:
-        async def is_admin(self, _uid: int) -> bool:
-            return False
-
-    handler.admins_store = _AdminNo()  # type: ignore[assignment]
-
-    await handler.stop_command(fake_update, fake_context)
-
-    fake_update.message.reply_text.assert_awaited()
-    call = fake_update.message.reply_text.await_args
-    text = call.kwargs.get("text", call.args[0])
-    assert "Доступно только администратору" in text
-
-
-@pytest.mark.asyncio
-async def test_stop_command_admin(fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any) -> None:
-    services = MagicMock()
-    services.image_generator = MagicMock()
-    handler = AdminHandlers(services=services, logger=mock_logger)
-    async_retry_stub(handler)
-
-    class _AdminOk:
-        async def is_admin(self, _uid: int) -> bool:
-            return True
-
-    handler.admins_store = _AdminOk()  # type: ignore[assignment]
-
-    # Мокаем bot_instance в bot_data
-    class DummyBot:
-        async def stop(self) -> None:
-            pass
-
-    fake_context.application.bot_data["bot"] = DummyBot()
-
-    await handler.stop_command(fake_update, fake_context)
-
-    # Проверяем, что была попытка остановить бота
-    assert "bot" in fake_context.application.bot_data
-
-
-@pytest.mark.asyncio
 async def test_set_kandinsky_model_command_no_args(
     fake_update: Any, fake_context: Any, async_retry_stub: Any, mock_logger: Any
 ) -> None:

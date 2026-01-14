@@ -13,7 +13,7 @@ from telegram.ext import Application
 from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
-    from infra.new_container import Container
+    from infra.container import Container
 
 
 class WednesdayBot:

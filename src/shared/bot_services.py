@@ -24,7 +24,6 @@ from infra.cache.prompt_cache import PromptCache
 from infra.cache.user_state_cache import UserStateCache
 from infra.repos.dispatch_registry import DispatchRegistry
 from shared.config import AppSettings
-from shared.protocols.bot import IBotController
 from shared.protocols.infrastructure import IMetrics
 from shared.protocols.messaging import IMessagingService
 from shared.protocols.repositories import IAdminsRepo, IChatsRepo, IUsageTracker
@@ -96,7 +95,6 @@ class BotServices:
     admin_command_service: AdminCommandService | None = None
     admin_notification_service: AdminNotificationService | None = None
     chat_info_service: ChatInfoService | None = None
-    bot_controller: IBotController | None = None  # для команд управления ботом, например /stop
     dispatch_service: DispatchService | None = None
     messaging_service: IMessagingService | None = None
     database_operations: DatabaseOperationsService | None = None

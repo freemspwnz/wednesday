@@ -16,11 +16,11 @@ from telegram.ext import ApplicationBuilder
 from bot.wednesday_bot import WednesdayBot
 from infra.celery.app import celery_app
 from infra.celery.celery_task_queue import CeleryTaskQueue
+from infra.container import Container
 from infra.database.postgres_client import PostgresPoolFactory
 from infra.database.postgres_schema import ensure_schema
 from infra.logging.logger import get_logger
 from infra.metrics.metrics import Metrics
-from infra.new_container import Container
 from infra.redis.redis_client import RedisClientFactory
 from shared.config import Config
 
@@ -56,7 +56,7 @@ async def main() -> None:
         status="ok",
     )
 
-    # 2. Создание Telegram Application ПЕРЕД созданием контейнера
+    # 2. Создание Telegram Application (ПЕРЕД созданием контейнера)
     main_logger.debug(
         "Создание Telegram Application",
         event="main_create_telegram_app",

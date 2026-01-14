@@ -131,7 +131,6 @@ def wednesday_bot(monkeypatch: Any) -> Any:
         settings=SimpleNamespace(scheduler_send_times=["10:00"], time_format_length=5),
         frog_rate_limiter=SimpleNamespace(),
         task_queue=SimpleNamespace(),
-        bot_controller=None,
     )
 
     monkeypatch.setattr(wb_module, "CommandHandler", DummyCommandHandler)

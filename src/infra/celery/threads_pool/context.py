@@ -254,8 +254,8 @@ async def get_services_context(
             config_obj=config_obj,
         )
 
-        # Создаём сервисы через DI-контейнер (единый стиль с container.py)
-        from infra.container import build_celery_services_context
+        # Создаём сервисы через DI-контейнер (единый стиль с infra.container)
+        from infra.container.celery_builders import build_celery_services_context
 
         _services_context = build_celery_services_context(
             config=config_obj,
@@ -264,7 +264,7 @@ async def get_services_context(
         )
 
         # Создаём cleanup service для graceful shutdown
-        from infra.container import build_cleanup_service
+        from infra.container.celery_builders import build_cleanup_service
 
         global _cleanup_service  # noqa: PLW0603
         _cleanup_service = build_cleanup_service(

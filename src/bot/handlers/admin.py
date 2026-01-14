@@ -175,56 +175,6 @@ class AdminHandlers(BaseHandlers):
 
         await self._handle_command_errors(update, _execute_status)
 
-    async def stop_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обработчик команды /stop.
-
-        Останавливает бота полностью. Команда доступна только администраторам.
-        После выполнения команды основной бот останавливается и запускается
-        SupportBot для обслуживания резервных функций.
-
-        Args:
-            update: Объект обновления Telegram, содержащий информацию о сообщении,
-                пользователе и чате, из которого отправлена команда.
-            context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args.
-
-        Side Effects:
-            - Сохраняет метаданные сообщения для последующего редактирования.
-            - Вызывает bot_controller.stop() для остановки основного бота через DI.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
-        """
-        if not update.message or not update.effective_user:
-            return
-
-        user_id = update.effective_user.id
-        self.logger.info(f"Получена команда /stop от пользователя {user_id}")
-
-        # Проверка прав администратора
-        if not await self.admins_store.is_admin(user_id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
-            return
-
-        # Сохраняем message для использования в замыкании
-        message = update.message
-
-        async def _execute_stop() -> None:
-            # Получаем экземпляр основного бота через DI и останавливаем его
-            bot_controller = self.services.bot_controller
-            if bot_controller is not None:
-                await bot_controller.stop()
-            else:
-                self.logger.error("bot_controller не доступен, невозможно остановить бота")
-                if message:
-                    await self._safe_reply_with_fallback(
-                        message,
-                        "❌ Ошибка: невозможно остановить бота (bot_controller недоступен)",
-                    )
-
-        await self._handle_command_errors(update, _execute_stop)
-
     async def admin_force_send_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /force_send.
 

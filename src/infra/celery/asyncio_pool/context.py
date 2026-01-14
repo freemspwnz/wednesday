@@ -21,7 +21,7 @@ from infra.redis.redis_client import RedisClientFactory
 from shared.config import Config
 
 if TYPE_CHECKING:
-    from infra.new_container import Container
+    from infra.container import Container
 
 logger = get_logger("celery.worker_context")
 
@@ -116,7 +116,7 @@ class WorkerContext:
                 task_queue = CeleryTaskQueue()
 
                 # Создаём Container
-                from infra.new_container import Container
+                from infra.container import Container
 
                 self._container = Container(
                     config=self._config,

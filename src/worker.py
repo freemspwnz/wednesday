@@ -13,8 +13,8 @@ import os
 
 from celery import Celery
 
-from infra.logging.logger import LoguruHandler, get_logger
 from infra.celery.asyncio_pool.config import CeleryConfig, get_celery_redis_url
+from infra.logging.logger import LoguruHandler, get_logger
 
 logger = get_logger(__name__)
 

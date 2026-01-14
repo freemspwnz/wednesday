@@ -4,6 +4,29 @@
 
 ### Изменено
 
+- **Удаление легаси функционала `bot_controller` и команды `/stop`**:
+  - Удалён метод `stop_command()` из `src/bot/handlers/admin.py` (команда `/stop` больше не актуальна, так как теперь используется только один бот)
+  - Удалена регистрация команды `/stop` из `src/bot/handlers/registry.py`
+  - Удалено поле `bot_controller: IBotController | None` из `src/shared/bot_services.py` и его использование в DI-контейнере
+  - Удалён протокол `IBotController` из `src/shared/protocols/bot.py` (больше не используется для управления жизненным циклом бота)
+  - Удалён импорт и экспорт `IBotController` из `src/shared/protocols/__init__.py`
+  - Удалена установка `bot_controller=None` при создании `BotServices` в `src/infra/container/container.py`
+  - Удалены тесты `test_stop_command_non_admin` и `test_stop_command_admin` из `tests/bot/test_handlers.py`
+  - Удалено поле `bot_controller=None` из тестовых моков в `tests/bot/test_wednesday_bot.py`
+  - Обновлена документация: удалено упоминание `/stop` из `docs/ARCHITECTURE.md` и раздел `3.7. /stop` из `docs/API_REFERENCE.md`
+  - `bot_controller` был легаси фичей для переключения между двумя ботами, теперь используется только один бот
+
+- **Рефакторинг DI‑контейнера: модульный пакет `infra.container`**:
+  - Удалён монолитный файл `src/infra/container.py`, логика Composition Root вынесена в пакет `src/infra/container/`
+  - Создан новый класс `infra.container.Container` с тонкой координацией зависимостей и кэшированием `BotServices`
+  - Добавлены модульные билдеры: `repos`, `client_builders`, `image_stack_builder`, `service_builders`, `admin_builders`, `rate_limiter_builders`, `handler_builders`, `celery_builders`
+  - Обновлены `src/main.py`, `src/bot/wednesday_bot.py` и Celery worker-код для использования нового контейнера
+  - Удалены устаревшие упоминания `new_container.py`, логика объединена в новый пакет `infra.container`
+
+- **Перенос точек входа в каталог `src/`**:
+  - Файлы `main.py` и `worker.py` перенесены из корня проекта в каталог `src/` (теперь `src/main.py` и `src/worker.py`)
+  - Обновлены пути импортов и инструкции по запуску, чтобы использовать новое расположение точек входа
+
 - **Удаление функционала файлового логирования и команды /log**:
   - Удалены методы `_send_log_file()` и `_send_logs_command()` из `src/bot/handlers/base.py`
   - Удалены неиспользуемые импорты `datetime`, `timedelta`, `Path`, `LOGS_DIR` из `base.py`

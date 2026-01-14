@@ -6,7 +6,6 @@
 # Infrastructure
 # Bot
 from shared.protocols.bot import (
-    IBotController,
     IChatValidator,
     IHandlersRegistry,
 )
@@ -69,14 +68,13 @@ from shared.protocols.uow import (
 )
 
 __all__ = [
+    "ConnectionType",
     "IAdminsRepo",
-    "IBotController",
     "ICache",
     "ICaptionProvider",
-    "IChatsRepo",
     "IChatValidator",
+    "IChatsRepo",
     "ICircuitBreaker",
-    "ConnectionType",
     "IDataCleanupService",
     "IDatabaseUnitOfWork",
     "IDispatchRegistry",

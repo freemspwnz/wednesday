@@ -103,7 +103,6 @@ class BotHandlersRegistry:
         self.application.add_handler(
             CommandHandler("remove_chat", self.admin_handlers.admin_remove_chat_command),
         )
-        self.application.add_handler(CommandHandler("stop", self.admin_handlers.stop_command))
         self.application.add_handler(CommandHandler("list_chats", self.admin_handlers.list_chats_command))
         self.application.add_handler(CommandHandler("mod", self.admin_handlers.mod_command))
         self.application.add_handler(CommandHandler("unmod", self.admin_handlers.unmod_command))
