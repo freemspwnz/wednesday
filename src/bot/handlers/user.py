@@ -80,9 +80,8 @@ class UserHandlers(BaseHandlers):
                 для совместимости с интерфейсом обработчиков команд).
 
         Side Effects:
-            - Проверяет права администратора через admins_store.is_admin().
+            - Проверяет права администратора через admin_access_service.is_admin().
             - Отправляет соответствующую справку (админскую или пользовательскую).
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return

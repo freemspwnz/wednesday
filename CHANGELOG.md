@@ -5,6 +5,17 @@
 ### Изменено
 
 - **Исправление всех нарушений архитектуры из bot-layer-audit**:
+  - Создан `ErrorMessageFormatterService` для централизованного форматирования сообщений об ошибках
+  - Создан `RetryStrategyService` для расчета retry-стратегии и нормализации max_retries
+  - Вынесена логика форматирования ошибок из `handlers/base.py` в `ErrorMessageFormatterService`
+  - Вынесена логика расчета времени ожидания retry из `handlers/base.py` в `RetryStrategyService`
+  - Вынесена нормализация max_retries из `handlers/base.py` в `RetryStrategyService`
+  - Обновлены все обработчики ошибок в `BaseHandlers` для использования новых сервисов
+  - Добавлены `error_formatter` и `retry_strategy` в `BotServices` и `Container`
+  - Обновлены docstrings в `admin.py` и `user.py` для удаления упоминаний прямых обращений к репозиториям
+  - Перенесены константы `RETRY_DELAY_DEFAULT` и `MAX_RETRIES_LIMIT` из `handlers/base.py` в `retry_strategy_service.py`
+
+- **Исправление всех нарушений архитектуры из bot-layer-audit**:
   - Перенесена нормализация аргументов команд из хендлеров в сервисы (`.strip()`, `.lower()`)
   - Убрано форматирование ошибок из хендлеров - добавлен метод `format_service_error()` в билдеры
   - Разделен метод `_check_admin_access()` на `_check_admin_access_only()` и `_check_admin_access()` для соблюдения SRP

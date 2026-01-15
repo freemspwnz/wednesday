@@ -306,9 +306,19 @@ class Container:
         )
 
         from app.bot_notification_builders import BotNotificationBuilders
+        from app.error_message_formatter_service import ErrorMessageFormatterService
         from app.frog_command_service import FrogCommandService
+        from app.retry_strategy_service import RetryStrategyService
 
         bot_notification_builders = BotNotificationBuilders()
+
+        error_formatter = ErrorMessageFormatterService(
+            logger=log,
+        )
+
+        retry_strategy = RetryStrategyService(
+            logger=log,
+        )
 
         frog_command_service = FrogCommandService(
             frog_rate_limiter=frog_rate_limiter_service,
@@ -345,6 +355,8 @@ class Container:
             chat_event_service=chat_event_service,
             bot_notification_builders=bot_notification_builders,
             frog_command_service=frog_command_service,
+            error_formatter=error_formatter,
+            retry_strategy=retry_strategy,
         )
 
         self._services = services

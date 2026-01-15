@@ -15,6 +15,8 @@ from telegram import Message, Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
+# Импортируем константу из retry_strategy_service для использования в retry_on_connect_error
+from app.retry_strategy_service import RETRY_DELAY_DEFAULT
 from shared.base.exceptions import RepoError, ServiceError
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
@@ -25,11 +27,10 @@ if TYPE_CHECKING:
 
 # Константы
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
-RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по умолчанию
 CHAT_INFO_TIMEOUT_DEFAULT = 5.0  # таймаут для получения информации о чате по умолчанию
 CHAT_TIMEOUT_DEFAULT = 10.0  # таймаут для получения полного объекта чата по умолчанию
-MAX_RETRIES_LIMIT = 5  # максимальное количество попыток для защиты от утечек памяти
 COMMAND_TIMEOUT_DEFAULT = 60.0  # таймаут для выполнения команды по умолчанию (60 секунд)
+# Примечание: RETRY_DELAY_DEFAULT и MAX_RETRIES_LIMIT перенесены в app/retry_strategy_service.py
 
 
 class BaseHandlers:
@@ -50,8 +51,14 @@ class BaseHandlers:
         self.services: BotServices = services
         if services.telegram_api_rate_limiter is None:
             raise ValueError("telegram_api_rate_limiter must be provided in BotServices")
-        # Сохраняем в локальную переменную для типизации mypy
+        if services.error_formatter is None:
+            raise ValueError("error_formatter must be provided in BotServices")
+        if services.retry_strategy is None:
+            raise ValueError("retry_strategy must be provided in BotServices")
+        # Сохраняем в локальные переменные для типизации mypy
         self._rate_limiter = services.telegram_api_rate_limiter
+        self._error_formatter = services.error_formatter
+        self._retry_strategy = services.retry_strategy
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
@@ -403,9 +410,10 @@ class BaseHandlers:
         """
         self.logger.error(f"Ошибка валидации: {error}", exc_info=True)
         if update.message:
+            error_message = self._error_formatter.format_validation_error()
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Ошибка валидации данных",
+                error_message,
             )
 
     async def _handle_network_error_with_retry(
@@ -427,8 +435,8 @@ class BaseHandlers:
             True если нужно повторить попытку, False если все попытки исчерпаны.
         """
         if attempt < max_retries:
-            # Есть еще попытки - делаем retry с экспоненциальным backoff
-            wait_time = RETRY_DELAY_DEFAULT * attempt
+            # Есть еще попытки - делаем retry с расчетом времени ожидания через сервис
+            wait_time = self._retry_strategy.calculate_wait_time(attempt)
             self.logger.warning(
                 f"Сетевая ошибка Telegram API (попытка {attempt}/{max_retries}): {error}. Повтор через {wait_time}с",
             )
@@ -438,9 +446,10 @@ class BaseHandlers:
         # Все попытки исчерпаны
         self.logger.warning(f"Сетевая ошибка Telegram API после {max_retries} попыток: {error}")
         if update.message:
+            error_message = self._error_formatter.format_network_error()
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Временная проблема с Telegram API. Попробуйте позже.",
+                error_message,
             )
         return False
 
@@ -457,9 +466,10 @@ class BaseHandlers:
         """
         self.logger.error(f"Ошибка сервиса: {error}", exc_info=True)
         if update.message:
+            error_message = self._error_formatter.format_service_error(error)
             await self._safe_reply_with_fallback(
                 update.message,
-                f"❌ Ошибка сервиса: {str(error)[:200]}",
+                error_message,
             )
 
     async def _handle_repo_error(
@@ -475,13 +485,16 @@ class BaseHandlers:
         """
         self.logger.error(f"Ошибка репозитория: {error}", exc_info=True)
         if update.message:
+            error_message = self._error_formatter.format_repo_error(error)
             await self._safe_reply_with_fallback(
                 update.message,
-                f"❌ Ошибка доступа к данным: {str(error)[:200]}",
+                error_message,
             )
 
     def _normalize_max_retries(self, max_retries: int) -> int:
         """Нормализует значение max_retries для защиты от утечек памяти.
+
+        Делегирует нормализацию в RetryStrategyService для соблюдения границ слоёв.
 
         Args:
             max_retries: Исходное значение max_retries.
@@ -489,13 +502,7 @@ class BaseHandlers:
         Returns:
             Нормализованное значение max_retries.
         """
-        max_retries = max(max_retries, 1)
-        if max_retries > MAX_RETRIES_LIMIT:
-            self.logger.warning(
-                f"max_retries={max_retries} слишком большой, ограничиваем до {MAX_RETRIES_LIMIT}",
-            )
-            return MAX_RETRIES_LIMIT
-        return max_retries
+        return self._retry_strategy.normalize_max_retries(max_retries)
 
     async def _handle_command_errors(
         self,
@@ -575,9 +582,10 @@ class BaseHandlers:
                     exc_info=False,
                 )
                 if update.message:
+                    error_message = self._error_formatter.format_timeout_error()
                     await self._safe_reply_with_fallback(
                         update.message,
-                        "❌ Команда заняла слишком много времени. Попробуйте позже.",
+                        error_message,
                     )
             except asyncio.CancelledError:
                 # Пробрасываем CancelledError дальше для корректной обработки

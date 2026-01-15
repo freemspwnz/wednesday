@@ -47,16 +47,11 @@ class AdminHandlers(BaseHandlers):
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к Telegram‑боту через context.bot
-                для получения информации о боте. Хранилища (usage, chats, metrics)
-                берутся из self.services.*.
+                для получения информации о боте.
 
         Side Effects:
             - Вызывает admin_dashboard_service.build_status_message() для получения статуса.
-            - Получает информацию о лимитах через usage.get_limits_info().
-            - Получает список чатов через chats.list_chat_ids().
-            - Получает метрики через metrics.get_summary().
             - Отправляет подробный статус пользователю.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -98,16 +93,10 @@ class AdminHandlers(BaseHandlers):
                 пользователе и чате, из которого отправлена команда.
             context: Контекст бота, предоставляющий доступ к аргументам команды
                 через context.args и к самому Telegram‑боту через context.bot.
-                Список целевых чатов и лимиты использования берутся из self.services.chats
-                и self.services.usage.
 
         Side Effects:
-            - Вызывает image_generator.generate_frog_image() для генерации нового изображения
-              (если лимит не исчерпан).
-            - Использует image_generator.get_random_saved_image() как fallback при недоступности генерации.
-            - Отправляет изображение в указанные чаты через context.bot.send_image().
-            - Вызывает usage.increment() для увеличения счетчика использования.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
+            - Делегирует выполнение команды в admin_command_service.execute_force_send().
+            - Отправляет результат выполнения пользователю.
         """
         if not update.message or not update.effective_user:
             return
@@ -152,12 +141,11 @@ class AdminHandlers(BaseHandlers):
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args. Хранилище чатов берётся из self.services.chats.
+                через context.args.
 
         Side Effects:
-            - Вызывает chats.add_chat() для добавления чата в хранилище.
+            - Делегирует добавление чата в admin_command_service.add_chat_from_string().
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
 
         Raises:
             ValueError: Если переданный chat_id не является числом.
@@ -197,10 +185,10 @@ class AdminHandlers(BaseHandlers):
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, предоставляющий доступ к аргументам команды
-                через context.args. Хранилище чатов берётся из self.services.chats.
+                через context.args.
 
         Side Effects:
-            - Вызывает chats.remove_chat() для удаления чата из хранилища.
+            - Делегирует удаление чата в admin_command_service.remove_chat_from_string().
             - Отправляет ответное сообщение пользователю с результатом операции.
 
         Raises:
@@ -240,15 +228,12 @@ class AdminHandlers(BaseHandlers):
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении,
                 пользователе и чате, из которого отправлена команда.
-            context: Контекст бота, предоставляющий доступ к Telegram‑боту
-                для получения информации о чатах через context.bot.get_chat().
-                Список ID чатов берётся из self.services.chats.
+            context: Контекст бота (не используется напрямую, но требуется
+                для совместимости с интерфейсом обработчиков команд).
 
         Side Effects:
-            - Вызывает chats.list_chat_ids() для получения списка ID чатов.
-            - Вызывает context.bot.get_chat() для каждого чата для получения названия.
+            - Делегирует получение и форматирование списка чатов в admin_command_service.get_chat_list_for_display().
             - Отправляет форматированный список чатов пользователю.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -278,10 +263,10 @@ class AdminHandlers(BaseHandlers):
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, используемый для доступа к аргументам команды
-                через context.args. Данные об использовании берутся из self.services.usage.
+                через context.args.
 
         Side Effects:
-            - Вызывает usage.set_frog_threshold() для установки нового порога.
+            - Делегирует установку порога в admin_command_service.set_frog_threshold_from_string().
             - Отправляет ответное сообщение пользователю с результатом операции.
 
         Raises:
@@ -323,10 +308,10 @@ class AdminHandlers(BaseHandlers):
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
             context: Контекст бота, используемый для доступа к аргументам команды
-                через context.args. Данные об использовании берутся из self.services.usage.
+                через context.args.
 
         Side Effects:
-            - Вызывает usage.set_month_total() для установки текущего использования.
+            - Делегирует установку использования в admin_command_service.set_frog_used_from_string().
             - Отправляет ответное сообщение пользователю с информацией о лимитах.
 
         Raises:
@@ -371,9 +356,8 @@ class AdminHandlers(BaseHandlers):
                 через context.args для получения user_id нового администратора.
 
         Side Effects:
-            - Вызывает admins_store.add_admin() для добавления пользователя в список администраторов.
+            - Делегирует добавление администратора в admin_command_service.add_admin().
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -427,11 +411,9 @@ class AdminHandlers(BaseHandlers):
                 через context.args для получения user_id администратора для удаления.
 
         Side Effects:
-            - Вызывает admins_store.remove_admin() для удаления пользователя из списка администраторов.
-            - Вызывает admins_store.list_all_admins() для получения списка администраторов.
-            - Вызывает context.bot.get_chat() для получения информации о пользователях.
+            - Делегирует удаление администратора в admin_command_service.remove_admin().
+            - Делегирует получение списка администраторов в admin_command_service.get_admin_list_with_details().
             - Отправляет ответное сообщение пользователю с результатом операции.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return
@@ -487,9 +469,8 @@ class AdminHandlers(BaseHandlers):
                 для совместимости с интерфейсом обработчиков команд).
 
         Side Effects:
-            - Вызывает admins_store.list_all_admins() для получения списка администраторов.
+            - Делегирует получение списка администраторов в admin_command_service.get_admin_list_with_details().
             - Отправляет форматированный список администраторов пользователю.
-            - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
         if not update.message or not update.effective_user:
             return

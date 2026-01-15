@@ -18,11 +18,13 @@ from app.chat_event_service import ChatEventService
 from app.chat_info_service import ChatInfoService
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_service import DispatchService
+from app.error_message_formatter_service import ErrorMessageFormatterService
 from app.frog_command_service import FrogCommandService
 from app.frog_limit_service import FrogRateLimiterService
 from app.help_message_service import HelpMessageService
 from app.image_service import ImageService
 from app.model_management_service import ModelManagementService
+from app.retry_strategy_service import RetryStrategyService
 from app.telegram_api_rate_limiter_service import TelegramAPIRateLimiterService
 from app.user_extraction_service import UserExtractionService
 from infra.cache.prompt_cache import PromptCache
@@ -110,6 +112,8 @@ class BotServices:
     chat_event_service: ChatEventService | None = None
     bot_notification_builders: BotNotificationBuilders | None = None
     frog_command_service: FrogCommandService | None = None
+    error_formatter: ErrorMessageFormatterService | None = None
+    retry_strategy: RetryStrategyService | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
         """Закрывает все ресурсы (HTTP сессии, соединения).
