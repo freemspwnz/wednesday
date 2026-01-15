@@ -232,3 +232,23 @@ class PTBMessagingService:
             message_id=message_id_int,
             text=text,
         )
+
+    @map_telegram_exceptions
+    async def get_bot_info(self) -> dict[str, str | int | None]:
+        """Получает информацию о боте.
+
+        Returns:
+            Словарь с информацией о боте. Ключи: 'id', 'first_name', 'last_name', 'username', 'is_bot'.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права).
+        """
+        bot_user = await self._bot.get_me()
+        return {
+            "id": bot_user.id,
+            "first_name": bot_user.first_name,
+            "last_name": bot_user.last_name,
+            "username": bot_user.username,
+            "is_bot": bot_user.is_bot,
+        }

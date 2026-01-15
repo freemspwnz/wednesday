@@ -123,3 +123,17 @@ class FrogRateLimiterService(BaseService):
             return (False, error_message)
 
         return (True, None)
+
+    @staticmethod
+    def format_generation_limit_error(limit_message: str | None) -> str:
+        """Форматирует сообщение об ошибке лимита генераций.
+
+        Args:
+            limit_message: Сообщение от check_generation_allowed() или None.
+
+        Returns:
+            Отформатированное сообщение об ошибке для пользователя.
+        """
+        if limit_message:
+            return limit_message
+        return "🚫 Лимит ручных генераций на этот месяц исчерпан.\nОжидайте автоматических отправок по средам."

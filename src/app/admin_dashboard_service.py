@@ -27,6 +27,7 @@ from app.api_status_service import APIStatusService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError
 from shared.protocols.infrastructure import ILogger, IMetrics
+from shared.protocols.messaging import IMessagingService
 from shared.protocols.repositories import IChatsRepo, IUsageTracker
 
 if TYPE_CHECKING:
@@ -47,6 +48,7 @@ class AdminDashboardService(BaseService):
         chats: IChatsRepo | None,
         metrics: IMetrics | None,
         api_status_service: APIStatusService,
+        messaging_service: IMessagingService | None = None,
         status_builder: StatusMessageBuilder | None = None,
         models_list_builder: ModelsListMessageBuilder | None = None,
         logger: ILogger,
@@ -64,6 +66,8 @@ class AdminDashboardService(BaseService):
                 Если None, в статусе отображается "Не настроены" для метрик производительности.
                 Не критично для основной функциональности дашборда.
             api_status_service: Сервис проверки статуса API (обязателен).
+            messaging_service: Сервис для работы с мессенджером (опционально).
+                Если None, bot_name будет "Unknown" в статусе.
             status_builder: Билдер сообщений статуса (опционально).
                 Если None, создается новый экземпляр StatusMessageBuilder.
             models_list_builder: Билдер сообщений списка моделей (опционально).
@@ -75,14 +79,32 @@ class AdminDashboardService(BaseService):
         self._chats = chats
         self._metrics = metrics
         self._api_status_service = api_status_service
+        self._messaging = messaging_service
         self._status_builder = status_builder or StatusMessageBuilder()
         self._models_list_builder = models_list_builder or ModelsListMessageBuilder()
 
     async def build_status_message(
         self,
-        bot_name: str,
+        bot_name: str | None = None,
     ) -> str:
-        """Строит текст расширенного статуса бота для команды /status."""
+        """Строит текст расширенного статуса бота для команды /status.
+
+        Args:
+            bot_name: Имя бота (опционально). Если None, пытается получить через messaging_service.
+                Если messaging_service недоступен, используется "Unknown".
+        """
+        # Получаем bot_name если не передан
+        if bot_name is None:
+            if self._messaging is not None:
+                try:
+                    bot_info = await self._messaging.get_bot_info()
+                    first_name = bot_info.get("first_name")
+                    bot_name = str(first_name) if first_name else "Unknown"
+                except Exception as e:
+                    self.logger.warning(f"Не удалось получить информацию о боте: {e}")
+                    bot_name = "Unknown"
+            else:
+                bot_name = "Unknown"
 
         scheduler_status = "✅ Настроен (Celery)"
 

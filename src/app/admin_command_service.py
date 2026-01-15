@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from app.admin_access_service import AdminAccessService
 from shared.base.base_service import BaseService
 from shared.base.exceptions import RepoError, ServiceError
+from shared.constants import MAX_FROG_THRESHOLD
 from shared.protocols.infrastructure import ILogger
 from shared.protocols.repositories import IAdminsRepo, IChatsRepo, IUsageTracker
 
@@ -52,10 +53,6 @@ class ValidationResult:
 
     is_valid: bool
     error_message: str | None = None
-
-
-# Константы бизнес-правил
-MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
 
 
 class AdminCommandService(BaseService):

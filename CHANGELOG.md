@@ -4,6 +4,23 @@
 
 ### Изменено
 
+- **Исправление нарушений архитектуры `bot/`**:
+  - Вынесено определение статуса бота из `bot/handlers/chat_event.py` в `ChatEventService.determine_bot_status_change()`
+  - Вынесена логика отправки приветственного сообщения из `chat_event.py` в `ChatEventService.send_welcome_message()`
+  - Перенесена константа `MAX_FROG_THRESHOLD` из `app/admin_command_service.py` в `shared/constants.py`
+  - Вынесено получение информации о боте (`get_me`) в `MessagingService.get_bot_info()` и `AdminDashboardService`
+  - Заменены все прямые вызовы `retry_on_connect_error()` на `_safe_reply_with_fallback()` в `admin.py` и `user.py`
+  - Вынесено форматирование сообщений об ошибках из `frog_command` в `FrogRateLimiterService.format_generation_limit_error()`
+  - Разбит метод `_handle_command_errors()` на более мелкие методы для соблюдения SRP:
+    - `_handle_validation_error()` - обработка ошибок валидации
+    - `_handle_network_error_with_retry()` - обработка сетевых ошибок с retry
+    - `_handle_service_error()` - обработка ошибок сервисного слоя
+    - `_handle_repo_error()` - обработка ошибок репозитория
+    - `_normalize_max_retries()` - нормализация max_retries
+  - Добавлен метод `_safe_reply_text_and_get_message()` для отправки сообщений с возвратом Message объекта
+  - Обновлена инициализация `ChatEventService` и `AdminDashboardService` в Container для передачи `messaging_service`
+  - Удалены неиспользуемые импорты `retry_on_connect_error` из `admin.py` и `user.py`
+
 - **Рефакторинг bot/ для устранения нарушений чистой архитектуры**:
   - Перенесена константа `MAX_FROG_THRESHOLD` из `bot/handlers/admin.py` в `app/admin_command_service.py`
   - Добавлены методы `set_frog_threshold_from_string()` и `set_frog_used_from_string()` в `AdminCommandService` для парсинга и валидации входных данных

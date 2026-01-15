@@ -56,6 +56,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913
     image_client: ITextToImageClient,
     text_client: ITextToTextClient | None,
     models_repo: IModelsRepo,
+    messaging_service: IMessagingService | None = None,
 ) -> AdminDashboardService:
     """Создаёт `AdminDashboardService`."""
     app_logger = logger.bind(module="AdminDashboardService")
@@ -72,6 +73,7 @@ def build_admin_dashboard_service(  # noqa: PLR0913
         chats=chats_repo,
         metrics=metrics,
         api_status_service=api_status_service,
+        messaging_service=messaging_service,
         logger=app_logger,
     )
 

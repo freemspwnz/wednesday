@@ -157,6 +157,19 @@ class IMessagingService(Protocol):
         """
         ...
 
+    async def get_bot_info(self) -> dict[str, str | int | None]:
+        """Получает информацию о боте.
+
+        Returns:
+            Словарь с информацией о боте. Ключи: 'id', 'first_name', 'last_name', 'username', 'is_bot'.
+            Для универсальности возвращает структурированные данные вместо специфичного объекта мессенджера.
+
+        Raises:
+            MessagingNetworkError: При сетевых ошибках (таймаут, ошибка соединения).
+            MessagingAPIError: При ошибках API (токен, права).
+        """
+        ...
+
 
 @runtime_checkable
 class IFallbackImageProvider(Protocol):

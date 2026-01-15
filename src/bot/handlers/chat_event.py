@@ -5,14 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from telegram import Bot, Update
-from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
-from app.chat_info_service import ChatInfoService
 from bot.handlers.messages import WELCOME_MESSAGE_CHAT
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
-from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
     pass
@@ -80,44 +77,18 @@ class ChatEventHandler:
             chat_id = chat.id
 
             # Определяем изменение статуса через сервис
-            status_change = ChatInfoService.determine_bot_status_change(old, new)
+            status_change = self._chat_event_service.determine_bot_status_change(old, new)
 
             # Бот добавлен/активирован в чате
             if status_change.was_added:
                 # Делегируем обработку события в сервис
                 await self._chat_event_service.handle_bot_added(chat_id)
 
-                # Отправляем приветственное сообщение
-                welcome = WELCOME_MESSAGE_CHAT
-                try:
-
-                    async def _send_welcome() -> None:
-                        await retry_on_connect_error(
-                            self.bot.send_message,
-                            chat_id=chat_id,
-                            text=welcome,
-                            max_retries=3,
-                            delay=2.0,
-                            handle_rate_limit=True,
-                        )
-
-                    await self._rate_limiter.execute_with_rate_limit(_send_welcome)
-                except (TelegramError, NetworkError, TimedOut) as send_error:
-                    # Временные сетевые ошибки - можно повторить позже
-                    self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {send_error}")
-                except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as send_error:
-                    # Критические ошибки - пробрасываем выше
-                    self.logger.critical(
-                        f"Критическая ошибка при отправке приветствия в чат {chat_id}: {send_error}",
-                        exc_info=True,
-                    )
-                    raise
-                except Exception as send_error:
-                    # Другие ошибки (например, бот заблокирован) - логируем, но не прерываем работу
-                    self.logger.error(
-                        f"Ошибка при отправке приветствия в чат {chat_id}: {send_error}",
-                        exc_info=True,
-                    )
+                # Отправляем приветственное сообщение через сервис
+                await self._chat_event_service.send_welcome_message(
+                    chat_id=chat_id,
+                    welcome_text=WELCOME_MESSAGE_CHAT,
+                )
 
             # Бот удалён из чата
             if status_change.was_removed:

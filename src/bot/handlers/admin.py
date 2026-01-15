@@ -15,7 +15,6 @@ from shared.base.exceptions import (
 )
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
-from shared.retry import retry_on_connect_error
 
 
 class AdminHandlers(BaseHandlers):
@@ -77,10 +76,7 @@ class AdminHandlers(BaseHandlers):
             return
 
         async def _execute_status() -> None:
-            bot_info = await context.bot.get_me()
-            status_message = await self._dashboard_service.build_status_message(
-                bot_name=bot_info.first_name,
-            )
+            status_message = await self._dashboard_service.build_status_message()
 
             # update.message гарантированно не None после проверки выше
             message = update.message
@@ -315,7 +311,7 @@ class AdminHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
-            from app.admin_command_service import MAX_FROG_THRESHOLD
+            from shared.constants import MAX_FROG_THRESHOLD
 
             await self._safe_reply_with_fallback(
                 update.message,
@@ -420,16 +416,10 @@ class AdminHandlers(BaseHandlers):
                 target_user_id=target_user_id,
                 requester_user_id=user_id,
             )
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    result.message,
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                result.message,
+            )
         except AccessDeniedError:
             # Должно быть обработано выше, но на всякий случай
             await self._safe_reply_with_fallback(
@@ -516,16 +506,10 @@ class AdminHandlers(BaseHandlers):
                 requester_user_id=user_id,
                 super_admin_id=super_admin_id,
             )
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    result.message,
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                result.message,
+            )
         except AccessDeniedError:
             # Должно быть обработано выше, но на всякий случай
             await self._safe_reply_with_fallback(
@@ -534,19 +518,10 @@ class AdminHandlers(BaseHandlers):
             )
         except ServiceError as e:
             # Ошибка при попытке удалить главного админа
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ {str(e)[:200]}",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as service_error:
-                # Обрабатываем ошибку отправки сообщения об ошибке сервиса
-                self._handle_send_message_error(
-                    service_error,
-                    context="отправке сообщения об ошибке сервиса при удалении админа",
-                )
+            await self._safe_reply_with_fallback(
+                update.message,
+                f"❌ {str(e)[:200]}",
+            )
 
     async def list_mods_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_mods.

@@ -209,6 +209,7 @@ class Container:
             image_client=image_client,
             text_client=text_client,
             models_repo=self.repos.models_repo,
+            messaging_service=messaging_service,
         )
 
         # --- Admin‑сервисы ---
@@ -292,6 +293,7 @@ class Container:
         chat_event_service = ChatEventService(
             admin_command_service=admin_command_service,
             chat_info_service=chat_info_service,
+            messaging_service=messaging_service,
             logger=log,
         )
 

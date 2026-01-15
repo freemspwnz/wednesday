@@ -231,6 +231,45 @@ class BaseHandlers:
 
             return False
 
+    async def _safe_reply_text_and_get_message(
+        self,
+        message: Message,
+        text: str,
+    ) -> Message | None:
+        """Безопасная отправка текста с возвратом Message объекта.
+
+        Используется когда нужно получить Message объект для дальнейшей работы
+        (например, для получения message_id).
+
+        Args:
+            message: Сообщение для ответа.
+            text: Текст для отправки.
+
+        Returns:
+            Message объект если сообщение отправлено успешно, None иначе.
+        """
+        try:
+
+            async def _reply() -> Message:
+                return await retry_on_connect_error(
+                    message.reply_text,
+                    text,
+                    max_retries=MAX_RETRIES_DEFAULT,
+                    delay=RETRY_DELAY_DEFAULT,
+                )
+
+            result = await self._rate_limiter.execute_with_rate_limit(_reply)
+            return result
+        except Exception as e:
+            # retry_on_connect_error уже залогировал сетевые ошибки через log_event
+            # Логируем только если это не сетевая ошибка (неожиданная ошибка)
+            if not isinstance(e, TelegramError | NetworkError | TimedOut):
+                self.logger.warning(
+                    f"Неожиданная ошибка при отправке сообщения: {e}",
+                    exc_info=True,
+                )
+            return None
+
     async def _safe_delete_message(self, message: Message | None) -> None:
         """Безопасно удаляет сообщение, игнорируя ошибки.
 
@@ -331,6 +370,113 @@ class BaseHandlers:
             )
             return False
 
+    async def _handle_validation_error(
+        self,
+        error: ValueError | TypeError | AttributeError,
+        update: Update,
+    ) -> None:
+        """Обрабатывает ошибки валидации данных.
+
+        Args:
+            error: Исключение валидации.
+            update: Объект обновления Telegram.
+        """
+        self.logger.error(f"Ошибка валидации: {error}", exc_info=True)
+        if update.message:
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Ошибка валидации данных",
+            )
+
+    async def _handle_network_error_with_retry(
+        self,
+        error: TelegramError | NetworkError | TimedOut,
+        update: Update,
+        attempt: int,
+        max_retries: int,
+    ) -> bool:
+        """Обрабатывает сетевые ошибки Telegram API с retry-логикой.
+
+        Args:
+            error: Сетевое исключение Telegram API.
+            update: Объект обновления Telegram.
+            attempt: Номер текущей попытки.
+            max_retries: Максимальное количество попыток.
+
+        Returns:
+            True если нужно повторить попытку, False если все попытки исчерпаны.
+        """
+        if attempt < max_retries:
+            # Есть еще попытки - делаем retry с экспоненциальным backoff
+            wait_time = RETRY_DELAY_DEFAULT * attempt
+            self.logger.warning(
+                f"Сетевая ошибка Telegram API (попытка {attempt}/{max_retries}): {error}. Повтор через {wait_time}с",
+            )
+            await asyncio.sleep(wait_time)
+            return True
+
+        # Все попытки исчерпаны
+        self.logger.warning(f"Сетевая ошибка Telegram API после {max_retries} попыток: {error}")
+        if update.message:
+            await self._safe_reply_with_fallback(
+                update.message,
+                "❌ Временная проблема с Telegram API. Попробуйте позже.",
+            )
+        return False
+
+    async def _handle_service_error(
+        self,
+        error: ServiceError,
+        update: Update,
+    ) -> None:
+        """Обрабатывает ошибки сервисного слоя.
+
+        Args:
+            error: Исключение сервисного слоя.
+            update: Объект обновления Telegram.
+        """
+        self.logger.error(f"Ошибка сервиса: {error}", exc_info=True)
+        if update.message:
+            await self._safe_reply_with_fallback(
+                update.message,
+                f"❌ Ошибка сервиса: {str(error)[:200]}",
+            )
+
+    async def _handle_repo_error(
+        self,
+        error: RepoError,
+        update: Update,
+    ) -> None:
+        """Обрабатывает ошибки репозитория.
+
+        Args:
+            error: Исключение репозитория.
+            update: Объект обновления Telegram.
+        """
+        self.logger.error(f"Ошибка репозитория: {error}", exc_info=True)
+        if update.message:
+            await self._safe_reply_with_fallback(
+                update.message,
+                f"❌ Ошибка доступа к данным: {str(error)[:200]}",
+            )
+
+    def _normalize_max_retries(self, max_retries: int) -> int:
+        """Нормализует значение max_retries для защиты от утечек памяти.
+
+        Args:
+            max_retries: Исходное значение max_retries.
+
+        Returns:
+            Нормализованное значение max_retries.
+        """
+        max_retries = max(max_retries, 1)
+        if max_retries > MAX_RETRIES_LIMIT:
+            self.logger.warning(
+                f"max_retries={max_retries} слишком большой, ограничиваем до {MAX_RETRIES_LIMIT}",
+            )
+            return MAX_RETRIES_LIMIT
+        return max_retries
+
     async def _handle_command_errors(
         self,
         update: Update,
@@ -368,90 +514,36 @@ class BaseHandlers:
             По умолчанию max_retries=1 означает "без retry", что безопасно для команд,
             которые уже используют retry_on_connect_error для сетевых операций.
         """
-        # Защита от некорректных значений max_retries
-        max_retries = max(max_retries, 1)
-        if max_retries > MAX_RETRIES_LIMIT:
-            # Ограничиваем максимальное количество попыток для защиты от утечек памяти
-            self.logger.warning(
-                f"max_retries={max_retries} слишком большой, ограничиваем до {MAX_RETRIES_LIMIT}",
-            )
-            max_retries = MAX_RETRIES_LIMIT
+        max_retries = self._normalize_max_retries(max_retries)
 
         async def _execute_with_retries() -> None:
             """Внутренняя функция для выполнения команды с retry-логикой."""
             attempt = 0
-            last_network_error: Exception | None = None
 
             while attempt < max_retries:
                 try:
                     await func()
                     return  # Успех - выходим
                 except (ValueError, TypeError, AttributeError) as e:
-                    # Ошибки валидации данных или доступа к атрибутам - не ретраим
-                    self.logger.error(f"Ошибка валидации: {e}", exc_info=True)
-                    if update.message:
-                        await self._safe_reply_with_fallback(
-                            update.message,
-                            "❌ Ошибка валидации данных",
-                        )
+                    await self._handle_validation_error(e, update)
                     return  # Не ретраим ошибки валидации
                 except (TelegramError, NetworkError, TimedOut) as e:
-                    # Сетевые ошибки Telegram API - ретраим с ограничением
                     attempt += 1
-                    last_network_error = e
-
-                    if attempt < max_retries:
-                        # Есть еще попытки - делаем retry с экспоненциальным backoff
-                        wait_time = RETRY_DELAY_DEFAULT * attempt
-                        self.logger.warning(
-                            f"Сетевая ошибка Telegram API (попытка {attempt}/{max_retries}): {e}. "
-                            f"Повтор через {wait_time}с",
-                        )
-                        await asyncio.sleep(wait_time)
+                    should_retry = await self._handle_network_error_with_retry(e, update, attempt, max_retries)
+                    if should_retry:
                         continue
-
-                    # Все попытки исчерпаны
-                    self.logger.warning(f"Сетевая ошибка Telegram API после {max_retries} попыток: {e}")
-                    if update.message:
-                        await self._safe_reply_with_fallback(
-                            update.message,
-                            "❌ Временная проблема с Telegram API. Попробуйте позже.",
-                        )
-                    return
+                    return  # Все попытки исчерпаны
                 except ServiceError as e:
-                    # Ошибки сервисного слоя - не ретраим
-                    self.logger.error(f"Ошибка сервиса: {e}", exc_info=True)
-                    if update.message:
-                        await self._safe_reply_with_fallback(
-                            update.message,
-                            f"❌ Ошибка сервиса: {str(e)[:200]}",
-                        )
+                    await self._handle_service_error(e, update)
                     return  # Не ретраим ошибки сервиса
                 except RepoError as e:
-                    # Ошибки репозитория - не ретраим
-                    self.logger.error(f"Ошибка репозитория: {e}", exc_info=True)
-                    if update.message:
-                        await self._safe_reply_with_fallback(
-                            update.message,
-                            f"❌ Ошибка доступа к данным: {str(e)[:200]}",
-                        )
+                    await self._handle_repo_error(e, update)
                     return  # Не ретраим ошибки репозитория
                 except asyncio.CancelledError:
                     # Задача была отменена (например, при остановке бота)
                     self.logger.info("Команда была отменена")
                     raise  # Пробрасываем дальше для корректной обработки
                 # Критические ошибки (память, системные) должны пробрасываться выше
-
-            # Если дошли сюда, все попытки исчерпаны (не должно произойти, но защита)
-            if last_network_error:
-                self.logger.error(
-                    f"Все {max_retries} попыток исчерпаны для сетевой ошибки: {last_network_error}",
-                )
-                if update.message:
-                    await self._safe_reply_with_fallback(
-                        update.message,
-                        "❌ Временная проблема с Telegram API. Попробуйте позже.",
-                    )
 
         # Применяем таймаут, если указан
         if timeout is not None:

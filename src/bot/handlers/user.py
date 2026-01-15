@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 from telegram import Update
-from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
+from app.frog_limit_service import FrogRateLimiterService
 from bot.handlers.base import BaseHandlers
 from bot.handlers.messages import WELCOME_MESSAGE_START
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
-from shared.retry import retry_on_connect_error
-
-# Константы
-MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
-RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по умолчанию
 
 
 class UserHandlers(BaseHandlers):
@@ -140,44 +135,22 @@ class UserHandlers(BaseHandlers):
             is_admin=is_admin,
         )
         if not is_allowed:
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    rate_limit_message or "⏰ Повторная генерация временно недоступна",
-                    max_retries=MAX_RETRIES_DEFAULT,
-                    delay=RETRY_DELAY_DEFAULT,
-                )
-            except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.error(
-                    f"Не удалось отправить сообщение о rate limit после {MAX_RETRIES_DEFAULT} попыток: {e}",
-                )
+            error_message = rate_limit_message or "⏰ Повторная генерация временно недоступна"
+            await self._safe_reply_with_fallback(update.message, error_message)
             return
 
         # Проверяем лимит генераций через frog_rate_limiter
         can_generate, limit_message = await self.services.frog_rate_limiter.check_generation_allowed()
         if not can_generate:
-            error_message = (
-                limit_message
-                if limit_message
-                else "🚫 Лимит ручных генераций на этот месяц исчерпан.\nОжидайте автоматических отправок по средам."
-            )
+            error_message = FrogRateLimiterService.format_generation_limit_error(limit_message)
             await self._safe_reply_with_fallback(update.message, error_message)
             return
 
         # Отправляем сообщение о начале генерации
-        status_message = None
-        try:
-            status_message = await retry_on_connect_error(
-                update.message.reply_text,
-                "🐸 Генерирую жабу для вас... Это может занять несколько секунд.",
-                max_retries=MAX_RETRIES_DEFAULT,
-                delay=RETRY_DELAY_DEFAULT,
-            )
-        except Exception as e:
-            self.logger.error(
-                f"Не удалось отправить сообщение о начале генерации после {MAX_RETRIES_DEFAULT} попыток: {e}",
-            )
-            # Продолжаем даже если не удалось отправить статус
+        status_message = await self._safe_reply_text_and_get_message(
+            update.message,
+            "🐸 Генерирую жабу для вас... Это может занять несколько секунд.",
+        )
 
         # Ставим задачу в очередь Celery напрямую
         try:
