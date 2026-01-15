@@ -223,13 +223,6 @@ class Container:
             super_admin_id=super_admin_id,
             logger=log,
         )
-        admin_command_service = build_admin_command_service(
-            chats_repo=self.repos.chats_repo,
-            usage=self.repos.usage_tracker,
-            admins_repo=self.repos.admins_repo,
-            admin_access_service=admin_access_service,
-            logger=log,
-        )
         telegram_api_rate_limiter_service = build_telegram_api_rate_limiter_service(
             app_settings=app_settings,
             api_limiter=telegram_api_limiter,
@@ -271,6 +264,26 @@ class Container:
             logger=log,
         )
 
+        # Создаем chat_info_service и admin_command_service после dispatch_delivery_service
+        from app.chat_info_service import ChatInfoService
+
+        chat_info_service = ChatInfoService(
+            messaging_service=messaging_service,
+            logger=log,
+        )
+
+        admin_command_service = build_admin_command_service(
+            chats_repo=self.repos.chats_repo,
+            usage=self.repos.usage_tracker,
+            admins_repo=self.repos.admins_repo,
+            admin_access_service=admin_access_service,
+            logger=log,
+            image_service=image_service,
+            frog_limit_service=frog_rate_limiter_service,
+            dispatch_delivery_service=dispatch_delivery_service,
+            chat_info_service=chat_info_service,
+        )
+
         services = BotServices(
             usage=self.repos.usage_tracker,
             chats=self.repos.chats_repo,
@@ -288,6 +301,7 @@ class Container:
             admin_access_service=admin_access_service,
             admin_command_service=admin_command_service,
             admin_notification_service=admin_notification_service,
+            chat_info_service=chat_info_service,
             messaging_service=messaging_service,
             database_operations=database_operations,
             admins_repo=self.repos.admins_repo,

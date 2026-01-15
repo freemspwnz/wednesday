@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from telegram import Bot, Chat, Update, User
+from telegram import Bot, Chat, Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.handlers.base import (
-    CHAT_INFO_TIMEOUT_DEFAULT,
-    CHAT_TIMEOUT_DEFAULT,
     BaseHandlers,
 )
 from shared.base.exceptions import (
@@ -211,252 +209,40 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
-        chat_ids = await self._admin_command.list_chat_ids()
-        if not chat_ids:
-            self.logger.info("Нет активных чатов")
-            await self._safe_reply_with_fallback(
-                update.message,
-                "📭 Нет активных чатов для отправки",
-            )
-            return
-
-        # Если аргумент не передан - показываем список чатов
+        # Без аргументов - показываем список чатов
         if not context.args or len(context.args) == 0:
-            # Получаем информацию о чатах параллельно для улучшения производительности
-            tasks = [self._get_chat_info_safe(context.bot, chat_id) for chat_id in chat_ids]
-            results: list[tuple[int, str] | BaseException] = await self._gather_with_timeout(
-                *tasks,
-                timeout=CHAT_INFO_TIMEOUT_DEFAULT,
-                return_exceptions=True,
-            )
-
-            chat_list = []
-            for result in results:
-                if isinstance(result, BaseException):
-                    self.logger.warning(f"Ошибка при получении информации о чате: {result}")
-                    chat_list.append(f"• Чат (ошибка: {type(result).__name__})")
-                else:
-                    chat_id, title = result
-                    chat_list.append(f"• {title} (ID: {chat_id})")
-
-            message = (
-                "📋 Активные чаты для отправки:\n\n"
-                + "\n".join(chat_list)
-                + "\n\n"
-                + "💡 Использование:\n"
-                + "• /force_send <chat_id> — отправить жабу в указанный чат\n"
-                + "• /force_send all — отправить жабу во все чаты"
-            )
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    message,
-                    max_retries=3,
-                    delay=2,
-                )
-                self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
-            except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.error(f"Не удалось отправить список чатов после {3} попыток: {e}")
-            return
-
-        # Получаем аргумент
-        arg = context.args[0].strip().lower()
-
-        # Проверяем лимит генераций
-        usage = self.services.usage
-        can_generate = True
-        if usage:
-            can_generate = await usage.can_use_frog()
-            if not can_generate:
-                total, threshold, quota = await usage.get_limits_info()
-                self.logger.info(
-                    f"Лимит ручных генераций исчерпан: {total}/{quota}, порог: {threshold}",
-                )
-
-        # Определяем целевые чаты
-        target_chat_ids: list[int] = []
-        if arg == "all":
-            target_chat_ids = list(chat_ids)
-        else:
-            try:
-                requested_chat_id = int(arg)
-                if requested_chat_id in chat_ids:
-                    target_chat_ids = [requested_chat_id]
-                else:
-                    await self._safe_reply_with_fallback(
-                        update.message,
-                        f"❌ Чат {requested_chat_id} не найден в списке активных чатов",
-                    )
-                    return
-            except ValueError:
-                await self._safe_reply_with_fallback(
-                    update.message,
-                    "❌ Неверный аргумент. Используйте: /force_send <chat_id> или /force_send all",
-                )
-                return
-
-        if not target_chat_ids:
+            result = await self._admin_command.get_chat_list_for_display()
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Нет целевых чатов для отправки",
+                result.message,
             )
             return
 
-        # Отправляем статусное сообщение
+        # Делегируем всю бизнес-логику в сервис
+        arg = context.args[0].strip().lower()
         try:
-            status_msg = await retry_on_connect_error(
-                update.message.reply_text,
-                f"🔄 Генерирую и отправляю жабу в {len(target_chat_ids)} чат(ов)...",
-                max_retries=3,
-                delay=2,
+            result = await self._admin_command.execute_force_send(
+                requester_user_id=user_id,
+                target_arg=arg,
             )
-        except (TelegramError, NetworkError, TimedOut) as e:
-            self.logger.error(f"Не удалось отправить статусное сообщение после {3} попыток: {e}")
-            status_msg = None
-
-        # Генерируем или получаем изображение
-        image_data: bytes | None = None
-        caption: str = ""
-        use_fallback = False
-
-        image_service = self.services.image_service
-        if can_generate and image_service is not None:
-            # Используем централизованный метод обработки ошибок генерации изображений
-            image_data, caption, use_fallback = await self._handle_image_generation_errors(
-                image_service=image_service,
-                user_id=user_id,
-            )
-            # Увеличиваем счетчик использования только если генерация успешна
-            if not use_fallback and usage:
-                await usage.increment(1)
-        else:
-            use_fallback = True
-            self.logger.info("Лимит генераций исчерпан, используем fallback")
-
-        # Если нужно использовать fallback и изображение еще не получено
-        if use_fallback and image_data is None:
-            if image_service is not None:
-                fallback_image = await image_service.get_random_saved_image()
-            else:
-                fallback_image = None
-            if fallback_image:
-                image_data, caption = fallback_image
-                self.logger.info("Используется случайное изображение из архива")
-            else:
-                self.logger.warning("Нет сохраненных изображений для отправки")
-                await self._safe_reply_text_with_error_logging(
-                    update.message,
-                    "❌ Не удалось получить изображение (лимит исчерпан и нет сохраненных изображений)",
-                    error_context="сообщение об ошибке",
-                    max_retries=3,
-                    delay=2,
-                )
-                await self._safe_delete_message(status_msg)
-                return
-
-        if not image_data:
-            self.logger.error("Не удалось получить изображение для отправки")
-            await self._safe_reply_text_with_error_logging(
+            await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Не удалось получить изображение для отправки",
-                error_context="сообщение об ошибке",
-                max_retries=3,
-                delay=2,
+                result.message,
             )
-            await self._safe_delete_message(status_msg)
-            return
-
-        # Отправляем изображение главному админу
-        admin_chat_id = self.services.settings.admin_chat_id
-        if admin_chat_id:
-            try:
-                rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
-
-                async def _send_to_admin() -> None:
-                    await retry_on_connect_error(
-                        context.bot.send_photo,
-                        chat_id=admin_chat_id,
-                        photo=image_data,
-                        caption=f"🐸 Принудительная отправка (команда /force_send)\n\n{caption}",
-                        max_retries=3,
-                        delay=2,
-                    )
-
-                if rate_limiter:
-                    await rate_limiter.execute_with_rate_limit(_send_to_admin)
-                else:
-                    await _send_to_admin()
-                self.logger.info(f"Изображение отправлено главному админу {admin_chat_id}")
-            except (TelegramError, NetworkError, TimedOut) as e:
-                # Сетевые ошибки - отправка админу не критична, продолжаем работу
-                self.logger.warning(f"Сетевая ошибка при отправке изображения главному админу: {e}")
-            except (ValueError, TypeError, AttributeError) as e:
-                # Ошибки валидации данных
-                self.logger.warning(f"Ошибка валидации при отправке изображения главному админу: {e}", exc_info=True)
-            except ServiceError as e:
-                # Ошибки сервисного слоя
-                self.logger.warning(f"Ошибка сервиса при отправке изображения главному админу: {e}", exc_info=True)
-            # Критические ошибки (память, системные) должны пробрасываться выше
-
-        # Отправляем изображение в целевые чаты
-        success_count = 0
-        failed_count = 0
-        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
-
-        for target_chat_id in target_chat_ids:
-            try:
-
-                async def _send_photo(chat_id: int) -> None:
-                    await retry_on_connect_error(
-                        context.bot.send_photo,
-                        chat_id=chat_id,
-                        photo=image_data,
-                        caption=caption,
-                        max_retries=3,
-                        delay=2,
-                    )
-
-                if rate_limiter:
-                    await rate_limiter.execute_with_rate_limit(lambda cid=target_chat_id: _send_photo(cid))
-                else:
-                    await _send_photo(target_chat_id)
-                success_count += 1
-                self.logger.info(f"Изображение отправлено в чат {target_chat_id}")
-            except (TelegramError, NetworkError, TimedOut) as e:
-                # Сетевые ошибки - ошибка отправки в один чат не должна прерывать отправку в другие
-                failed_count += 1
-                self.logger.warning(f"Сетевая ошибка при отправке изображения в чат {target_chat_id}: {e}")
-            except (ValueError, TypeError, AttributeError) as e:
-                # Ошибки валидации данных
-                failed_count += 1
-                self.logger.warning(
-                    f"Ошибка валидации при отправке изображения в чат {target_chat_id}: {e}", exc_info=True
-                )
-            except ServiceError as e:
-                # Ошибки сервисного слоя
-                failed_count += 1
-                self.logger.warning(
-                    f"Ошибка сервиса при отправке изображения в чат {target_chat_id}: {e}", exc_info=True
-                )
-            # Критические ошибки (память, системные) должны пробрасываться выше
-
-        # Удаляем статусное сообщение и отправляем итоговое
-        await self._safe_delete_message(status_msg)
-
-        result_message = (
-            f"✅ Отправка выполнена:\n"
-            f"• Успешно: {success_count}/{len(target_chat_ids)}\n"
-            f"• Ошибок: {failed_count}\n"
-            f"• Использован: {'fallback (лимит исчерпан)' if use_fallback else 'новая генерация'}"
-        )
-        if await self._safe_reply_text_with_error_logging(
-            update.message,
-            result_message,
-            error_context="итоговое сообщение",
-            max_retries=3,
-            delay=2,
-        ):
-            self.logger.info(f"Команда /force_send выполнена: {success_count} успешных отправок")
+            if result.success:
+                self.logger.info(f"Команда /force_send выполнена пользователем {user_id}")
+        except ServiceError as e:
+            self.logger.error(
+                f"Ошибка сервиса при выполнении force_send: {e}",
+                event="force_send_service_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            await self._safe_reply_with_fallback(
+                update.message,
+                f"❌ Ошибка сервиса: {str(e)[:200]}",
+            )
 
     async def admin_add_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /add_chat.
@@ -497,13 +283,16 @@ class AdminHandlers(BaseHandlers):
 
         try:
             chat_id = int(context.args[0])
-            # Валидация диапазона: Telegram chat_id может быть положительным (пользователи)
-            # или отрицательным (группы/каналы, начинаются с -100)
-            # Максимальное значение для int64: 2**63 - 1, минимальное: -2**63
-            if chat_id < -(2**63) or chat_id > 2**63 - 1:
-                raise ValueError("chat_id выходит за допустимый диапазон")
-            if chat_id == 0:
-                raise ValueError("chat_id не может быть нулем")
+            # Валидация через сервис
+            from app.admin_command_service import AdminCommandService
+
+            validation_result = AdminCommandService.validate_chat_id(chat_id)
+            if not validation_result.is_valid:
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    f"❌ {validation_result.error_message or 'Неверный chat_id'}",
+                )
+                return
 
             result = await self._admin_command.add_chat(chat_id, "Manually added")
             if result.success:
@@ -559,13 +348,16 @@ class AdminHandlers(BaseHandlers):
 
         try:
             chat_id = int(context.args[0])
-            # Валидация диапазона: Telegram chat_id может быть положительным (пользователи)
-            # или отрицательным (группы/каналы, начинаются с -100)
-            # Максимальное значение для int64: 2**63 - 1, минимальное: -2**63
-            if chat_id < -(2**63) or chat_id > 2**63 - 1:
-                raise ValueError("chat_id выходит за допустимый диапазон")
-            if chat_id == 0:
-                raise ValueError("chat_id не может быть нулем")
+            # Валидация через сервис
+            from app.admin_command_service import AdminCommandService
+
+            validation_result = AdminCommandService.validate_chat_id(chat_id)
+            if not validation_result.is_valid:
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    f"❌ {validation_result.error_message or 'Неверный chat_id'}",
+                )
+                return
 
             result = await self._admin_command.remove_chat(chat_id)
             if result.success:
@@ -619,50 +411,14 @@ class AdminHandlers(BaseHandlers):
                 return
             return
 
-        chat_ids = await self._admin_command.list_chat_ids()
-        if not chat_ids:
-            self.logger.info("Нет активных чатов")
-            if not await self._safe_reply_text_with_error_logging(
-                update.message,
-                "📭 Нет активных чатов",
-                error_context="сообщение",
-                max_retries=3,
-                delay=2,
-            ):
-                return
-            return
-
-        # Получаем информацию о чатах параллельно для улучшения производительности
-        tasks = [self._get_chat_info_safe(context.bot, chat_id) for chat_id in chat_ids]
-        results: list[tuple[int, str] | BaseException] = await self._gather_with_timeout(
-            *tasks,
-            timeout=CHAT_INFO_TIMEOUT_DEFAULT,
-            return_exceptions=True,
+        # Делегируем получение и форматирование списка чатов в сервис
+        result = await self._admin_command.get_chat_list_for_display()
+        await self._safe_reply_with_fallback(
+            update.message,
+            result.message,
         )
-
-        chat_list = []
-        for result in results:
-            if isinstance(result, BaseException):
-                self.logger.warning(f"Ошибка при получении информации о чате: {result}")
-                chat_list.append(f"• Чат (ошибка: {type(result).__name__})")
-            else:
-                chat_id, title = result
-                chat_list.append(f"• {title} (ID: {chat_id})")
-
-        # Сохраняем message для использования в замыкании
-        reply_message = update.message
-
-        async def _execute_list_chats() -> None:
-            message_text = "📋 Активные чаты:\n\n" + "\n".join(chat_list)
-            if reply_message:
-                success = await self._safe_reply_with_fallback(
-                    reply_message,
-                    message_text,
-                )
-            if success:
-                self.logger.info(f"Отправлен список из {len(chat_ids)} активных чатов пользователю {user_id}")
-
-        await self._handle_command_errors(update, _execute_list_chats)
+        if result.success:
+            self.logger.info(f"Отправлен список чатов пользователю {user_id}")
 
     async def set_frog_limit_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_limit.
@@ -982,48 +738,55 @@ class AdminHandlers(BaseHandlers):
                         self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
                     return
 
-                # Получаем информацию об администраторах параллельно для улучшения производительности
-                tasks = [self._get_chat_safe(context.bot, admin_id) for admin_id in admins]
-                chat_results: list[object | None | BaseException] = await self._gather_with_timeout(
-                    *tasks,
-                    timeout=CHAT_TIMEOUT_DEFAULT,
-                    return_exceptions=True,
-                )
+                # Получаем информацию об администраторах через chat_info_service
+                from app.admin_notification_builders import AdminInfo, AdminNotificationBuilders
 
-                admin_list = []
-                for admin_id, chat in zip(admins, chat_results, strict=True):
-                    # Помечаем главного админа (нужно получить независимо от результата запроса)
-                    is_main = " (главный)" if await self._admin_access.is_super_admin(admin_id) else ""
+                admin_infos: list[AdminInfo] = []
 
-                    if isinstance(chat, BaseException) or chat is None:
-                        self.logger.warning(f"Не удалось получить информацию об администраторе {admin_id}")
-                        admin_list.append(f"• ID: {admin_id} (не удалось получить информацию){is_main}")
-                        continue
+                if self._chat_info_service:
+                    for admin_id in admins:
+                        is_super = await self._admin_access.is_super_admin(admin_id)
+                        try:
+                            chat_details = await self._chat_info_service.get_chat_details_safe(admin_id)
+                            if chat_details:
+                                name_raw = (
+                                    chat_details.get("title")
+                                    or chat_details.get("first_name")
+                                    or chat_details.get("full_name")
+                                    or "Unknown"
+                                )
+                                name = str(name_raw) if name_raw is not None else "Unknown"
+                                username_raw = chat_details.get("username")
+                                username = str(username_raw) if username_raw is not None else None
+                            else:
+                                name = "Unknown"
+                                username = None
+                        except Exception:
+                            name = "Unknown"
+                            username = None
 
-                    # Формируем имя с разумным fallback
-                    # Используем проверку типов вместо hasattr для лучшей типизации
-                    if isinstance(chat, User):
-                        # User имеет свойство full_name, которое объединяет first_name и last_name
-                        name = chat.full_name or chat.first_name or "Unknown"
-                        username_text = f" (@{chat.username})" if chat.username else ""
-                    elif isinstance(chat, Chat):
-                        # Chat для пользователя имеет first_name, last_name, но не full_name
-                        name_parts = []
-                        if chat.first_name:
-                            name_parts.append(chat.first_name)
-                        if chat.last_name:
-                            name_parts.append(chat.last_name)
-                        # Для Chat также может быть title (для групп/каналов)
-                        name = " ".join(name_parts) if name_parts else (chat.title or "Unknown")
-                        username_text = f" (@{chat.username})" if chat.username else ""
-                    else:
-                        # Fallback для неизвестных типов
-                        name = "Unknown"
-                        username_text = ""
+                        admin_infos.append(
+                            AdminInfo(
+                                admin_id=admin_id,
+                                name=name,
+                                username=username,
+                                is_super_admin=is_super,
+                            )
+                        )
+                else:
+                    # Fallback без chat_info_service
+                    for admin_id in admins:
+                        is_super = await self._admin_access.is_super_admin(admin_id)
+                        admin_infos.append(
+                            AdminInfo(
+                                admin_id=admin_id,
+                                name="Unknown",
+                                username=None,
+                                is_super_admin=is_super,
+                            )
+                        )
 
-                    admin_list.append(f"• ID: {admin_id} ({name}{username_text}){is_main}")
-
-                message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
+                message = AdminNotificationBuilders.build_admin_list_message(admin_infos)
                 try:
                     await retry_on_connect_error(
                         update.message.reply_text,
@@ -1071,12 +834,8 @@ class AdminHandlers(BaseHandlers):
 
         # Удаляем админа через AdminCommandService
         try:
-            super_admin_id = None
-            if self.services.settings.admin_chat_id:
-                try:
-                    super_admin_id = int(self.services.settings.admin_chat_id)
-                except (ValueError, TypeError):
-                    pass
+            # Получаем super_admin_id через admin_access_service
+            super_admin_id = self._admin_access.get_super_admin_id()
 
             result = await self._admin_command.remove_admin(
                 target_user_id=target_user_id,
@@ -1156,25 +915,20 @@ class AdminHandlers(BaseHandlers):
         all_admins = await self._admin_command.list_all_admins()
         if not all_admins:
             self.logger.info("Нет администраторов")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "📭 Нет администраторов",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(
+                update.message,
+                "📭 Нет администраторов",
+            )
             return
 
-        admin_list = []
-        main_admin = self.services.settings.admin_chat_id
-        for admin_id in all_admins:
-            is_main = " (главный)" if (main_admin and main_admin == admin_id) else ""
-            admin_list.append(f"• ID: {admin_id}{is_main}")
+        # Используем билдер для форматирования сообщения
+        from app.admin_notification_builders import AdminNotificationBuilders
 
-        message = "👥 Список администраторов:\n\n" + "\n".join(admin_list)
+        super_admin_id = self._admin_access.get_super_admin_id()
+        message = AdminNotificationBuilders.build_simple_admin_list_message(
+            admins=all_admins,
+            super_admin_id=super_admin_id,
+        )
         try:
             await retry_on_connect_error(
                 update.message.reply_text,

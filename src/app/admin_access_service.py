@@ -88,3 +88,11 @@ class AdminAccessService(BaseService):
             Список ID всех администраторов.
         """
         return await self._admins_repo.list_all_admins()
+
+    def get_super_admin_id(self) -> int | None:
+        """Возвращает ID главного администратора.
+
+        Returns:
+            ID главного администратора или None, если не установлен.
+        """
+        return self._super_admin_id

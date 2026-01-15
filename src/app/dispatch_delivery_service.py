@@ -469,3 +469,78 @@ class DispatchDeliveryService(BaseService):
         except ServiceError:  # pragma: no cover
             pass
         result.failed_count += 1
+
+    async def send_to_multiple_chats(
+        self,
+        chat_ids: list[int],
+        image_data: bytes,
+        caption: str,
+    ) -> DispatchResult:
+        """Отправляет изображение в несколько чатов без привязки к слотам.
+
+        Используется для команды /force_send, где отправка не связана с расписанием.
+
+        Args:
+            chat_ids: Список ID целевых чатов.
+            image_data: Байты изображения.
+            caption: Подпись к изображению.
+
+        Returns:
+            DispatchResult с подсчетом успешных и неуспешных отправок.
+        """
+        result = DispatchResult(
+            slot_date="",  # Не используется для force_send
+            slot_time="",  # Не используется для force_send
+            total_targets=len(chat_ids),
+            success_count=0,
+            failed_count=0,
+            used_fallback=False,  # Определяется вызывающим кодом
+        )
+
+        for chat_id in chat_ids:
+            try:
+                await retry_on_connect_error(
+                    self._messaging.send_image,
+                    chat_id=chat_id,
+                    image=image_data,
+                    caption=caption,
+                    max_retries=3,
+                    delay=2.0,
+                    handle_rate_limit=True,
+                )
+                result.success_count += 1
+                self.logger.info(f"Изображение отправлено в чат {chat_id}")
+            except (MessagingNetworkError, MessagingAPIError) as e:
+                result.failed_count += 1
+                self.logger.warning(
+                    f"Сетевая/API ошибка при отправке изображения в чат {chat_id}: {e}",
+                    event="force_send_delivery_error",
+                    status="warning",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    chat_id=chat_id,
+                )
+            except AppError as e:
+                result.failed_count += 1
+                self.logger.warning(
+                    f"Ошибка приложения при отправке изображения в чат {chat_id}: {e}",
+                    event="force_send_delivery_error",
+                    status="warning",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    chat_id=chat_id,
+                )
+            except BaseException as e:
+                # Неожиданные ошибки логируем, но не прерываем отправку в другие чаты
+                result.failed_count += 1
+                self.logger.error(
+                    f"Неожиданная ошибка при отправке изображения в чат {chat_id}: {e}",
+                    event="force_send_delivery_error",
+                    status="error",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    chat_id=chat_id,
+                    exc_info=True,
+                )
+
+        return result

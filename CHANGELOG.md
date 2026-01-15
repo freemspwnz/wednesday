@@ -4,6 +4,17 @@
 
 ### Изменено
 
+- **Рефакторинг bot/handlers/admin.py: перенос бизнес-логики в app-слой**:
+  - Вынесена валидация chat_id в `app/admin_command_service.validate_chat_id()`
+  - Вынесена логика определения целевых чатов в `app/admin_command_service.determine_target_chats()`
+  - Вынесена логика выполнения force_send в `app/admin_command_service.execute_force_send()`
+  - Вынесено форматирование списка чатов в `app/admin_command_service.get_chat_list_for_display()`
+  - Вынесено форматирование сообщений в `app/admin_notification_builders.AdminNotificationBuilders`
+  - Вынесена отправка изображений в несколько чатов в `app/dispatch_delivery_service.send_to_multiple_chats()`
+  - Вынесено получение super_admin_id в `app/admin_access_service.get_super_admin_id()`
+  - Убраны прямые обращения к репозиториям из хендлеров (используются через сервисы)
+  - Улучшено соблюдение границ слоёв: bot-слой делегирует всю бизнес-логику в app-слой
+
 - **Рефакторинг dispatch-сервисов: перенос создания в composition root**:
   - Добавлены билдеры dispatch-стека в `src/infra/container/service_builders.py` (`build_fallback_image_delivery_service`, `build_admin_notification_service`, `build_target_preparation_service`, `build_dispatch_delivery_service`, `build_dispatch_service`)
   - Обновлён `src/infra/container/container.py`: `DispatchService` и связанные dispatch-сервисы теперь создаются в `Container.build_bot_services()` и передаются в `BotServices` вместо инициализации на bot-слое

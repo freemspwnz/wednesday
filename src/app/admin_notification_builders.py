@@ -7,6 +7,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.admin_command_service import ChatInfo
+    from app.dispatch_targets_helper import DispatchResult
 
 # Константы для форматирования сообщений
 MAX_TRACE_LENGTH = 1500
@@ -159,3 +164,114 @@ class DispatchErrorNotificationBuilder:
         """
         full_message = self.build(data)
         return len(full_message) > self._max_message_length
+
+
+@dataclass
+class AdminInfo:
+    """Информация об администраторе для форматирования."""
+
+    admin_id: int
+    name: str
+    username: str | None = None
+    is_super_admin: bool = False
+
+
+class AdminNotificationBuilders:
+    """Билдеры для форматирования административных сообщений.
+
+    Инкапсулирует логику форматирования сообщений для админских команд,
+    обеспечивая единообразное представление информации.
+    """
+
+    @staticmethod
+    def build_chat_list_message(chat_infos: list[ChatInfo]) -> str:
+        """Форматирует список чатов для отображения.
+
+        Args:
+            chat_infos: Список информации о чатах.
+
+        Returns:
+            Отформатированное сообщение со списком чатов.
+        """
+        if not chat_infos:
+            return "📭 Нет активных чатов"
+
+        chat_list = []
+        for info in chat_infos:
+            title = info.title or "Unknown"
+            chat_list.append(f"• {title} (ID: {info.chat_id})")
+
+        return (
+            "📋 Активные чаты для отправки:\n\n"
+            + "\n".join(chat_list)
+            + "\n\n"
+            + "💡 Использование:\n"
+            + "• /force_send <chat_id> — отправить жабу в указанный чат\n"
+            + "• /force_send all — отправить жабу во все чаты"
+        )
+
+    @staticmethod
+    def build_admin_list_message(admins: list[AdminInfo]) -> str:
+        """Форматирует список администраторов с полной информацией.
+
+        Args:
+            admins: Список информации об администраторах.
+
+        Returns:
+            Отформатированное сообщение со списком администраторов.
+        """
+        if not admins:
+            return "📭 Нет администраторов"
+
+        admin_list = []
+        for admin in admins:
+            username_text = f" (@{admin.username})" if admin.username else ""
+            super_text = " (главный)" if admin.is_super_admin else ""
+            admin_list.append(f"• ID: {admin.admin_id} ({admin.name}{username_text}){super_text}")
+
+        return "👥 Список администраторов:\n\n" + "\n".join(admin_list)
+
+    @staticmethod
+    def build_simple_admin_list_message(
+        admins: list[int],
+        super_admin_id: int | None,
+    ) -> str:
+        """Форматирует простой список администраторов только с ID.
+
+        Args:
+            admins: Список ID администраторов.
+            super_admin_id: ID главного администратора (опционально).
+
+        Returns:
+            Отформатированное сообщение со списком администраторов.
+        """
+        if not admins:
+            return "📭 Нет администраторов"
+
+        admin_list = []
+        for admin_id in admins:
+            is_main = " (главный)" if (super_admin_id and super_admin_id == admin_id) else ""
+            admin_list.append(f"• ID: {admin_id}{is_main}")
+
+        return "👥 Список администраторов:\n\n" + "\n".join(admin_list)
+
+    @staticmethod
+    def build_force_send_result_message(
+        delivery_result: DispatchResult,
+        used_fallback: bool,
+    ) -> str:
+        """Форматирует результат выполнения команды /force_send.
+
+        Args:
+            delivery_result: Результат отправки изображений.
+            used_fallback: Флаг использования fallback изображения.
+
+        Returns:
+            Отформатированное сообщение с результатом отправки.
+        """
+        return (
+            f"✅ Отправка выполнена:\n"
+            f"• Успешно: {delivery_result.success_count}/{delivery_result.total_targets}\n"
+            f"• Ошибок: {delivery_result.failed_count}\n"
+            f"• Использован: {'fallback (лимит исчерпан)' if used_fallback else 'новая генерация'}"
+        )
