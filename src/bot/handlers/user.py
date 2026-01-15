@@ -27,6 +27,9 @@ class UserHandlers(BaseHandlers):
         logger: ILogger,
     ) -> None:
         super().__init__(services, logger)
+        if self.services.admin_access_service is None:
+            raise ValueError("admin_access_service must be provided in BotServices")
+        self._admin_access = self.services.admin_access_service
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.
@@ -90,9 +93,7 @@ class UserHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /help от пользователя {user_id}")
 
         # Проверка доступа администратора через admin_access_service
-        if self.services.admin_access_service is None:
-            raise RuntimeError("admin_access_service must be provided in BotServices")
-        is_admin = await self.services.admin_access_service.is_admin(user_id)
+        is_admin = await self._admin_access.is_admin(user_id)
 
         if is_admin:
             # Админская справка
@@ -170,9 +171,7 @@ class UserHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
         # Проверка на админа через admin_access_service
-        if self.services.admin_access_service is None:
-            raise RuntimeError("admin_access_service must be provided in BotServices")
-        is_admin = await self.services.admin_access_service.is_admin(user_id)
+        is_admin = await self._admin_access.is_admin(user_id)
 
         # Проверка rate limit через application service
         is_allowed, rate_limit_message = await self.services.frog_rate_limiter.check_and_consume(

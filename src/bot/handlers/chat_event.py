@@ -42,7 +42,11 @@ class ChatEventHandler:
         self.logger = logger
         if services.admin_command_service is None:
             raise ValueError("admin_command_service must be provided in BotServices")
+        if services.telegram_api_rate_limiter is None:
+            raise ValueError("telegram_api_rate_limiter must be provided in BotServices")
         self._admin_command = services.admin_command_service
+        # Сохраняем в локальную переменную для типизации mypy
+        self._rate_limiter = services.telegram_api_rate_limiter
 
     async def on_my_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик событий изменения статуса бота в чатах.
@@ -72,7 +76,6 @@ class ChatEventHandler:
             new = getattr(my_cm.new_chat_member, "status", None)
             chat = my_cm.chat
             chat_id = chat.id
-            title = getattr(chat, "title", None) or getattr(chat, "username", "") or ""
 
             # Определяем изменение статуса через сервис
             from app.chat_info_service import ChatInfoService
@@ -98,8 +101,6 @@ class ChatEventHandler:
                         # Используем rate limiting для защиты от превышения лимитов Telegram API
                         from shared.retry import retry_on_connect_error
 
-                        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
-
                         async def _send_welcome() -> None:
                             await retry_on_connect_error(
                                 self.bot.send_message,
@@ -110,11 +111,7 @@ class ChatEventHandler:
                                 handle_rate_limit=True,
                             )
 
-                        if rate_limiter:
-                            await rate_limiter.execute_with_rate_limit(_send_welcome)
-                        else:
-                            # Fallback без rate limiting (для обратной совместимости)
-                            await _send_welcome()
+                        await self._rate_limiter.execute_with_rate_limit(_send_welcome)
                     except (TelegramError, NetworkError, TimedOut) as send_error:
                         # Временные сетевые ошибки - можно повторить позже
                         self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {send_error}")

@@ -4,6 +4,20 @@
 
 ### Изменено
 
+- **Устранение критических архитектурных нарушений в bot/handlers/**:
+  - **base.py**: Удалено прямое использование репозитория `self.admins_store`, теперь используется только `admin_access_service`
+  - **base.py**: Удалены неиспользуемые методы `_is_super_admin()` и `_handle_image_generation_errors()`
+  - **base.py**: Добавлена обязательная проверка наличия `telegram_api_rate_limiter` в `__init__()` (fail-fast)
+  - **base.py**: Убран fallback для `telegram_api_rate_limiter` во всех методах отправки сообщений
+  - **admin.py**: Удалены дублирующие методы `_get_chat_info_safe()` и `_get_chat_safe()`, используется `chat_info_service` напрямую
+  - **admin.py**: Удалены неиспользуемые константы `MAX_ERROR_DETAILS_LENGTH`, `PERCENT_MULTIPLIER`, `TELEGRAM_SAFE_MESSAGE_LENGTH`
+  - **admin.py**: Унифицирована обработка ошибок в `set_frog_limit_command()` и `set_frog_used_command()` через `_handle_command_errors()`
+  - **user.py**: Унифицирован доступ к `admin_access_service` через поле класса `self._admin_access`
+  - **chat_event.py**: Добавлена обязательная проверка наличия `telegram_api_rate_limiter` в `__init__()` (fail-fast)
+  - **chat_event.py**: Убран fallback для `telegram_api_rate_limiter`
+  - Улучшено соблюдение принципов fail-fast: все обязательные зависимости проверяются при инициализации
+  - Улучшено соблюдение принципов DRY: удалено дублирование кода, унифицирована обработка ошибок
+
 - **Исправление нарушений архитектуры в bot/handlers/**:
   - **admin.py**: Заменены все прямые вызовы `self.admins_store.is_admin()` на `self._admin_access.is_admin()` для соблюдения границ слоёв
   - **admin.py**: Преобразован статический метод `AdminCommandService.validate_chat_id()` в метод экземпляра

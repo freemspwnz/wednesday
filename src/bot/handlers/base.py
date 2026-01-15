@@ -21,7 +21,7 @@ from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
-    from app.image_service import ImageService
+    pass
 
 # Константы
 MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
@@ -48,10 +48,10 @@ class BaseHandlers:
         """
         self.logger = logger
         self.services: BotServices = services
-        # Используем admins_repo из сервисов через DI (ОБЯЗАТЕЛЬНО)
-        if services.admins_repo is None:
-            raise RuntimeError("admins_repo не инициализирован в BotServices")
-        self.admins_store = services.admins_repo
+        if services.telegram_api_rate_limiter is None:
+            raise ValueError("telegram_api_rate_limiter must be provided in BotServices")
+        # Сохраняем в локальную переменную для типизации mypy
+        self._rate_limiter = services.telegram_api_rate_limiter
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
@@ -93,21 +93,6 @@ class BaseHandlers:
 
         return None
 
-    async def _is_super_admin(self, user_id: int) -> bool:
-        """Проверяет, является ли пользователь главным администратором.
-
-        Делегирует проверку в admin_access_service.
-
-        Args:
-            user_id: Идентификатор пользователя для проверки.
-
-        Returns:
-            True если user_id является главным администратором, False иначе.
-        """
-        if self.services.admin_access_service is None:
-            raise RuntimeError("admin_access_service must be provided in BotServices")
-        return await self.services.admin_access_service.is_super_admin(user_id)
-
     async def _safe_reply_text(self, message: Message, text: str) -> None:
         """Безопасная отправка текста с retry для Telegram/сетевых ошибок.
 
@@ -129,8 +114,6 @@ class BaseHandlers:
             - retry_on_connect_error() уже логирует сетевые ошибки через log_event().
         """
         try:
-            # Получаем rate limiter через services (если доступен)
-            rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
 
             async def _reply() -> None:
                 await retry_on_connect_error(
@@ -140,11 +123,7 @@ class BaseHandlers:
                     delay=RETRY_DELAY_DEFAULT,
                 )
 
-            if rate_limiter:
-                await rate_limiter.execute_with_rate_limit(_reply)
-            else:
-                # Fallback без rate limiting (для обратной совместимости)
-                await _reply()
+            await self._rate_limiter.execute_with_rate_limit(_reply)
         except Exception as e:
             # retry_on_connect_error уже залогировал сетевые ошибки через log_event
             # Логируем только если это не сетевая ошибка (неожиданная ошибка)
@@ -182,8 +161,6 @@ class BaseHandlers:
             - retry_on_connect_error() уже логирует сетевые ошибки через log_event().
         """
         try:
-            # Получаем rate limiter через services (если доступен)
-            rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
 
             async def _reply() -> None:
                 await retry_on_connect_error(
@@ -193,11 +170,7 @@ class BaseHandlers:
                     delay=RETRY_DELAY_DEFAULT,
                 )
 
-            if rate_limiter:
-                await rate_limiter.execute_with_rate_limit(_reply)
-            else:
-                # Fallback без rate limiting (для обратной совместимости)
-                await _reply()
+            await self._rate_limiter.execute_with_rate_limit(_reply)
             return True
         except Exception as e:
             # retry_on_connect_error уже залогировал сетевые ошибки через log_event
@@ -211,7 +184,6 @@ class BaseHandlers:
             # Если указан fallback текст, пытаемся отправить его
             if fallback_text:
                 try:
-                    rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
 
                     async def _reply_fallback() -> None:
                         await retry_on_connect_error(
@@ -221,11 +193,7 @@ class BaseHandlers:
                             delay=RETRY_DELAY_DEFAULT,
                         )
 
-                    if rate_limiter:
-                        await rate_limiter.execute_with_rate_limit(_reply_fallback)
-                    else:
-                        # Fallback без rate limiting (для обратной совместимости)
-                        await _reply_fallback()
+                    await self._rate_limiter.execute_with_rate_limit(_reply_fallback)
                 except Exception as fallback_error:
                     # retry_on_connect_error уже залогировал сетевые ошибки
                     # Логируем только неожиданные ошибки
@@ -319,8 +287,6 @@ class BaseHandlers:
             True если сообщение отправлено успешно, False иначе.
         """
         try:
-            # Получаем rate limiter через services (если доступен)
-            rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
 
             async def _reply() -> None:
                 await retry_on_connect_error(
@@ -330,11 +296,7 @@ class BaseHandlers:
                     delay=delay,
                 )
 
-            if rate_limiter:
-                await rate_limiter.execute_with_rate_limit(_reply)
-            else:
-                # Fallback без rate limiting (для обратной совместимости)
-                await _reply()
+            await self._rate_limiter.execute_with_rate_limit(_reply)
             return True
         except Exception as e:
             # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
@@ -528,28 +490,3 @@ class BaseHandlers:
 
         wrapped_tasks = [_with_timeout(task) for task in tasks]
         return await asyncio.gather(*wrapped_tasks, return_exceptions=return_exceptions)
-
-    @staticmethod
-    async def _handle_image_generation_errors(
-        image_service: ImageService,
-        user_id: int,
-    ) -> tuple[bytes | None, str, bool]:
-        """Обрабатывает ошибки генерации изображений с fallback.
-
-        Делегирует генерацию с fallback в image_service.generate_or_fallback().
-
-        Args:
-            image_service: Сервис для генерации изображений.
-            user_id: ID пользователя для генерации изображения.
-
-        Returns:
-            Кортеж (image_data, caption, use_fallback), где:
-            - image_data: Данные изображения в байтах или None
-            - caption: Подпись к изображению
-            - use_fallback: True если используется fallback, False если новое изображение
-
-        Note:
-            Этот метод является обёрткой для обратной совместимости.
-            Рекомендуется использовать image_service.generate_or_fallback() напрямую.
-        """
-        return await image_service.generate_or_fallback(user_id=user_id)

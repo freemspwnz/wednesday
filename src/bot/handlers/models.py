@@ -9,9 +9,6 @@ from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
 
-# Константы
-TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
-
 
 class ModelHandlers(BaseHandlers):
     """Обработчики команд управления моделями (Kandinsky и GigaChat).

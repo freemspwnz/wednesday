@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from telegram import Bot, Chat, Update
-from telegram.error import NetworkError, TelegramError, TimedOut
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.handlers.base import (
@@ -9,7 +8,6 @@ from bot.handlers.base import (
 )
 from shared.base.exceptions import (
     AccessDeniedError,
-    RepoError,
     ServiceError,
 )
 from shared.bot_services import BotServices
@@ -18,9 +16,6 @@ from shared.retry import retry_on_connect_error
 
 # Константы
 MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
-MAX_ERROR_DETAILS_LENGTH = 500  # максимальная длина деталей ошибки
-PERCENT_MULTIPLIER = 100  # множитель для процентов
-TELEGRAM_SAFE_MESSAGE_LENGTH = 4000  # безопасная длина для обрезки сообщений
 
 
 class AdminHandlers(BaseHandlers):
@@ -48,75 +43,6 @@ class AdminHandlers(BaseHandlers):
         self._admin_access = self.services.admin_access_service
         self._admin_command = self.services.admin_command_service
         self._chat_info_service = self.services.chat_info_service
-
-    async def _get_chat_info_safe(
-        self,
-        bot: Bot,
-        chat_id: int,
-        timeout: float = 5.0,
-    ) -> tuple[str | int, str]:
-        """Безопасно получает информацию о чате с обработкой ошибок и rate limiting.
-
-        Делегирует выполнение в ChatInfoService для соблюдения архитектурных границ.
-        Использует rate limiting для защиты от превышения лимитов Telegram API.
-
-        Args:
-            bot: Экземпляр Telegram бота (не используется, оставлен для обратной совместимости).
-            chat_id: ID чата для получения информации.
-            timeout: Таймаут для запроса в секундах.
-
-        Returns:
-            Кортеж (chat_id, title), где chat_id может быть str или int,
-            title - название чата или сообщение об ошибке.
-        """
-        # Получаем rate limiter через services (если доступен)
-        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
-
-        if rate_limiter:
-            # Используем проактивную защиту через rate limiter
-            async def _get_info() -> tuple[str | int, str]:
-                result = await self._chat_info_service.get_chat_info_safe(chat_id, timeout)
-                return result
-
-            result: tuple[str | int, str] = await rate_limiter.execute_with_rate_limit(_get_info)
-            return result
-        else:
-            # Fallback без rate limiting (для обратной совместимости)
-            return await self._chat_info_service.get_chat_info_safe(chat_id, timeout)
-
-    async def _get_chat_safe(
-        self,
-        bot: Bot,
-        chat_id: int,
-        timeout: float = 10.0,
-    ) -> Chat | None:
-        """Безопасно получает полный объект чата с обработкой ошибок и rate limiting.
-
-        Делегирует выполнение в ChatInfoService для соблюдения архитектурных границ.
-        Использует rate limiting для защиты от превышения лимитов Telegram API.
-
-        Args:
-            bot: Экземпляр Telegram бота (не используется, оставлен для обратной совместимости).
-            chat_id: ID чата для получения информации.
-            timeout: Таймаут для запроса в секундах (по умолчанию 10 секунд).
-
-        Returns:
-            Объект чата или None в случае ошибки.
-        """
-        # Получаем rate limiter через services (если доступен)
-        rate_limiter = getattr(self.services, "telegram_api_rate_limiter", None)
-
-        if rate_limiter:
-            # Используем проактивную защиту через rate limiter
-            async def _get_chat() -> Chat | None:
-                result = await self._chat_info_service.get_chat_safe(chat_id, timeout)
-                return result
-
-            result: Chat | None = await rate_limiter.execute_with_rate_limit(_get_chat)
-            return result
-        else:
-            # Fallback без rate limiting (для обратной совместимости)
-            return await self._chat_info_service.get_chat_safe(chat_id, timeout)
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /status.
@@ -435,97 +361,34 @@ class AdminHandlers(BaseHandlers):
         Raises:
             ValueError: Если переданный аргумент не является положительным числом.
         """
-        self.logger.info("Начало выполнения команды set_frog_limit_command")
         if not update.message or not update.effective_user:
-            self.logger.warning("set_frog_limit_command: update.message или update.effective_user отсутствует")
             return
 
         user_id = update.effective_user.id
-        self.logger.info(f"set_frog_limit_command: запрос от пользователя {user_id}")
+        self.logger.info(f"Получена команда /set_frog_limit от пользователя {user_id}")
+
         if not await self._admin_access.is_admin(user_id):
-            self.logger.warning(f"set_frog_limit_command: пользователь {user_id} не является администратором")
             await self._safe_reply_with_fallback(
                 update.message,
                 "❌ Доступно только администратору",
             )
             return
+
         if not context.args or len(context.args) < 1:
-            self.logger.warning("set_frog_limit_command: аргументы не предоставлены")
             await self._safe_reply_with_fallback(
                 update.message,
                 f"📝 Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})",
             )
             return
-        try:
+
+        async def _execute() -> None:
             raw = int(context.args[0])
-            self.logger.info(f"set_frog_limit_command: запрошенный порог: {raw}")
             if raw <= 0:
                 raise ValueError(f"Порог должен быть положительным числом, получено: {raw}")
             result = await self._admin_command.set_frog_threshold(raw, max_threshold=MAX_FROG_THRESHOLD)
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    result.message,
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut) as e:
-                # Сетевые ошибки Telegram API
-                self.logger.warning(f"Сетевая ошибка при отправке сообщения в set_frog_limit_command: {e}")
-            except (ValueError, TypeError, AttributeError) as e:
-                # Ошибки валидации данных
-                self.logger.error(
-                    f"Ошибка валидации при отправке сообщения в set_frog_limit_command: {e}", exc_info=True
-                )
-            except ServiceError as e:
-                # Ошибки сервисного слоя
-                self.logger.error(f"Ошибка сервиса при отправке сообщения в set_frog_limit_command: {e}", exc_info=True)
-            # Критические ошибки (память, системные) должны пробрасываться выше
-        except ValueError as e:
-            self.logger.error(f"set_frog_limit_command: ошибка валидации параметра: {e}", exc_info=True)
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ Неверный параметр. Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as send_error:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(
-                    f"Не удалось отправить сообщение об ошибке после {3} попыток: {send_error}", exc_info=True
-                )
-        except (TelegramError, NetworkError, TimedOut) as e:
-            # Сетевые ошибки Telegram API
-            self.logger.warning(f"Сетевая ошибка в set_frog_limit_command: {e}")
-        except ServiceError as e:
-            # Ошибки сервисного слоя
-            self.logger.error(f"Ошибка сервиса в set_frog_limit_command: {e}", exc_info=True)
-            await self._safe_reply_text_with_error_logging(
-                update.message,
-                f"❌ Ошибка сервиса: {str(e)[:200]}",
-                error_context="сообщение об ошибке сервиса",
-                max_retries=3,
-                delay=2,
-            )
-        except RepoError as e:
-            # Ошибки репозитория
-            self.logger.error(f"Ошибка репозитория в set_frog_limit_command: {e}", exc_info=True)
-            await self._safe_reply_text_with_error_logging(
-                update.message,
-                f"❌ Ошибка доступа к данным: {str(e)[:200]}",
-                error_context="сообщение об ошибке репозитория",
-                max_retries=3,
-                delay=2,
-            )
-            # Критические ошибки (память, системные) должны пробрасываться выше
-            await self._safe_reply_text_with_error_logging(
-                update.message,
-                "❌ Произошла неожиданная ошибка при изменении лимита",
-                error_context="сообщение об ошибке",
-                max_retries=3,
-                delay=2,
-            )  # Если не удалось отправить, централизованный обработчик перехватит
+            await self._safe_reply_with_fallback(update.message, result.message)
+
+        await self._handle_command_errors(update, _execute)
 
     async def set_frog_used_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_frog_used.
@@ -551,56 +414,27 @@ class AdminHandlers(BaseHandlers):
 
         user_id = update.effective_user.id
         if not await self._admin_access.is_admin(user_id):
-            if not await self._safe_reply_text_with_error_logging(
+            await self._safe_reply_with_fallback(
                 update.message,
                 "❌ Доступно только администратору",
-                error_context="сообщение об ограничении доступа",
-                max_retries=3,
-                delay=2,
-            ):
-                return
+            )
             return
+
         if not context.args or len(context.args) < 1:
             await self._safe_reply_with_fallback(
                 update.message,
                 "📝 Использование: /set_frog_used <count>",
             )
             return
-        try:
+
+        async def _execute() -> None:
             raw = int(context.args[0])
             if raw < 0:
-                raise ValueError
+                raise ValueError(f"Количество использований должно быть неотрицательным числом, получено: {raw}")
             result = await self._admin_command.set_frog_used(raw)
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    result.message,
-                    max_retries=3,
-                    delay=2,
-                )
-            except (TelegramError, NetworkError, TimedOut) as e:
-                # Сетевые ошибки Telegram API
-                self.logger.warning(f"Сетевая ошибка при отправке сообщения в set_frog_used_command: {e}")
-            except (ValueError, TypeError, AttributeError) as e:
-                # Ошибки валидации данных
-                self.logger.error(
-                    f"Ошибка валидации при отправке сообщения в set_frog_used_command: {e}", exc_info=True
-                )
-            except ServiceError as e:
-                # Ошибки сервисного слоя
-                self.logger.error(f"Ошибка сервиса при отправке сообщения в set_frog_used_command: {e}", exc_info=True)
-            # Критические ошибки (память, системные) должны пробрасываться выше
-        except ValueError:
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Неверный параметр. Использование: /set_frog_used <count>",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                self.logger.error(f"Не удалось отправить сообщение об ошибке после {3} попыток: {e}", exc_info=True)
+            await self._safe_reply_with_fallback(update.message, result.message)
+
+        await self._handle_command_errors(update, _execute)
 
     async def mod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /mod.
