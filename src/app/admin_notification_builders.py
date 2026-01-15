@@ -275,3 +275,19 @@ class AdminNotificationBuilders:
             f"• Ошибок: {delivery_result.failed_count}\n"
             f"• Использован: {'fallback (лимит исчерпан)' if used_fallback else 'новая генерация'}"
         )
+
+    @staticmethod
+    def format_service_error(error: Exception, max_length: int = 200) -> str:
+        """Форматирует сообщение об ошибке сервиса.
+
+        Args:
+            error: Исключение, которое произошло в сервисе.
+            max_length: Максимальная длина сообщения об ошибке.
+
+        Returns:
+            Отформатированное сообщение об ошибке для пользователя.
+        """
+        error_message = str(error)
+        if len(error_message) > max_length:
+            error_message = error_message[:max_length] + "..."
+        return f"❌ Ошибка сервиса: {error_message}"

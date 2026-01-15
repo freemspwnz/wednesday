@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Исправление всех нарушений архитектуры из bot-layer-audit**:
+  - Перенесена нормализация аргументов команд из хендлеров в сервисы (`.strip()`, `.lower()`)
+  - Убрано форматирование ошибок из хендлеров - добавлен метод `format_service_error()` в билдеры
+  - Разделен метод `_check_admin_access()` на `_check_admin_access_only()` и `_check_admin_access()` для соблюдения SRP
+  - Убрано дублирование проверки `admin_access_service is None` через метод `_require_admin_access_service()`
+  - Заменен `assert` в `status_command()` на явную проверку с логированием
+  - Перенесено объединение аргументов команды из `set_kandinsky_model_command()` в `ModelManagementService.set_kandinsky_model()`
+  - Обработаны все исключения в `AdminCommandService` (add_admin, remove_admin, get_admin_list_with_details, execute_force_send) - возвращают готовые сообщения
+  - Обновлены все хендлеры для передачи сырых аргументов в сервисы без нормализации
+  - Убраны неиспользуемые импорты `AccessDeniedError` и `ServiceError` из `admin.py`
+  - Добавлен метод `format_service_error()` в `BotNotificationBuilders` и `AdminNotificationBuilders`
+
 - **Исправление нарушений архитектуры bot/ слоя**:
   - Создан `BotNotificationBuilders` для централизованного форматирования сообщений бота
   - Создан `FrogCommandService` для инкапсуляции всей бизнес-логики команды /frog

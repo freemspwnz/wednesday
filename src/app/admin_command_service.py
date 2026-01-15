@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from app.admin_access_service import AdminAccessService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import RepoError, ServiceError
+from shared.base.exceptions import AccessDeniedError, RepoError, ServiceError
 from shared.constants import MAX_FROG_THRESHOLD
 from shared.protocols.infrastructure import ILogger
 from shared.protocols.repositories import IAdminsRepo, IChatsRepo, IUsageTracker
@@ -109,16 +109,16 @@ class AdminCommandService(BaseService):
     ) -> CommandResult:
         """Добавляет чат в список рассылки, парся строку с chat_id.
 
-        Инкапсулирует всю логику парсинга, валидации и добавления чата.
+        Инкапсулирует всю логику нормализации, парсинга, валидации и добавления чата.
 
         Args:
-            chat_id_str: Строка с chat_id для парсинга.
+            chat_id_str: Сырая строка с chat_id (будет нормализована внутри).
             source: Источник добавления чата (для логирования).
 
         Returns:
             CommandResult с результатом операции и сообщением для пользователя.
         """
-        # Парсинг
+        # Нормализация и парсинг
         try:
             chat_id = int(chat_id_str.strip())
         except ValueError:
@@ -185,15 +185,15 @@ class AdminCommandService(BaseService):
     ) -> CommandResult:
         """Удаляет чат из списка рассылки, парся строку с chat_id.
 
-        Инкапсулирует всю логику парсинга, валидации и удаления чата.
+        Инкапсулирует всю логику нормализации, парсинга, валидации и удаления чата.
 
         Args:
-            chat_id_str: Строка с chat_id для парсинга.
+            chat_id_str: Сырая строка с chat_id (будет нормализована внутри).
 
         Returns:
             CommandResult с результатом операции и сообщением для пользователя.
         """
-        # Парсинг
+        # Нормализация и парсинг
         try:
             chat_id = int(chat_id_str.strip())
         except ValueError:
@@ -281,10 +281,10 @@ class AdminCommandService(BaseService):
     ) -> CommandResult:
         """Устанавливает порог ручных генераций /frog, парся строку.
 
-        Инкапсулирует всю логику парсинга, валидации и установки порога.
+        Инкапсулирует всю логику нормализации, парсинга, валидации и установки порога.
 
         Args:
-            threshold_str: Строка с порогом для парсинга.
+            threshold_str: Сырая строка с порогом (будет нормализована внутри).
 
         Returns:
             Результат выполнения команды с информацией о текущем использовании.
@@ -295,9 +295,9 @@ class AdminCommandService(BaseService):
         if self._usage is None:
             raise ServiceError("Трекер использования не инициализирован")
 
-        # Парсинг
+        # Нормализация и парсинг
         try:
-            threshold = int(threshold_str)
+            threshold = int(threshold_str.strip())
         except ValueError:
             return CommandResult(
                 success=False,
@@ -393,10 +393,10 @@ class AdminCommandService(BaseService):
     ) -> CommandResult:
         """Устанавливает текущее значение выработки /frog за месяц, парся строку.
 
-        Инкапсулирует всю логику парсинга, валидации и установки значения.
+        Инкапсулирует всю логику нормализации, парсинга, валидации и установки значения.
 
         Args:
-            count_str: Строка с количеством использований для парсинга.
+            count_str: Сырая строка с количеством использований (будет нормализована внутри).
 
         Returns:
             Результат выполнения команды с информацией о лимитах.
@@ -407,9 +407,9 @@ class AdminCommandService(BaseService):
         if self._usage is None:
             raise ServiceError("Трекер использования не инициализирован")
 
-        # Парсинг
+        # Нормализация и парсинг
         try:
-            count = int(count_str)
+            count = int(count_str.strip())
         except ValueError:
             return CommandResult(
                 success=False,
@@ -502,18 +502,26 @@ class AdminCommandService(BaseService):
     ) -> CommandResult:
         """Добавляет администратора.
 
+        Обрабатывает все исключения внутри и возвращает готовое сообщение.
+
         Args:
             target_user_id: ID пользователя для добавления в администраторы.
             requester_user_id: ID пользователя, запрашивающего операцию.
 
         Returns:
-            Результат выполнения команды.
-
-        Raises:
-            AccessDeniedError: Если запрашивающий не является главным администратором.
+            Результат выполнения команды с готовым сообщением.
         """
-        # Проверяем права
-        await self._admin_access.require_super_admin(requester_user_id)
+        try:
+            # Проверяем права
+            await self._admin_access.require_super_admin(requester_user_id)
+        except AccessDeniedError:
+            # Обрабатываем AccessDeniedError и возвращаем готовое сообщение
+            from bot.handlers.messages import SUPER_ADMIN_ACCESS_DENIED
+
+            return CommandResult(
+                success=False,
+                message=SUPER_ADMIN_ACCESS_DENIED,
+            )
 
         try:
             success = await self._admins_repo.add_admin(target_user_id)
@@ -535,9 +543,12 @@ class AdminCommandService(BaseService):
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
+            error_message = f"❌ Ошибка при добавлении администратора: {str(e)[:200]}"
+            if self._notification_builders:
+                error_message = self._notification_builders.format_service_error(e)
             return CommandResult(
                 success=False,
-                message=f"❌ Ошибка при добавлении администратора: {str(e)[:200]}",
+                message=error_message,
             )
 
     async def remove_admin(
@@ -547,26 +558,41 @@ class AdminCommandService(BaseService):
     ) -> CommandResult:
         """Удаляет администратора.
 
+        Обрабатывает все исключения внутри и возвращает готовое сообщение.
+
         Args:
             target_user_id: ID пользователя для удаления из администраторов.
             requester_user_id: ID пользователя, запрашивающего операцию.
 
         Returns:
-            Результат выполнения команды.
-
-        Raises:
-            AccessDeniedError: Если запрашивающий не является главным администратором.
-            ServiceError: Если пытаются удалить главного администратора.
+            Результат выполнения команды с готовым сообщением.
         """
-        # Проверяем права
-        await self._admin_access.require_super_admin(requester_user_id)
+        try:
+            # Проверяем права
+            await self._admin_access.require_super_admin(requester_user_id)
+        except AccessDeniedError:
+            # Обрабатываем AccessDeniedError и возвращаем готовое сообщение
+            from bot.handlers.messages import SUPER_ADMIN_ACCESS_DENIED
+
+            return CommandResult(
+                success=False,
+                message=SUPER_ADMIN_ACCESS_DENIED,
+            )
 
         # Получаем super_admin_id внутри сервиса
         super_admin_id = self._admin_access.get_super_admin_id()
 
         # Проверяем, не пытаются ли удалить главного админа
         if super_admin_id and int(target_user_id) == int(super_admin_id):
-            raise ServiceError("Нельзя удалить главного администратора (из .env)")
+            error_message = "❌ Нельзя удалить главного администратора (из .env)"
+            if self._notification_builders:
+                error_message = self._notification_builders.format_service_error(
+                    ServiceError("Нельзя удалить главного администратора (из .env)"),
+                )
+            return CommandResult(
+                success=False,
+                message=error_message,
+            )
 
         try:
             success = await self._admins_repo.remove_admin(target_user_id)
@@ -588,9 +614,12 @@ class AdminCommandService(BaseService):
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
+            error_message = f"❌ Ошибка при удалении администратора: {str(e)[:200]}"
+            if self._notification_builders:
+                error_message = self._notification_builders.format_service_error(e)
             return CommandResult(
                 success=False,
-                message=f"❌ Ошибка при удалении администратора: {str(e)[:200]}",
+                message=error_message,
             )
 
     async def list_all_admins(self) -> list[int]:
@@ -677,16 +706,30 @@ class AdminCommandService(BaseService):
 
             return CommandResult(success=True, message=message)
 
-        except ServiceError:
-            raise
+        except ServiceError as e:
+            # Обрабатываем ServiceError и форматируем через билдер
+            self.logger.error(
+                f"Ошибка сервиса при получении списка администраторов: {e}",
+                exc_info=True,
+            )
+            error_message = "❌ Ошибка сервиса при получении списка администраторов"
+            if self._notification_builders:
+                error_message = self._notification_builders.format_service_error(e)
+            return CommandResult(
+                success=False,
+                message=error_message,
+            )
         except Exception as e:
             self.logger.error(
                 f"Ошибка при получении списка администраторов: {e}",
                 exc_info=True,
             )
+            error_message = "❌ Ошибка при получении списка администраторов"
+            if self._notification_builders:
+                error_message = self._notification_builders.format_service_error(e)
             return CommandResult(
                 success=False,
-                message="❌ Ошибка при получении списка администраторов",
+                message=error_message,
             )
 
     def validate_chat_id(self, chat_id: int) -> ValidationResult:  # noqa: PLR6301
@@ -815,6 +858,7 @@ class AdminCommandService(BaseService):
         """Выполняет принудительную отправку жабы.
 
         Инкапсулирует всю бизнес-логику:
+        - Нормализация аргумента
         - Определение целевых чатов
         - Проверка лимитов
         - Генерация/fallback
@@ -823,13 +867,10 @@ class AdminCommandService(BaseService):
 
         Args:
             requester_user_id: ID пользователя, запрашивающего отправку.
-            target_arg: Аргумент команды ("all" или конкретный chat_id).
+            target_arg: Сырой аргумент команды (будет нормализован внутри).
 
         Returns:
             Результат выполнения команды с форматированным сообщением.
-
-        Raises:
-            ServiceError: Если необходимые сервисы не инициализированы.
         """
         # Проверяем наличие необходимых сервисов
         if self._chats is None:
@@ -840,6 +881,9 @@ class AdminCommandService(BaseService):
             raise ServiceError("Сервис отправки изображений не инициализирован")
 
         try:
+            # Нормализуем аргумент внутри сервиса
+            normalized_arg = target_arg.strip().lower()
+
             # Получаем список активных чатов
             chat_ids = await self.list_chat_ids()
             if not chat_ids:
@@ -849,7 +893,7 @@ class AdminCommandService(BaseService):
                 )
 
             # Определяем целевые чаты
-            target_chat_ids = AdminCommandService.determine_target_chats(chat_ids, target_arg)
+            target_chat_ids = AdminCommandService.determine_target_chats(chat_ids, normalized_arg)
             if not target_chat_ids:
                 return CommandResult(
                     success=False,
@@ -920,8 +964,23 @@ class AdminCommandService(BaseService):
             )
 
             return CommandResult(success=True, message=result_message)
-        except ServiceError:
-            raise
+        except ServiceError as e:
+            # Обрабатываем ServiceError и форматируем через билдер
+            self.logger.error(
+                f"Ошибка сервиса при выполнении force_send: {e}",
+                event="force_send_service_error",
+                status="error",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            if self._notification_builders:
+                error_message = self._notification_builders.format_service_error(e)
+            else:
+                error_message = f"❌ Ошибка сервиса: {str(e)[:200]}"
+            return CommandResult(
+                success=False,
+                message=error_message,
+            )
         except Exception as e:
             self.logger.error(
                 f"Неожиданная ошибка при выполнении force_send: {e}",
@@ -930,7 +989,11 @@ class AdminCommandService(BaseService):
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
+            if self._notification_builders:
+                error_message = self._notification_builders.format_service_error(e)
+            else:
+                error_message = f"❌ Ошибка при выполнении отправки: {str(e)[:200]}"
             return CommandResult(
                 success=False,
-                message=f"❌ Ошибка при выполнении отправки: {str(e)[:200]}",
+                message=error_message,
             )

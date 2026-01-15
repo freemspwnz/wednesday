@@ -82,6 +82,37 @@ class BaseHandlers:
         """
         return context.args is not None and len(context.args) >= min_count
 
+    def _require_admin_access_service(self) -> None:
+        """Проверяет наличие admin_access_service.
+
+        Raises:
+            ValueError: Если admin_access_service не предоставлен.
+        """
+        if self.services.admin_access_service is None:
+            raise ValueError("admin_access_service must be provided in BotServices")
+
+    async def _check_admin_access_only(
+        self,
+        user_id: int,
+        require_super: bool = False,
+    ) -> bool:
+        """Проверяет доступ администратора без отправки сообщений.
+
+        Args:
+            user_id: ID пользователя для проверки.
+            require_super: Если True, проверяет доступ главного администратора.
+
+        Returns:
+            True если доступ есть, False если доступ отсутствует.
+        """
+        self._require_admin_access_service()
+        # После проверки admin_access_service гарантированно не None
+        admin_access = self.services.admin_access_service
+        assert admin_access is not None  # для mypy
+        if require_super:
+            return await admin_access.is_super_admin(user_id)
+        return await admin_access.is_admin(user_id)
+
     async def _check_admin_access(
         self,
         user_id: int,
@@ -98,24 +129,13 @@ class BaseHandlers:
         Returns:
             True если доступ есть, False если доступ отсутствует (сообщение об ошибке отправлено).
         """
-        if require_super:
-            if self.services.admin_access_service is None:
-                raise ValueError("admin_access_service must be provided in BotServices")
-            is_authorized = await self.services.admin_access_service.is_super_admin(user_id)
-            if not is_authorized:
-                from bot.handlers.messages import SUPER_ADMIN_ACCESS_DENIED
+        is_authorized = await self._check_admin_access_only(user_id, require_super)
+        if not is_authorized:
+            from bot.handlers.messages import ADMIN_ACCESS_DENIED, SUPER_ADMIN_ACCESS_DENIED
 
-                await self._safe_reply_with_fallback(message, SUPER_ADMIN_ACCESS_DENIED)
-                return False
-        else:
-            if self.services.admin_access_service is None:
-                raise ValueError("admin_access_service must be provided in BotServices")
-            is_authorized = await self.services.admin_access_service.is_admin(user_id)
-            if not is_authorized:
-                from bot.handlers.messages import ADMIN_ACCESS_DENIED
-
-                await self._safe_reply_with_fallback(message, ADMIN_ACCESS_DENIED)
-                return False
+            error_message = SUPER_ADMIN_ACCESS_DENIED if require_super else ADMIN_ACCESS_DENIED
+            await self._safe_reply_with_fallback(message, error_message)
+            return False
         return True
 
     async def _safe_reply_text(self, message: Message, text: str) -> None:

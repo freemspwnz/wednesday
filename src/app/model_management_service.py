@@ -41,13 +41,18 @@ class ModelManagementService(BaseService):
         self._text_client = text_client
         self._models_repo = models_repo
 
-    async def set_kandinsky_model(self, model_identifier: str) -> SetModelResult:
+    async def set_kandinsky_model(
+        self,
+        model_args: list[str] | str,
+    ) -> SetModelResult:
         """Устанавливает модель Kandinsky через клиент и сохраняет в репозиторий.
 
         Клиент только выбирает модель, а сохранение выполняется в app-слое.
+        Объединяет аргументы команды, если передан список.
 
         Args:
-            model_identifier: ID модели или часть названия для поиска.
+            model_args: Список аргументов команды или строка с идентификатором модели.
+                Если передан список, аргументы будут объединены через пробел.
 
         Returns:
             SetModelResult с информацией о результате установки.
@@ -60,6 +65,12 @@ class ModelManagementService(BaseService):
         """
         if not self._image_client:
             raise ValueError("Image client not configured")
+
+        # Объединяем аргументы, если передан список
+        if isinstance(model_args, list):
+            model_identifier = " ".join(model_args)
+        else:
+            model_identifier = model_args
 
         # Клиент только выбирает модель, но не сохраняет
         result = await self._image_client.set_model(model_identifier)

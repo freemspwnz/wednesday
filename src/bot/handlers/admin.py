@@ -6,13 +6,6 @@ from telegram.ext import ContextTypes
 from bot.handlers.base import (
     BaseHandlers,
 )
-from bot.handlers.messages import (
-    SUPER_ADMIN_ACCESS_DENIED,
-)
-from shared.base.exceptions import (
-    AccessDeniedError,
-    ServiceError,
-)
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 
@@ -80,7 +73,9 @@ class AdminHandlers(BaseHandlers):
 
             # update.message гарантированно не None после проверки выше
             message = update.message
-            assert message is not None  # для mypy
+            if message is None:
+                self.logger.warning("status_command: update.message is None после проверки")
+                return
             success = await self._safe_reply_with_fallback(
                 message,
                 status_message,
@@ -132,31 +127,20 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
-        # Делегируем всю бизнес-логику в сервис
-        arg = context.args[0].strip().lower()
-        try:
-            result = await self._admin_command.execute_force_send(
-                requester_user_id=user_id,
-                target_arg=arg,
-            )
-            await self._safe_reply_with_fallback(
-                update.message,
-                result.message,
-            )
-            if result.success:
-                self.logger.info(f"Команда /force_send выполнена пользователем {user_id}")
-        except ServiceError as e:
-            self.logger.error(
-                f"Ошибка сервиса при выполнении force_send: {e}",
-                event="force_send_service_error",
-                status="error",
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-            await self._safe_reply_with_fallback(
-                update.message,
-                f"❌ Ошибка сервиса: {str(e)[:200]}",
-            )
+        # Передаем сырой аргумент - нормализация будет в сервисе
+        raw_arg = context.args[0]
+
+        # Делегируем всю бизнес-логику в сервис (включая нормализацию и обработку ошибок)
+        result = await self._admin_command.execute_force_send(
+            requester_user_id=user_id,
+            target_arg=raw_arg,
+        )
+        await self._safe_reply_with_fallback(
+            update.message,
+            result.message,
+        )
+        if result.success:
+            self.logger.info(f"Команда /force_send выполнена пользователем {user_id}")
 
     async def admin_add_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /add_chat.
@@ -192,7 +176,8 @@ class AdminHandlers(BaseHandlers):
             return
 
         async def _execute() -> None:
-            raw_arg = context.args[0].strip()
+            # Передаем сырой аргумент - нормализация будет в сервисе
+            raw_arg = context.args[0]
             result = await self._admin_command.add_chat_from_string(raw_arg, "Manually added")
             if result.success:
                 self.logger.info("Чат успешно добавлен в рассылку")
@@ -235,7 +220,8 @@ class AdminHandlers(BaseHandlers):
             return
 
         async def _execute() -> None:
-            raw_arg = context.args[0].strip()
+            # Передаем сырой аргумент - нормализация будет в сервисе
+            raw_arg = context.args[0]
             result = await self._admin_command.remove_chat_from_string(raw_arg)
             if result.success:
                 self.logger.info("Чат успешно удалён из рассылки")
@@ -320,7 +306,8 @@ class AdminHandlers(BaseHandlers):
             return
 
         async def _execute() -> None:
-            raw_arg = context.args[0].strip()
+            # Передаем сырой аргумент - нормализация будет в сервисе
+            raw_arg = context.args[0]
             result = await self._admin_command.set_frog_threshold_from_string(raw_arg)
             await self._safe_reply_with_fallback(update.message, result.message)
 
@@ -360,7 +347,8 @@ class AdminHandlers(BaseHandlers):
             return
 
         async def _execute() -> None:
-            raw_arg = context.args[0].strip()
+            # Передаем сырой аргумент - нормализация будет в сервисе
+            raw_arg = context.args[0]
             result = await self._admin_command.set_frog_used_from_string(raw_arg)
             await self._safe_reply_with_fallback(update.message, result.message)
 
@@ -411,21 +399,15 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"mod_command: попытка добавить админа {target_user_id} пользователем {user_id}")
 
         # Добавляем администратора через AdminCommandService
-        try:
-            result = await self._admin_command.add_admin(
-                target_user_id=target_user_id,
-                requester_user_id=user_id,
-            )
-            await self._safe_reply_with_fallback(
-                update.message,
-                result.message,
-            )
-        except AccessDeniedError:
-            # Должно быть обработано выше, но на всякий случай
-            await self._safe_reply_with_fallback(
-                update.message,
-                SUPER_ADMIN_ACCESS_DENIED,
-            )
+        # Сервис обрабатывает все исключения и возвращает готовое сообщение
+        result = await self._admin_command.add_admin(
+            target_user_id=target_user_id,
+            requester_user_id=user_id,
+        )
+        await self._safe_reply_with_fallback(
+            update.message,
+            result.message,
+        )
 
     async def unmod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /unmod.
@@ -467,57 +449,29 @@ class AdminHandlers(BaseHandlers):
         # Если target_user_id не определён - показываем список админов
         if target_user_id is None:
             self.logger.info("unmod_command: target_user_id не определён, показываем список админов")
-            try:
-                result = await self._admin_command.get_admin_list_with_details()
-                await self._safe_reply_with_fallback(
-                    update.message,
-                    result.message,
-                )
-                if result.success:
-                    self.logger.info(f"Отправлен список администраторов пользователю {user_id}")
-            except ServiceError as e:
-                self.logger.error(
-                    f"Ошибка сервиса при получении списка админов: {e}",
-                    exc_info=True,
-                )
-                await self._safe_reply_with_fallback(
-                    update.message,
-                    f"❌ Ошибка сервиса: {str(e)[:200]}",
-                )
-            except Exception as e:
-                # Неожиданные ошибки при получении списка админов
-                self.logger.error(f"Ошибка при получении списка админов: {e}", exc_info=True)
-                await self._safe_reply_with_fallback(
-                    update.message,
-                    "❌ Ошибка при получении списка администраторов",
-                )
+            # Сервис обрабатывает все исключения и возвращает готовое сообщение
+            result = await self._admin_command.get_admin_list_with_details()
+            await self._safe_reply_with_fallback(
+                update.message,
+                result.message,
+            )
+            if result.success:
+                self.logger.info(f"Отправлен список администраторов пользователю {user_id}")
             return
 
         # Ветка удаления админа
         self.logger.info(f"unmod_command: попытка удалить админа {target_user_id} пользователем {user_id}")
 
         # Удаляем админа через AdminCommandService
-        try:
-            result = await self._admin_command.remove_admin(
-                target_user_id=target_user_id,
-                requester_user_id=user_id,
-            )
-            await self._safe_reply_with_fallback(
-                update.message,
-                result.message,
-            )
-        except AccessDeniedError:
-            # Должно быть обработано выше, но на всякий случай
-            await self._safe_reply_with_fallback(
-                update.message,
-                SUPER_ADMIN_ACCESS_DENIED,
-            )
-        except ServiceError as e:
-            # Ошибка при попытке удалить главного админа
-            await self._safe_reply_with_fallback(
-                update.message,
-                f"❌ {str(e)[:200]}",
-            )
+        # Сервис обрабатывает все исключения и возвращает готовое сообщение
+        result = await self._admin_command.remove_admin(
+            target_user_id=target_user_id,
+            requester_user_id=user_id,
+        )
+        await self._safe_reply_with_fallback(
+            update.message,
+            result.message,
+        )
 
     async def list_mods_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_mods.

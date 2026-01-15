@@ -71,14 +71,15 @@ class ModelHandlers(BaseHandlers):
             )
             return
 
-        model_arg = " ".join(context.args)  # Объединяем аргументы на случай названий с пробелами
+        # Передаем список аргументов - объединение будет в сервисе
+        model_args = context.args
         await self._safe_reply_with_fallback(
             update.message,
             MODEL_SETTING_STATUS_MESSAGE,
         )
 
         async def _execute() -> None:
-            result = await self._model_management_service.set_kandinsky_model(model_arg)
+            result = await self._model_management_service.set_kandinsky_model(model_args)
             message = self._notification_builders.format_model_result(result)
             await self._safe_reply_with_fallback(update.message, message)
 
