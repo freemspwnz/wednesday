@@ -9,6 +9,7 @@ from __future__ import annotations
 from shared.base.base_service import BaseService
 from shared.config import AppSettings
 from shared.protocols.infrastructure import ILogger, IRateLimiter
+from shared.protocols.repositories import IUsageTracker
 
 # Константы
 SECONDS_PER_MINUTE = 60  # секунд в минуте
@@ -31,6 +32,7 @@ class FrogRateLimiterService(BaseService):
         global_limiter: IRateLimiter,
         user_limiter: IRateLimiter,
         logger: ILogger,
+        usage: IUsageTracker | None = None,
     ) -> None:
         """Инициализирует сервис rate limiting для команды /frog.
 
@@ -39,11 +41,13 @@ class FrogRateLimiterService(BaseService):
             global_limiter: Лимитер для глобального лимита запросов.
             user_limiter: Лимитер для per-user лимита запросов.
             logger: Экземпляр логгера для использования в сервисе.
+            usage: Трекер использования для проверки месячных лимитов (опционально).
         """
         super().__init__(logger)
         self._settings = settings
         self._global_limiter = global_limiter
         self._user_limiter = user_limiter
+        self._usage = usage
 
     async def check_and_consume(
         self,
@@ -89,4 +93,33 @@ class FrogRateLimiterService(BaseService):
                 )
 
         # Все проверки пройдены
+        return (True, None)
+
+    async def check_generation_allowed(self) -> tuple[bool, str | None]:
+        """Проверяет, разрешена ли генерация с учетом месячного лимита.
+
+        Проверяет месячный лимит генераций через IUsageTracker.
+        Используется для команд, которые не требуют rate limiting (например, /force_send).
+
+        Returns:
+            Кортеж (is_allowed, error_message):
+            - is_allowed: True если генерация разрешена, False если лимит исчерпан.
+            - error_message: Сообщение об ошибке (None если разрешено,
+                текст сообщения если лимит исчерпан).
+        """
+        if self._usage is None:
+            # Если usage tracker не доступен, разрешаем генерацию
+            return (True, None)
+
+        can_generate = await self._usage.can_use_frog()
+        if not can_generate:
+            total, threshold, quota = await self._usage.get_limits_info()
+            error_message = (
+                f"🚫 Лимит ручных генераций исчерпан: {total}/{quota}. Доступ к /frog закрыт после {threshold}."
+            )
+            self.logger.info(
+                f"Лимит ручных генераций исчерпан: {total}/{quota}, порог: {threshold}",
+            )
+            return (False, error_message)
+
         return (True, None)

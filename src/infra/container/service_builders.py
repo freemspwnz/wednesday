@@ -82,6 +82,7 @@ def build_frog_rate_limiter_service(
     global_limiter: IRateLimiter,
     user_limiter: IRateLimiter,
     logger: ILogger,
+    usage: IUsageTracker | None = None,
 ) -> FrogRateLimiterService:
     """Создаёт `FrogRateLimiterService` для ограничения частоты /frog."""
     rate_logger = logger.bind(module="FrogRateLimiterService")
@@ -90,6 +91,7 @@ def build_frog_rate_limiter_service(
         global_limiter=global_limiter,
         user_limiter=user_limiter,
         logger=rate_logger,
+        usage=usage,
     )
 
 

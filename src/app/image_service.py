@@ -15,7 +15,13 @@ from app.image_storage_coordinator import ImageStorageCoordinator
 from app.prompt_service import PromptService
 from domain.caption_service import CaptionService
 from shared.base.base_service import BaseService
-from shared.base.exceptions import ImageGenerationError, StorageError, UnexpectedImageError
+from shared.base.exceptions import (
+    CircuitBreakerOpen,
+    ImageGenerationError,
+    ServiceError,
+    StorageError,
+    UnexpectedImageError,
+)
 from shared.protocols.infrastructure import IImageStorage, ILogger
 
 PROMPT_PREVIEW_LENGTH = 100
@@ -233,3 +239,80 @@ class ImageService(BaseService):
         )
 
         return prompt
+
+    async def generate_or_fallback(
+        self,
+        user_id: int | None = None,
+    ) -> tuple[bytes | None, str, bool]:
+        """Генерирует изображение или использует fallback при ошибке.
+
+        Пытается сгенерировать новое изображение через generate_frog_image().
+        При ошибке генерации использует случайное сохраненное изображение из архива.
+
+        Args:
+            user_id: Идентификатор пользователя для логирования и метрик (опционально).
+
+        Returns:
+            Кортеж (image_data, caption, use_fallback):
+            - image_data: Байты изображения или None, если не удалось получить.
+            - caption: Подпись к изображению.
+            - use_fallback: True если использован fallback, False если новое изображение.
+        """
+        user_id_str = str(user_id) if user_id is not None else None
+
+        try:
+            # Пытаемся сгенерировать новое изображение
+            image_data, caption = await self.generate_frog_image(user_id=user_id)
+            return image_data, caption, False  # use_fallback = False
+        except (ImageGenerationError, CircuitBreakerOpen) as e:
+            # Ошибки генерации изображений - используем fallback
+            self.logger.warning(
+                f"Ошибка при генерации изображения, используем fallback: {e}",
+                event="generation_fallback",
+                status="warning",
+                user_id=user_id_str,
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            try:
+                fallback_image = await self.get_random_saved_image()
+                if fallback_image:
+                    return fallback_image[0], fallback_image[1], True  # use_fallback = True
+                return None, "", True
+            except Exception as fallback_error:
+                # Ошибка при получении fallback - логируем, но не пробрасываем
+                self.logger.error(
+                    f"Ошибка при получении fallback изображения: {fallback_error}",
+                    event="fallback_error",
+                    status="error",
+                    user_id=user_id_str,
+                    error_type=type(fallback_error).__name__,
+                    error_message=str(fallback_error),
+                    exc_info=True,
+                )
+                return None, "", True
+        except (ValueError, TypeError, AttributeError) as e:
+            # Ошибки валидации данных - не используем fallback
+            self.logger.error(
+                f"Ошибка валидации при генерации изображения: {e}",
+                event="generation_validation_error",
+                status="error",
+                user_id=user_id_str,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                exc_info=True,
+            )
+            return None, "", True
+        except ServiceError as e:
+            # Ошибки сервисного слоя - не используем fallback
+            self.logger.error(
+                f"Ошибка сервиса при генерации изображения: {e}",
+                event="generation_service_error",
+                status="error",
+                user_id=user_id_str,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                exc_info=True,
+            )
+            return None, "", True
+        # Критические ошибки (память, системные) должны пробрасываться выше

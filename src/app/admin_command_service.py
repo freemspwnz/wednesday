@@ -568,53 +568,45 @@ class AdminCommandService(BaseService):
                     message="❌ Неверный аргумент. Используйте: /force_send <chat_id> или /force_send all",
                 )
 
-            # Проверяем лимиты генераций (если сервис доступен)
+            # Проверяем лимиты генераций через frog_limit_service
             can_generate = True
+            limit_message: str | None = None
             if self._frog_limit_service:
-                # Для force_send проверяем только глобальный лимит, без per-user
-                # Используем внутренний метод проверки лимитов через usage
-                if self._usage:
-                    can_generate = await self._usage.can_use_frog()
+                can_generate, limit_message = await self._frog_limit_service.check_generation_allowed()
+                if not can_generate and limit_message:
+                    self.logger.info("Лимит генераций исчерпан, используем fallback")
 
-            # Генерируем или получаем изображение
+            # Генерируем или получаем изображение через image_service
             image_data: bytes | None = None
             caption: str = ""
             use_fallback = False
 
             if can_generate:
-                try:
-                    image_data, caption = await self._image_service.generate_frog_image(
-                        user_id=requester_user_id,
-                    )
-                    # Увеличиваем счетчик использования только если генерация успешна
-                    if self._usage:
-                        await self._usage.increment(1)
-                except Exception as e:
-                    # Ошибка генерации - используем fallback
-                    self.logger.warning(
-                        f"Ошибка при генерации изображения, используем fallback: {e}",
-                        event="force_send_generation_error",
-                        status="warning",
-                        error_type=type(e).__name__,
-                        error_message=str(e),
-                    )
-                    use_fallback = True
+                # Пытаемся сгенерировать новое изображение
+                image_data, caption, use_fallback = await self._image_service.generate_or_fallback(
+                    user_id=requester_user_id,
+                )
+                # Увеличиваем счетчик использования только если генерация успешна (не fallback)
+                if not use_fallback and self._usage:
+                    await self._usage.increment(1)
             else:
+                # Лимит исчерпан - используем fallback
                 use_fallback = True
-                self.logger.info("Лимит генераций исчерпан, используем fallback")
+                image_data, caption, _ = await self._image_service.generate_or_fallback(
+                    user_id=requester_user_id,
+                )
 
-            # Если нужно использовать fallback и изображение еще не получено
-            if use_fallback and image_data is None:
-                fallback_image = await self._image_service.get_random_saved_image()
-                if fallback_image:
-                    image_data, caption = fallback_image
-                    self.logger.info("Используется случайное изображение из архива")
-                else:
-                    self.logger.warning("Нет сохраненных изображений для отправки")
-                    return CommandResult(
-                        success=False,
-                        message="❌ Не удалось получить изображение (лимит исчерпан и нет сохраненных изображений)",
-                    )
+            # Проверяем, удалось ли получить изображение
+            if not image_data:
+                error_msg = (
+                    limit_message
+                    if limit_message
+                    else "❌ Не удалось получить изображение (лимит исчерпан и нет сохраненных изображений)"
+                )
+                return CommandResult(
+                    success=False,
+                    message=error_msg,
+                )
 
             if not image_data:
                 return CommandResult(

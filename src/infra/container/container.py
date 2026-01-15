@@ -167,6 +167,7 @@ class Container:
             global_limiter=frog_global_limiter,
             user_limiter=frog_user_limiter,
             logger=log,
+            usage=self.repos.usage_tracker,
         )
 
         # --- Messaging service ---

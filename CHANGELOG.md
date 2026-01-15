@@ -12,6 +12,8 @@
   - Вынесено форматирование сообщений в `app/admin_notification_builders.AdminNotificationBuilders`
   - Вынесена отправка изображений в несколько чатов в `app/dispatch_delivery_service.send_to_multiple_chats()`
   - Вынесено получение super_admin_id в `app/admin_access_service.get_super_admin_id()`
+  - Добавлен метод `check_generation_allowed()` в `app/frog_limit_service.py` для проверки месячных лимитов
+  - Добавлен метод `generate_or_fallback()` в `app/image_service.py` для генерации с автоматическим fallback
   - Убраны прямые обращения к репозиториям из хендлеров (используются через сервисы)
   - Улучшено соблюдение границ слоёв: bot-слой делегирует всю бизнес-логику в app-слой
 
