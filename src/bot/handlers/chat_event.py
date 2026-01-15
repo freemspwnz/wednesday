@@ -72,23 +72,9 @@ class ChatEventHandler:
             title = getattr(chat, "title", None) or getattr(chat, "username", "") or ""
 
             # Определяем изменение статуса через сервис
-            status_change = None
-            if self.services.chat_info_service:
-                from app.chat_info_service import ChatInfoService
+            from app.chat_info_service import ChatInfoService
 
-                status_change = ChatInfoService.determine_bot_status_change(old, new)
-            else:
-                # Fallback для обратной совместимости
-                from app.chat_info_service import BotStatusChange
-
-                active_statuses = {"member", "administrator", "restricted"}
-                inactive_statuses = {"left", "kicked", None}
-                status_change = BotStatusChange(
-                    was_added=new in active_statuses and old in inactive_statuses,
-                    was_removed=new in inactive_statuses and old in active_statuses,
-                    old_status=old,
-                    new_status=new,
-                )
+            status_change = ChatInfoService.determine_bot_status_change(old, new)
 
             # Бот добавлен/активирован в чате
             if status_change.was_added:

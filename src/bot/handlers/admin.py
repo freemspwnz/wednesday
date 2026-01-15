@@ -743,48 +743,35 @@ class AdminHandlers(BaseHandlers):
 
                 admin_infos: list[AdminInfo] = []
 
-                if self._chat_info_service:
-                    for admin_id in admins:
-                        is_super = await self._admin_access.is_super_admin(admin_id)
-                        try:
-                            chat_details = await self._chat_info_service.get_chat_details_safe(admin_id)
-                            if chat_details:
-                                name_raw = (
-                                    chat_details.get("title")
-                                    or chat_details.get("first_name")
-                                    or chat_details.get("full_name")
-                                    or "Unknown"
-                                )
-                                name = str(name_raw) if name_raw is not None else "Unknown"
-                                username_raw = chat_details.get("username")
-                                username = str(username_raw) if username_raw is not None else None
-                            else:
-                                name = "Unknown"
-                                username = None
-                        except Exception:
+                for admin_id in admins:
+                    is_super = await self._admin_access.is_super_admin(admin_id)
+                    try:
+                        chat_details = await self._chat_info_service.get_chat_details_safe(admin_id)
+                        if chat_details:
+                            name_raw = (
+                                chat_details.get("title")
+                                or chat_details.get("first_name")
+                                or chat_details.get("full_name")
+                                or "Unknown"
+                            )
+                            name = str(name_raw) if name_raw is not None else "Unknown"
+                            username_raw = chat_details.get("username")
+                            username = str(username_raw) if username_raw is not None else None
+                        else:
                             name = "Unknown"
                             username = None
+                    except Exception:
+                        name = "Unknown"
+                        username = None
 
-                        admin_infos.append(
-                            AdminInfo(
-                                admin_id=admin_id,
-                                name=name,
-                                username=username,
-                                is_super_admin=is_super,
-                            )
+                    admin_infos.append(
+                        AdminInfo(
+                            admin_id=admin_id,
+                            name=name,
+                            username=username,
+                            is_super_admin=is_super,
                         )
-                else:
-                    # Fallback без chat_info_service
-                    for admin_id in admins:
-                        is_super = await self._admin_access.is_super_admin(admin_id)
-                        admin_infos.append(
-                            AdminInfo(
-                                admin_id=admin_id,
-                                name="Unknown",
-                                username=None,
-                                is_super_admin=is_super,
-                            )
-                        )
+                    )
 
                 message = AdminNotificationBuilders.build_admin_list_message(admin_infos)
                 try:

@@ -104,13 +104,9 @@ class BaseHandlers:
         Returns:
             True если user_id является главным администратором, False иначе.
         """
-        if self.services.admin_access_service:
-            return await self.services.admin_access_service.is_super_admin(user_id)
-        # Fallback для обратной совместимости
-        admin_chat_id = self.services.settings.admin_chat_id
-        if not admin_chat_id:
-            return False
-        return admin_chat_id == user_id
+        if self.services.admin_access_service is None:
+            raise RuntimeError("admin_access_service must be provided in BotServices")
+        return await self.services.admin_access_service.is_super_admin(user_id)
 
     async def _safe_reply_text(self, message: Message, text: str) -> None:
         """Безопасная отправка текста с retry для Telegram/сетевых ошибок.
