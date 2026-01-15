@@ -93,21 +93,23 @@ class BaseHandlers:
 
         return None
 
-    def _is_super_admin(self, user_id: int) -> bool:
+    async def _is_super_admin(self, user_id: int) -> bool:
         """Проверяет, является ли пользователь главным администратором.
 
-        Сравнивает user_id с settings.admin_chat_id (из .env через DI).
+        Делегирует проверку в admin_access_service.
 
         Args:
             user_id: Идентификатор пользователя для проверки.
 
         Returns:
-            True если user_id совпадает с admin_chat_id, False иначе.
+            True если user_id является главным администратором, False иначе.
         """
+        if self.services.admin_access_service:
+            return await self.services.admin_access_service.is_super_admin(user_id)
+        # Fallback для обратной совместимости
         admin_chat_id = self.services.settings.admin_chat_id
         if not admin_chat_id:
             return False
-
         return admin_chat_id == user_id
 
     async def _safe_reply_text(self, message: Message, text: str) -> None:
@@ -531,16 +533,14 @@ class BaseHandlers:
         wrapped_tasks = [_with_timeout(task) for task in tasks]
         return await asyncio.gather(*wrapped_tasks, return_exceptions=return_exceptions)
 
+    @staticmethod
     async def _handle_image_generation_errors(
-        self,
         image_service: ImageService,
         user_id: int,
     ) -> tuple[bytes | None, str, bool]:
         """Обрабатывает ошибки генерации изображений с fallback.
 
-        Пытается сгенерировать новое изображение, при ошибках использует fallback
-        (случайное сохраненное изображение). Обрабатывает различные типы ошибок
-        и возвращает результат генерации или fallback.
+        Делегирует генерацию с fallback в image_service.generate_or_fallback().
 
         Args:
             image_service: Сервис для генерации изображений.
@@ -552,40 +552,8 @@ class BaseHandlers:
             - caption: Подпись к изображению
             - use_fallback: True если используется fallback, False если новое изображение
 
-        Side Effects:
-            - Логирует ошибки генерации с соответствующими уровнями.
-            - При ошибках генерации пытается получить случайное сохраненное изображение.
-            - Критические ошибки (память, системные) пробрасываются выше.
+        Note:
+            Этот метод является обёрткой для обратной совместимости.
+            Рекомендуется использовать image_service.generate_or_fallback() напрямую.
         """
-        from shared.base.exceptions import CircuitBreakerOpen, ImageGenerationError
-
-        try:
-            image_data, caption = await image_service.generate_frog_image(user_id=user_id)
-            return image_data, caption, False  # use_fallback = False
-        except (ImageGenerationError, CircuitBreakerOpen) as e:
-            # Ошибки генерации изображений - используем fallback
-            self.logger.warning(
-                f"Ошибка при генерации изображения, используем fallback: {e}",
-                exc_info=True,
-            )
-            try:
-                fallback_image = await image_service.get_random_saved_image()
-                if fallback_image:
-                    return fallback_image[0], fallback_image[1], True  # use_fallback = True
-                return None, "", True
-            except Exception as fallback_error:
-                # Ошибка при получении fallback - логируем, но не пробрасываем
-                self.logger.error(
-                    f"Ошибка при получении fallback изображения: {fallback_error}",
-                    exc_info=True,
-                )
-                return None, "", True
-        except (ValueError, TypeError, AttributeError) as e:
-            # Ошибки валидации данных - не используем fallback
-            self.logger.error(f"Ошибка валидации при генерации изображения: {e}", exc_info=True)
-            return None, "", True
-        except ServiceError as e:
-            # Ошибки сервисного слоя - не используем fallback
-            self.logger.error(f"Ошибка сервиса при генерации изображения: {e}", exc_info=True)
-            return None, "", True
-        # Критические ошибки (память, системные) должны пробрасываться выше
+        return await image_service.generate_or_fallback(user_id=user_id)

@@ -16,6 +16,13 @@
   - Добавлен метод `generate_or_fallback()` в `app/image_service.py` для генерации с автоматическим fallback
   - Убраны прямые обращения к репозиториям из хендлеров (используются через сервисы)
   - Улучшено соблюдение границ слоёв: bot-слой делегирует всю бизнес-логику в app-слой
+- **Рефакторинг bot/handlers/user.py, base.py, chat_event.py: перенос бизнес-логики в app-слой**:
+  - Заменена прямая проверка лимитов через `usage.can_use_frog()` на `frog_limit_service.check_generation_allowed()` в `user.py`
+  - Заменена прямая проверка прав администратора через `admins_store.is_admin()` на `admin_access_service.is_admin()` в `user.py`
+  - Заменен метод `_handle_image_generation_errors()` на использование `image_service.generate_or_fallback()` в `base.py`
+  - Заменен метод `_is_super_admin()` на использование `admin_access_service.is_super_admin()` в `base.py`
+  - Вынесена логика определения статуса бота в `app/chat_info_service.determine_bot_status_change()` в `chat_event.py`
+  - Улучшено соблюдение границ слоёв: bot-слой делегирует всю бизнес-логику в app-слой
 
 - **Рефакторинг dispatch-сервисов: перенос создания в composition root**:
   - Добавлены билдеры dispatch-стека в `src/infra/container/service_builders.py` (`build_fallback_image_delivery_service`, `build_admin_notification_service`, `build_target_preparation_service`, `build_dispatch_delivery_service`, `build_dispatch_service`)

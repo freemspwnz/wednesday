@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from shared.base.base_service import BaseService
@@ -14,6 +15,16 @@ if TYPE_CHECKING:
 # Константы для таймаутов
 DEFAULT_CHAT_INFO_TIMEOUT = 5.0
 DEFAULT_CHAT_FULL_TIMEOUT = 10.0
+
+
+@dataclass
+class BotStatusChange:
+    """Результат определения изменения статуса бота в чате."""
+
+    was_added: bool
+    was_removed: bool
+    old_status: str | None
+    new_status: str | None
 
 
 class ChatInfoService(BaseService):
@@ -119,3 +130,38 @@ class ChatInfoService(BaseService):
         if result is None:
             self.logger.warning(f"Не удалось получить детальную информацию о чате {chat_id}")
         return result
+
+    @staticmethod
+    def determine_bot_status_change(
+        old_status: str | None,
+        new_status: str | None,
+    ) -> BotStatusChange:
+        """Определяет изменение статуса бота в чате.
+
+        Анализирует переходы между статусами для определения, был ли бот добавлен
+        или удален из чата.
+
+        Args:
+            old_status: Предыдущий статус бота в чате (может быть None для новых чатов).
+            new_status: Новый статус бота в чате.
+
+        Returns:
+            BotStatusChange с информацией о том, был ли бот добавлен или удален.
+        """
+        # Статусы, когда бот активен в чате
+        active_statuses = {"member", "administrator", "restricted"}
+        # Статусы, когда бот не в чате
+        inactive_statuses = {"left", "kicked", None}
+
+        # Определяем, был ли бот добавлен
+        was_added = new_status in active_statuses and old_status in inactive_statuses
+
+        # Определяем, был ли бот удален
+        was_removed = new_status in inactive_statuses and old_status in active_statuses
+
+        return BotStatusChange(
+            was_added=was_added,
+            was_removed=was_removed,
+            old_status=old_status,
+            new_status=new_status,
+        )

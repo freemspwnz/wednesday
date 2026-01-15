@@ -89,8 +89,13 @@ class UserHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /help от пользователя {user_id}")
 
-        # Проверка доступа администратора
-        is_admin = await self.admins_store.is_admin(user_id)
+        # Проверка доступа администратора через admin_access_service
+        is_admin = False
+        if self.services.admin_access_service:
+            is_admin = await self.services.admin_access_service.is_admin(user_id)
+        else:
+            # Fallback на admins_store для обратной совместимости
+            is_admin = await self.admins_store.is_admin(user_id)
 
         if is_admin:
             # Админская справка
@@ -167,8 +172,13 @@ class UserHandlers(BaseHandlers):
         chat_id = update.message.chat_id
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
-        # Проверка на админа
-        is_admin = await self.admins_store.is_admin(user_id)
+        # Проверка на админа через admin_access_service
+        is_admin = False
+        if self.services.admin_access_service:
+            is_admin = await self.services.admin_access_service.is_admin(user_id)
+        else:
+            # Fallback на admins_store для обратной совместимости
+            is_admin = await self.admins_store.is_admin(user_id)
 
         # Проверка rate limit через application service
         is_allowed, rate_limit_message = await self.services.frog_rate_limiter.check_and_consume(
@@ -189,18 +199,20 @@ class UserHandlers(BaseHandlers):
                 )
             return
 
-        # Проверяем лимит генераций
-        usage = self.services.usage
-        if usage and not await usage.can_use_frog():
-            total, threshold, quota = await usage.get_limits_info()
+        # Проверяем лимит генераций через frog_rate_limiter
+        can_generate, limit_message = await self.services.frog_rate_limiter.check_generation_allowed()
+        if not can_generate:
             try:
+                error_message = (
+                    limit_message
+                    if limit_message
+                    else (
+                        "🚫 Лимит ручных генераций на этот месяц исчерпан.\nОжидайте автоматических отправок по средам."
+                    )
+                )
                 await retry_on_connect_error(
                     update.message.reply_text,
-                    (
-                        "🚫 Лимит ручных генераций на этот месяц исчерпан.\n"
-                        f"Использовано: {total}/{quota}. Доступ к /frog закрыт после {threshold}.\n"
-                        "Ожидайте автоматических отправок по средам."
-                    ),
+                    error_message,
                     max_retries=MAX_RETRIES_DEFAULT,
                     delay=RETRY_DELAY_DEFAULT,
                 )
