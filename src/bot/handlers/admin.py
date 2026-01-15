@@ -157,9 +157,10 @@ class AdminHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
+            usage_message = self._admin_command.get_add_chat_usage_message()
             await self._safe_reply_with_fallback(
                 update.message,
-                "📝 Использование: /add_chat <chat_id>",
+                usage_message,
             )
             return
 
@@ -201,9 +202,10 @@ class AdminHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
+            usage_message = self._admin_command.get_remove_chat_usage_message()
             await self._safe_reply_with_fallback(
                 update.message,
-                "📝 Использование: /remove_chat <chat_id>",
+                usage_message,
             )
             return
 
@@ -282,11 +284,10 @@ class AdminHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
-            from shared.constants import MAX_FROG_THRESHOLD
-
+            usage_message = self._admin_command.get_set_frog_limit_usage_message()
             await self._safe_reply_with_fallback(
                 update.message,
-                f"📝 Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})",
+                usage_message,
             )
             return
 
@@ -325,9 +326,10 @@ class AdminHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
+            usage_message = self._admin_command.get_set_frog_used_usage_message()
             await self._safe_reply_with_fallback(
                 update.message,
-                "📝 Использование: /set_frog_used <count>",
+                usage_message,
             )
             return
 
@@ -374,9 +376,10 @@ class AdminHandlers(BaseHandlers):
 
         if target_user_id is None:
             self.logger.warning("mod_command: не удалось определить target_user_id")
+            usage_message = self._admin_command.get_mod_usage_message()
             await self._safe_reply_with_fallback(
                 update.message,
-                "📝 Использование: ответьте на сообщение пользователя командой /mod или вызовите: /mod <user_id>",
+                usage_message,
             )
             return
 

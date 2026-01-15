@@ -61,13 +61,10 @@ class ModelHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
+            usage_message = self._model_management_service.get_set_kandinsky_model_usage_message()
             await self._safe_reply_with_fallback(
                 update.message,
-                (
-                    "📝 Использование: /set_kandinsky_model <pipeline_id или название модели>\n\n"
-                    "Используйте /list_models для просмотра доступных моделей.\n"
-                    "Можно указать как ID (например: 12345678), так и название модели (например: kandinsky-2.2)"
-                ),
+                usage_message,
             )
             return
 
@@ -109,10 +106,10 @@ class ModelHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
+            usage_message = self._model_management_service.get_set_gigachat_model_usage_message()
             await self._safe_reply_with_fallback(
                 update.message,
-                "📝 Использование: /set_gigachat_model <model_name>\n\n"
-                "Используйте /list_models для просмотра доступных моделей.",
+                usage_message,
             )
             return
 

@@ -17,9 +17,12 @@ from app.bot_notification_builders import BotNotificationBuilders
 from app.chat_event_service import ChatEventService
 from app.chat_info_service import ChatInfoService
 from app.command_error_handler_service import CommandErrorHandlerService
+from app.command_validation_service import CommandValidationService
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_service import DispatchService
+from app.error_classification_service import ErrorClassificationService
 from app.error_message_formatter_service import ErrorMessageFormatterService
+from app.error_reporting_service import ErrorReportingService
 from app.frog_command_service import FrogCommandService
 from app.frog_limit_service import FrogRateLimiterService
 from app.help_message_service import HelpMessageService
@@ -116,6 +119,9 @@ class BotServices:
     frog_command_service: FrogCommandService | None = None
     error_formatter: ErrorMessageFormatterService | None = None
     retry_strategy: RetryStrategyService | None = None
+    command_validation_service: CommandValidationService | None = None
+    error_classification_service: ErrorClassificationService | None = None
+    error_reporting_service: ErrorReportingService | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
         """Закрывает все ресурсы (HTTP сессии, соединения).

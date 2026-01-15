@@ -4,6 +4,31 @@
 
 ### Изменено
 
+- **Рефакторинг bot/ слоя для устранения нарушений архитектуры**:
+  - Создан `CommandValidationService` для валидации аргументов команд
+  - Создан `ErrorClassificationService` для классификации типов ошибок
+  - Создан `ErrorReportingService` для отправки ошибок в системы мониторинга
+  - Вынесена валидация аргументов из `BaseHandlers._has_args()` в `CommandValidationService.has_args()`
+  - Вынесена классификация ошибок из `BaseHandlers._handle_send_message_error()` в `ErrorClassificationService`
+  - Вынесена логика отправки в Sentry из `BotErrorHandler` в `ErrorReportingService`
+  - Расширен `HelpMessageService` методом `build_help_message()` для объединения проверки прав и выбора сообщения
+  - Рефакторинг `UserHandlers.help_command()` - вся бизнес-логика делегирована в сервис
+  - Добавлены методы формирования usage сообщений в `AdminCommandService`:
+    - `get_add_chat_usage_message()`
+    - `get_remove_chat_usage_message()`
+    - `get_set_frog_limit_usage_message()`
+    - `get_set_frog_used_usage_message()`
+    - `get_mod_usage_message()`
+  - Добавлены методы формирования usage сообщений в `ModelManagementService`:
+    - `get_set_kandinsky_model_usage_message()`
+    - `get_set_gigachat_model_usage_message()`
+  - Обновлены все хендлеры для использования сервисов вместо прямого формирования usage сообщений
+  - Обновлен `ChatEventHandler` для использования `ErrorClassificationService` вместо прямых проверок типов ошибок
+  - Обновлен `BotErrorHandler` для использования `ErrorReportingService` вместо прямого вызова Sentry
+  - Добавлены новые сервисы в `BotServices`: `command_validation_service`, `error_classification_service`, `error_reporting_service`
+  - Обновлен `Container` для создания новых сервисов
+  - Удалены прямые импорты `TelegramError`, `NetworkError`, `TimedOut` из `bot/handlers/base.py` - теперь используется сервис
+
 - **Рефакторинг bot/ слоя для соблюдения чистых границ архитектуры**:
   - Создан `CommandErrorHandlerService` для централизованной обработки ошибок команд
   - Перенесена вся бизнес-логика обработки ошибок из `handlers/base.py` в `CommandErrorHandlerService`

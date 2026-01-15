@@ -11,7 +11,6 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from telegram import Message, Update
-from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 # Импортируем константы из retry_strategy_service для использования в retry_on_connect_error
@@ -26,7 +25,9 @@ from shared.retry import retry_on_connect_error
 from shared.utils.async_utils import gather_with_timeout
 
 if TYPE_CHECKING:
-    pass
+    from app.command_validation_service import CommandValidationService
+else:
+    from app.command_validation_service import CommandValidationService
 
 
 class BaseHandlers:
@@ -69,9 +70,10 @@ class BaseHandlers:
             raise ValueError("user_extraction_service must be provided in BotServices")
         return self.services.user_extraction_service.extract_target_user_id(update, context)
 
-    @staticmethod
-    def _has_args(context: ContextTypes.DEFAULT_TYPE, min_count: int = 1) -> bool:
+    def _has_args(self, context: ContextTypes.DEFAULT_TYPE, min_count: int = 1) -> bool:
         """Проверяет наличие аргументов команды.
+
+        Делегирует проверку в CommandValidationService для соблюдения границ слоёв.
 
         Args:
             context: Контекст бота с аргументами команды.
@@ -80,7 +82,9 @@ class BaseHandlers:
         Returns:
             True если аргументы присутствуют и их количество >= min_count, False иначе.
         """
-        return context.args is not None and len(context.args) >= min_count
+        if self.services.command_validation_service is None:
+            raise ValueError("command_validation_service must be provided in BotServices")
+        return CommandValidationService.has_args(context, min_count)
 
     def _require_admin_access_service(self) -> None:
         """Проверяет наличие admin_access_service.
@@ -151,7 +155,9 @@ class BaseHandlers:
         except Exception as e:
             # retry_on_connect_error уже залогировал сетевые ошибки через log_event
             # Логируем только если это не сетевая ошибка (неожиданная ошибка)
-            if not isinstance(e, TelegramError | NetworkError | TimedOut):
+            if self.services.error_classification_service is None:
+                raise ValueError("error_classification_service must be provided in BotServices") from None
+            if not self.services.error_classification_service.is_telegram_error(e):
                 self.logger.warning(
                     f"Неожиданная ошибка при отправке сообщения: {e}",
                     exc_info=True,
@@ -199,7 +205,9 @@ class BaseHandlers:
         except Exception as e:
             # retry_on_connect_error уже залогировал сетевые ошибки через log_event
             # Логируем только если это не сетевая ошибка (неожиданная ошибка)
-            if not isinstance(e, TelegramError | NetworkError | TimedOut):
+            if self.services.error_classification_service is None:
+                raise ValueError("error_classification_service must be provided in BotServices") from None
+            if not self.services.error_classification_service.is_telegram_error(e):
                 self.logger.warning(
                     f"Неожиданная ошибка при отправке сообщения: {e}",
                     exc_info=True,
@@ -221,7 +229,7 @@ class BaseHandlers:
                 except Exception as fallback_error:
                     # retry_on_connect_error уже залогировал сетевые ошибки
                     # Логируем только неожиданные ошибки
-                    if not isinstance(fallback_error, TelegramError | NetworkError | TimedOut):
+                    if not self.services.error_classification_service.is_telegram_error(fallback_error):
                         self.logger.warning(
                             f"Неожиданная ошибка при отправке fallback сообщения: {fallback_error}",
                             exc_info=True,
@@ -262,7 +270,9 @@ class BaseHandlers:
         except Exception as e:
             # retry_on_connect_error уже залогировал сетевые ошибки через log_event
             # Логируем только если это не сетевая ошибка (неожиданная ошибка)
-            if not isinstance(e, TelegramError | NetworkError | TimedOut):
+            if self.services.error_classification_service is None:
+                raise ValueError("error_classification_service must be provided in BotServices") from None
+            if not self.services.error_classification_service.is_telegram_error(e):
                 self.logger.warning(
                     f"Неожиданная ошибка при отправке сообщения: {e}",
                     exc_info=True,
@@ -283,18 +293,21 @@ class BaseHandlers:
 
         try:
             await message.delete()
-        except (TelegramError, NetworkError, TimedOut) as delete_error:
-            # Сетевые ошибки Telegram API - логируем, но не прерываем
-            self.logger.debug(
-                f"Не удалось удалить статусное сообщение (сетевая ошибка): {delete_error}",
-                exc_info=False,
-            )
         except Exception as delete_error:
-            # Неожиданные ошибки - логируем с полным стеком для диагностики
-            self.logger.warning(
-                f"Неожиданная ошибка при удалении статусного сообщения: {delete_error}",
-                exc_info=True,
-            )
+            if self.services.error_classification_service is None:
+                raise ValueError("error_classification_service must be provided in BotServices") from None
+            if self.services.error_classification_service.is_telegram_error(delete_error):
+                # Сетевые ошибки Telegram API - логируем, но не прерываем
+                self.logger.debug(
+                    f"Не удалось удалить статусное сообщение (сетевая ошибка): {delete_error}",
+                    exc_info=False,
+                )
+            else:
+                # Неожиданные ошибки - логируем с полным стеком для диагностики
+                self.logger.warning(
+                    f"Неожиданная ошибка при удалении статусного сообщения: {delete_error}",
+                    exc_info=True,
+                )
 
     def _handle_send_message_error(
         self,
@@ -303,14 +316,16 @@ class BaseHandlers:
     ) -> None:
         """Обрабатывает ошибки отправки сообщений с правильным логированием.
 
-        Разделяет обработку сетевых ошибок Telegram API и неожиданных ошибок.
-        Используется для замены `except Exception: pass` на более специфичную обработку.
+        Делегирует классификацию ошибок в ErrorClassificationService для соблюдения границ слоёв.
 
         Args:
             error: Исключение, которое произошло при отправке сообщения.
             context: Контекст для логирования (например, "отправке сообщения об ошибке").
         """
-        if isinstance(error, TelegramError | NetworkError | TimedOut):
+        if self.services.error_classification_service is None:
+            raise ValueError("error_classification_service must be provided in BotServices")
+        is_telegram_error = self.services.error_classification_service.is_telegram_error(error)
+        if is_telegram_error:
             # Сетевые ошибки Telegram API - логируем, но не прерываем
             self.logger.warning(
                 f"Сетевая ошибка Telegram API при {context}: {error}",

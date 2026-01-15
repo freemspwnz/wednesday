@@ -6,8 +6,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from shared.base.base_service import BaseService
 from shared.protocols.infrastructure import ILogger
+
+if TYPE_CHECKING:
+    from app.admin_access_service import AdminAccessService
+else:
+    from app.admin_access_service import AdminAccessService
 
 
 class HelpMessageService(BaseService):
@@ -80,3 +87,22 @@ class HelpMessageService(BaseService):
             "• /set_frog_used <count> — установить текущее число ручных /frog за месяц\n"
             "• /help — эта справка"
         )
+
+    async def build_help_message(
+        self,
+        user_id: int,
+        admin_access_service: AdminAccessService,
+    ) -> str:
+        """Строит сообщение справки для пользователя с учетом его прав.
+
+        Args:
+            user_id: ID пользователя для проверки прав.
+            admin_access_service: Сервис для проверки прав администратора.
+
+        Returns:
+            Отформатированное сообщение справки (админское или пользовательское).
+        """
+        is_admin = await admin_access_service.is_admin(user_id)
+        if is_admin:
+            return self.build_admin_help_message()
+        return self.build_user_help_message()

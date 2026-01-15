@@ -74,11 +74,15 @@ def build_chat_event_handler(
 
 def build_error_handler(
     *,
+    services: BotServices,
     logger: ILogger,
 ) -> BotErrorHandler:
     """Создаёт глобальный обработчик ошибок."""
     handler_logger = logger.bind(module="BotErrorHandler")
+    if services.error_reporting_service is None:
+        raise ValueError("error_reporting_service must be provided in BotServices")
     return BotErrorHandler(
+        error_reporting_service=services.error_reporting_service,
         logger=handler_logger,
     )
 
@@ -102,7 +106,7 @@ def build_handlers_registry(
     admin_handlers = build_admin_handlers(services=services, logger=logger)
     model_handlers = build_model_handlers(services=services, logger=logger)
     chat_event_handler = build_chat_event_handler(services=services, bot=bot, logger=logger)
-    error_handler = build_error_handler(logger=logger)
+    error_handler = build_error_handler(services=services, logger=logger)
 
     registry = BotHandlersRegistry(
         application=application,

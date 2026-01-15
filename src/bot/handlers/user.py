@@ -80,7 +80,7 @@ class UserHandlers(BaseHandlers):
                 для совместимости с интерфейсом обработчиков команд).
 
         Side Effects:
-            - Проверяет права администратора через admin_access_service.is_admin().
+            - Делегирует всю логику (проверку прав и выбор сообщения) в help_message_service.
             - Отправляет соответствующую справку (админскую или пользовательскую).
         """
         if not update.message or not update.effective_user:
@@ -89,16 +89,11 @@ class UserHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /help от пользователя {user_id}")
 
-        # Проверка доступа администратора через admin_access_service
-        is_admin = await self._admin_access.is_admin(user_id)
-
-        # Получаем сообщение справки через сервис
-        if is_admin:
-            help_message = self._help_message_service.build_admin_help_message()
-            self.logger.info("Отправлена админская справка")
-        else:
-            help_message = self._help_message_service.build_user_help_message()
-            self.logger.info("Отправлена пользовательская справка")
+        # Делегируем всю логику (проверку прав и выбор сообщения) в сервис
+        help_message = await self._help_message_service.build_help_message(
+            user_id=user_id,
+            admin_access_service=self._admin_access,
+        )
 
         await self._safe_reply_with_fallback(
             update.message,

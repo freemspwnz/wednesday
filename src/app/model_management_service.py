@@ -128,3 +128,28 @@ class ModelManagementService(BaseService):
             return SetModelResult.ok(msg, model_name=result.model_name)
 
         return result
+
+    @staticmethod
+    def get_set_kandinsky_model_usage_message() -> str:
+        """Возвращает сообщение об использовании команды /set_kandinsky_model.
+
+        Returns:
+            Сообщение с инструкцией по использованию команды.
+        """
+        return (
+            "📝 Использование: /set_kandinsky_model <pipeline_id или название модели>\n\n"
+            "Используйте /list_models для просмотра доступных моделей.\n"
+            "Можно указать как ID (например: 12345678), так и название модели (например: kandinsky-2.2)"
+        )
+
+    @staticmethod
+    def get_set_gigachat_model_usage_message() -> str:
+        """Возвращает сообщение об использовании команды /set_gigachat_model.
+
+        Returns:
+            Сообщение с инструкцией по использованию команды.
+        """
+        return (
+            "📝 Использование: /set_gigachat_model <model_name>\n\n"
+            "Используйте /list_models для просмотра доступных моделей."
+        )

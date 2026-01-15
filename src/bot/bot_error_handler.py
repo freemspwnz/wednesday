@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
-    pass
+    from app.error_reporting_service import ErrorReportingService
 
 
 class BotErrorHandler:
@@ -21,13 +21,19 @@ class BotErrorHandler:
     и структурированное логирование для дальнейшего анализа.
     """
 
-    def __init__(self, logger: ILogger) -> None:
+    def __init__(
+        self,
+        error_reporting_service: ErrorReportingService,
+        logger: ILogger,
+    ) -> None:
         """Инициализирует обработчик ошибок.
 
         Args:
+            error_reporting_service: Сервис для отправки ошибок в системы мониторинга.
             logger: Экземпляр логгера для логирования ошибок.
         """
         self.logger = logger
+        self._error_reporting = error_reporting_service
 
     async def handle_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обрабатывает необработанные исключения из хендлеров PTB.
@@ -47,16 +53,9 @@ class BotErrorHandler:
         error = getattr(context, "error", None)
         self.logger.error(f"Необработанное исключение в обработчике PTB: {error!r}", exc_info=True)
 
-        # Отправляем исключение в Sentry, если SDK инициализирован.
+        # Отправляем исключение в Sentry через сервис для соблюдения границ слоёв
         if error is not None:
-            try:
-                import sentry_sdk
-
-                sentry_sdk.capture_exception(error)
-            except Exception as sentry_error:
-                # Ошибки в интеграции Sentry не должны ломать основной поток.
-                # Но логируем для диагностики проблем с мониторингом
-                self.logger.warning(f"Ошибка при отправке в Sentry: {sentry_error}", exc_info=False)
+            self._error_reporting.report_error_to_sentry(error)
 
         # Логируем структурированное событие для унифицированного JSON‑логирования.
         # Используем ILogger протокол вместо прямого импорта из infra.logging.logger

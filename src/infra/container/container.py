@@ -307,7 +307,10 @@ class Container:
 
         from app.bot_notification_builders import BotNotificationBuilders
         from app.command_error_handler_service import CommandErrorHandlerService
+        from app.command_validation_service import CommandValidationService
+        from app.error_classification_service import ErrorClassificationService
         from app.error_message_formatter_service import ErrorMessageFormatterService
+        from app.error_reporting_service import ErrorReportingService
         from app.frog_command_service import FrogCommandService
         from app.retry_strategy_service import RetryStrategyService
 
@@ -324,6 +327,19 @@ class Container:
         command_error_handler = CommandErrorHandlerService(
             error_formatter=error_formatter,
             retry_strategy=retry_strategy,
+            logger=log,
+        )
+
+        command_validation_service = CommandValidationService(
+            logger=log,
+        )
+
+        error_classification_service = ErrorClassificationService(
+            logger=log,
+        )
+
+        error_reporting_service = ErrorReportingService(
+            error_classification_service=error_classification_service,
             logger=log,
         )
 
@@ -365,6 +381,9 @@ class Container:
             frog_command_service=frog_command_service,
             error_formatter=error_formatter,
             retry_strategy=retry_strategy,
+            command_validation_service=command_validation_service,
+            error_classification_service=error_classification_service,
+            error_reporting_service=error_reporting_service,
         )
 
         self._services = services

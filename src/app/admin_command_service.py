@@ -55,7 +55,7 @@ class ValidationResult:
     error_message: str | None = None
 
 
-class AdminCommandService(BaseService):
+class AdminCommandService(BaseService):  # noqa: PLR0904
     """Сервис для координации админских команд.
 
     Инкапсулирует бизнес-логику выполнения админских команд,
@@ -997,3 +997,48 @@ class AdminCommandService(BaseService):
                 success=False,
                 message=error_message,
             )
+
+    @staticmethod
+    def get_add_chat_usage_message() -> str:
+        """Возвращает сообщение об использовании команды /add_chat.
+
+        Returns:
+            Сообщение с инструкцией по использованию команды.
+        """
+        return "📝 Использование: /add_chat <chat_id>"
+
+    @staticmethod
+    def get_remove_chat_usage_message() -> str:
+        """Возвращает сообщение об использовании команды /remove_chat.
+
+        Returns:
+            Сообщение с инструкцией по использованию команды.
+        """
+        return "📝 Использование: /remove_chat <chat_id>"
+
+    @staticmethod
+    def get_set_frog_limit_usage_message() -> str:
+        """Возвращает сообщение об использовании команды /set_frog_limit.
+
+        Returns:
+            Сообщение с инструкцией по использованию команды.
+        """
+        return f"📝 Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})"
+
+    @staticmethod
+    def get_set_frog_used_usage_message() -> str:
+        """Возвращает сообщение об использовании команды /set_frog_used.
+
+        Returns:
+            Сообщение с инструкцией по использованию команды.
+        """
+        return "📝 Использование: /set_frog_used <count>"
+
+    @staticmethod
+    def get_mod_usage_message() -> str:
+        """Возвращает сообщение об использовании команды /mod.
+
+        Returns:
+            Сообщение с инструкцией по использованию команды.
+        """
+        return "📝 Использование: ответьте на сообщение пользователя командой /mod или вызовите: /mod <user_id>"

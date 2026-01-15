@@ -43,9 +43,12 @@ class ChatEventHandler:
             raise ValueError("chat_event_service must be provided in BotServices")
         if services.telegram_api_rate_limiter is None:
             raise ValueError("telegram_api_rate_limiter must be provided in BotServices")
+        if services.error_classification_service is None:
+            raise ValueError("error_classification_service must be provided in BotServices")
         self._chat_event_service = services.chat_event_service
         # Сохраняем в локальную переменную для типизации mypy
         self._rate_limiter = services.telegram_api_rate_limiter
+        self._error_classification = services.error_classification_service
 
     async def on_my_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик событий изменения статуса бота в чатах.
@@ -91,10 +94,11 @@ class ChatEventHandler:
                 # Делегируем обработку события в сервис
                 await self._chat_event_service.handle_bot_removed(chat_id)
 
-        except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as e:
-            # Критические ошибки - пробрасываем выше
-            self.logger.critical(f"Критическая ошибка в on_my_chat_member: {e}", exc_info=True)
-            raise
         except Exception as e:
+            # Классифицируем ошибку через сервис для соблюдения границ слоёв
+            if self._error_classification.is_critical_error(e):
+                # Критические ошибки - пробрасываем выше
+                self.logger.critical(f"Критическая ошибка в on_my_chat_member: {e}", exc_info=True)
+                raise
             # Неожиданные ошибки - логируем, но не прерываем работу
             self.logger.error(f"Неожиданная ошибка в on_my_chat_member: {e}", exc_info=True)
