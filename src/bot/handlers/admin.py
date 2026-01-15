@@ -3,8 +3,12 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from app.admin_notification_builders import AdminNotificationBuilders
 from bot.handlers.base import (
     BaseHandlers,
+)
+from bot.handlers.messages import (
+    SUPER_ADMIN_ACCESS_DENIED,
 )
 from shared.base.exceptions import (
     AccessDeniedError,
@@ -73,11 +77,7 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /status от пользователя {user_id}")
 
         # Проверка доступа администратора
-        if not await self._admin_access.is_admin(user_id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(user_id, update.message):
             return
 
         async def _execute_status() -> None:
@@ -128,15 +128,11 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /force_send от пользователя {user_id}")
 
-        if not await self._admin_access.is_admin(user_id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(user_id, update.message):
             return
 
         # Без аргументов - показываем список чатов
-        if not context.args or len(context.args) == 0:
+        if not self._has_args(context):
             result = await self._admin_command.get_chat_list_for_display()
             await self._safe_reply_with_fallback(
                 update.message,
@@ -193,14 +189,10 @@ class AdminHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self._admin_access.is_admin(update.effective_user.id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(update.effective_user.id, update.message):
             return
 
-        if not context.args or len(context.args) == 0:
+        if not self._has_args(context):
             await self._safe_reply_with_fallback(
                 update.message,
                 "📝 Использование: /add_chat <chat_id>",
@@ -256,14 +248,10 @@ class AdminHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self._admin_access.is_admin(update.effective_user.id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(update.effective_user.id, update.message):
             return
 
-        if not context.args or len(context.args) == 0:
+        if not self._has_args(context):
             await self._safe_reply_with_fallback(
                 update.message,
                 "📝 Использование: /remove_chat <chat_id>",
@@ -322,15 +310,7 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /list_chats от пользователя {user_id}")
 
-        if not await self._admin_access.is_admin(user_id):
-            if not await self._safe_reply_text_with_error_logging(
-                update.message,
-                "❌ Доступно только администратору",
-                error_context="сообщение об ограничении доступа",
-                max_retries=3,
-                delay=2,
-            ):
-                return
+        if not await self._check_admin_access(user_id, update.message):
             return
 
         # Делегируем получение и форматирование списка чатов в сервис
@@ -367,14 +347,10 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /set_frog_limit от пользователя {user_id}")
 
-        if not await self._admin_access.is_admin(user_id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(user_id, update.message):
             return
 
-        if not context.args or len(context.args) < 1:
+        if not self._has_args(context):
             await self._safe_reply_with_fallback(
                 update.message,
                 f"📝 Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})",
@@ -413,14 +389,10 @@ class AdminHandlers(BaseHandlers):
             return
 
         user_id = update.effective_user.id
-        if not await self._admin_access.is_admin(user_id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(user_id, update.message):
             return
 
-        if not context.args or len(context.args) < 1:
+        if not self._has_args(context):
             await self._safe_reply_with_fallback(
                 update.message,
                 "📝 Использование: /set_frog_used <count>",
@@ -464,12 +436,7 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /mod от пользователя {user_id}")
 
         # Проверка прав: только главный администратор
-        if not await self._admin_access.is_super_admin(user_id):
-            self.logger.warning(f"mod_command: пользователь {user_id} не является главным администратором")
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только главному администратору",
-            )
+        if not await self._check_admin_access(user_id, update.message, require_super=True):
             return
 
         # Извлекаем target_user_id из reply или аргументов
@@ -505,7 +472,7 @@ class AdminHandlers(BaseHandlers):
             # Должно быть обработано выше, но на всякий случай
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Доступно только главному администратору",
+                SUPER_ADMIN_ACCESS_DENIED,
             )
 
     async def unmod_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -539,12 +506,7 @@ class AdminHandlers(BaseHandlers):
         self.logger.info(f"Получена команда /unmod от пользователя {user_id}")
 
         # Проверка прав: только главный администратор
-        if not await self._admin_access.is_super_admin(user_id):
-            self.logger.warning(f"unmod_command: пользователь {user_id} не является главным администратором")
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только главному администратору",
-            )
+        if not await self._check_admin_access(user_id, update.message, require_super=True):
             return
 
         # Извлекаем target_user_id из reply или аргументов
@@ -606,7 +568,7 @@ class AdminHandlers(BaseHandlers):
             # Должно быть обработано выше, но на всякий случай
             await self._safe_reply_with_fallback(
                 update.message,
-                "❌ Доступно только главному администратору",
+                SUPER_ADMIN_ACCESS_DENIED,
             )
         except ServiceError as e:
             # Ошибка при попытке удалить главного админа
@@ -648,18 +610,7 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /list_mods от пользователя {user_id}")
 
-        if not await self._admin_access.is_admin(user_id):
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Доступно только администратору",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(
-                    f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}", exc_info=True
-                )
+        if not await self._check_admin_access(user_id, update.message):
             return
 
         all_admins = await self._admin_command.list_all_admins()
@@ -672,8 +623,6 @@ class AdminHandlers(BaseHandlers):
             return
 
         # Используем билдер для форматирования сообщения
-        from app.admin_notification_builders import AdminNotificationBuilders
-
         super_admin_id = self._admin_access.get_super_admin_id()
         message = AdminNotificationBuilders.build_simple_admin_list_message(
             admins=all_admins,

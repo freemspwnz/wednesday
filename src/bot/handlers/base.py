@@ -93,6 +93,55 @@ class BaseHandlers:
 
         return None
 
+    @staticmethod
+    def _has_args(context: ContextTypes.DEFAULT_TYPE, min_count: int = 1) -> bool:
+        """Проверяет наличие аргументов команды.
+
+        Args:
+            context: Контекст бота с аргументами команды.
+            min_count: Минимальное количество аргументов (по умолчанию 1).
+
+        Returns:
+            True если аргументы присутствуют и их количество >= min_count, False иначе.
+        """
+        return context.args is not None and len(context.args) >= min_count
+
+    async def _check_admin_access(
+        self,
+        user_id: int,
+        message: Message,
+        require_super: bool = False,
+    ) -> bool:
+        """Проверяет доступ администратора и отправляет сообщение об ошибке при отсутствии доступа.
+
+        Args:
+            user_id: ID пользователя для проверки.
+            message: Сообщение для отправки ответа об ошибке.
+            require_super: Если True, проверяет доступ главного администратора.
+
+        Returns:
+            True если доступ есть, False если доступ отсутствует (сообщение об ошибке отправлено).
+        """
+        if require_super:
+            if self.services.admin_access_service is None:
+                raise ValueError("admin_access_service must be provided in BotServices")
+            is_authorized = await self.services.admin_access_service.is_super_admin(user_id)
+            if not is_authorized:
+                from bot.handlers.messages import SUPER_ADMIN_ACCESS_DENIED
+
+                await self._safe_reply_with_fallback(message, SUPER_ADMIN_ACCESS_DENIED)
+                return False
+        else:
+            if self.services.admin_access_service is None:
+                raise ValueError("admin_access_service must be provided in BotServices")
+            is_authorized = await self.services.admin_access_service.is_admin(user_id)
+            if not is_authorized:
+                from bot.handlers.messages import ADMIN_ACCESS_DENIED
+
+                await self._safe_reply_with_fallback(message, ADMIN_ACCESS_DENIED)
+                return False
+        return True
+
     async def _safe_reply_text(self, message: Message, text: str) -> None:
         """Безопасная отправка текста с retry для Telegram/сетевых ошибок.
 

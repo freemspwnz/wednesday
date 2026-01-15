@@ -55,19 +55,10 @@ class ModelHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self._admin_access.is_admin(update.effective_user.id):
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Доступно только администратору",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as e:
-                self.logger.error(f"Не удалось отправить сообщение об ограничении доступа после {3} попыток: {e}")
+        if not await self._check_admin_access(update.effective_user.id, update.message):
             return
 
-        if not context.args or len(context.args) == 0:
+        if not self._has_args(context):
             await self._safe_reply_with_fallback(
                 update.message,
                 (
@@ -153,14 +144,10 @@ class ModelHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self._admin_access.is_admin(update.effective_user.id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(update.effective_user.id, update.message):
             return
 
-        if not context.args or len(context.args) == 0:
+        if not self._has_args(context):
             await self._safe_reply_with_fallback(
                 update.message,
                 "📝 Использование: /set_gigachat_model <model_name>\n\n"
@@ -235,11 +222,7 @@ class ModelHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /list_models от пользователя {user_id}")
 
-        if not await self._admin_access.is_admin(user_id):
-            await self._safe_reply_with_fallback(
-                update.message,
-                "❌ Доступно только администратору",
-            )
+        if not await self._check_admin_access(user_id, update.message):
             return
 
         try:

@@ -5,6 +5,7 @@ from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from bot.handlers.base import BaseHandlers
+from bot.handlers.messages import WELCOME_MESSAGE_START
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
@@ -52,14 +53,7 @@ class UserHandlers(BaseHandlers):
 
         self.logger.info(f"Получена команда /start от пользователя {update.effective_user.id}")
 
-        welcome_message = (
-            "🐸 Привет! Я Wednesday Frog Bot!\n\n"
-            "Я генерирую изображения жабы по расписанию (каждую среду) и по команде.\n\n"
-            "Доступные команды:\n"
-            "/start - Показать это сообщение\n"
-            "/help - Справка по командам\n"
-            "/frog - Сгенерировать жабу прямо сейчас\n"
-        )
+        welcome_message = WELCOME_MESSAGE_START
 
         success = await self._safe_reply_with_fallback(
             update.message,

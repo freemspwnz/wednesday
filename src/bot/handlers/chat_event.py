@@ -8,6 +8,8 @@ from telegram import Bot, Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
+from app.chat_info_service import ChatInfoService
+from bot.handlers.messages import WELCOME_MESSAGE_CHAT
 from shared.base.exceptions import ServiceError
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
@@ -78,8 +80,6 @@ class ChatEventHandler:
             chat_id = chat.id
 
             # Определяем изменение статуса через сервис
-            from app.chat_info_service import ChatInfoService
-
             status_change = ChatInfoService.determine_bot_status_change(old, new)
 
             # Бот добавлен/активирован в чате
@@ -88,15 +88,7 @@ class ChatEventHandler:
                     result = await self._admin_command.add_chat(chat_id, "Bot added to chat")
                     if not result.success:
                         self.logger.warning(f"Не удалось добавить чат {chat_id}: {result.message}")
-                    welcome = (
-                        "🐸 Привет! Я Wednesday Frog Bot.\n\n"
-                        "Я присылаю картинки с жабой по средам (09:00, 12:00, 18:00 по Мск), "
-                        "а также по команде /frog (если не превышен лимит ручных генераций).\n\n"
-                        "Доступные команды:\n"
-                        "• /start — информация\n"
-                        "• /help — справка\n"
-                        "• /frog — сгенерировать жабу сейчас\n"
-                    )
+                    welcome = WELCOME_MESSAGE_CHAT
                     try:
                         # Используем rate limiting для защиты от превышения лимитов Telegram API
                         from shared.retry import retry_on_connect_error
