@@ -1,60 +1,103 @@
-"""Билдеры для уведомлений о жизненном цикле бота."""
+"""Билдеры для форматирования сообщений бота пользователям.
+
+Инкапсулирует логику форматирования сообщений для команд бота,
+обеспечивая единообразное представление информации и соблюдение границ слоёв.
+"""
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
-class BotLifecycleNotificationBuilder:
-    """Билдер для создания сообщений о жизненном цикле бота.
+if TYPE_CHECKING:
+    from app.admin_command_service import CommandResult
 
-    Инкапсулирует форматирование сообщений о запуске и остановке бота.
-    Соблюдает принцип единственной ответственности (SRP): отвечает только
-    за форматирование сообщений, не содержит логики отправки.
+
+class BotNotificationBuilders:
+    """Билдеры для форматирования сообщений бота пользователям.
+
+    Инкапсулирует логику форматирования сообщений для команд бота,
+    обеспечивая единообразное представление информации.
     """
 
     @staticmethod
-    def build_startup_message() -> str:
-        """Создает сообщение о запуске основного бота.
+    def format_rate_limit_error(rate_limit_message: str | None) -> str:
+        """Форматирует сообщение об ошибке rate limit.
+
+        Args:
+            rate_limit_message: Сообщение от сервиса rate limiting или None.
 
         Returns:
-            Форматированное сообщение о запуске бота.
+            Отформатированное сообщение об ошибке для пользователя.
         """
-        return (
-            "🚀 Wednesday Frog Bot запущен!\n\n"
-            "✅ Бот активен и готов к работе\n"
-            "📅 Планировщик: включен (Celery)\n"
-            "🎨 Генератор изображений: Kandinsky API\n"
-            "📝 Логирование: включено\n\n"
-            "🐸 Используйте команду /frog для генерации жабы!"
-        )
+        return rate_limit_message or "⏰ Повторная генерация временно недоступна"
 
     @staticmethod
-    def build_shutdown_message() -> str:
-        """Создает сообщение об остановке основного бота.
+    def format_generation_limit_error(limit_message: str | None) -> str:
+        """Форматирует сообщение об ошибке лимита генераций.
+
+        Args:
+            limit_message: Сообщение от сервиса проверки лимитов или None.
 
         Returns:
-            Форматированное сообщение об остановке бота.
+            Отформатированное сообщение об ошибке для пользователя.
         """
-        return "🛑 Wednesday Frog Bot остановлен!\n\n👋 До свидания!"
+        if limit_message:
+            return limit_message
+        return "🚫 Лимит ручных генераций на этот месяц исчерпан.\nОжидайте автоматических отправок по средам."
 
     @staticmethod
-    def build_support_startup_message() -> str:
-        """Создает сообщение о запуске SupportBot.
+    def get_frog_generation_status_message() -> str:
+        """Возвращает текст статусного сообщения для генерации жабы.
 
         Returns:
-            Форматированное сообщение о запуске SupportBot.
+            Текст статусного сообщения.
         """
-        return (
-            "🟢 SupportBot запущен и принимает команды.\n"
-            "• /help — справка\n"
-            "• /log — последний лог\n"
-            "• /start — запустить основной бот"
-        )
+        return "🐸 Генерирую жабу для вас... Это может занять несколько секунд."
 
     @staticmethod
-    def build_support_shutdown_message() -> str:
-        """Создает сообщение об остановке SupportBot.
+    def get_frog_queue_error_message() -> str:
+        """Возвращает текст сообщения об ошибке постановки в очередь.
 
         Returns:
-            Форматированное сообщение об остановке SupportBot.
+            Текст сообщения об ошибке.
         """
-        return "🛑 SupportBot остановлен.\n\nЕсли это не плановая остановка, проверьте логи и состояние основного бота."
+        return "⚠️ Не удалось поставить запрос в очередь. Попробуйте позже."
+
+    @staticmethod
+    def format_command_result(result: CommandResult) -> str:
+        """Форматирует результат выполнения команды.
+
+        Args:
+            result: Результат выполнения команды (CommandResult или объект с success и message).
+
+        Returns:
+            Отформатированное сообщение с результатом.
+        """
+        if result.success:
+            return f"✅ {result.message}"
+        return f"❌ {result.message}"
+
+    @staticmethod
+    def format_model_result(result: object) -> str:
+        """Форматирует результат установки модели.
+
+        Args:
+            result: Результат установки модели (объект с success и message).
+
+        Returns:
+            Отформатированное сообщение с результатом.
+        """
+        if hasattr(result, "success") and hasattr(result, "message"):
+            if result.success:
+                return f"✅ {result.message}"
+            return f"❌ {result.message}"
+        return str(result)
+
+    @staticmethod
+    def get_model_setting_status_message() -> str:
+        """Возвращает текст статусного сообщения для установки модели.
+
+        Returns:
+            Текст статусного сообщения.
+        """
+        return "⏳ Устанавливаю модель..."

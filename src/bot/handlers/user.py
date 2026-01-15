@@ -3,9 +3,12 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.frog_limit_service import FrogRateLimiterService
 from bot.handlers.base import BaseHandlers
-from bot.handlers.messages import WELCOME_MESSAGE_START
+from bot.handlers.messages import (
+    FROG_GENERATION_STATUS_MESSAGE,
+    UNKNOWN_COMMAND_MESSAGE,
+    WELCOME_MESSAGE_START,
+)
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 
@@ -27,8 +30,11 @@ class UserHandlers(BaseHandlers):
             raise ValueError("admin_access_service must be provided in BotServices")
         if self.services.help_message_service is None:
             raise ValueError("help_message_service must be provided in BotServices")
+        if self.services.frog_command_service is None:
+            raise ValueError("frog_command_service must be provided in BotServices")
         self._admin_access = self.services.admin_access_service
         self._help_message_service = self.services.help_message_service
+        self._frog_command_service = self.services.frog_command_service
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.
@@ -103,21 +109,19 @@ class UserHandlers(BaseHandlers):
     async def frog_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /frog.
 
-        Ставит задачу генерации и отправки изображения жабы в очередь Celery.
-        Команда защищена rate limiting (per-user и глобальный) и проверкой
-        месячного лимита генераций.
+        Делегирует всю бизнес-логику в FrogCommandService.
+        Отвечает только за взаимодействие с Telegram API.
 
         Args:
             update: Объект обновления Telegram, содержащий информацию о сообщении
                 и пользователе, который отправил команду.
-            context: Контекст бота, предоставляющий доступ к объекту бота и Celery‑контексту.
-                Информация о лимитах и использовании берётся из self.services.usage.
+            context: Контекст бота (не используется напрямую, но требуется
+                для совместимости с интерфейсом обработчиков команд).
 
         Side Effects:
-            - Проверяет глобальный и per-user rate limits через FrogRateLimiterService.
-            - Проверяет месячный лимит генераций через usage.can_use_frog().
-            - Отправляет статусное сообщение пользователю.
-            - Ставит Celery-задачу через ITaskQueue.
+            - Отправляет статусное сообщение пользователю (если нужно).
+            - Отправляет сообщение об ошибке пользователю (если есть).
+            - Удаляет статусное сообщение при ошибке (если нужно).
         """
         if not update.message or not update.effective_user:
             return
@@ -126,48 +130,36 @@ class UserHandlers(BaseHandlers):
         chat_id = update.message.chat_id
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
-        # Проверка на админа через admin_access_service
-        is_admin = await self._admin_access.is_admin(user_id)
+        # Проверяем, разрешена ли команда
+        check_result = await self._frog_command_service.check_frog_command_allowed(user_id)
 
-        # Проверка rate limit через application service
-        is_allowed, rate_limit_message = await self.services.frog_rate_limiter.check_and_consume(
-            user_id=user_id,
-            is_admin=is_admin,
-        )
-        if not is_allowed:
-            error_message = rate_limit_message or "⏰ Повторная генерация временно недоступна"
+        # Если проверка не прошла, отправляем ошибку
+        if not check_result.success:
+            error_message = check_result.error_message or ""
             await self._safe_reply_with_fallback(update.message, error_message)
             return
 
-        # Проверяем лимит генераций через frog_rate_limiter
-        can_generate, limit_message = await self.services.frog_rate_limiter.check_generation_allowed()
-        if not can_generate:
-            error_message = FrogRateLimiterService.format_generation_limit_error(limit_message)
-            await self._safe_reply_with_fallback(update.message, error_message)
-            return
-
-        # Отправляем сообщение о начале генерации
+        # Отправляем статусное сообщение
         status_message = await self._safe_reply_text_and_get_message(
             update.message,
-            "🐸 Генерирую жабу для вас... Это может занять несколько секунд.",
+            check_result.status_message or FROG_GENERATION_STATUS_MESSAGE,
         )
 
-        # Ставим задачу в очередь Celery напрямую
-        try:
-            await self.services.task_queue.send_frog_manual_task(
-                chat_id=chat_id,
-                user_id=user_id,
-                status_message_id=status_message.message_id if status_message else None,
-            )
-        except Exception as e:
-            self.logger.error(f"Не удалось поставить задачу в очередь Celery: {e}")
-            # Удаляем статусное сообщение
+        # Ставим задачу в очередь
+        enqueue_result = await self._frog_command_service.enqueue_frog_generation(
+            chat_id=chat_id,
+            user_id=user_id,
+            status_message_id=status_message.message_id if status_message else None,
+        )
+
+        # Если была ошибка при постановке задачи, обрабатываем её
+        if not enqueue_result.success:
             await self._safe_delete_message(status_message)
-            # Отправляем сообщение пользователю об ошибке
-            await self._safe_reply_with_fallback(
-                update.message,
-                "⚠️ Не удалось поставить запрос в очередь. Попробуйте позже.",
-            )
+            if enqueue_result.error_message:
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    enqueue_result.error_message,
+                )
 
     async def unknown_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик неизвестных команд.
@@ -191,18 +183,9 @@ class UserHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена неизвестная команда от пользователя {user_id}")
 
-        unknown_message = (
-            "❓ Неизвестная команда!\n\n"
-            "Доступные команды:\n"
-            "/start - Приветствие\n"
-            "/help - Справка\n"
-            "/frog - Сгенерировать жабу\n\n"
-            "Используйте /help для получения подробной информации."
-        )
-
         success = await self._safe_reply_with_fallback(
             update.message,
-            unknown_message,
+            UNKNOWN_COMMAND_MESSAGE,
         )
         if success:
             self.logger.info("Отправлено сообщение о неизвестной команде")

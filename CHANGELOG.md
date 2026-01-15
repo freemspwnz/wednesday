@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Исправление нарушений архитектуры bot/ слоя**:
+  - Создан `BotNotificationBuilders` для централизованного форматирования сообщений бота
+  - Создан `FrogCommandService` для инкапсуляции всей бизнес-логики команды /frog
+  - Вынесено форматирование сообщений об ошибках из хендлеров в `BotNotificationBuilders`
+  - Вынесены все текстовые константы сообщений в `bot/handlers/messages.py`
+  - Убрано прямое обращение к `task_queue` из `frog_command` - теперь через `FrogCommandService`
+  - Убрано прямое обращение к `get_super_admin_id()` из `unmod_command` - инкапсулировано в `AdminCommandService`
+  - Разделена логика `frog_command` на проверку лимитов и постановку задачи в очередь
+  - Обновлен `AdminCommandService.remove_admin()` для получения `super_admin_id` внутри сервиса
+  - Обновлены все хендлеры для использования builders вместо прямого форматирования сообщений
+  - Добавлены новые сервисы в `BotServices` и `Container` для соблюдения границ слоёв
+
 - **Исправление нарушений архитектуры `bot/`**:
   - Вынесено определение статуса бота из `bot/handlers/chat_event.py` в `ChatEventService.determine_bot_status_change()`
   - Вынесена логика отправки приветственного сообщения из `chat_event.py` в `ChatEventService.send_welcome_message()`

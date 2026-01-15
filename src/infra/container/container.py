@@ -305,6 +305,19 @@ class Container:
             logger=log,
         )
 
+        from app.bot_notification_builders import BotNotificationBuilders
+        from app.frog_command_service import FrogCommandService
+
+        bot_notification_builders = BotNotificationBuilders()
+
+        frog_command_service = FrogCommandService(
+            frog_rate_limiter=frog_rate_limiter_service,
+            admin_access_service=admin_access_service,
+            task_queue=self._task_queue,
+            notification_builders=bot_notification_builders,
+            logger=log,
+        )
+
         services = BotServices(
             usage=self.repos.usage_tracker,
             chats=self.repos.chats_repo,
@@ -330,6 +343,8 @@ class Container:
             user_extraction_service=user_extraction_service,
             help_message_service=help_message_service,
             chat_event_service=chat_event_service,
+            bot_notification_builders=bot_notification_builders,
+            frog_command_service=frog_command_service,
         )
 
         self._services = services

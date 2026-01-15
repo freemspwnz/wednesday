@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.handlers.base import BaseHandlers
+from bot.handlers.messages import MODEL_SETTING_STATUS_MESSAGE
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 
@@ -28,9 +29,12 @@ class ModelHandlers(BaseHandlers):
             raise ValueError("model_management_service must be provided in BotServices")
         if self.services.admin_access_service is None:
             raise ValueError("admin_access_service must be provided in BotServices")
+        if self.services.bot_notification_builders is None:
+            raise ValueError("bot_notification_builders must be provided in BotServices")
         self._dashboard_service = self.services.admin_dashboard_service
         self._model_management_service = self.services.model_management_service
         self._admin_access = self.services.admin_access_service
+        self._notification_builders = self.services.bot_notification_builders
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_kandinsky_model.
@@ -70,12 +74,12 @@ class ModelHandlers(BaseHandlers):
         model_arg = " ".join(context.args)  # Объединяем аргументы на случай названий с пробелами
         await self._safe_reply_with_fallback(
             update.message,
-            "⏳ Устанавливаю модель...",
+            MODEL_SETTING_STATUS_MESSAGE,
         )
 
         async def _execute() -> None:
             result = await self._model_management_service.set_kandinsky_model(model_arg)
-            message = f"✅ {result.message}" if result.success else f"❌ {result.message}"
+            message = self._notification_builders.format_model_result(result)
             await self._safe_reply_with_fallback(update.message, message)
 
         await self._handle_command_errors(update, _execute)

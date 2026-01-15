@@ -13,10 +13,12 @@ from app.admin_access_service import AdminAccessService
 from app.admin_command_service import AdminCommandService
 from app.admin_dashboard_service import AdminDashboardService
 from app.admin_notification_service import AdminNotificationService
+from app.bot_notification_builders import BotNotificationBuilders
 from app.chat_event_service import ChatEventService
 from app.chat_info_service import ChatInfoService
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_service import DispatchService
+from app.frog_command_service import FrogCommandService
 from app.frog_limit_service import FrogRateLimiterService
 from app.help_message_service import HelpMessageService
 from app.image_service import ImageService
@@ -106,6 +108,8 @@ class BotServices:
     user_extraction_service: UserExtractionService | None = None
     help_message_service: HelpMessageService | None = None
     chat_event_service: ChatEventService | None = None
+    bot_notification_builders: BotNotificationBuilders | None = None
+    frog_command_service: FrogCommandService | None = None
 
     async def cleanup(self) -> None:  # noqa: PLR6301
         """Закрывает все ресурсы (HTTP сессии, соединения).

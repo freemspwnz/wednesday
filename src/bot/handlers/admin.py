@@ -498,13 +498,9 @@ class AdminHandlers(BaseHandlers):
 
         # Удаляем админа через AdminCommandService
         try:
-            # Получаем super_admin_id через admin_access_service
-            super_admin_id = self._admin_access.get_super_admin_id()
-
             result = await self._admin_command.remove_admin(
                 target_user_id=target_user_id,
                 requester_user_id=user_id,
-                super_admin_id=super_admin_id,
             )
             await self._safe_reply_with_fallback(
                 update.message,

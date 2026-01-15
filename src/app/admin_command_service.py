@@ -544,14 +544,12 @@ class AdminCommandService(BaseService):
         self,
         target_user_id: int,
         requester_user_id: int,
-        super_admin_id: int | None,
     ) -> CommandResult:
         """Удаляет администратора.
 
         Args:
             target_user_id: ID пользователя для удаления из администраторов.
             requester_user_id: ID пользователя, запрашивающего операцию.
-            super_admin_id: ID главного администратора (нельзя удалить).
 
         Returns:
             Результат выполнения команды.
@@ -562,6 +560,9 @@ class AdminCommandService(BaseService):
         """
         # Проверяем права
         await self._admin_access.require_super_admin(requester_user_id)
+
+        # Получаем super_admin_id внутри сервиса
+        super_admin_id = self._admin_access.get_super_admin_id()
 
         # Проверяем, не пытаются ли удалить главного админа
         if super_admin_id and int(target_user_id) == int(super_admin_id):
