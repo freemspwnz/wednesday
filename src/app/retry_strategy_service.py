@@ -7,17 +7,11 @@
 from __future__ import annotations
 
 from shared.base.base_service import BaseService
+from shared.constants import (
+    MAX_RETRIES_LIMIT,
+    RETRY_DELAY_DEFAULT,
+)
 from shared.protocols.infrastructure import ILogger
-
-# Константы для retry-стратегии
-RETRY_DELAY_DEFAULT = 2.0  # задержка между попытками по умолчанию
-MAX_RETRIES_LIMIT = 5  # максимальное количество попыток для защиты от утечек памяти
-MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
-
-# Константы таймаутов
-CHAT_INFO_TIMEOUT_DEFAULT = 5.0  # таймаут для получения информации о чате по умолчанию
-CHAT_TIMEOUT_DEFAULT = 10.0  # таймаут для получения полного объекта чата по умолчанию
-COMMAND_TIMEOUT_DEFAULT = 60.0  # таймаут для выполнения команды по умолчанию (60 секунд)
 
 
 class RetryStrategyService(BaseService):

@@ -53,24 +53,21 @@ class AdminHandlers(BaseHandlers):
             - Вызывает admin_dashboard_service.build_status_message() для получения статуса.
             - Отправляет подробный статус пользователю.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /status от пользователя {user_id}")
 
         # Проверка доступа администратора
-        if not await self._check_admin_access(user_id, update.message):
+        if not await self._check_admin_access(user_id, message):
             return
 
         async def _execute_status() -> None:
             status_message = await self._dashboard_service.build_status_message()
 
-            # update.message гарантированно не None после проверки выше
-            message = update.message
-            if message is None:
-                self.logger.warning("status_command: update.message is None после проверки")
-                return
             success = await self._safe_reply_with_fallback(
                 message,
                 status_message,
@@ -98,20 +95,22 @@ class AdminHandlers(BaseHandlers):
             - Делегирует выполнение команды в admin_command_service.execute_force_send().
             - Отправляет результат выполнения пользователю.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /force_send от пользователя {user_id}")
 
-        if not await self._check_admin_access(user_id, update.message):
+        if not await self._check_admin_access(user_id, message):
             return
 
         # Без аргументов - показываем список чатов
         if not self._has_args(context):
             result = await self._admin_command.get_chat_list_for_display()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 result.message,
             )
             return
@@ -125,7 +124,7 @@ class AdminHandlers(BaseHandlers):
             target_arg=raw_arg,
         )
         await self._safe_reply_with_fallback(
-            update.message,
+            message,
             result.message,
         )
         if result.success:
@@ -150,16 +149,18 @@ class AdminHandlers(BaseHandlers):
         Raises:
             ValueError: Если переданный chat_id не является числом.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        if not await self._check_admin_access(update.effective_user.id, update.message):
+        if not await self._check_admin_access(user.id, message):
             return
 
         if not self._has_args(context):
             usage_message = self._admin_command.get_add_chat_usage_message()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 usage_message,
             )
             return
@@ -172,7 +173,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.info("Чат успешно добавлен в рассылку")
             else:
                 self.logger.warning(f"Не удалось добавить чат: {result.message}")
-            await self._safe_reply_with_fallback(update.message, result.message)
+            await self._safe_reply_with_fallback(message, result.message)
 
         await self._handle_command_errors(update, _execute)
 
@@ -195,16 +196,18 @@ class AdminHandlers(BaseHandlers):
         Raises:
             ValueError: Если переданный chat_id не является числом.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        if not await self._check_admin_access(update.effective_user.id, update.message):
+        if not await self._check_admin_access(user.id, message):
             return
 
         if not self._has_args(context):
             usage_message = self._admin_command.get_remove_chat_usage_message()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 usage_message,
             )
             return
@@ -217,7 +220,7 @@ class AdminHandlers(BaseHandlers):
                 self.logger.info("Чат успешно удалён из рассылки")
             else:
                 self.logger.warning(f"Не удалось удалить чат: {result.message}")
-            await self._safe_reply_with_fallback(update.message, result.message)
+            await self._safe_reply_with_fallback(message, result.message)
 
         await self._handle_command_errors(update, _execute)
 
@@ -237,19 +240,21 @@ class AdminHandlers(BaseHandlers):
             - Делегирует получение и форматирование списка чатов в admin_command_service.get_chat_list_for_display().
             - Отправляет форматированный список чатов пользователю.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /list_chats от пользователя {user_id}")
 
-        if not await self._check_admin_access(user_id, update.message):
+        if not await self._check_admin_access(user_id, message):
             return
 
         # Делегируем получение и форматирование списка чатов в сервис
         result = await self._admin_command.get_chat_list_for_display()
         await self._safe_reply_with_fallback(
-            update.message,
+            message,
             result.message,
         )
         if result.success:
@@ -274,19 +279,21 @@ class AdminHandlers(BaseHandlers):
         Raises:
             ValueError: Если переданный аргумент не является положительным числом.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /set_frog_limit от пользователя {user_id}")
 
-        if not await self._check_admin_access(user_id, update.message):
+        if not await self._check_admin_access(user_id, message):
             return
 
         if not self._has_args(context):
             usage_message = self._admin_command.get_set_frog_limit_usage_message()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 usage_message,
             )
             return
@@ -295,7 +302,7 @@ class AdminHandlers(BaseHandlers):
             # Передаем сырой аргумент - нормализация будет в сервисе
             raw_arg = context.args[0]
             result = await self._admin_command.set_frog_threshold_from_string(raw_arg)
-            await self._safe_reply_with_fallback(update.message, result.message)
+            await self._safe_reply_with_fallback(message, result.message)
 
         await self._handle_command_errors(update, _execute)
 
@@ -318,17 +325,19 @@ class AdminHandlers(BaseHandlers):
         Raises:
             ValueError: Если переданный аргумент не является неотрицательным числом.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
-        if not await self._check_admin_access(user_id, update.message):
+        user_id = user.id
+        if not await self._check_admin_access(user_id, message):
             return
 
         if not self._has_args(context):
             usage_message = self._admin_command.get_set_frog_used_usage_message()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 usage_message,
             )
             return
@@ -337,7 +346,7 @@ class AdminHandlers(BaseHandlers):
             # Передаем сырой аргумент - нормализация будет в сервисе
             raw_arg = context.args[0]
             result = await self._admin_command.set_frog_used_from_string(raw_arg)
-            await self._safe_reply_with_fallback(update.message, result.message)
+            await self._safe_reply_with_fallback(message, result.message)
 
         await self._handle_command_errors(update, _execute)
 
@@ -361,14 +370,16 @@ class AdminHandlers(BaseHandlers):
             - Делегирует добавление администратора в admin_command_service.add_admin().
             - Отправляет ответное сообщение пользователю с результатом операции.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /mod от пользователя {user_id}")
 
         # Проверка прав: только главный администратор
-        if not await self._check_admin_access(user_id, update.message, require_super=True):
+        if not await self._check_admin_access(user_id, message, require_super=True):
             return
 
         # Извлекаем target_user_id из reply или аргументов
@@ -378,7 +389,7 @@ class AdminHandlers(BaseHandlers):
             self.logger.warning("mod_command: не удалось определить target_user_id")
             usage_message = self._admin_command.get_mod_usage_message()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 usage_message,
             )
             return
@@ -392,7 +403,7 @@ class AdminHandlers(BaseHandlers):
             requester_user_id=user_id,
         )
         await self._safe_reply_with_fallback(
-            update.message,
+            message,
             result.message,
         )
 
@@ -418,14 +429,16 @@ class AdminHandlers(BaseHandlers):
             - Делегирует получение списка администраторов в admin_command_service.get_admin_list_with_details().
             - Отправляет ответное сообщение пользователю с результатом операции.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /unmod от пользователя {user_id}")
 
         # Проверка прав: только главный администратор
-        if not await self._check_admin_access(user_id, update.message, require_super=True):
+        if not await self._check_admin_access(user_id, message, require_super=True):
             return
 
         # Извлекаем target_user_id из reply или аргументов
@@ -437,7 +450,7 @@ class AdminHandlers(BaseHandlers):
             # Сервис обрабатывает все исключения и возвращает готовое сообщение
             result = await self._admin_command.get_admin_list_with_details()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 result.message,
             )
             if result.success:
@@ -454,7 +467,7 @@ class AdminHandlers(BaseHandlers):
             requester_user_id=user_id,
         )
         await self._safe_reply_with_fallback(
-            update.message,
+            message,
             result.message,
         )
 
@@ -475,18 +488,20 @@ class AdminHandlers(BaseHandlers):
             - Делегирует получение списка администраторов в admin_command_service.get_admin_list_with_details().
             - Отправляет форматированный список администраторов пользователю.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /list_mods от пользователя {user_id}")
 
-        if not await self._check_admin_access(user_id, update.message):
+        if not await self._check_admin_access(user_id, message):
             return
 
         result = await self._admin_command.get_admin_list_with_details()
         await self._safe_reply_with_fallback(
-            update.message,
+            message,
             result.message,
         )
         if result.success:

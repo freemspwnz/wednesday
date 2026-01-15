@@ -54,16 +54,18 @@ class ModelHandlers(BaseHandlers):
             - Отправляет ответное сообщение пользователю с результатом операции.
             - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        if not await self._check_admin_access(update.effective_user.id, update.message):
+        if not await self._check_admin_access(user.id, message):
             return
 
         if not self._has_args(context):
             usage_message = self._model_management_service.get_set_kandinsky_model_usage_message()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 usage_message,
             )
             return
@@ -71,14 +73,14 @@ class ModelHandlers(BaseHandlers):
         # Передаем список аргументов - объединение будет в сервисе
         model_args = context.args
         await self._safe_reply_with_fallback(
-            update.message,
+            message,
             MODEL_SETTING_STATUS_MESSAGE,
         )
 
         async def _execute() -> None:
             result = await self._model_management_service.set_kandinsky_model(model_args)
-            message = self._notification_builders.format_model_result(result)
-            await self._safe_reply_with_fallback(update.message, message)
+            result_message = self._notification_builders.format_model_result(result)
+            await self._safe_reply_with_fallback(message, result_message)
 
         await self._handle_command_errors(update, _execute)
 
@@ -99,16 +101,18 @@ class ModelHandlers(BaseHandlers):
             - Отправляет ответное сообщение пользователю с результатом операции.
             - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        if not await self._check_admin_access(update.effective_user.id, update.message):
+        if not await self._check_admin_access(user.id, message):
             return
 
         if not self._has_args(context):
             usage_message = self._model_management_service.get_set_gigachat_model_usage_message()
             await self._safe_reply_with_fallback(
-                update.message,
+                message,
                 usage_message,
             )
             return
@@ -117,7 +121,7 @@ class ModelHandlers(BaseHandlers):
 
         async def _execute() -> None:
             result = await self._model_management_service.set_gigachat_model(model_name)
-            await self._safe_reply_with_fallback(update.message, result.message)
+            await self._safe_reply_with_fallback(message, result.message)
 
         await self._handle_command_errors(update, _execute)
 
@@ -139,18 +143,20 @@ class ModelHandlers(BaseHandlers):
             - Отправляет форматированный список моделей пользователю.
             - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /list_models от пользователя {user_id}")
 
-        if not await self._check_admin_access(user_id, update.message):
+        if not await self._check_admin_access(user_id, message):
             return
 
         async def _execute() -> None:
-            message = await self._dashboard_service.build_models_list_message()
-            await self._safe_reply_with_fallback(update.message, message)
+            models_message = await self._dashboard_service.build_models_list_message()
+            await self._safe_reply_with_fallback(message, models_message)
             self.logger.info(f"Отправлен список моделей пользователю {user_id}")
 
         await self._handle_command_errors(update, _execute)

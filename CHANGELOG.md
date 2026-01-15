@@ -4,6 +4,13 @@
 
 ### Изменено
 
+- **Исправление оставшихся нарушений архитектуры в bot/ слое**:
+  - Перенесены константы retry-стратегии (`RETRY_DELAY_DEFAULT`, `MAX_RETRIES_DEFAULT`, `MAX_RETRIES_LIMIT`, `CHAT_INFO_TIMEOUT_DEFAULT`, `CHAT_TIMEOUT_DEFAULT`, `COMMAND_TIMEOUT_DEFAULT`) из `app/retry_strategy_service.py` в `shared/constants.py` для соблюдения границ слоёв
+  - Обновлены импорты констант в `bot/handlers/base.py` и `app/retry_strategy_service.py` для использования `shared/constants`
+  - Исправлен вызов `CommandValidationService.has_args()` - теперь используется инстанс из контейнера вместо прямого статического вызова
+  - Добавлен метод `_validate_update()` в `BaseHandlers` для устранения дублирования проверок `update.message` и `update.effective_user`
+  - Обновлены все обработчики (`UserHandlers`, `AdminHandlers`, `ModelHandlers`) для использования `_validate_update()` вместо дублирования проверок
+
 - **Рефакторинг bot/ слоя для устранения нарушений архитектуры**:
   - Создан `CommandValidationService` для валидации аргументов команд
   - Создан `ErrorClassificationService` для классификации типов ошибок

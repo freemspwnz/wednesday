@@ -52,15 +52,17 @@ class UserHandlers(BaseHandlers):
             - Отправляет приветственное сообщение пользователю.
             - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        self.logger.info(f"Получена команда /start от пользователя {update.effective_user.id}")
+        self.logger.info(f"Получена команда /start от пользователя {user.id}")
 
         welcome_message = WELCOME_MESSAGE_START
 
         success = await self._safe_reply_with_fallback(
-            update.message,
+            message,
             welcome_message,
         )
         if success:
@@ -83,10 +85,12 @@ class UserHandlers(BaseHandlers):
             - Делегирует всю логику (проверку прав и выбор сообщения) в help_message_service.
             - Отправляет соответствующую справку (админскую или пользовательскую).
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена команда /help от пользователя {user_id}")
 
         # Делегируем всю логику (проверку прав и выбор сообщения) в сервис
@@ -96,7 +100,7 @@ class UserHandlers(BaseHandlers):
         )
 
         await self._safe_reply_with_fallback(
-            update.message,
+            message,
             help_message,
         )
 
@@ -117,11 +121,13 @@ class UserHandlers(BaseHandlers):
             - Отправляет сообщение об ошибке пользователю (если есть).
             - Удаляет статусное сообщение при ошибке (если нужно).
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
-        chat_id = update.message.chat_id
+        user_id = user.id
+        chat_id = message.chat_id
         self.logger.info(f"Получена команда /frog от пользователя {user_id}")
 
         # Проверяем, разрешена ли команда
@@ -130,12 +136,12 @@ class UserHandlers(BaseHandlers):
         # Если проверка не прошла, отправляем ошибку
         if not check_result.success:
             error_message = check_result.error_message or ""
-            await self._safe_reply_with_fallback(update.message, error_message)
+            await self._safe_reply_with_fallback(message, error_message)
             return
 
         # Отправляем статусное сообщение
         status_message = await self._safe_reply_text_and_get_message(
-            update.message,
+            message,
             check_result.status_message or FROG_GENERATION_STATUS_MESSAGE,
         )
 
@@ -151,7 +157,7 @@ class UserHandlers(BaseHandlers):
             await self._safe_delete_message(status_message)
             if enqueue_result.error_message:
                 await self._safe_reply_with_fallback(
-                    update.message,
+                    message,
                     enqueue_result.error_message,
                 )
 
@@ -171,14 +177,16 @@ class UserHandlers(BaseHandlers):
             - Отправляет сообщение с информацией о доступных командах пользователю.
             - Использует retry_on_connect_error() для обработки сетевых ошибок.
         """
-        if not update.message or not update.effective_user:
+        validated = self._validate_update(update)
+        if validated is None:
             return
+        message, user = validated
 
-        user_id = update.effective_user.id
+        user_id = user.id
         self.logger.info(f"Получена неизвестная команда от пользователя {user_id}")
 
         success = await self._safe_reply_with_fallback(
-            update.message,
+            message,
             UNKNOWN_COMMAND_MESSAGE,
         )
         if success:

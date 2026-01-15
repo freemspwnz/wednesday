@@ -8,26 +8,19 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
 
-from telegram import Message, Update
+from telegram import Message, Update, User
 from telegram.ext import ContextTypes
 
-# Импортируем константы из retry_strategy_service для использования в retry_on_connect_error
-from app.retry_strategy_service import (
+from shared.bot_services import BotServices
+from shared.constants import (
     CHAT_INFO_TIMEOUT_DEFAULT,
     MAX_RETRIES_DEFAULT,
     RETRY_DELAY_DEFAULT,
 )
-from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
 from shared.utils.async_utils import gather_with_timeout
-
-if TYPE_CHECKING:
-    from app.command_validation_service import CommandValidationService
-else:
-    from app.command_validation_service import CommandValidationService
 
 
 class BaseHandlers:
@@ -53,6 +46,22 @@ class BaseHandlers:
         # Сохраняем в локальные переменные для типизации mypy
         self._rate_limiter = services.telegram_api_rate_limiter
         self._command_error_handler = services.command_error_handler
+
+    def _validate_update(self, update: Update) -> tuple[Message, User] | None:  # noqa: PLR6301
+        """Валидирует update и возвращает message и user или None.
+
+        Устраняет дублирование проверок update.message и update.effective_user
+        во всех обработчиках.
+
+        Args:
+            update: Объект обновления Telegram.
+
+        Returns:
+            Кортеж (message, user) если валидация прошла, None иначе.
+        """
+        if not update.message or not update.effective_user:
+            return None
+        return update.message, update.effective_user
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
@@ -84,7 +93,7 @@ class BaseHandlers:
         """
         if self.services.command_validation_service is None:
             raise ValueError("command_validation_service must be provided in BotServices")
-        return CommandValidationService.has_args(context, min_count)
+        return self.services.command_validation_service.has_args(context, min_count)
 
     def _require_admin_access_service(self) -> None:
         """Проверяет наличие admin_access_service.
