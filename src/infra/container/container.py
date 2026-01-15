@@ -285,6 +285,24 @@ class Container:
             chat_info_service=chat_info_service,
         )
 
+        from app.chat_event_service import ChatEventService
+        from app.help_message_service import HelpMessageService
+        from app.user_extraction_service import UserExtractionService
+
+        chat_event_service = ChatEventService(
+            admin_command_service=admin_command_service,
+            chat_info_service=chat_info_service,
+            logger=log,
+        )
+
+        user_extraction_service = UserExtractionService(
+            logger=log,
+        )
+
+        help_message_service = HelpMessageService(
+            logger=log,
+        )
+
         services = BotServices(
             usage=self.repos.usage_tracker,
             chats=self.repos.chats_repo,
@@ -307,6 +325,9 @@ class Container:
             database_operations=database_operations,
             admins_repo=self.repos.admins_repo,
             telegram_api_rate_limiter=telegram_api_rate_limiter_service,
+            user_extraction_service=user_extraction_service,
+            help_message_service=help_message_service,
+            chat_event_service=chat_event_service,
         )
 
         self._services = services

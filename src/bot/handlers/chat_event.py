@@ -10,9 +10,9 @@ from telegram.ext import ContextTypes
 
 from app.chat_info_service import ChatInfoService
 from bot.handlers.messages import WELCOME_MESSAGE_CHAT
-from shared.base.exceptions import ServiceError
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
+from shared.retry import retry_on_connect_error
 
 if TYPE_CHECKING:
     pass
@@ -42,11 +42,11 @@ class ChatEventHandler:
         self.services = services
         self.bot = bot
         self.logger = logger
-        if services.admin_command_service is None:
-            raise ValueError("admin_command_service must be provided in BotServices")
+        if services.chat_event_service is None:
+            raise ValueError("chat_event_service must be provided in BotServices")
         if services.telegram_api_rate_limiter is None:
             raise ValueError("telegram_api_rate_limiter must be provided in BotServices")
-        self._admin_command = services.admin_command_service
+        self._chat_event_service = services.chat_event_service
         # Сохраняем в локальную переменную для типизации mypy
         self._rate_limiter = services.telegram_api_rate_limiter
 
@@ -84,87 +84,45 @@ class ChatEventHandler:
 
             # Бот добавлен/активирован в чате
             if status_change.was_added:
+                # Делегируем обработку события в сервис
+                await self._chat_event_service.handle_bot_added(chat_id)
+
+                # Отправляем приветственное сообщение
+                welcome = WELCOME_MESSAGE_CHAT
                 try:
-                    result = await self._admin_command.add_chat(chat_id, "Bot added to chat")
-                    if not result.success:
-                        self.logger.warning(f"Не удалось добавить чат {chat_id}: {result.message}")
-                    welcome = WELCOME_MESSAGE_CHAT
-                    try:
-                        # Используем rate limiting для защиты от превышения лимитов Telegram API
-                        from shared.retry import retry_on_connect_error
 
-                        async def _send_welcome() -> None:
-                            await retry_on_connect_error(
-                                self.bot.send_message,
-                                chat_id=chat_id,
-                                text=welcome,
-                                max_retries=3,
-                                delay=2.0,
-                                handle_rate_limit=True,
-                            )
+                    async def _send_welcome() -> None:
+                        await retry_on_connect_error(
+                            self.bot.send_message,
+                            chat_id=chat_id,
+                            text=welcome,
+                            max_retries=3,
+                            delay=2.0,
+                            handle_rate_limit=True,
+                        )
 
-                        await self._rate_limiter.execute_with_rate_limit(_send_welcome)
-                    except (TelegramError, NetworkError, TimedOut) as send_error:
-                        # Временные сетевые ошибки - можно повторить позже
-                        self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {send_error}")
-                    except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as send_error:
-                        # Критические ошибки - пробрасываем выше
-                        self.logger.critical(
-                            f"Критическая ошибка при отправке приветствия в чат {chat_id}: {send_error}",
-                            exc_info=True,
-                        )
-                        raise
-                    except Exception as send_error:
-                        # Другие ошибки (например, бот заблокирован) - логируем, но не прерываем работу
-                        self.logger.error(
-                            f"Ошибка при отправке приветствия в чат {chat_id}: {send_error}",
-                            exc_info=True,
-                        )
-                except ServiceError as add_error:
-                    # Ошибки сервисного слоя
-                    self.logger.error(
-                        f"Ошибка сервиса при добавлении чата {chat_id}: {add_error}",
-                        exc_info=True,
-                    )
-                except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as add_error:
+                    await self._rate_limiter.execute_with_rate_limit(_send_welcome)
+                except (TelegramError, NetworkError, TimedOut) as send_error:
+                    # Временные сетевые ошибки - можно повторить позже
+                    self.logger.warning(f"Не удалось отправить приветствие в чат {chat_id}: {send_error}")
+                except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as send_error:
                     # Критические ошибки - пробрасываем выше
                     self.logger.critical(
-                        f"Критическая ошибка при добавлении чата {chat_id}: {add_error}",
+                        f"Критическая ошибка при отправке приветствия в чат {chat_id}: {send_error}",
                         exc_info=True,
                     )
                     raise
-                except Exception as add_error:
-                    # Неожиданные ошибки - логируем, но не прерываем работу
+                except Exception as send_error:
+                    # Другие ошибки (например, бот заблокирован) - логируем, но не прерываем работу
                     self.logger.error(
-                        f"Неожиданная ошибка при добавлении чата {chat_id}: {add_error}",
+                        f"Ошибка при отправке приветствия в чат {chat_id}: {send_error}",
                         exc_info=True,
                     )
 
             # Бот удалён из чата
             if status_change.was_removed:
-                try:
-                    result = await self._admin_command.remove_chat(chat_id)
-                    if not result.success:
-                        self.logger.warning(f"Не удалось удалить чат {chat_id}: {result.message}")
-                except ServiceError as remove_error:
-                    # Ошибки сервисного слоя
-                    self.logger.error(
-                        f"Ошибка сервиса при удалении чата {chat_id}: {remove_error}",
-                        exc_info=True,
-                    )
-                except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as remove_error:
-                    # Критические ошибки - пробрасываем выше
-                    self.logger.critical(
-                        f"Критическая ошибка при удалении чата {chat_id}: {remove_error}",
-                        exc_info=True,
-                    )
-                    raise
-                except Exception as remove_error:
-                    # Неожиданные ошибки - логируем, но не прерываем работу
-                    self.logger.error(
-                        f"Неожиданная ошибка при удалении чата {chat_id}: {remove_error}",
-                        exc_info=True,
-                    )
+                # Делегируем обработку события в сервис
+                await self._chat_event_service.handle_bot_removed(chat_id)
 
         except (KeyboardInterrupt, SystemExit, MemoryError, SystemError) as e:
             # Критические ошибки - пробрасываем выше

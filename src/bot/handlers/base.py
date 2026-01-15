@@ -56,9 +56,7 @@ class BaseHandlers:
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
 
-        Проверяет приоритеты:
-        1. reply_to_message.from_user.id (если есть reply)
-        2. context.args[0] (если ровно один аргумент и это число)
+        Делегирует извлечение в UserExtractionService для соблюдения границ слоёв.
 
         Args:
             update: Объект обновления Telegram.
@@ -67,31 +65,9 @@ class BaseHandlers:
         Returns:
             user_id как int, если успешно определён, иначе None.
         """
-        # Приоритет 1: reply на сообщение
-        if update.message and update.message.reply_to_message:
-            reply_user = update.message.reply_to_message.from_user
-            if reply_user:
-                target_id = int(reply_user.id)
-                self.logger.debug(f"_extract_target_user_id: найден через reply: {target_id}")
-                return target_id
-
-        # Приоритет 2: аргумент команды
-        if context.args:
-            if len(context.args) != 1:
-                self.logger.debug(
-                    f"_extract_target_user_id: неверное количество аргументов: {len(context.args)}",
-                )
-                return None
-
-            try:
-                target_id = int(context.args[0])
-                self.logger.debug(f"_extract_target_user_id: найден через аргумент: {target_id}")
-                return target_id
-            except ValueError as e:
-                self.logger.warning(f"_extract_target_user_id: не удалось преобразовать аргумент в int: {e}")
-                return None
-
-        return None
+        if self.services.user_extraction_service is None:
+            raise ValueError("user_extraction_service must be provided in BotServices")
+        return self.services.user_extraction_service.extract_target_user_id(update, context)
 
     @staticmethod
     def _has_args(context: ContextTypes.DEFAULT_TYPE, min_count: int = 1) -> bool:

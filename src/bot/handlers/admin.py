@@ -3,7 +3,6 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.admin_notification_builders import AdminNotificationBuilders
 from bot.handlers.base import (
     BaseHandlers,
 )
@@ -17,9 +16,6 @@ from shared.base.exceptions import (
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
-
-# Константы
-MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
 
 
 class AdminHandlers(BaseHandlers):
@@ -199,32 +195,16 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
-        try:
-            chat_id = int(context.args[0])
-            # Валидация через сервис
-            validation_result = self._admin_command.validate_chat_id(chat_id)
-            if not validation_result.is_valid:
-                await self._safe_reply_with_fallback(
-                    update.message,
-                    f"❌ {validation_result.error_message or 'Неверный chat_id'}",
-                )
-                return
-
-            result = await self._admin_command.add_chat(chat_id, "Manually added")
+        async def _execute() -> None:
+            raw_arg = context.args[0].strip()
+            result = await self._admin_command.add_chat_from_string(raw_arg, "Manually added")
             if result.success:
-                self.logger.info(f"Чат {chat_id} успешно добавлен в рассылку")
+                self.logger.info("Чат успешно добавлен в рассылку")
             else:
-                self.logger.warning(f"Не удалось добавить чат {chat_id}: {result.message}")
-            await self._safe_reply_with_fallback(
-                update.message,
-                result.message,
-            )
-        except ValueError as e:
-            error_msg = str(e) if str(e) else "Неверный chat_id (должен быть числом в допустимом диапазоне)"
-            await self._safe_reply_with_fallback(
-                update.message,
-                f"❌ {error_msg}",
-            )
+                self.logger.warning(f"Не удалось добавить чат: {result.message}")
+            await self._safe_reply_with_fallback(update.message, result.message)
+
+        await self._handle_command_errors(update, _execute)
 
     async def admin_remove_chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /remove_chat.
@@ -258,32 +238,16 @@ class AdminHandlers(BaseHandlers):
             )
             return
 
-        try:
-            chat_id = int(context.args[0])
-            # Валидация через сервис
-            validation_result = self._admin_command.validate_chat_id(chat_id)
-            if not validation_result.is_valid:
-                await self._safe_reply_with_fallback(
-                    update.message,
-                    f"❌ {validation_result.error_message or 'Неверный chat_id'}",
-                )
-                return
-
-            result = await self._admin_command.remove_chat(chat_id)
+        async def _execute() -> None:
+            raw_arg = context.args[0].strip()
+            result = await self._admin_command.remove_chat_from_string(raw_arg)
             if result.success:
-                self.logger.info(f"Чат {chat_id} успешно удалён из рассылки")
+                self.logger.info("Чат успешно удалён из рассылки")
             else:
-                self.logger.warning(f"Не удалось удалить чат {chat_id}: {result.message}")
-            await self._safe_reply_with_fallback(
-                update.message,
-                result.message,
-            )
-        except ValueError as e:
-            error_msg = str(e) if str(e) else "Неверный chat_id (должен быть числом в допустимом диапазоне)"
-            await self._safe_reply_with_fallback(
-                update.message,
-                f"❌ {error_msg}",
-            )
+                self.logger.warning(f"Не удалось удалить чат: {result.message}")
+            await self._safe_reply_with_fallback(update.message, result.message)
+
+        await self._handle_command_errors(update, _execute)
 
     async def list_chats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_chats.
@@ -351,6 +315,8 @@ class AdminHandlers(BaseHandlers):
             return
 
         if not self._has_args(context):
+            from app.admin_command_service import MAX_FROG_THRESHOLD
+
             await self._safe_reply_with_fallback(
                 update.message,
                 f"📝 Использование: /set_frog_limit <threshold> (1..{MAX_FROG_THRESHOLD})",
@@ -358,10 +324,8 @@ class AdminHandlers(BaseHandlers):
             return
 
         async def _execute() -> None:
-            raw = int(context.args[0])
-            if raw <= 0:
-                raise ValueError(f"Порог должен быть положительным числом, получено: {raw}")
-            result = await self._admin_command.set_frog_threshold(raw, max_threshold=MAX_FROG_THRESHOLD)
+            raw_arg = context.args[0].strip()
+            result = await self._admin_command.set_frog_threshold_from_string(raw_arg)
             await self._safe_reply_with_fallback(update.message, result.message)
 
         await self._handle_command_errors(update, _execute)
@@ -400,10 +364,8 @@ class AdminHandlers(BaseHandlers):
             return
 
         async def _execute() -> None:
-            raw = int(context.args[0])
-            if raw < 0:
-                raise ValueError(f"Количество использований должно быть неотрицательным числом, получено: {raw}")
-            result = await self._admin_command.set_frog_used(raw)
+            raw_arg = context.args[0].strip()
+            result = await self._admin_command.set_frog_used_from_string(raw_arg)
             await self._safe_reply_with_fallback(update.message, result.message)
 
         await self._handle_command_errors(update, _execute)
@@ -613,42 +575,10 @@ class AdminHandlers(BaseHandlers):
         if not await self._check_admin_access(user_id, update.message):
             return
 
-        all_admins = await self._admin_command.list_all_admins()
-        if not all_admins:
-            self.logger.info("Нет администраторов")
-            await self._safe_reply_with_fallback(
-                update.message,
-                "📭 Нет администраторов",
-            )
-            return
-
-        # Используем билдер для форматирования сообщения
-        super_admin_id = self._admin_access.get_super_admin_id()
-        message = AdminNotificationBuilders.build_simple_admin_list_message(
-            admins=all_admins,
-            super_admin_id=super_admin_id,
+        result = await self._admin_command.get_admin_list_with_details()
+        await self._safe_reply_with_fallback(
+            update.message,
+            result.message,
         )
-        try:
-            await retry_on_connect_error(
-                update.message.reply_text,
-                message,
-                max_retries=3,
-                delay=2,
-            )
-            self.logger.info(f"Отправлен список из {len(all_admins)} администраторов пользователю {user_id}")
-        except Exception as e:
-            # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-            self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}", exc_info=True)
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    "❌ Ошибка при отправке списка администраторов",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as list_error:
-                # Обрабатываем ошибку отправки сообщения об ошибке
-                self._handle_send_message_error(
-                    list_error,
-                    context="отправке сообщения об ошибке отправки списка админов",
-                )
+        if result.success:
+            self.logger.info(f"Отправлен список администраторов пользователю {user_id}")

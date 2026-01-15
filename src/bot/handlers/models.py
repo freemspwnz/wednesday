@@ -4,10 +4,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.handlers.base import BaseHandlers
-from shared.base.exceptions import APIError, AuthenticationError, NetworkError
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
-from shared.retry import retry_on_connect_error
 
 
 class ModelHandlers(BaseHandlers):
@@ -75,54 +73,12 @@ class ModelHandlers(BaseHandlers):
             "⏳ Устанавливаю модель...",
         )
 
-        try:
+        async def _execute() -> None:
             result = await self._model_management_service.set_kandinsky_model(model_arg)
-            if result.success:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"✅ {result.message}",
-                    max_retries=3,
-                    delay=2,
-                )
-            else:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ {result.message}",
-                    max_retries=3,
-                    delay=2,
-                )
-        except ValueError as e:
-            self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ {e!s}",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as send_error:
-                # Обрабатываем ошибку отправки сообщения
-                self._handle_send_message_error(
-                    send_error,
-                    context="отправке сообщения об ошибке установки модели Kandinsky",
-                )
-        except (AuthenticationError, NetworkError, APIError) as e:
-            self.logger.error(f"Ошибка при установке модели Kandinsky: {e}")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ Ошибка API: {str(e)[:200]}",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as api_error:
-                # Обрабатываем ошибку отправки сообщения об ошибке API
-                self._handle_send_message_error(
-                    api_error,
-                    context="отправке сообщения об ошибке API при установке модели Kandinsky",
-                )
-        except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при установке модели Kandinsky: {e}")
+            message = f"✅ {result.message}" if result.success else f"❌ {result.message}"
+            await self._safe_reply_with_fallback(update.message, message)
+
+        await self._handle_command_errors(update, _execute)
 
     async def set_gigachat_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_gigachat_model.
@@ -157,46 +113,11 @@ class ModelHandlers(BaseHandlers):
 
         model_name = context.args[0]
 
-        try:
+        async def _execute() -> None:
             result = await self._model_management_service.set_gigachat_model(model_name)
-            await retry_on_connect_error(
-                update.message.reply_text,
-                result.message,
-                max_retries=3,
-                delay=2,
-            )
-        except ValueError as e:
-            self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ {e!s}",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as send_error:
-                # Обрабатываем ошибку отправки сообщения
-                self._handle_send_message_error(
-                    send_error,
-                    context="отправке сообщения об ошибке установки модели GigaChat",
-                )
-        except (AuthenticationError, NetworkError, APIError) as e:
-            self.logger.error(f"Ошибка при установке модели GigaChat: {e}")
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ Ошибка API: {str(e)[:200]}",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as api_error:
-                # Обрабатываем ошибку отправки сообщения об ошибке API
-                self._handle_send_message_error(
-                    api_error,
-                    context="отправке сообщения об ошибке API при установке модели GigaChat",
-                )
-        except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при установке модели GigaChat: {e}")
+            await self._safe_reply_with_fallback(update.message, result.message)
+
+        await self._handle_command_errors(update, _execute)
 
     async def list_models_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /list_models.
@@ -225,27 +146,9 @@ class ModelHandlers(BaseHandlers):
         if not await self._check_admin_access(user_id, update.message):
             return
 
-        try:
+        async def _execute() -> None:
             message = await self._dashboard_service.build_models_list_message()
-            await retry_on_connect_error(
-                update.message.reply_text,
-                message,
-                max_retries=3,
-                delay=2,
-            )
+            await self._safe_reply_with_fallback(update.message, message)
             self.logger.info(f"Отправлен список моделей пользователю {user_id}")
-        except Exception as e:
-            self.logger.error(f"Ошибка при получении списка моделей: {e}", exc_info=True)
-            try:
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    f"❌ Ошибка при получении списка моделей: {str(e)[:200]}",
-                    max_retries=3,
-                    delay=2,
-                )
-            except Exception as send_error:
-                # Обрабатываем ошибку отправки сообщения
-                self._handle_send_message_error(
-                    send_error,
-                    context="отправке сообщения об ошибке установки модели Kandinsky",
-                )
+
+        await self._handle_command_errors(update, _execute)

@@ -54,6 +54,10 @@ class ValidationResult:
     error_message: str | None = None
 
 
+# Константы бизнес-правил
+MAX_FROG_THRESHOLD = 100  # максимальный порог ручных генераций
+
+
 class AdminCommandService(BaseService):
     """Сервис для координации админских команд.
 
@@ -101,6 +105,42 @@ class AdminCommandService(BaseService):
         self._chat_info_service = chat_info_service
         self._notification_builders = notification_builders
 
+    async def add_chat_from_string(
+        self,
+        chat_id_str: str,
+        source: str = "Manually added",
+    ) -> CommandResult:
+        """Добавляет чат в список рассылки, парся строку с chat_id.
+
+        Инкапсулирует всю логику парсинга, валидации и добавления чата.
+
+        Args:
+            chat_id_str: Строка с chat_id для парсинга.
+            source: Источник добавления чата (для логирования).
+
+        Returns:
+            CommandResult с результатом операции и сообщением для пользователя.
+        """
+        # Парсинг
+        try:
+            chat_id = int(chat_id_str.strip())
+        except ValueError:
+            return CommandResult(
+                success=False,
+                message="❌ Неверный chat_id (должен быть числом)",
+            )
+
+        # Валидация
+        validation_result = self.validate_chat_id(chat_id)
+        if not validation_result.is_valid:
+            return CommandResult(
+                success=False,
+                message=f"❌ {validation_result.error_message or 'Неверный chat_id'}",
+            )
+
+        # Выполнение бизнес-логики
+        return await self.add_chat(chat_id, source)
+
     async def add_chat(
         self,
         chat_id: int,
@@ -141,6 +181,40 @@ class AdminCommandService(BaseService):
                 success=False,
                 message=f"❌ Ошибка при добавлении чата: {str(e)[:200]}",
             )
+
+    async def remove_chat_from_string(
+        self,
+        chat_id_str: str,
+    ) -> CommandResult:
+        """Удаляет чат из списка рассылки, парся строку с chat_id.
+
+        Инкапсулирует всю логику парсинга, валидации и удаления чата.
+
+        Args:
+            chat_id_str: Строка с chat_id для парсинга.
+
+        Returns:
+            CommandResult с результатом операции и сообщением для пользователя.
+        """
+        # Парсинг
+        try:
+            chat_id = int(chat_id_str.strip())
+        except ValueError:
+            return CommandResult(
+                success=False,
+                message="❌ Неверный chat_id (должен быть числом)",
+            )
+
+        # Валидация
+        validation_result = self.validate_chat_id(chat_id)
+        if not validation_result.is_valid:
+            return CommandResult(
+                success=False,
+                message=f"❌ {validation_result.error_message or 'Неверный chat_id'}",
+            )
+
+        # Выполнение бизнес-логики
+        return await self.remove_chat(chat_id)
 
     async def remove_chat(
         self,
@@ -204,12 +278,75 @@ class AdminCommandService(BaseService):
             )
             raise ServiceError(f"Не удалось получить список чатов: {e}") from e
 
+    async def set_frog_threshold_from_string(
+        self,
+        threshold_str: str,
+    ) -> CommandResult:
+        """Устанавливает порог ручных генераций /frog, парся строку.
+
+        Инкапсулирует всю логику парсинга, валидации и установки порога.
+
+        Args:
+            threshold_str: Строка с порогом для парсинга.
+
+        Returns:
+            Результат выполнения команды с информацией о текущем использовании.
+
+        Raises:
+            ServiceError: Если трекер использования не инициализирован.
+        """
+        if self._usage is None:
+            raise ServiceError("Трекер использования не инициализирован")
+
+        # Парсинг
+        try:
+            threshold = int(threshold_str)
+        except ValueError:
+            return CommandResult(
+                success=False,
+                message=f"❌ Неверный порог (должен быть числом в диапазоне 1..{MAX_FROG_THRESHOLD})",
+            )
+
+        # Валидация
+        if threshold <= 0:
+            return CommandResult(
+                success=False,
+                message=f"❌ Порог должен быть положительным числом, получено: {threshold}",
+            )
+
+        # Ограничиваем максимумом
+        desired = min(threshold, MAX_FROG_THRESHOLD)
+
+        try:
+            new_threshold = await self._usage.set_frog_threshold(desired)
+            total, _threshold, quota = await self._usage.get_limits_info()
+
+            return CommandResult(
+                success=True,
+                message=f"✅ Порог /frog установлен: {new_threshold} (текущее использование: {total}/{quota})",
+            )
+        except (RepoError, ServiceError) as e:
+            self.logger.error(
+                f"Ошибка при установке порога /frog: {e}",
+                event="set_frog_threshold_error",
+                status="error",
+                threshold=desired,
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            return CommandResult(
+                success=False,
+                message=f"❌ Ошибка при установке порога: {str(e)[:200]}",
+            )
+
     async def set_frog_threshold(
         self,
         threshold: int,
-        max_threshold: int = 100,
+        max_threshold: int = MAX_FROG_THRESHOLD,
     ) -> CommandResult:
         """Устанавливает порог ручных генераций /frog.
+
+        DEPRECATED: Используйте set_frog_threshold_from_string() для парсинга строк.
 
         Args:
             threshold: Новый порог (будет ограничен max_threshold).
@@ -253,11 +390,73 @@ class AdminCommandService(BaseService):
                 message=f"❌ Ошибка при установке порога: {str(e)[:200]}",
             )
 
+    async def set_frog_used_from_string(
+        self,
+        count_str: str,
+    ) -> CommandResult:
+        """Устанавливает текущее значение выработки /frog за месяц, парся строку.
+
+        Инкапсулирует всю логику парсинга, валидации и установки значения.
+
+        Args:
+            count_str: Строка с количеством использований для парсинга.
+
+        Returns:
+            Результат выполнения команды с информацией о лимитах.
+
+        Raises:
+            ServiceError: Если трекер использования не инициализирован.
+        """
+        if self._usage is None:
+            raise ServiceError("Трекер использования не инициализирован")
+
+        # Парсинг
+        try:
+            count = int(count_str)
+        except ValueError:
+            return CommandResult(
+                success=False,
+                message="❌ Неверное количество использований (должно быть неотрицательным числом)",
+            )
+
+        # Валидация
+        if count < 0:
+            return CommandResult(
+                success=False,
+                message=f"❌ Количество использований должно быть неотрицательным числом, получено: {count}",
+            )
+
+        try:
+            # Ограничиваем значением квоты
+            capped = min(count, self._usage.monthly_quota)
+            await self._usage.set_month_total(capped)
+            total, threshold, quota = await self._usage.get_limits_info()
+
+            return CommandResult(
+                success=True,
+                message=f"✅ Текущее использование /frog: {total}/{threshold} (квота: {quota})",
+            )
+        except (RepoError, ServiceError) as e:
+            self.logger.error(
+                f"Ошибка при установке использованного количества /frog: {e}",
+                event="set_frog_used_error",
+                status="error",
+                count=count,
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            return CommandResult(
+                success=False,
+                message=f"❌ Ошибка при установке использованного количества: {str(e)[:200]}",
+            )
+
     async def set_frog_used(
         self,
         count: int,
     ) -> CommandResult:
         """Устанавливает текущее значение выработки /frog за месяц.
+
+        DEPRECATED: Используйте set_frog_used_from_string() для парсинга строк.
 
         Args:
             count: Количество использований (будет ограничено квотой).
@@ -409,6 +608,7 @@ class AdminCommandService(BaseService):
 
         Инкапсулирует бизнес-логику получения информации о каждом администраторе,
         включая проверку прав главного администратора и получение данных из Telegram API.
+        Форматирование сообщения инкапсулировано внутри метода.
 
         Returns:
             CommandResult с success=True и message, содержащим отформатированный список,
@@ -471,7 +671,11 @@ class AdminCommandService(BaseService):
                 )
 
             # Форматируем сообщение через билдер
-            message = self._notification_builders.build_admin_list_message(admin_infos)
+            super_admin_id = self._admin_access.get_super_admin_id()
+            message = self._notification_builders.build_simple_admin_list_message(
+                admins=admins,
+                super_admin_id=super_admin_id,
+            )
 
             return CommandResult(success=True, message=message)
 

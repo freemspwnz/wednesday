@@ -4,6 +4,18 @@
 
 ### Изменено
 
+- **Рефакторинг bot/ для устранения нарушений чистой архитектуры**:
+  - Перенесена константа `MAX_FROG_THRESHOLD` из `bot/handlers/admin.py` в `app/admin_command_service.py`
+  - Добавлены методы `set_frog_threshold_from_string()` и `set_frog_used_from_string()` в `AdminCommandService` для парсинга и валидации входных данных
+  - Добавлены методы `add_chat_from_string()` и `remove_chat_from_string()` в `AdminCommandService` для парсинга chat_id из строк
+  - Создан `UserExtractionService` для извлечения user_id из reply-сообщений и аргументов команд
+  - Создан `HelpMessageService` для форматирования сообщений справки для пользователей и администраторов
+  - Создан `ChatEventService` для централизованной обработки событий добавления/удаления бота из чатов
+  - Устранено дублирование обработки ошибок в `models.py` через использование `_handle_command_errors()`
+  - Улучшена инкапсуляция форматирования сообщений в `frog_command()` и `list_mods_command()`
+  - Обновлены хендлеры для использования новых сервисов вместо прямой бизнес-логики
+  - Все сервисы добавлены в `BotServices` и инициализируются в `Container`
+
 - **Устранение всех оставшихся нарушений из bot/handlers/**:
   - **messages.py**: Создан новый файл с константами сообщений об ошибках доступа и приветственных сообщений
   - **base.py**: Добавлены хелперы `_check_admin_access()` и `_has_args()` для унификации проверок

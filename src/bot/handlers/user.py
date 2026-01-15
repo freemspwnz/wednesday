@@ -30,7 +30,10 @@ class UserHandlers(BaseHandlers):
         super().__init__(services, logger)
         if self.services.admin_access_service is None:
             raise ValueError("admin_access_service must be provided in BotServices")
+        if self.services.help_message_service is None:
+            raise ValueError("help_message_service must be provided in BotServices")
         self._admin_access = self.services.admin_access_service
+        self._help_message_service = self.services.help_message_service
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /start.
@@ -89,48 +92,12 @@ class UserHandlers(BaseHandlers):
         # Проверка доступа администратора через admin_access_service
         is_admin = await self._admin_access.is_admin(user_id)
 
+        # Получаем сообщение справки через сервис
         if is_admin:
-            # Админская справка
-            help_message = (
-                "🛠 Админ-справка по командам\n\n"
-                "Пользовательские команды:\n"
-                "• /start — приветствие и информация\n"
-                "• /help — эта справка\n"
-                "• /frog — сгенерировать жабу сейчас (rate limit, учитывается в лимитах)\n\n"
-                "Админ-команды:\n"
-                "• /status — расширенный статус: бот, планировщик, генерации, "
-                "активные чаты, проверка API и метрики\n"
-                "• /log [count] — отправить логи за N дней (1..10), без аргумента — последний файл\n"
-                "• /add_chat <chat_id> — добавить чат в рассылку\n"
-                "• /remove_chat <chat_id> — удалить чат из рассылки\n"
-                "• /list_chats — список активных чатов с ID\n"
-                "• /force_send — принудительная отправка в подключенные чаты\n"
-                "• /set_kandinsky_model <pipeline_id> — установить модель Kandinsky\n"
-                "• /set_gigachat_model <model_name> — установить модель GigaChat\n"
-                "• /mod <user_id> или ответ на сообщение — предоставить админ-права "
-                "пользователю (только главный админ)\n"
-                "• /unmod <user_id> или ответ на сообщение — удалить админ-права у "
-                "пользователя (только главный админ)\n"
-                "• /unmod без аргументов — показать список всех админов "
-                "(только главный админ)\n"
-                "• /list_mods — список всех админов с ID\n"
-                "• /set_frog_limit <threshold> — порог ручных /frog (1..100, не выше квоты)\n"
-                "• /set_frog_used <count> — установить текущее число ручных /frog за месяц\n"
-                "• /help — эта справка"
-            )
+            help_message = self._help_message_service.build_admin_help_message()
             self.logger.info("Отправлена админская справка")
         else:
-            # Пользовательская справка
-            help_message = (
-                "📚 Справка по командам Wednesday Frog Bot\n\n"
-                "🔹 /start - Приветствие и основная информация\n"
-                "🔹 /help - Эта справка\n"
-                "🔹 /frog - Сгенерировать изображение жабы прямо сейчас\n\n"
-                "ℹ️ Информация:\n"
-                "• Автоматическая отправка каждый раз по расписанию\n"
-                "• Изображения генерируются с помощью нейросети Kandinsky\n\n"
-                "🐛 Если что-то не работает, обратитесь к администратору."
-            )
+            help_message = self._help_message_service.build_user_help_message()
             self.logger.info("Отправлена пользовательская справка")
 
         await self._safe_reply_with_fallback(
@@ -189,24 +156,12 @@ class UserHandlers(BaseHandlers):
         # Проверяем лимит генераций через frog_rate_limiter
         can_generate, limit_message = await self.services.frog_rate_limiter.check_generation_allowed()
         if not can_generate:
-            try:
-                error_message = (
-                    limit_message
-                    if limit_message
-                    else (
-                        "🚫 Лимит ручных генераций на этот месяц исчерпан.\nОжидайте автоматических отправок по средам."
-                    )
-                )
-                await retry_on_connect_error(
-                    update.message.reply_text,
-                    error_message,
-                    max_retries=MAX_RETRIES_DEFAULT,
-                    delay=RETRY_DELAY_DEFAULT,
-                )
-            except (TelegramError, NetworkError, TimedOut) as e:
-                self.logger.error(
-                    f"Не удалось отправить сообщение о лимите после {MAX_RETRIES_DEFAULT} попыток: {e}",
-                )
+            error_message = (
+                limit_message
+                if limit_message
+                else "🚫 Лимит ручных генераций на этот месяц исчерпан.\nОжидайте автоматических отправок по средам."
+            )
+            await self._safe_reply_with_fallback(update.message, error_message)
             return
 
         # Отправляем сообщение о начале генерации
