@@ -40,6 +40,9 @@ class ChatEventHandler:
         self.services = services
         self.bot = bot
         self.logger = logger
+        if services.admin_command_service is None:
+            raise ValueError("admin_command_service must be provided in BotServices")
+        self._admin_command = services.admin_command_service
 
     async def on_my_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик событий изменения статуса бота в чатах.
@@ -79,7 +82,9 @@ class ChatEventHandler:
             # Бот добавлен/активирован в чате
             if status_change.was_added:
                 try:
-                    await self.services.chats.add_chat(chat_id, title)
+                    result = await self._admin_command.add_chat(chat_id, "Bot added to chat")
+                    if not result.success:
+                        self.logger.warning(f"Не удалось добавить чат {chat_id}: {result.message}")
                     welcome = (
                         "🐸 Привет! Я Wednesday Frog Bot.\n\n"
                         "Я присылаю картинки с жабой по средам (09:00, 12:00, 18:00 по Мск), "
@@ -149,7 +154,9 @@ class ChatEventHandler:
             # Бот удалён из чата
             if status_change.was_removed:
                 try:
-                    await self.services.chats.remove_chat(chat_id)
+                    result = await self._admin_command.remove_chat(chat_id)
+                    if not result.success:
+                        self.logger.warning(f"Не удалось удалить чат {chat_id}: {result.message}")
                 except ServiceError as remove_error:
                     # Ошибки сервисного слоя
                     self.logger.error(

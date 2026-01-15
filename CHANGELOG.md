@@ -4,12 +4,16 @@
 
 ### Изменено
 
-- **Исправление нарушений архитектуры в bot/handlers/admin.py**:
-  - Заменены все прямые вызовы `self.admins_store.is_admin()` на `self._admin_access.is_admin()` для соблюдения границ слоёв
-  - Преобразован статический метод `AdminCommandService.validate_chat_id()` в метод экземпляра
-  - Заменены статические вызовы валидации на вызовы через экземпляр сервиса в `admin_add_chat_command()` и `admin_remove_chat_command()`
-  - Добавлен метод `get_admin_list_with_details()` в `AdminCommandService` для инкапсуляции бизнес-логики получения списка администраторов
-  - Рефакторинг `unmod_command()`: вынесена бизнес-логика получения информации об администраторах в сервисный слой
+- **Исправление нарушений архитектуры в bot/handlers/**:
+  - **admin.py**: Заменены все прямые вызовы `self.admins_store.is_admin()` на `self._admin_access.is_admin()` для соблюдения границ слоёв
+  - **admin.py**: Преобразован статический метод `AdminCommandService.validate_chat_id()` в метод экземпляра
+  - **admin.py**: Заменены статические вызовы валидации на вызовы через экземпляр сервиса в `admin_add_chat_command()` и `admin_remove_chat_command()`
+  - **admin.py**: Добавлен метод `get_admin_list_with_details()` в `AdminCommandService` для инкапсуляции бизнес-логики получения списка администраторов
+  - **admin.py**: Рефакторинг `unmod_command()`: вынесена бизнес-логика получения информации об администраторах в сервисный слой
+  - **models.py**: Заменены все прямые вызовы `self.admins_store.is_admin()` на `self._admin_access.is_admin()` в `set_kandinsky_model_command()`, `set_gigachat_model_command()` и `list_models_command()`
+  - **models.py**: Добавлена инициализация `admin_access_service` в `ModelHandlers` для соблюдения границ слоёв
+  - **chat_event.py**: Заменены прямые вызовы `self.services.chats.add_chat()` и `remove_chat()` на использование `admin_command_service` для координации операций с чатами
+  - **chat_event.py**: Добавлена инициализация `admin_command_service` в `ChatEventHandler` для соблюдения границ слоёв
   - Улучшено соблюдение принципов Clean Architecture: вся бизнес-логика находится в app-слое, хендлеры только координируют
 
 - **Рефакторинг bot/handlers/admin.py: перенос бизнес-логики в app-слой**:

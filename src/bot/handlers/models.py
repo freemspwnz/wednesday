@@ -31,8 +31,11 @@ class ModelHandlers(BaseHandlers):
             raise ValueError("admin_dashboard_service must be provided in BotServices")
         if self.services.model_management_service is None:
             raise ValueError("model_management_service must be provided in BotServices")
+        if self.services.admin_access_service is None:
+            raise ValueError("admin_access_service must be provided in BotServices")
         self._dashboard_service = self.services.admin_dashboard_service
         self._model_management_service = self.services.model_management_service
+        self._admin_access = self.services.admin_access_service
 
     async def set_kandinsky_model_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик команды /set_kandinsky_model.
@@ -55,7 +58,7 @@ class ModelHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self.admins_store.is_admin(update.effective_user.id):
+        if not await self._admin_access.is_admin(update.effective_user.id):
             try:
                 await retry_on_connect_error(
                     update.message.reply_text,
@@ -153,7 +156,7 @@ class ModelHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self.admins_store.is_admin(update.effective_user.id):
+        if not await self._admin_access.is_admin(update.effective_user.id):
             await self._safe_reply_with_fallback(
                 update.message,
                 "❌ Доступно только администратору",
@@ -235,7 +238,7 @@ class ModelHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /list_models от пользователя {user_id}")
 
-        if not await self.admins_store.is_admin(user_id):
+        if not await self._admin_access.is_admin(user_id):
             await self._safe_reply_with_fallback(
                 update.message,
                 "❌ Доступно только администратору",
