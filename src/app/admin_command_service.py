@@ -404,11 +404,97 @@ class AdminCommandService(BaseService):
         """
         return await self._admin_access.list_all_admins()
 
-    @staticmethod
-    def validate_chat_id(chat_id: int) -> ValidationResult:
+    async def get_admin_list_with_details(self) -> CommandResult:
+        """Получает список администраторов с детальной информацией.
+
+        Инкапсулирует бизнес-логику получения информации о каждом администраторе,
+        включая проверку прав главного администратора и получение данных из Telegram API.
+
+        Returns:
+            CommandResult с success=True и message, содержащим отформатированный список,
+            или success=False с сообщением об ошибке.
+
+        Raises:
+            ServiceError: Если chat_info_service или notification_builders не инициализированы.
+        """
+        if self._chat_info_service is None:
+            raise ServiceError("Сервис получения информации о чатах не инициализирован")
+        if self._notification_builders is None:
+            raise ServiceError("Билдеры уведомлений не инициализированы")
+
+        try:
+            admins = await self._admin_access.list_all_admins()
+            if not admins:
+                return CommandResult(
+                    success=True,
+                    message="📭 Нет администраторов",
+                )
+
+            from app.admin_notification_builders import AdminInfo
+
+            admin_infos: list[AdminInfo] = []
+
+            for admin_id in admins:
+                is_super = await self._admin_access.is_super_admin(admin_id)
+
+                # Получаем информацию о пользователе через chat_info_service
+                chat_details = None
+                try:
+                    chat_details = await self._chat_info_service.get_chat_details_safe(admin_id)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Не удалось получить информацию об администраторе {admin_id}: {e}",
+                    )
+
+                # Извлекаем имя и username
+                if chat_details:
+                    name_raw = (
+                        chat_details.get("title")
+                        or chat_details.get("first_name")
+                        or chat_details.get("full_name")
+                        or "Unknown"
+                    )
+                    name = str(name_raw) if name_raw is not None else "Unknown"
+                    username_raw = chat_details.get("username")
+                    username = str(username_raw) if username_raw is not None else None
+                else:
+                    name = "Unknown"
+                    username = None
+
+                admin_infos.append(
+                    AdminInfo(
+                        admin_id=admin_id,
+                        name=name,
+                        username=username,
+                        is_super_admin=is_super,
+                    )
+                )
+
+            # Форматируем сообщение через билдер
+            message = self._notification_builders.build_admin_list_message(admin_infos)
+
+            return CommandResult(success=True, message=message)
+
+        except ServiceError:
+            raise
+        except Exception as e:
+            self.logger.error(
+                f"Ошибка при получении списка администраторов: {e}",
+                exc_info=True,
+            )
+            return CommandResult(
+                success=False,
+                message="❌ Ошибка при получении списка администраторов",
+            )
+
+    def validate_chat_id(self, chat_id: int) -> ValidationResult:  # noqa: PLR6301
         """Валидирует chat_id.
 
         Проверяет диапазон значений и другие ограничения.
+
+        Метод должен быть методом экземпляра (не статическим), чтобы соблюдать
+        границы слоёв: хендлеры должны вызывать методы через экземпляр сервиса,
+        а не через статические методы класса.
 
         Args:
             chat_id: ID чата для валидации.

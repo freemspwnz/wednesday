@@ -4,6 +4,14 @@
 
 ### Изменено
 
+- **Исправление нарушений архитектуры в bot/handlers/admin.py**:
+  - Заменены все прямые вызовы `self.admins_store.is_admin()` на `self._admin_access.is_admin()` для соблюдения границ слоёв
+  - Преобразован статический метод `AdminCommandService.validate_chat_id()` в метод экземпляра
+  - Заменены статические вызовы валидации на вызовы через экземпляр сервиса в `admin_add_chat_command()` и `admin_remove_chat_command()`
+  - Добавлен метод `get_admin_list_with_details()` в `AdminCommandService` для инкапсуляции бизнес-логики получения списка администраторов
+  - Рефакторинг `unmod_command()`: вынесена бизнес-логика получения информации об администраторах в сервисный слой
+  - Улучшено соблюдение принципов Clean Architecture: вся бизнес-логика находится в app-слое, хендлеры только координируют
+
 - **Рефакторинг bot/handlers/admin.py: перенос бизнес-логики в app-слой**:
   - Вынесена валидация chat_id в `app/admin_command_service.validate_chat_id()`
   - Вынесена логика определения целевых чатов в `app/admin_command_service.determine_target_chats()`

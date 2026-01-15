@@ -202,7 +202,7 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /force_send от пользователя {user_id}")
 
-        if not await self.admins_store.is_admin(user_id):
+        if not await self._admin_access.is_admin(user_id):
             await self._safe_reply_with_fallback(
                 update.message,
                 "❌ Доступно только администратору",
@@ -267,7 +267,7 @@ class AdminHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self.admins_store.is_admin(update.effective_user.id):
+        if not await self._admin_access.is_admin(update.effective_user.id):
             await self._safe_reply_with_fallback(
                 update.message,
                 "❌ Доступно только администратору",
@@ -284,9 +284,7 @@ class AdminHandlers(BaseHandlers):
         try:
             chat_id = int(context.args[0])
             # Валидация через сервис
-            from app.admin_command_service import AdminCommandService
-
-            validation_result = AdminCommandService.validate_chat_id(chat_id)
+            validation_result = self._admin_command.validate_chat_id(chat_id)
             if not validation_result.is_valid:
                 await self._safe_reply_with_fallback(
                     update.message,
@@ -332,7 +330,7 @@ class AdminHandlers(BaseHandlers):
         if not update.message or not update.effective_user:
             return
 
-        if not await self.admins_store.is_admin(update.effective_user.id):
+        if not await self._admin_access.is_admin(update.effective_user.id):
             await self._safe_reply_with_fallback(
                 update.message,
                 "❌ Доступно только администратору",
@@ -349,9 +347,7 @@ class AdminHandlers(BaseHandlers):
         try:
             chat_id = int(context.args[0])
             # Валидация через сервис
-            from app.admin_command_service import AdminCommandService
-
-            validation_result = AdminCommandService.validate_chat_id(chat_id)
+            validation_result = self._admin_command.validate_chat_id(chat_id)
             if not validation_result.is_valid:
                 await self._safe_reply_with_fallback(
                     update.message,
@@ -400,7 +396,7 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /list_chats от пользователя {user_id}")
 
-        if not await self.admins_store.is_admin(user_id):
+        if not await self._admin_access.is_admin(user_id):
             if not await self._safe_reply_text_with_error_logging(
                 update.message,
                 "❌ Доступно только администратору",
@@ -446,7 +442,7 @@ class AdminHandlers(BaseHandlers):
 
         user_id = update.effective_user.id
         self.logger.info(f"set_frog_limit_command: запрос от пользователя {user_id}")
-        if not await self.admins_store.is_admin(user_id):
+        if not await self._admin_access.is_admin(user_id):
             self.logger.warning(f"set_frog_limit_command: пользователь {user_id} не является администратором")
             await self._safe_reply_with_fallback(
                 update.message,
@@ -554,7 +550,7 @@ class AdminHandlers(BaseHandlers):
             return
 
         user_id = update.effective_user.id
-        if not await self.admins_store.is_admin(user_id):
+        if not await self._admin_access.is_admin(user_id):
             if not await self._safe_reply_text_with_error_logging(
                 update.message,
                 "❌ Доступно только администратору",
@@ -724,96 +720,29 @@ class AdminHandlers(BaseHandlers):
         if target_user_id is None:
             self.logger.info("unmod_command: target_user_id не определён, показываем список админов")
             try:
-                admins = await self._admin_command.list_all_admins()
-                if not admins:
-                    try:
-                        await retry_on_connect_error(
-                            update.message.reply_text,
-                            "📭 Нет администраторов",
-                            max_retries=3,
-                            delay=2,
-                        )
-                    except Exception as e:
-                        # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                        self.logger.error(f"Не удалось отправить сообщение после {3} попыток: {e}", exc_info=True)
-                    return
-
-                # Получаем информацию об администраторах через chat_info_service
-                from app.admin_notification_builders import AdminInfo, AdminNotificationBuilders
-
-                admin_infos: list[AdminInfo] = []
-
-                for admin_id in admins:
-                    is_super = await self._admin_access.is_super_admin(admin_id)
-                    try:
-                        chat_details = await self._chat_info_service.get_chat_details_safe(admin_id)
-                        if chat_details:
-                            name_raw = (
-                                chat_details.get("title")
-                                or chat_details.get("first_name")
-                                or chat_details.get("full_name")
-                                or "Unknown"
-                            )
-                            name = str(name_raw) if name_raw is not None else "Unknown"
-                            username_raw = chat_details.get("username")
-                            username = str(username_raw) if username_raw is not None else None
-                        else:
-                            name = "Unknown"
-                            username = None
-                    except Exception:
-                        name = "Unknown"
-                        username = None
-
-                    admin_infos.append(
-                        AdminInfo(
-                            admin_id=admin_id,
-                            name=name,
-                            username=username,
-                            is_super_admin=is_super,
-                        )
-                    )
-
-                message = AdminNotificationBuilders.build_admin_list_message(admin_infos)
-                try:
-                    await retry_on_connect_error(
-                        update.message.reply_text,
-                        message,
-                        max_retries=3,
-                        delay=2,
-                    )
-                    self.logger.info(f"Отправлен список из {len(admins)} администраторов пользователю {user_id}")
-                except Exception as e:
-                    # Exception оправдан - нужно гарантировать, что ошибка отправки не сломает обработчик
-                    self.logger.error(f"Не удалось отправить список админов после {3} попыток: {e}", exc_info=True)
-                    try:
-                        await retry_on_connect_error(
-                            update.message.reply_text,
-                            "❌ Ошибка при отправке списка администраторов",
-                            max_retries=3,
-                            delay=2,
-                        )
-                    except Exception as fallback_error:
-                        # Обрабатываем ошибку отправки fallback сообщения
-                        self._handle_send_message_error(
-                            fallback_error,
-                            context="отправке сообщения об ошибке отправки списка админов",
-                        )
+                result = await self._admin_command.get_admin_list_with_details()
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    result.message,
+                )
+                if result.success:
+                    self.logger.info(f"Отправлен список администраторов пользователю {user_id}")
+            except ServiceError as e:
+                self.logger.error(
+                    f"Ошибка сервиса при получении списка админов: {e}",
+                    exc_info=True,
+                )
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    f"❌ Ошибка сервиса: {str(e)[:200]}",
+                )
             except Exception as e:
                 # Неожиданные ошибки при получении списка админов
                 self.logger.error(f"Ошибка при получении списка админов: {e}", exc_info=True)
-                try:
-                    await retry_on_connect_error(
-                        update.message.reply_text,
-                        "❌ Ошибка при получении списка администраторов",
-                        max_retries=3,
-                        delay=2,
-                    )
-                except Exception as error_error:
-                    # Обрабатываем ошибку отправки сообщения об ошибке
-                    self._handle_send_message_error(
-                        error_error,
-                        context="отправке сообщения об ошибке получения списка админов",
-                    )
+                await self._safe_reply_with_fallback(
+                    update.message,
+                    "❌ Ошибка при получении списка администраторов",
+                )
             return
 
         # Ветка удаления админа
@@ -885,7 +814,7 @@ class AdminHandlers(BaseHandlers):
         user_id = update.effective_user.id
         self.logger.info(f"Получена команда /list_mods от пользователя {user_id}")
 
-        if not await self.admins_store.is_admin(user_id):
+        if not await self._admin_access.is_admin(user_id):
             try:
                 await retry_on_connect_error(
                     update.message.reply_text,
