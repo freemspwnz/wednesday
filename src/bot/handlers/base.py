@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
@@ -15,22 +14,19 @@ from telegram import Message, Update
 from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
-# Импортируем константу из retry_strategy_service для использования в retry_on_connect_error
-from app.retry_strategy_service import RETRY_DELAY_DEFAULT
-from shared.base.exceptions import RepoError, ServiceError
+# Импортируем константы из retry_strategy_service для использования в retry_on_connect_error
+from app.retry_strategy_service import (
+    CHAT_INFO_TIMEOUT_DEFAULT,
+    MAX_RETRIES_DEFAULT,
+    RETRY_DELAY_DEFAULT,
+)
 from shared.bot_services import BotServices
 from shared.protocols.infrastructure import ILogger
 from shared.retry import retry_on_connect_error
+from shared.utils.async_utils import gather_with_timeout
 
 if TYPE_CHECKING:
     pass
-
-# Константы
-MAX_RETRIES_DEFAULT = 3  # количество попыток по умолчанию
-CHAT_INFO_TIMEOUT_DEFAULT = 5.0  # таймаут для получения информации о чате по умолчанию
-CHAT_TIMEOUT_DEFAULT = 10.0  # таймаут для получения полного объекта чата по умолчанию
-COMMAND_TIMEOUT_DEFAULT = 60.0  # таймаут для выполнения команды по умолчанию (60 секунд)
-# Примечание: RETRY_DELAY_DEFAULT и MAX_RETRIES_LIMIT перенесены в app/retry_strategy_service.py
 
 
 class BaseHandlers:
@@ -51,14 +47,11 @@ class BaseHandlers:
         self.services: BotServices = services
         if services.telegram_api_rate_limiter is None:
             raise ValueError("telegram_api_rate_limiter must be provided in BotServices")
-        if services.error_formatter is None:
-            raise ValueError("error_formatter must be provided in BotServices")
-        if services.retry_strategy is None:
-            raise ValueError("retry_strategy must be provided in BotServices")
+        if services.command_error_handler is None:
+            raise ValueError("command_error_handler must be provided in BotServices")
         # Сохраняем в локальные переменные для типизации mypy
         self._rate_limiter = services.telegram_api_rate_limiter
-        self._error_formatter = services.error_formatter
-        self._retry_strategy = services.retry_strategy
+        self._command_error_handler = services.command_error_handler
 
     async def _extract_target_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
         """Извлекает target_user_id из reply или аргументов команды.
@@ -98,28 +91,6 @@ class BaseHandlers:
         if self.services.admin_access_service is None:
             raise ValueError("admin_access_service must be provided in BotServices")
 
-    async def _check_admin_access_only(
-        self,
-        user_id: int,
-        require_super: bool = False,
-    ) -> bool:
-        """Проверяет доступ администратора без отправки сообщений.
-
-        Args:
-            user_id: ID пользователя для проверки.
-            require_super: Если True, проверяет доступ главного администратора.
-
-        Returns:
-            True если доступ есть, False если доступ отсутствует.
-        """
-        self._require_admin_access_service()
-        # После проверки admin_access_service гарантированно не None
-        admin_access = self.services.admin_access_service
-        assert admin_access is not None  # для mypy
-        if require_super:
-            return await admin_access.is_super_admin(user_id)
-        return await admin_access.is_admin(user_id)
-
     async def _check_admin_access(
         self,
         user_id: int,
@@ -136,11 +107,12 @@ class BaseHandlers:
         Returns:
             True если доступ есть, False если доступ отсутствует (сообщение об ошибке отправлено).
         """
-        is_authorized = await self._check_admin_access_only(user_id, require_super)
-        if not is_authorized:
-            from bot.handlers.messages import ADMIN_ACCESS_DENIED, SUPER_ADMIN_ACCESS_DENIED
+        self._require_admin_access_service()
+        admin_access = self.services.admin_access_service
+        assert admin_access is not None  # для mypy
 
-            error_message = SUPER_ADMIN_ACCESS_DENIED if require_super else ADMIN_ACCESS_DENIED
+        is_authorized, error_message = await admin_access.check_admin_access_with_message(user_id, require_super)
+        if not is_authorized:
             await self._safe_reply_with_fallback(message, error_message)
             return False
         return True
@@ -397,113 +369,6 @@ class BaseHandlers:
             )
             return False
 
-    async def _handle_validation_error(
-        self,
-        error: ValueError | TypeError | AttributeError,
-        update: Update,
-    ) -> None:
-        """Обрабатывает ошибки валидации данных.
-
-        Args:
-            error: Исключение валидации.
-            update: Объект обновления Telegram.
-        """
-        self.logger.error(f"Ошибка валидации: {error}", exc_info=True)
-        if update.message:
-            error_message = self._error_formatter.format_validation_error()
-            await self._safe_reply_with_fallback(
-                update.message,
-                error_message,
-            )
-
-    async def _handle_network_error_with_retry(
-        self,
-        error: TelegramError | NetworkError | TimedOut,
-        update: Update,
-        attempt: int,
-        max_retries: int,
-    ) -> bool:
-        """Обрабатывает сетевые ошибки Telegram API с retry-логикой.
-
-        Args:
-            error: Сетевое исключение Telegram API.
-            update: Объект обновления Telegram.
-            attempt: Номер текущей попытки.
-            max_retries: Максимальное количество попыток.
-
-        Returns:
-            True если нужно повторить попытку, False если все попытки исчерпаны.
-        """
-        if attempt < max_retries:
-            # Есть еще попытки - делаем retry с расчетом времени ожидания через сервис
-            wait_time = self._retry_strategy.calculate_wait_time(attempt)
-            self.logger.warning(
-                f"Сетевая ошибка Telegram API (попытка {attempt}/{max_retries}): {error}. Повтор через {wait_time}с",
-            )
-            await asyncio.sleep(wait_time)
-            return True
-
-        # Все попытки исчерпаны
-        self.logger.warning(f"Сетевая ошибка Telegram API после {max_retries} попыток: {error}")
-        if update.message:
-            error_message = self._error_formatter.format_network_error()
-            await self._safe_reply_with_fallback(
-                update.message,
-                error_message,
-            )
-        return False
-
-    async def _handle_service_error(
-        self,
-        error: ServiceError,
-        update: Update,
-    ) -> None:
-        """Обрабатывает ошибки сервисного слоя.
-
-        Args:
-            error: Исключение сервисного слоя.
-            update: Объект обновления Telegram.
-        """
-        self.logger.error(f"Ошибка сервиса: {error}", exc_info=True)
-        if update.message:
-            error_message = self._error_formatter.format_service_error(error)
-            await self._safe_reply_with_fallback(
-                update.message,
-                error_message,
-            )
-
-    async def _handle_repo_error(
-        self,
-        error: RepoError,
-        update: Update,
-    ) -> None:
-        """Обрабатывает ошибки репозитория.
-
-        Args:
-            error: Исключение репозитория.
-            update: Объект обновления Telegram.
-        """
-        self.logger.error(f"Ошибка репозитория: {error}", exc_info=True)
-        if update.message:
-            error_message = self._error_formatter.format_repo_error(error)
-            await self._safe_reply_with_fallback(
-                update.message,
-                error_message,
-            )
-
-    def _normalize_max_retries(self, max_retries: int) -> int:
-        """Нормализует значение max_retries для защиты от утечек памяти.
-
-        Делегирует нормализацию в RetryStrategyService для соблюдения границ слоёв.
-
-        Args:
-            max_retries: Исходное значение max_retries.
-
-        Returns:
-            Нормализованное значение max_retries.
-        """
-        return self._retry_strategy.normalize_max_retries(max_retries)
-
     async def _handle_command_errors(
         self,
         update: Update,
@@ -511,88 +376,29 @@ class BaseHandlers:
         max_retries: int = 1,
         timeout: float | None = None,
     ) -> None:
-        """Универсальный обработчик ошибок для команд с защитой от утечек памяти.
+        """Универсальный обработчик ошибок для команд.
 
-        Обеспечивает единообразную обработку ошибок во всех командах:
-        - Ошибки валидации данных (ValueError, TypeError, AttributeError) - не ретраим
-        - Сетевые ошибки Telegram API (TelegramError, NetworkError, TimedOut) - ретраим с ограничением
-        - Ошибки сервисного слоя (ServiceError) - не ретраим
-        - Ошибки репозитория (RepoError) - не ретраим
-        - Критические ошибки пробрасываются выше
+        Делегирует всю бизнес-логику обработки ошибок в CommandErrorHandlerService.
 
         Args:
             update: Объект обновления Telegram.
             func: Асинхронная функция для выполнения команды.
-            max_retries: Максимальное количество попыток для сетевых ошибок (по умолчанию 1,
-                что означает без retry). Используется только для сетевых ошибок Telegram API.
-            timeout: Таймаут для выполнения команды в секундах. Если None, таймаут не применяется.
-                Если указан, команда будет прервана после истечения времени с сообщением об ошибке.
-
-        Side Effects:
-            - Логирует ошибки с соответствующими уровнями (warning/error).
-            - Отправляет сообщения об ошибках пользователю через _safe_reply_with_fallback().
-            - Критические ошибки (память, системные) пробрасываются выше.
-            - Защита от утечек памяти: явное ограничение количества попыток, не накапливает исключения.
-            - Защита от зависаний: таймаут прерывает выполнение команды при превышении времени.
-
-        Note:
-            Retry выполняется только для сетевых ошибок Telegram API. Ошибки валидации,
-            сервисного слоя и репозитория не ретраятся, так как они не являются временными.
-            По умолчанию max_retries=1 означает "без retry", что безопасно для команд,
-            которые уже используют retry_on_connect_error для сетевых операций.
+            max_retries: Максимальное количество попыток для сетевых ошибок.
+            timeout: Таймаут для выполнения команды в секундах.
         """
-        max_retries = self._normalize_max_retries(max_retries)
 
-        async def _execute_with_retries() -> None:
-            """Внутренняя функция для выполнения команды с retry-логикой."""
-            attempt = 0
+        async def send_error_message(text: str) -> None:
+            """Вспомогательная функция для отправки сообщений об ошибках."""
+            if update.message:
+                await self._safe_reply_with_fallback(update.message, text)
 
-            while attempt < max_retries:
-                try:
-                    await func()
-                    return  # Успех - выходим
-                except (ValueError, TypeError, AttributeError) as e:
-                    await self._handle_validation_error(e, update)
-                    return  # Не ретраим ошибки валидации
-                except (TelegramError, NetworkError, TimedOut) as e:
-                    attempt += 1
-                    should_retry = await self._handle_network_error_with_retry(e, update, attempt, max_retries)
-                    if should_retry:
-                        continue
-                    return  # Все попытки исчерпаны
-                except ServiceError as e:
-                    await self._handle_service_error(e, update)
-                    return  # Не ретраим ошибки сервиса
-                except RepoError as e:
-                    await self._handle_repo_error(e, update)
-                    return  # Не ретраим ошибки репозитория
-                except asyncio.CancelledError:
-                    # Задача была отменена (например, при остановке бота)
-                    self.logger.info("Команда была отменена")
-                    raise  # Пробрасываем дальше для корректной обработки
-                # Критические ошибки (память, системные) должны пробрасываться выше
-
-        # Применяем таймаут, если указан
-        if timeout is not None:
-            try:
-                await asyncio.wait_for(_execute_with_retries(), timeout=timeout)
-            except TimeoutError:
-                self.logger.error(
-                    f"Команда не завершилась за {timeout}с, прерываем выполнение",
-                    exc_info=False,
-                )
-                if update.message:
-                    error_message = self._error_formatter.format_timeout_error()
-                    await self._safe_reply_with_fallback(
-                        update.message,
-                        error_message,
-                    )
-            except asyncio.CancelledError:
-                # Пробрасываем CancelledError дальше для корректной обработки
-                raise
-        else:
-            # Выполняем без таймаута
-            await _execute_with_retries()
+        await self._command_error_handler.execute_with_error_handling(
+            func=func,
+            update=update,
+            max_retries=max_retries,
+            timeout=timeout,
+            send_error_message=send_error_message,
+        )
 
     async def _gather_with_timeout(
         self,
@@ -602,8 +408,7 @@ class BaseHandlers:
     ) -> list:
         """Выполняет asyncio.gather с таймаутом для всех задач.
 
-        Оборачивает каждую задачу в asyncio.wait_for для защиты от зависаний.
-        Если таймаут не указан, используется значение по умолчанию.
+        Делегирует выполнение в shared.utils.async_utils.gather_with_timeout.
 
         Args:
             *tasks: Асинхронные задачи для параллельного выполнения.
@@ -615,23 +420,11 @@ class BaseHandlers:
         Returns:
             Список результатов выполнения задач. Если return_exceptions=True,
             исключения включаются в список как элементы.
-
-        Side Effects:
-            - Логирует предупреждения при таймаутах.
-            - Защищает от зависания при проблемах с сетью.
         """
-        if timeout is None:
-            timeout = CHAT_INFO_TIMEOUT_DEFAULT
-
-        async def _with_timeout(task: Awaitable) -> object:
-            """Оборачивает задачу в таймаут."""
-            try:
-                return await asyncio.wait_for(task, timeout=timeout)
-            except TimeoutError as e:
-                self.logger.warning(f"Таймаут {timeout}с при выполнении задачи")
-                if return_exceptions:
-                    return e
-                raise
-
-        wrapped_tasks = [_with_timeout(task) for task in tasks]
-        return await asyncio.gather(*wrapped_tasks, return_exceptions=return_exceptions)
+        return await gather_with_timeout(
+            *tasks,
+            timeout=timeout,
+            return_exceptions=return_exceptions,
+            default_timeout=CHAT_INFO_TIMEOUT_DEFAULT,
+            logger=self.logger,
+        )

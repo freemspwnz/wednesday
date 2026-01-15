@@ -68,16 +68,12 @@ class ChatEventHandler:
             - Логирует все операции и ошибки.
         """
         try:
-            my_cm = update.my_chat_member
-            if not my_cm:
+            # Извлекаем данные о событии через сервис
+            event_data = self._chat_event_service.extract_chat_event_data(update)
+            if event_data is None:
                 return
-            old = getattr(my_cm.old_chat_member, "status", None)
-            new = getattr(my_cm.new_chat_member, "status", None)
-            chat = my_cm.chat
-            chat_id = chat.id
 
-            # Определяем изменение статуса через сервис
-            status_change = self._chat_event_service.determine_bot_status_change(old, new)
+            chat_id, status_change = event_data
 
             # Бот добавлен/активирован в чате
             if status_change.was_added:

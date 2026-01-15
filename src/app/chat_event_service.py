@@ -15,6 +15,8 @@ from shared.base.exceptions import ServiceError
 from shared.protocols.infrastructure import ILogger
 
 if TYPE_CHECKING:
+    from telegram import Update
+
     from app.admin_command_service import AdminCommandService
     from shared.protocols.messaging import IMessagingService
 
@@ -178,3 +180,30 @@ class ChatEventService(BaseService):
             old_status=old_status,
             new_status=new_status,
         )
+
+    def extract_chat_event_data(
+        self,
+        update: Update,
+    ) -> tuple[int, BotStatusChange] | None:
+        """Извлекает данные о событии чата из Update.
+
+        Парсит update.my_chat_member и извлекает chat_id и изменение статуса.
+
+        Args:
+            update: Объект обновления Telegram.
+
+        Returns:
+            Кортеж (chat_id, BotStatusChange) если событие валидно, None иначе.
+        """
+        my_cm = update.my_chat_member
+        if not my_cm:
+            return None
+
+        old = getattr(my_cm.old_chat_member, "status", None)
+        new = getattr(my_cm.new_chat_member, "status", None)
+        chat = my_cm.chat
+        chat_id = chat.id
+
+        status_change = self.determine_bot_status_change(old, new)
+
+        return (chat_id, status_change)

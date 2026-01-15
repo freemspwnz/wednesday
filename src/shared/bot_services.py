@@ -16,6 +16,7 @@ from app.admin_notification_service import AdminNotificationService
 from app.bot_notification_builders import BotNotificationBuilders
 from app.chat_event_service import ChatEventService
 from app.chat_info_service import ChatInfoService
+from app.command_error_handler_service import CommandErrorHandlerService
 from app.database_operations_service import DatabaseOperationsService
 from app.dispatch_service import DispatchService
 from app.error_message_formatter_service import ErrorMessageFormatterService
@@ -102,6 +103,7 @@ class BotServices:
     admin_command_service: AdminCommandService | None = None
     admin_notification_service: AdminNotificationService | None = None
     chat_info_service: ChatInfoService | None = None
+    command_error_handler: CommandErrorHandlerService | None = None
     dispatch_service: DispatchService | None = None
     messaging_service: IMessagingService | None = None
     database_operations: DatabaseOperationsService | None = None

@@ -4,6 +4,21 @@
 
 ### Изменено
 
+- **Рефакторинг bot/ слоя для соблюдения чистых границ архитектуры**:
+  - Создан `CommandErrorHandlerService` для централизованной обработки ошибок команд
+  - Перенесена вся бизнес-логика обработки ошибок из `handlers/base.py` в `CommandErrorHandlerService`
+  - Удалены методы `_handle_validation_error()`, `_handle_network_error_with_retry()`, `_handle_service_error()`, `_handle_repo_error()`, `_normalize_max_retries()` из `BaseHandlers`
+  - Упрощен метод `_handle_command_errors()` - теперь делегирует всю логику в сервис
+  - Перенесены константы `MAX_RETRIES_DEFAULT`, `CHAT_INFO_TIMEOUT_DEFAULT`, `CHAT_TIMEOUT_DEFAULT`, `COMMAND_TIMEOUT_DEFAULT` из `handlers/base.py` в `app/retry_strategy_service.py`
+  - Создан `shared/utils/async_utils.py` с функцией `gather_with_timeout()` для общих утилит работы с asyncio
+  - Заменен метод `_gather_with_timeout()` в `BaseHandlers` на использование `shared.utils.async_utils.gather_with_timeout()`
+  - Удален метод `_check_admin_access_only()` - используется прямой вызов `admin_access_service`
+  - Упрощен метод `_check_admin_access()` - использует новый метод `check_admin_access_with_message()` из `AdminAccessService`
+  - Расширен `AdminAccessService` методом `check_admin_access_with_message()` для возврата готовых сообщений об ошибках
+  - Расширен `ChatEventService` методом `extract_chat_event_data()` для извлечения данных из `Update`
+  - Обновлен `handlers/chat_event.py` для использования нового API `ChatEventService.extract_chat_event_data()`
+  - Добавлен `command_error_handler` в `BotServices` и `Container`
+
 - **Исправление всех нарушений архитектуры из bot-layer-audit**:
   - Создан `ErrorMessageFormatterService` для централизованного форматирования сообщений об ошибках
   - Создан `RetryStrategyService` для расчета retry-стратегии и нормализации max_retries

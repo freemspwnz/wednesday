@@ -96,3 +96,28 @@ class AdminAccessService(BaseService):
             ID главного администратора или None, если не установлен.
         """
         return self._super_admin_id
+
+    async def check_admin_access_with_message(
+        self,
+        user_id: int,
+        require_super: bool = False,
+    ) -> tuple[bool, str]:
+        """Проверяет доступ администратора и возвращает готовое сообщение об ошибке.
+
+        Args:
+            user_id: ID пользователя для проверки.
+            require_super: Если True, проверяет доступ главного администратора.
+
+        Returns:
+            Кортеж (is_authorized, error_message), где:
+            - is_authorized: True если доступ есть, False если доступ отсутствует.
+            - error_message: Готовое сообщение об ошибке (пустая строка если доступ есть).
+        """
+        if require_super:
+            is_authorized = await self.is_super_admin(user_id)
+            error_message = "❌ Доступно только главному администратору" if not is_authorized else ""
+        else:
+            is_authorized = await self.is_admin(user_id)
+            error_message = "❌ Доступно только администратору" if not is_authorized else ""
+
+        return (is_authorized, error_message)
