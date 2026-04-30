@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -9,7 +11,7 @@ from ....vo import AwareDatetime
 class BanDuration:
     value: timedelta
 
-    def __add__(self, other: AwareDatetime | "BanDuration") -> AwareDatetime | "BanDuration":
+    def __add__(self, other: AwareDatetime | BanDuration) -> AwareDatetime | BanDuration:
         if isinstance(other, AwareDatetime):
             return AwareDatetime(other.value + self.value)
 
@@ -32,25 +34,25 @@ class BanDuration:
             raise ValidationError("value must be >= 0")
 
     @classmethod
-    def null(cls) -> "BanDuration":
+    def null(cls) -> BanDuration:
         return cls(value=timedelta(0))
 
     @classmethod
-    def hour(cls) -> "BanDuration":
+    def hour(cls) -> BanDuration:
         return cls(value=timedelta(hours=1))
 
     @classmethod
-    def day(cls) -> "BanDuration":
+    def day(cls) -> BanDuration:
         return cls(value=timedelta(days=1))
 
     @classmethod
-    def week(cls) -> "BanDuration":
+    def week(cls) -> BanDuration:
         return cls(value=timedelta(weeks=1))
 
     @classmethod
-    def month(cls) -> "BanDuration":
+    def month(cls) -> BanDuration:
         return cls(value=timedelta(days=30))
 
     @classmethod
-    def year(cls) -> "BanDuration":
+    def year(cls) -> BanDuration:
         return cls(value=timedelta(days=365))
