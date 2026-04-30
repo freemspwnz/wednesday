@@ -3,27 +3,15 @@ name: Pytest Full Suite
 on:
   workflow_call:
     inputs:
-      python_version:
+      python-version:
         required: true
         type: string
-      compose_project:
-        required: true
-        type: string
-      compose_file:
-        required: true
-        type: string
-      compose_env:
-        required: true
-        type: string
-      is_release:
-        required: true
-        type: boolean
 
 permissions:
   contents: read
 
 jobs:
-  pytest-full:
+  pytest:
     name: All Pytest Tests
     runs-on: ubuntu-latest
     env:
@@ -35,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ inputs.python_version }}
+          python-version: ${{ inputs.python-version }}
           cache: "poetry"
 
       - name: Install Poetry
@@ -48,13 +36,7 @@ jobs:
       - name: Run tests
         env:
           COVERAGE_FILE: ".coverage"
-        run: |
-          poetry run pytest tests/domain/user tests/domain/kernel \
-            --cov=wednesday/domain/user \
-            --cov=wednesday/domain/kernel \
-            --cov-report=xml:coverage.xml \
-            --cov-report=term-missing \
-            --junitxml=junit-domain.xml
+        run: make test-cov
 
       - name: Upload coverage-all artifact
         if: always()
@@ -62,7 +44,7 @@ jobs:
         with:
           name: coverage-all
           path: |
-            .coverage.*
+            .coverage*
           retention-days: 1
           if-no-files-found: ignore
 

@@ -1,4 +1,4 @@
-name: Mypy Check
+name: Format Check
 
 on:
   workflow_call:
@@ -11,10 +11,11 @@ permissions:
   contents: read
 
 jobs:
-  mypy:
+  ruff-format:
     runs-on: ubuntu-latest
     env:
       POETRY_VERSION: "1.8.4"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,7 +30,8 @@ jobs:
         run: pipx install "poetry==${POETRY_VERSION}"
 
       - name: Install dependencies
-        run: poetry install --with dev --no-interaction
+        run: |
+          poetry install --with dev --no-interaction
 
-      - name: Run mypy
-        run: poetry run mypy .
+      - name: Run ruff format
+        run: make format-check

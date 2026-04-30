@@ -34,4 +34,4 @@ jobs:
           poetry install --with dev --no-interaction
 
       - name: Run ruff lint
-        run: poetry run ruff check .
+        run: make lint

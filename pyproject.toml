@@ -10,10 +10,10 @@ authors = ["freemspwnz"]
 readme = "README.md"
 license = "MIT"
 packages = [
-  { include = "app", from = "wednesday" },
-  { include = "infra", from = "wednesday" },
+  # { include = "app", from = "wednesday" },
+  # { include = "infra", from = "wednesday" },
   { include = "domain", from = "wednesday" },
-  { include = "presentation", from = "wednesday" },
+  # { include = "presentation", from = "wednesday" },
 ]
 
 [tool.poetry.dependencies]

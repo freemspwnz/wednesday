@@ -15,31 +15,25 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PYTHON_VERSION: "3.12"
-  COMPOSE_PROJECT: wednesday_test
-  COMPOSE_FILE: tests/docker-compose.test.yml
-  COMPOSE_ENV: tests/.env.test
-
 jobs:
   # ============================================================================
   # Линтинг и проверка форматирования (параллельно)
   # ============================================================================
 
   lint:
-    uses: ./.github/workflows/jobs/lint-check.yml
+    uses: ./.github/workflows/jobs/ruff-lint.yml
     with:
-      python-version: ${{ env.PYTHON_VERSION }}
+      python-version: ${{ vars.PYTHON_VERSION }}
 
   format:
-    uses: ./.github/workflows/jobs/format-check.yml
+    uses: ./.github/workflows/jobs/ruff-format.yml
     with:
-      python-version: ${{ env.PYTHON_VERSION }}
+      python-version: ${{ vars.PYTHON_VERSION }}
 
   mypy:
-    uses: ./.github/workflows/jobs/mypy-check.yml
+    uses: ./.github/workflows/jobs/mypy.yml
     with:
-      python-version: ${{ env.PYTHON_VERSION }}
+      python-version: ${{ vars.PYTHON_VERSION }}
 
   actionlint:
     uses: ./.github/workflows/jobs/actionlint-check.yml
@@ -62,14 +56,10 @@ jobs:
   # Унифицированный набор всех Pytest тестов
   # ============================================================================
 
-  pytest-full:
-    uses: ./.github/workflows/jobs/pytest-full.yml
+  pytest:
+    uses: ./.github/workflows/jobs/pytest.yml
     with:
-      python_version: ${{ env.PYTHON_VERSION }}
-      compose_project: ${{ env.COMPOSE_PROJECT }}
-      compose_file: ${{ env.COMPOSE_FILE }}
-      compose_env: ${{ env.COMPOSE_ENV }}
-      is_release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      python-version: ${{ vars.PYTHON_VERSION }}
 
   # ============================================================================
   # Объединение результатов тестов
@@ -77,19 +67,19 @@ jobs:
 
   coverage-merge:
     uses: ./.github/workflows/jobs/coverage-merge.yml
-    needs: [pytest-full]
+    needs: [pytest]
     if: always()
     with:
-      python_version: ${{ env.PYTHON_VERSION }}
+      python-version: ${{ vars.PYTHON_VERSION }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   junit-merge:
     uses: ./.github/workflows/jobs/junit-merge.yml
-    needs: [pytest-full]
+    needs: [pytest]
     if: always()
     with:
-      python_version: ${{ env.PYTHON_VERSION }}
+      python-version: ${{ vars.PYTHON_VERSION }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -99,7 +89,7 @@ jobs:
 
   docker-build:
     name: Build Docker image (release only)
-    needs: [lint, format, mypy, actionlint, pytest-full, prometheus, loki-dashboards]
+    needs: [lint, format, mypy, actionlint, pytest, prometheus, loki-dashboards]
     if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/jobs/docker-build.yml
     with:
