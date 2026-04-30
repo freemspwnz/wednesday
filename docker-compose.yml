@@ -1,250 +1,108 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: wednesday_postgres
+  # postgres:
+  #   image: postgres:17-alpine
+  #   container_name: postgres
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   expose:
+  #     - "5432"
+  #   volumes:
+  #     - pg_data:/var/lib/postgresql/data
+  #   networks:
+  #     - wednesday
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_NAME}"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "0.75"
+  #         memory: 1g
+  #       reservations:
+  #         cpus: "0.25"
+  #         memory: 256m
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+
+  # redis:
+  #   image: redis:7.2-alpine
+  #   container_name: redis
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     REDISCLI_AUTH: ${REDIS_PASSWORD}
+  #   command: >
+  #     redis-server
+  #     --appendonly yes
+  #     --appendfsync everysec
+  #     --requirepass ${REDIS_PASSWORD}
+  #     --maxmemory 100mb
+  #     --maxmemory-policy allkeys-lru
+  #     --save 60 1
+  #     --hash-max-ziplist-entries 512
+  #     --hash-max-ziplist-value 64
+  #   expose:
+  #     - "6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - wednesday
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "redis-cli ping"]
+  #     interval: 10s
+  #     timeout: 2s
+  #     retries: 5
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "0.5"
+  #         memory: 128m
+  #       reservations:
+  #         cpus: "0.25"
+  #         memory: 64m
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+
+  wednesday:
+    image: wednesday:latest
+    container_name: wednesday
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      POSTGRES_DB: ${POSTGRES_DB}
-    expose:
-      - "5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    secrets:
-      - postgres_password
-    deploy:
-      resources:
-        limits:
-          cpus: "0.75"
-          memory: 1g
-        reservations:
-          cpus: "0.25"
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  redis:
-    image: redis:7-alpine
-    container_name: wednesday_redis
-    restart: always
-    command: >
-      sh -c '
-      REDIS_PASSWORD="$(cat /run/secrets/redis_password)";
-      redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD" --maxmemory 100mb --maxmemory-policy allkeys-lru --save 60 1 --hash-max-ziplist-entries 512 --hash-max-ziplist-value 64
-      '
-    expose:
-      - "6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - backend
-    healthcheck:
-      test: >
-        sh -c '
-        REDIS_PASSWORD="$(cat /run/secrets/redis_password)";
-        redis-cli -a "$$REDIS_PASSWORD" ping
-        '
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    secrets:
-      - redis_password
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 128m
-        reservations:
-          cpus: "0.2"
-          memory: 128m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  bot-init:
-    image: wednesday-bot:local
-    container_name: wednesday_bot_init
-    restart: "no"
-    # Init-контейнер запускается от root, чтобы один раз выставить права
-    # на томах (frog_images, prompt_storage, beat_data). Основной бот потом
-    # работает под пользователем app из Dockerfile.
-    # /app/logs не нужен, т.к. логи пишутся только в stdout (Promtail читает Docker logs)
-    user: "0:0"
-    volumes:
-      - frog_images:/app/data/frogs
-      - prompt_storage:/app/data/prompts
-      - beat_data:/app/data/beat
-    command: ["/bin/sh", "-lc", "mkdir -p /app/data/frogs /app/data/prompts /app/data/beat && chown -R app:app /app/data/frogs /app/data/prompts /app/data/beat"]
-    networks:
-      - backend
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: 256m
-        reservations:
-          cpus: "0.1"
-          memory: 128m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  bot:
-    image: wednesday-bot:local
-    container_name: wednesday_bot
-    restart: unless-stopped
-    read_only: true
-    tmpfs:
+    read_only: true       # for nobody to change files in runtime
+    tmpfs:                # for ability to write temp files for app itself
       - /tmp              # Временные файлы Python, tempfile
       - /var/tmp          # Дополнительные временные файлы
       - /root/.cache      # Кеши Python библиотек (если запускается от root)
       - /run              # PID файлы, сокеты
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      bot-init:
-        condition: service_completed_successfully
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+    #   redis:
+    #     condition: service_healthy
     env_file:
       - .env
     environment:
-      # Переопределяем хосты для работы внутри docker-сети
-      POSTGRES_HOST: postgres
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      REDIS_HOST: redis
-      REDIS_PASSWORD_FILE: /run/secrets/redis_password
-      # Выбор бэкендов моделей (через фабрику клиентов):
-      # - IMAGE_MODEL_BACKEND: kandinsky (по умолчанию)
-      # - TEXT_MODEL_BACKEND: gigachat (по умолчанию)
-      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
-      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
-      # Порт HTTP‑экспортёра Prometheus (/metrics) внутри контейнера.
-      # При необходимости может быть переопределён через переменную окружения.
-      PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-8000}
-      # Порт HTTP‑серверa healthcheck (/health) внутри контейнера.
-      HEALTHCHECK_PORT: ${HEALTHCHECK_PORT:-8080}
       PYTHONDONTWRITEBYTECODE: "1"
-      SERVICE_NAME: wednesday-bot
-      ENV: ${ENV:-dev}
-    volumes:
-      # Хранилище сгенерированных изображений жабы.
-      # Внутри контейнера бот читает/пишет только в /app/data/frogs.
-      - frog_images:/app/data/frogs
-      # Хранилище промптов GigaChat (файловый fallback).
-      # Внутри контейнера промпты сохраняются в /app/data/prompts.
-      - prompt_storage:/app/data/prompts
     networks:
-      - backend
-      - monitoring
+      - wednesday
     expose:
-      - "${PROMETHEUS_EXPORTER_PORT:-8000}"
-      - "${HEALTHCHECK_PORT:-8080}"
-    healthcheck:
-      # Используем встроенный python для проверки эндпоинта /health без
-      # дополнительных системных утилит (curl/wget).
-      # Скрипт минималистичный - только проверка 200 OK, без лишней логики
-      # Таймауты fail-fast для быстрой диагностики проблем
-      test: ["CMD-SHELL", "python3 -c 'import os, urllib.request, sys; port=os.getenv(\"HEALTHCHECK_PORT\",\"8080\"); resp=urllib.request.urlopen(f\"http://127.0.0.1:{port}/health\"); sys.exit(0 if resp.getcode()==200 else 1)'"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    secrets:
-      - postgres_password
-      - redis_password
+      - "${METRICS_PORT:-8000}"
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512m
         reservations:
-          cpus: "0.25"
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  celery-worker:
-    image: wednesday-bot:local
-    container_name: wednesday_celery_worker
-    restart: unless-stopped
-    read_only: true
-    tmpfs:
-      - /tmp              # Временные файлы Python, tempfile
-      - /var/tmp          # Дополнительные временные файлы
-      - /root/.cache      # Кеши Python библиотек (если запускается от root)
-      - /run              # PID файлы, сокеты
-      - /celerybeat-schedule  # Celery Beat schedule (если используется файловый backend)
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      bot-init:
-        condition: service_completed_successfully
-    env_file:
-      - .env
-    environment:
-      # Переопределяем хосты для работы внутри docker-сети
-      POSTGRES_HOST: postgres
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      REDIS_HOST: redis
-      REDIS_PASSWORD_FILE: /run/secrets/redis_password
-      # Timezone для Celery Beat
-      TZ: ${SCHEDULER_TZ:-Europe/Amsterdam}
-      # Выбор бэкендов моделей
-      IMAGE_MODEL_BACKEND: ${IMAGE_MODEL_BACKEND:-kandinsky}
-      TEXT_MODEL_BACKEND: ${TEXT_MODEL_BACKEND:-gigachat}
-      PYTHONDONTWRITEBYTECODE: "1"
-      SERVICE_NAME: celery-worker
-      ENV: ${ENV:-dev}
-    # ВАЖНО: Используем новую версию Celery с asyncio pool и флагом -B (Beat в одном процессе)
-    # get_redis_url() в celery/new_app.py читает REDIS_HOST из переменных окружения
-    command: celery -A infra.celery.new_app worker -B --pool=asyncio --loglevel=info -Q wednesday,images,maintenance
-    volumes:
-      - frog_images:/app/data/frogs
-      - prompt_storage:/app/data/prompts
-      # Beat сохраняет состояние расписания в файл (опционально)
-      - beat_data:/app/data/beat
-    networks:
-      - backend
-      - monitoring
-    healthcheck:
-      # Проверяем здоровье worker через стандартный Celery inspect ping
-      # Используем celery inspect ping для проверки доступности worker
-      test: ["CMD-SHELL", "celery -A infra.celery.new_app inspect ping --timeout=2 >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    secrets:
-      - postgres_password
-      - redis_password
-    deploy:
-      resources:
-        limits:
           cpus: "0.5"
-          memory: 512m
-        reservations:
-          cpus: "0.25"
           memory: 256m
     logging:
       driver: json-file
@@ -252,185 +110,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  loki:
-    image: grafana/loki:2.9.6
-    container_name: wednesday_loki
-    restart: unless-stopped
-    command: -config.file=/etc/loki/config.yml
-    volumes:
-      - ./monitoring/loki-config.yml:/etc/loki/config.yml:ro
-      - loki_data:/loki
-    expose:
-      - "3100"
-    networks:
-      - monitoring
-    healthcheck:
-      # Loki имеет встроенный HTTP endpoint /ready
-      # Используем busybox wget (доступен в образе grafana/loki)
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready | grep -q ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512m
-        reservations:
-          cpus: "0.25"
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  grafana:
-    image: grafana/grafana:11.1.0
-    container_name: wednesday_grafana
-    restart: unless-stopped
-    depends_on:
-      loki:
-        condition: service_healthy
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
-      GF_SERVER_DOMAIN: localhost
-      GF_UNIFIED_ALERTING_PROVISIONING_PATH: /etc/grafana/provisioning/alerting
-    ports:
-      - "127.0.0.1:3000:3000"
-    networks:
-      - monitoring
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-    secrets:
-      - grafana_admin_password
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512m
-        reservations:
-          cpus: "0.25"
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  prometheus:
-    image: prom/prometheus:v2.54.1
-    container_name: wednesday_prometheus
-    restart: unless-stopped
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=15d
-      - --web.enable-lifecycle
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
-      - prometheus_data:/prometheus
-    expose:
-      - "9090"
-    networks:
-      - backend
-      - monitoring
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      bot:
-        condition: service_healthy
-      celery-worker:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "0.75"
-          memory: 1g
-        reservations:
-          cpus: "0.25"
-          memory: 256m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  promtail:
-    image: grafana/promtail:2.9.6
-    container_name: wednesday_promtail
-    restart: unless-stopped
-    depends_on:
-      loki:
-        condition: service_healthy
-    volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro  # Для чтения docker logs
-      - promtail_positions:/promtail  # Персистентные позиции
-      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
-    command: -config.file=/etc/promtail/config.yml
-    expose:
-      - "9080"
-    networks:
-      - monitoring
-    healthcheck:
-      # Promtail не имеет wget/curl в образе, используем проверку процесса
-      # Это безопасный вариант - проверяет, что процесс запущен
-      # Примечание: promtail может висеть (процесс жив, но не отправляет логи),
-      # но для базового healthcheck проверки процесса достаточно
-      test: ["CMD-SHELL", "/bin/pidof promtail > /dev/null || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: 256m
-        reservations:
-          cpus: "0.1"
-          memory: 128m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-volumes:
-  postgres_data:
-  redis_data:
-  frog_images:
-  prompt_storage:
-  beat_data:
-  loki_data:
-  grafana_data:
-  promtail_positions:
-  prometheus_data:
+# volumes:
+#   pg_data:
+#   redis_data:
 
 networks:
-  backend:
-    driver: bridge
-  monitoring:
-    driver: bridge
-
-secrets:
-  postgres_password:
-    file: ./secrets/postgres_password
-  redis_password:
-    file: ./secrets/redis_password
-  grafana_admin_password:
-    file: ./secrets/grafana_admin_password
+  wednesday:
+    external: true

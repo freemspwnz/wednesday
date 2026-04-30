@@ -8,31 +8,20 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
   COMPOSE_PROJECT: wednesday_test
   COMPOSE_FILE: tests/docker-compose.test.yml
   COMPOSE_ENV: tests/.env.test
 
 jobs:
-  # ============================================================================
-  # Определение типа запуска (release или обычный)
-  # ============================================================================
-  check_release:
-    name: Check if release
-    runs-on: ubuntu-latest
-    outputs:
-      is_tag: ${{ steps.check.outputs.is_tag }}
-    steps:
-      - name: Check if tag
-        id: check
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "is_tag=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_tag=false" >> $GITHUB_OUTPUT
-          fi
-
   # ============================================================================
   # Линтинг и проверка форматирования (параллельно)
   # ============================================================================
@@ -52,6 +41,13 @@ jobs:
     with:
       python-version: ${{ env.PYTHON_VERSION }}
 
+  actionlint:
+    uses: ./.github/workflows/jobs/actionlint-check.yml
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/jobs/dependency-review.yml
+
   # ============================================================================
   # Дополнительные проверки (параллельно с тестами)
   # ============================================================================
@@ -63,27 +59,17 @@ jobs:
     uses: ./.github/workflows/jobs/loki-dashboards-check.yml
 
   # ============================================================================
-  # Проверка документации MkDocs
-  # ============================================================================
-
-  check-docs:
-    uses: ./.github/workflows/jobs/check-docs.yml
-    with:
-      python_version: ${{ env.PYTHON_VERSION }}
-
-  # ============================================================================
   # Унифицированный набор всех Pytest тестов
   # ============================================================================
 
   pytest-full:
     uses: ./.github/workflows/jobs/pytest-full.yml
-    needs: [check_release]
     with:
       python_version: ${{ env.PYTHON_VERSION }}
       compose_project: ${{ env.COMPOSE_PROJECT }}
       compose_file: ${{ env.COMPOSE_FILE }}
       compose_env: ${{ env.COMPOSE_ENV }}
-      is_release: ${{ needs.check_release.outputs.is_tag == 'true' }}
+      is_release: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
   # ============================================================================
   # Объединение результатов тестов
@@ -113,30 +99,8 @@ jobs:
 
   docker-build:
     name: Build Docker image (release only)
-    needs: [check_release, lint, format, mypy, pytest-full, prometheus, loki-dashboards]
-    if: needs.check_release.outputs.is_tag == 'true'
+    needs: [lint, format, mypy, actionlint, pytest-full, prometheus, loki-dashboards]
+    if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/jobs/docker-build.yml
     with:
       image-name: wednesday-bot
-
-  # ============================================================================
-  # Deploy MkDocs documentation to GitHub Pages (only for main branch pushes)
-  # ============================================================================
-
-  deploy-docs:
-    name: "🚀 Deploy Documentation to GH Pages"
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs:
-      - check_release
-      - lint
-      - format
-      - mypy
-      - pytest-full
-      - prometheus
-      - loki-dashboards
-      - check-docs
-    uses: ./.github/workflows/jobs/deploy-docs.yml
-    with:
-      python_version: ${{ env.PYTHON_VERSION }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

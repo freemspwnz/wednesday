@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
   packages: write
+  attestations: write
+  id-token: write
 
 jobs:
   docker-build:
@@ -49,6 +51,8 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
+          provenance: true
+          sbom: true
           tags: |
             ghcr.io/${{ steps.vars.outputs.repo_owner }}/${{ inputs.image-name }}:${{ steps.vars.outputs.tag }}
             ghcr.io/${{ steps.vars.outputs.repo_owner }}/${{ inputs.image-name }}:${{ steps.vars.outputs.latest }}

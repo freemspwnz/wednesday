@@ -5,7 +5,7 @@
 minimum_pre_commit_version: "3.5.0"
 default_stages: [pre-commit]
 default_language_version:
-  python: python3.14
+  python: python3.12
 fail_fast: false
 
 # Исключаем служебные каталоги (виртуальные окружения, миграции, кэш и пр.)
@@ -63,10 +63,6 @@ repos:
       - id: detect-private-key
         name: Detect private keys
 
-      # Поиск AWS credentials (опционально, не падает при отсутствии)
-      # - id: detect-aws-credentials
-      #  name: Detect AWS credentials
-        # Не требует аргументов, работает опционально
 
   # ---------------------------
   # Проверка .env файлов (валидация синтаксиса и дубликатов)
@@ -75,6 +71,7 @@ repos:
     rev: v4.0.0
     hooks:
       - id: dotenv-linter
+        args: ["check"]
         name: Dotenv linter
         files: "^\\.env$|^\\.env\\.(example|local|production)$"
         # Проверяет только основные .env файлы (исключаем .env.test через files паттерн)
@@ -105,16 +102,11 @@ repos:
     hooks:
       - id: mypy
         name: Mypy type checker
-        pass_filenames: false   # не подставлять только изменённые файлы
-        args: ["--explicit-package-bases", "."]
-        exclude: ^tests/   # убрать после рефакторинга tests/
+        pass_filenames: false
+        args: ["wednesday/domain/user", "wednesday/domain/kernel", "tests/domain"]
         additional_dependencies:
-          - types-requests
-          - types-python-dateutil
-          - aiohttp==3.13.1
           - redis==5.2.1
           - tenacity>=8.2.3
-        # Дополнительные типы для внешних библиотек
 
   # ---------------------------
   # Gitleaks: поиск секретов в коде (дополнительно к базовым хукам)
@@ -124,21 +116,7 @@ repos:
     hooks:
       - id: gitleaks
         name: Gitleaks secret scanner
-        # Сканирует весь репозиторий на наличие секретов
         pass_filenames: false
-
-  # ---------------------------
-  # Проверка качества тестов
-  # ---------------------------
-  - repo: local
-    hooks:
-      - id: check-test-quality
-        name: Check test quality (markers, fixtures)
-        entry: python3 tests/check_test_quality.py
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]
-        # Проверяет правильность использования маркеров и фикстур
 
   # ---------------------------
   # Pre-push: полный запуск pytest с покрытием (как в GitHub Actions)
@@ -146,9 +124,9 @@ repos:
   - repo: local
     hooks:
       - id: pytest-pre-push
-        name: Run tests with coverage via make test-cov before push
+        name: Run domain user quality gate before push
         entry: make test-cov
         language: system
         pass_filenames: false
         stages: [pre-push]
-        # Запускается только перед push, использует конфиг из pyproject.toml
+        # Запускает актуальный минимальный контур для domain/user

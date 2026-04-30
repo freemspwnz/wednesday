@@ -1,149 +1,110 @@
 [build-system]
-requires = ["setuptools>=67", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[project]
-name = "wednesday-tg-bot"
-version = "5.0.0"
-description = "Telegram-бот Wednesday Frog с расширенной автоматизацией и проверками качества кода."
+[tool.poetry]
+name = "wednesday"
+version = "7.0.0"
+description = "Telegram bot generating Wednesday frog meme images."
+authors = ["freemspwnz"]
 readme = "README.md"
-requires-python = ">=3.11"
-authors = [{ name = "Wednesday Frog Team" }]
-license = { file = "LICENSE" }
-dependencies = [
-  "aiohappyeyeballs==2.6.1",
-  "aiohttp==3.13.1",
-  "aiohttp_request==0.0.2",
-  "aioredis==2.0.1",
-  "aiosignal==1.4.0",
-  "amqp==5.3.1",
-  "anyio==4.11.0",
-  "async-timeout==5.0.1",
-  "asyncpg==0.31.0",
-  "attrs==25.4.0",
-  "billiard==4.2.3",
-  "celery==5.5.3",
-  "celery-pool-asyncio==0.2.0",
-  "certifi==2025.10.5",
-  "charset-normalizer==3.4.4",
-  "click==8.3.1",
-  "click-didyoumean==0.3.1",
-  "click-plugins==1.1.1.2",
-  "click-repl==0.3.0",
-  "coverage==7.11.3",
-  "databases==0.9.0",
-  "frozenlist==1.8.0",
-  "greenlet==3.2.4",
-  "h11==0.16.0",
-  "httpcore==1.0.9",
-  "httpx==0.28.1",
-  "idna==3.11",
-  "iniconfig==2.3.0",
-  "kombu==5.5.4",
-  "loguru==0.7.3",
-  "fastapi==0.115.5",
-  "MarkupSafe==3.0.3",
-  "multidict==6.7.0",
-  "mypy==1.18.2",
-  "mypy_extensions==1.1.0",
-  "packaging==25.0",
-  "pathspec==0.12.1",
-  "pillow==12.0.0",
-  "pip-review==1.3.0",
-  "pluggy==1.6.0",
-  "prompt_toolkit==3.0.52",
-  "propcache==0.4.1",
-  "pydantic-settings>=2.0.0",
-  "Pygments==2.19.2",
-  "pytest==9.0.0",
-  "pytest-asyncio==1.3.0",
-  "pytest-cov==7.0.0",
-  "pytest-xdist==3.6.1",
-  "python-dateutil==2.9.0.post0",
-  "python-dotenv==1.2.1",
-  "python-telegram-bot==22.5",
-  "redis==5.2.1",
-  "requests==2.32.5",
-  "ruff==0.7.1",
-  "setuptools==80.9.0",
-  "six==1.17.0",
-  "sniffio==1.3.1",
-  "SQLAlchemy==2.0.44",
-  "types-requests==2.32.4.20250913",
-  "typing_extensions==4.15.0",
-  "tzdata==2025.2",
-  "urllib3==2.5.0",
-  "vine==5.1.0",
-  "wcwidth==0.2.14",
-  "Werkzeug==3.1.3",
-  "wheel==0.45.1",
-  "yarl==1.22.0",
-  "prometheus_client>=0.20.0",
-  "sentry-sdk[fastapi,asyncio]==2.19.2",
-  "tenacity>=8.2.3",
-  "uvicorn==0.32.1",
-  "junitparser==4.0.2",
-  "mkdocs>=1.5.0",
-  "mkdocstrings[python]>=0.24.0",
-  "mkdocs-material>=9.5.0",
+license = "MIT"
+packages = [
+  { include = "app", from = "wednesday" },
+  { include = "infra", from = "wednesday" },
+  { include = "domain", from = "wednesday" },
+  { include = "presentation", from = "wednesday" },
 ]
 
+[tool.poetry.dependencies]
+python = ">=3.12,<3.15"
+
+# Core bot
+aiogram = "^3.17.0"
+
+# HTTP client
+httpx = { version = "0.28.1", extras = ["http2"] }
+
+# Async tasks
+taskiq = { version = "^0.11.0", extras = ["redis", "metrics"] }
+
+# Database & ORM
+redis = "5.2.1"
+asyncpg = "0.31.0"
+sqlalchemy = { version = "^2.0.44", extras = ["asyncio"] }
+alembic = "1.14.1"
+greenlet = "^3.4.0"
+
+# Pydantic
+pydantic = "2.12.5"
+pydantic-settings = ">=2.0.0"
+
+# Metrics & Monitoring & Logging
+prometheus_client = "0.23.1"
+sentry-sdk = { version = "2.46.0", extras = ["asyncio"] }
+loguru = "0.7.3"
+
+# Resilience
+tenacity = "9.1.4"
+asyncbreaker = "2.0.1"
+limits = "5.8.0"
+
+[tool.poetry.group.dev.dependencies]
+# Testing
+pytest = "9.0.0"
+pytest-asyncio = "1.3.0"
+pytest-cov = "7.0.0"
+
+# Linting and formatting
+mypy = "1.18.2"
+ruff = "0.7.1"
+junitparser = "4.0.2"
+
+types-redis = "^4.6.0"
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "^1.6.0"
+mkdocs-material = "^9.5.0"
+
+#  Auto generating documentation from docstrings
+mkdocstrings = { version = "^0.28.0", extras = ["python"] }
+
+# Checking links
+mkdocs-htmlproofer-plugin = "^1.2.0"
+
+# Mermaid diagrams renderer
+mkdocs-mermaid2-plugin = "^1.2.1"
+
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 120
 extend-exclude = [
   ".venv",
   "build",
   "dist",
   "__pycache__",
-  "tests/conftest.py",
 ]
 fix = true
 unsafe-fixes = false
 
 [tool.ruff.lint]
-select = [
-  "E",
-  "F",
-  "W",
-  "B",
-  "C4",
-  "I",
-  "ANN",
-  "UP",
-  "RUF",
-  "PLE",
-  "PLR",
-  "PLW",
-  "COM",
-]
+select = ["E","F","W","B","C4","I","ANN","UP","RUF","PLE","PLR","PLW","COM"]
 ignore = [
-    "RUF001",
-    "RUF002",
-    "RUF003",
-    "W293",
-    "PLR0912",  # Too many branches (сложные функции обработчиков)
-    "PLR0915",  # Too many statements (сложные функции обработчиков)
-    "PLR0914",  # Too many local variables (сложные функции обработчиков)
-    "PLR1702",  # Too many nested blocks (сложные функции обработчиков)
-    "PLR0911",  # Too many return statements (нормально для обработки ошибок)
-    "COM812",
-    "TID252",
-    "RUF015",
+  "RUF001","RUF002","RUF003","W293",
+  "PLR0912","PLR0915","PLR0914","PLR1702","PLR0911",
+  "COM812","TID252","RUF015",
 ]
 fixable = ["ALL"]
-unfixable = ["B", "RUF"]  # запрет на refactor фиксы
+unfixable = ["B", "RUF"]
 preview = true
 
 [tool.ruff.lint.isort]
-known-first-party = ["bot", "app", "infra", "domain", "shared", "tests"]
+known-first-party = ["app", "domain", "infra", "presentation", "tests"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ANN401", "PLR6301", "RUF029", "PLR2004"]
 
 [tool.ruff.format]
 preview = true
@@ -152,7 +113,7 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
@@ -164,46 +125,26 @@ warn_return_any = true
 warn_no_return = true
 no_implicit_optional = true
 strict_equality = true
-mypy_path = "src"
-exclude = "(?x)(^tests/_doubles/|^tests/helpers/|^tests/common/|^tests/fixtures/|^services/celery_app_test\\.py|^services/celery_tasks_test\\.py)"
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = false
-check_untyped_defs = false
-
-[[tool.mypy.overrides]]
-module = "tests.conftest"
-disallow_untyped_defs = false
-check_untyped_defs = false
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "tests.common.celery_app_test"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "tests.common.celery_tasks_test"
-ignore_errors = true
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["ANN401", "PLR6301", "RUF029", "PLR2004"]
-"tests/conftest.py" = ["ANN401", "PLR6301"]
+mypy_path = "wednesday"
 
 [tool.pytest.ini_options]
 markers = [
-    "unit: быстрые модульные тесты без внешних зависимостей",
-    "integration: интеграционные тесты с Postgres/Redis без Celery e2e",
-    "db: тест требует Postgres",
-    "redis: тест требует Redis",
-    "celery: тест требует Celery worker/beat",
-    "e2e: end-to-end сценарии с внешними сервисами",
-    "infra: инфраструктурные/диагностические проверки (запуск редко)",
-    "slow: долгие сценарии, исключаются из быстрых прогонов",
+  "unit: быстрые модульные тесты без внешних зависимостей",
+  "integration: интеграционные тесты с Postgres/Redis без taskiq e2e",
+  "db: тест требует Postgres",
+  "redis: тест требует Redis",
+  "taskiq: тест требует taskiq worker/beat",
+  "e2e: end-to-end сценарии с внешними сервисами",
+  "infra: инфраструктурные/диагностические проверки (запуск редко)",
+  "slow: долгие сценарии, исключаются из быстрых прогонов",
 ]
 addopts = "-v -ra --tb=short"
 testpaths = ["tests"]
+pythonpath = ["wednesday"]
 asyncio_mode = "strict"
 asyncio_default_test_loop_scope = "session"
 asyncio_default_fixture_loop_scope = "session"
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::sqlalchemy.exc.SAWarning"
+]

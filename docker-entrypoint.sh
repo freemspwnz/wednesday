@@ -5,15 +5,15 @@ set -e
 # Эта функция безопасна для повторного вызова
 prepare_directories() {
     # Создаём директории для логов и данных, если их нет
-    mkdir -p /app/logs /app/data/prompts /app/data/beat /app/data/frogs
+    mkdir -p /var/tmp/logs
 
     # Если мы root, устанавливаем права доступа
     if [ "$(id -u)" = "0" ]; then
         # Устанавливаем права только если директории существуют и права неправильные
         # Это делает функцию idempotent - можно вызывать многократно без побочных эффектов
-        chown -R app:app /app/logs /app/data 2>/dev/null || true
+        chown -R app:app /var/tmp/logs 2>/dev/null || true
         # Устанавливаем права на запись для группы и владельца
-        chmod -R u+rwX,g+rwX,o+rX /app/logs /app/data 2>/dev/null || true
+        chmod -R u+rwX,g+rwX,o+rX /var/tmp/logs 2>/dev/null || true
     fi
 }
 

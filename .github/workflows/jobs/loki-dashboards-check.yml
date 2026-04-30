@@ -3,6 +3,9 @@ name: Loki Dashboards Check
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   loki-dashboards-check:
     name: Loki dashboard lint

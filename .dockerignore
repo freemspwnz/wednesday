@@ -109,3 +109,8 @@ ipython_config.py
 
 # Wednesday Frog Bot specific
 data/
+
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.mypy_cache/
