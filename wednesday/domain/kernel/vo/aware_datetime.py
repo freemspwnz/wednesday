@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import overload
@@ -18,18 +20,18 @@ class AwareDatetime:
     def __str__(self) -> str:
         return self.value.isoformat()
 
-    def __add__(self, other: timedelta) -> "AwareDatetime":
+    def __add__(self, other: timedelta) -> AwareDatetime:
         if not isinstance(other, timedelta):
             return NotImplemented
         return AwareDatetime(self.value + other)
 
     @overload
-    def __sub__(self, other: timedelta) -> "AwareDatetime": ...
+    def __sub__(self, other: timedelta) -> AwareDatetime: ...
 
     @overload
-    def __sub__(self, other: "AwareDatetime") -> timedelta: ...
+    def __sub__(self, other: AwareDatetime) -> timedelta: ...
 
-    def __sub__(self, other: object) -> "AwareDatetime" | timedelta:
+    def __sub__(self, other: object) -> AwareDatetime | timedelta:
         if isinstance(other, timedelta):
             return AwareDatetime(self.value - other)
         if isinstance(other, AwareDatetime):
@@ -40,9 +42,9 @@ class AwareDatetime:
         return f"AwareDatetime({self.value!r})"
 
     @classmethod
-    def now_utc(cls) -> "AwareDatetime":
+    def now_utc(cls) -> AwareDatetime:
         return cls(value=datetime.now(UTC))
 
     @classmethod
-    def from_datetime(cls, dt: datetime) -> "AwareDatetime":
+    def from_datetime(cls, dt: datetime) -> AwareDatetime:
         return cls(value=dt)
