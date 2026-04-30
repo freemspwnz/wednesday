@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -41,6 +40,9 @@ jobs:
 
   dependency-review:
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/dependency-review.yml
 
   # ============================================================================
@@ -92,6 +94,11 @@ jobs:
     name: Build Docker image (release only)
     needs: [lint, format, mypy, actionlint, pytest, prometheus, loki-dashboards]
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
       image-name: wednesday-bot

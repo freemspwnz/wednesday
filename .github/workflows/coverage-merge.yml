@@ -51,7 +51,7 @@ jobs:
       - name: Check coverage inputs
         id: coverage-inputs
         run: |
-          if ls .coverage.* >/dev/null 2>&1; then
+          if ls .coverage* >/dev/null 2>&1; then
             echo "has_coverage=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_coverage=false" >> "$GITHUB_OUTPUT"
@@ -63,7 +63,7 @@ jobs:
           HOST_REPO_ROOT: ${{ github.workspace }}
         run: |
           # Исправляем пути в coverage файлах
-          for f in .coverage.*; do
+          for f in .coverage*; do
             if [ -f "$f" ]; then
               echo "Исправление путей в $f"
               poetry run python scripts/fix_coverage_paths.py "$f" || true
@@ -71,7 +71,7 @@ jobs:
           done
 
           # Объединяем coverage файлы
-          poetry run coverage combine .coverage.* || true
+          poetry run coverage combine .coverage* || true
 
           # Генерируем XML и отчет
           poetry run coverage xml -o coverage.xml --ignore-errors || true
