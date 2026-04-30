@@ -35,8 +35,9 @@ test: ## Запустить все тесты с покрытием
 test-domain: ## Запустить только domain тесты
 	$(POETRY) pytest $(DOMAIN_TESTS)
 
-test-cov: ## Запустить domain quality gate (pre-push)
-	$(POETRY) pytest $(DOMAIN_TESTS) $(DOMAIN_COV) --cov-report=term-missing --cov-report=xml:coverage.xml
+test-cov:
+	$(POETRY) pytest $(DOMAIN_TESTS) $(DOMAIN_COV) --cov-report=term-missing \
+	--cov-report=xml:coverage.xml --junitxml=junit-domain.xml
 
 clean: ## Очистить временные артефакты
 	rm -rf .pytest_cache .coverage coverage.xml .mypy_cache .ruff_cache

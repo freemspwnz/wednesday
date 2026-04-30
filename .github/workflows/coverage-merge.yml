@@ -46,8 +46,8 @@ jobs:
       - name: Copy coverage files
         run: |
           echo "=== Копирование файлов покрытия ==="
-          find coverage-files -name ".coverage.*" -type f -exec cp {} . \;
-          ls -la .coverage.* 2>/dev/null || echo "Файлы покрытия не найдены"
+          find coverage-files -name ".coverage*" -type f -exec cp {} . \;
+          ls -la .coverage* 2>/dev/null || echo "Файлы покрытия не найдены"
 
       - name: Check coverage inputs
         id: coverage-inputs

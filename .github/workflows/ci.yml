@@ -71,7 +71,7 @@ jobs:
   coverage-merge:
     uses: ./.github/workflows/coverage-merge.yml
     needs: [pytest]
-    if: always()
+    if: needs.pytest.result == 'success'
     with:
       python-version: ${{ vars.PYTHON_VERSION }}
     secrets:
@@ -80,7 +80,7 @@ jobs:
   junit-merge:
     uses: ./.github/workflows/junit-merge.yml
     needs: [pytest]
-    if: always()
+    if: needs.pytest.result == 'success'
     with:
       python-version: ${{ vars.PYTHON_VERSION }}
     secrets:
