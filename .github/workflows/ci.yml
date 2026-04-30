@@ -21,43 +21,43 @@ jobs:
   # ============================================================================
 
   lint:
-    uses: ./.github/workflows/jobs/ruff-lint.yml
+    uses: ./.github/workflows/ruff-lint.yml
     with:
       python-version: ${{ vars.PYTHON_VERSION }}
 
   format:
-    uses: ./.github/workflows/jobs/ruff-format.yml
+    uses: ./.github/workflows/ruff-format.yml
     with:
       python-version: ${{ vars.PYTHON_VERSION }}
 
   mypy:
-    uses: ./.github/workflows/jobs/mypy.yml
+    uses: ./.github/workflows/mypy.yml
     with:
       python-version: ${{ vars.PYTHON_VERSION }}
 
   actionlint:
-    uses: ./.github/workflows/jobs/actionlint-check.yml
+    uses: ./.github/workflows/actionlint.yml
 
   dependency-review:
     if: github.event_name == 'pull_request'
-    uses: ./.github/workflows/jobs/dependency-review.yml
+    uses: ./.github/workflows/dependency-review.yml
 
   # ============================================================================
   # Дополнительные проверки (параллельно с тестами)
   # ============================================================================
 
   prometheus:
-    uses: ./.github/workflows/jobs/prometheus-check.yml
+    uses: ./.github/workflows/prometheus.yml
 
   loki-dashboards:
-    uses: ./.github/workflows/jobs/loki-dashboards-check.yml
+    uses: ./.github/workflows/loki.yml
 
   # ============================================================================
   # Унифицированный набор всех Pytest тестов
   # ============================================================================
 
   pytest:
-    uses: ./.github/workflows/jobs/pytest.yml
+    uses: ./.github/workflows/pytest.yml
     with:
       python-version: ${{ vars.PYTHON_VERSION }}
 
@@ -66,7 +66,7 @@ jobs:
   # ============================================================================
 
   coverage-merge:
-    uses: ./.github/workflows/jobs/coverage-merge.yml
+    uses: ./.github/workflows/coverage-merge.yml
     needs: [pytest]
     if: always()
     with:
@@ -75,7 +75,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   junit-merge:
-    uses: ./.github/workflows/jobs/junit-merge.yml
+    uses: ./.github/workflows/junit-merge.yml
     needs: [pytest]
     if: always()
     with:
@@ -91,6 +91,6 @@ jobs:
     name: Build Docker image (release only)
     needs: [lint, format, mypy, actionlint, pytest, prometheus, loki-dashboards]
     if: startsWith(github.ref, 'refs/tags/v')
-    uses: ./.github/workflows/jobs/docker-build.yml
+    uses: ./.github/workflows/docker-build.yml
     with:
       image-name: wednesday-bot
