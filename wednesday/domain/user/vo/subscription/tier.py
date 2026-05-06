@@ -1,6 +1,6 @@
-from enum import StrEnum
+from enum import IntEnum
 
 
-class SubscriptionTier(StrEnum):
-    FREE = "free"
-    PREMIUM = "premium"
+class SubscriptionTier(IntEnum):
+    FREE = 0
+    PREMIUM = 1

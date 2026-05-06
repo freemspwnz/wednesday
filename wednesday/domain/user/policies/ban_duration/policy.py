@@ -34,7 +34,7 @@ class BanDurationPolicy:
         if stats.today >= MAX_DAILY_VIOLATIONS:
             return cls.assign(now + BanDuration.day(), BanDurationCode.BAN_1_DAY)
 
-        if stats.today >= MAX_HOURLY_VIOLATIONS:
+        if stats.hour >= MAX_HOURLY_VIOLATIONS:
             return cls.assign(now + BanDuration.hour(), BanDurationCode.BAN_1_HOUR)
 
         return cls.deny()

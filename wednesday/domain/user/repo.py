@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from .aggregate import User
+from .user import User
 from .vo import UserTelegramId
 
 

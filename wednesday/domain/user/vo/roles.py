@@ -1,22 +1,18 @@
-from enum import StrEnum
+from __future__ import annotations
 
-from ..exceptions import InvalidStateTransitionError
+from enum import IntEnum
 
-
-class UserRole(StrEnum):
-    SYSTEM = "system"
-    OWNER = "owner"
-    ADMIN = "admin"
-    USER = "user"
-
-    def ensure_transition_allowed(self, target: "UserRole") -> None:
-        if target not in TRANSITION_MATRIX[self]:
-            raise InvalidStateTransitionError("Transition to target role is forbidden.")
+from ..exceptions import ValidationError
 
 
-TRANSITION_MATRIX: dict[UserRole, set[UserRole]] = {
-    UserRole.SYSTEM: set(),
-    UserRole.OWNER: {UserRole.ADMIN, UserRole.USER},
-    UserRole.ADMIN: {UserRole.OWNER, UserRole.USER},
-    UserRole.USER: {UserRole.ADMIN},
-}
+class UserRole(IntEnum):
+    SYSTEM = 3
+    OWNER = 2
+    ADMIN = 1
+    USER = 0
+
+    @classmethod
+    def ensure(cls, role: UserRole) -> UserRole:
+        if not isinstance(role, UserRole):
+            raise ValidationError("role must be a UserRole")
+        return role

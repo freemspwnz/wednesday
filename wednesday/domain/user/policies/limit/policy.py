@@ -1,14 +1,13 @@
 from datetime import timedelta
 
+from ...vo import AwareDatetime, UserSubscription
 from .vo import (
-    AwareDatetime,
     CooldownViolation,
     DailyLimitViolation,
     LimitAllowed,
     LimitDecision,
     LimitDenied,
     LimitViolation,
-    SubscriptionPlan,
     UsageStats,
 )
 
@@ -19,7 +18,7 @@ class LimitPolicy:
     @classmethod
     def evaluate(
         cls,
-        subscription: SubscriptionPlan,
+        subscription: UserSubscription,
         stats: UsageStats,
         now: AwareDatetime,
     ) -> LimitDecision:
@@ -31,8 +30,8 @@ class LimitPolicy:
         If not, denies the request.
         """
 
-        limit = subscription.daily_limit
-        cooldown = subscription.cooldown_minutes
+        limit = subscription.plan.daily_limit
+        cooldown = subscription.plan.cooldown_minutes
         daily_usage = stats.daily_usage
         last_usage = stats.last_usage
 
@@ -45,7 +44,7 @@ class LimitPolicy:
             )
 
         if last_usage is not None:
-            remaining = last_usage - now + timedelta(minutes=cooldown)
+            remaining = last_usage + timedelta(minutes=cooldown) - now
             if remaining.total_seconds() > 0:
                 return cls.deny(
                     CooldownViolation(

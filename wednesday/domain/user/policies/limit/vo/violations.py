@@ -25,7 +25,7 @@ class DailyLimitViolation:
 
     @property
     def code(self) -> LimitViolationCode:
-        return LimitViolationCode.DAILY_LIMIT
+        return LimitViolationCode.DAILY_LIMIT_EXCEEDED
 
 
 @dataclass(frozen=True)

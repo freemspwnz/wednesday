@@ -2,8 +2,8 @@ from ...kernel.vo import AwareDatetime, NonEmptyStr
 from .profile import UserProfile
 from .roles import UserRole
 from .states import ActiveState, BannedState, UserState
-from .subscription import SubscriptionPlan, SubscriptionTier
-from .telegram_id import UserTelegramId
+from .subscription import SubscriptionPlan, SubscriptionTier, UserSubscription
+from .user_id import UserTelegramId
 
 __all__ = [
     "ActiveState",
@@ -15,5 +15,6 @@ __all__ = [
     "UserProfile",
     "UserRole",
     "UserState",
+    "UserSubscription",
     "UserTelegramId",
 ]

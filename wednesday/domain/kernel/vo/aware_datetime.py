@@ -48,3 +48,9 @@ class AwareDatetime:
     @classmethod
     def from_datetime(cls, dt: datetime) -> AwareDatetime:
         return cls(value=dt)
+
+    @classmethod
+    def ensure(cls, dt: AwareDatetime) -> AwareDatetime:
+        if not isinstance(dt, AwareDatetime):
+            raise ValidationError("dt must be an AwareDatetime")
+        return dt

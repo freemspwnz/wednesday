@@ -21,8 +21,8 @@ from domain.user.exceptions import InvalidStateTransitionError, ValidationError
 from domain.user.policies.ban_duration.vo import BanAssigned, BanDuration, BanDurationCode, ViolationStats
 from domain.user.policies.limit.vo.decisions import LimitDenied
 from domain.user.policies.limit.vo.violations import CooldownViolation, DailyLimitViolation
-from domain.user.policies.management.vo.decisions import ManagementAccessDenied
-from domain.user.services import SubscriptionCatalog
+from domain.user.policies.management.vo.decisions import ManagementDenied
+from domain.user.vo import UserSubscription
 
 from .factories import dt, mk_user
 
@@ -45,7 +45,7 @@ def test_user_event_validates_types(user_id: object, occurred_at: object) -> Non
 def test_aggregate_rejects_non_subscription_plan_on_change() -> None:
     user = mk_user()
     with pytest.raises(ValidationError):
-        user.change_subscription("premium", now=dt(13))  # type: ignore[arg-type]
+        user.change_subscription(actor=UserRole.ADMIN, new_subscription="premium", at=dt(13))  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -60,29 +60,22 @@ def test_aggregate_rejects_non_subscription_plan_on_change() -> None:
 def test_aggregate_rejects_invalid_change_role_types(actor: object, new_role: object) -> None:
     user = mk_user()
     with pytest.raises(ValidationError):
-        user.change_role(actor=actor, new_role=new_role, now=dt(13))  # type: ignore[arg-type]
-
-
-@pytest.mark.unit
-def test_aggregate_rejects_invalid_violation_stats_type() -> None:
-    user = mk_user()
-    with pytest.raises(ValidationError):
-        user.apply_policy_ban(stats="bad", now=dt(12))  # type: ignore[arg-type]
+        user.change_role(actor=actor, new_role=new_role, at=dt(13))  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
 def test_mark_seen_checks_updated_at_monotonicity() -> None:
     user = mk_user(now=dt(10))
-    user.change_subscription(SubscriptionCatalog.premium(), now=dt(12))
+    user.change_subscription(actor=UserRole.ADMIN, new_subscription=UserSubscription.premium(dt(12)), at=dt(12))
     with pytest.raises(ValidationError):
-        user.mark_seen_at(dt(11))
+        user.mark_seen_at(at=dt(11))
 
 
 @pytest.mark.unit
 def test_mark_seen_rejects_non_aware_datetime() -> None:
     user = mk_user()
     with pytest.raises(ValidationError):
-        user.mark_seen_at(datetime.now(UTC))  # type: ignore[arg-type]
+        user.mark_seen_at(at=datetime.now(UTC))  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -92,7 +85,7 @@ def test_user_dataclass_rejects_non_event_item() -> None:
             _id=UserTelegramId(1),
             _profile=UserProfile(is_bot=False, first_name=NonEmptyStr("A")),
             _role=UserRole.USER,
-            _subscription=SubscriptionCatalog.free(),
+            _subscription=UserSubscription.free(dt(12)),
             _events=["bad"],  # type: ignore[list-item]
             _state=ActiveState(),
             _created_at=dt(12),
@@ -130,7 +123,7 @@ def test_active_state_unban_raises_invalid_transition() -> None:
 @pytest.mark.unit
 def test_active_state_refresh_returns_same_object() -> None:
     state = ActiveState()
-    assert state.refresh(dt(12)) is state
+    assert state.effective_at(dt(12), ActiveState()) is state
 
 
 @pytest.mark.unit
@@ -154,7 +147,7 @@ def test_banned_state_unban_returns_active_state() -> None:
 @pytest.mark.unit
 def test_banned_state_refresh_keeps_state_before_expiry() -> None:
     state = BannedState(until=dt(14))
-    assert state.refresh(now=dt(13)) == state
+    assert state.effective_at(now=dt(13), fallback=ActiveState()) == state
 
 
 @pytest.mark.unit
@@ -194,7 +187,7 @@ def test_ban_duration_builders_and_addition_variants() -> None:
 )
 def test_violation_stats_validation_edges(today: object, week: object, total: object) -> None:
     with pytest.raises(ValidationError):
-        ViolationStats(today=today, week=week, total=total)  # type: ignore[arg-type]
+        ViolationStats(hour=0, today=today, week=week, total=total)  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -241,7 +234,7 @@ def test_cooldown_violation_validation(cooldown_minutes: object, remaining: obje
 
 @pytest.mark.unit
 def test_limit_violation_codes() -> None:
-    assert DailyLimitViolation(daily_limit=3, used=3).code.value == "daily_limit"
+    assert DailyLimitViolation(daily_limit=3, used=3).code.value == "daily_limit_exceeded"
     assert CooldownViolation(cooldown_minutes=1, remaining=timedelta(seconds=1)).code.value == "cooldown"
 
 
@@ -250,7 +243,7 @@ def test_limit_violation_codes() -> None:
     ("factory", "kwargs"),
     [
         (LimitDenied, {"violation": "bad"}),
-        (ManagementAccessDenied, {"code": "bad"}),
+        (ManagementDenied, {"code": "bad"}),
         (BanAssigned, {"banned_until": "bad", "code": BanDurationCode.BAN_1_HOUR}),
         (BanAssigned, {"banned_until": dt(13), "code": "bad"}),
     ],

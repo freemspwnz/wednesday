@@ -5,12 +5,12 @@ from .code import ManagementAccessCode
 
 
 @dataclass(frozen=True)
-class ManagementAccessAllowed:
+class ManagementAllowed:
     pass
 
 
 @dataclass(frozen=True)
-class ManagementAccessDenied:
+class ManagementDenied:
     code: ManagementAccessCode
 
     def __post_init__(self) -> None:
@@ -18,4 +18,4 @@ class ManagementAccessDenied:
             raise ValidationError("code must be a ManagementAccessCode")
 
 
-type ManagementAccessDecision = ManagementAccessAllowed | ManagementAccessDenied
+type ManagementAccessDecision = ManagementAllowed | ManagementDenied

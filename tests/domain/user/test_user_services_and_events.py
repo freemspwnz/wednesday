@@ -3,23 +3,23 @@ from typing import Any, cast
 
 import pytest
 
-from domain.user import SubscriptionTier, UserBanned, UserRole, UserTelegramId, UserUnbanned
-from domain.user.events import SubscriptionChanged, UserRoleChanged
+from domain.user import UserBanned, UserRole, UserTelegramId, UserUnbanned
+from domain.user.events import UserRoleChanged, UserSubscriptionChanged
 from domain.user.exceptions import ValidationError
-from domain.user.services import SubscriptionCatalog
+from domain.user.vo import UserSubscription
 
 from .factories import dt
 
 
 @pytest.mark.unit
-def test_subscription_catalog_presets() -> None:
-    free = SubscriptionCatalog.free()
-    premium = SubscriptionCatalog.premium()
+def test_subscription_presets() -> None:
+    free = UserSubscription.free(dt(12))
+    premium = UserSubscription.premium(dt(12))
 
-    assert free.tier == SubscriptionTier.FREE
-    assert free.daily_limit == 3
-    assert premium.tier == SubscriptionTier.PREMIUM
-    assert premium.cooldown_minutes == 1
+    assert free.plan.daily_limit == 3
+    assert free.plan.cooldown_minutes == 5
+    assert premium.plan.daily_limit == 10
+    assert premium.plan.cooldown_minutes == 1
 
 
 @pytest.mark.unit
@@ -27,12 +27,12 @@ def test_subscription_catalog_presets() -> None:
     ("event_factory", "kwargs"),
     [
         (
-            SubscriptionChanged,
+            UserSubscriptionChanged,
             {
                 "user_id": UserTelegramId(1),
                 "occurred_at": dt(12),
-                "old_plan": "free",
-                "new_plan": SubscriptionCatalog.premium(),
+                "old_subscription": "free",
+                "new_subscription": UserSubscription.premium(dt(12)),
             },
         ),
         (

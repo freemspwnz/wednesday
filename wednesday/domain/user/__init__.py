@@ -1,14 +1,15 @@
-from .aggregate import User
 from .events import (
-    SubscriptionChanged,
     UserBanExpired,
     UserBanned,
     UserEvent,
     UserRoleChanged,
+    UserSubscriptionChanged,
+    UserSubscriptionExpired,
     UserUnbanned,
 )
 from .exceptions import (
     AccessDeniedError,
+    CooldownViolationError,
     LimitViolationError,
     UserBannedError,
     UserNotBannedError,
@@ -16,12 +17,13 @@ from .exceptions import (
 from .policies import (
     BanDurationPolicy,
     LimitPolicy,
-    ManagementAccessContext,
     ManagementAccessPolicy,
+    ManagementContext,
     UsageStats,
     ViolationStats,
 )
 from .repo import UserRepo
+from .user import User
 from .vo import (
     ActiveState,
     BannedState,
@@ -30,6 +32,7 @@ from .vo import (
     UserProfile,
     UserRole,
     UserState,
+    UserSubscription,
     UserTelegramId,
 )
 
@@ -38,11 +41,11 @@ __all__ = [
     "ActiveState",
     "BanDurationPolicy",
     "BannedState",
+    "CooldownViolationError",
     "LimitPolicy",
     "LimitViolationError",
-    "ManagementAccessContext",
     "ManagementAccessPolicy",
-    "SubscriptionChanged",
+    "ManagementContext",
     "SubscriptionPlan",
     "SubscriptionTier",
     "UsageStats",
@@ -57,6 +60,9 @@ __all__ = [
     "UserRole",
     "UserRoleChanged",
     "UserState",
+    "UserSubscription",
+    "UserSubscriptionChanged",
+    "UserSubscriptionExpired",
     "UserTelegramId",
     "UserUnbanned",
     "ViolationStats",

@@ -103,7 +103,7 @@ repos:
       - id: mypy
         name: Mypy type checker
         pass_filenames: false
-        args: ["wednesday/domain/user", "wednesday/domain/kernel", "tests/domain"]
+        args: ["wednesday/domain/user", "wednesday/domain/kernel", "wednesday/domain/chat", "tests/domain"]
         additional_dependencies:
           - redis==5.2.1
           - tenacity>=8.2.3
@@ -124,9 +124,9 @@ repos:
   - repo: local
     hooks:
       - id: pytest-pre-push
-        name: Run domain user quality gate before push
+        name: Run domain quality gate before push
         entry: make test-cov
         language: system
         pass_filenames: false
         stages: [pre-push]
-        # Запускает актуальный минимальный контур для domain/user
+        # Запускает актуальный минимальный контур для domain (kernel, user, chat)

@@ -29,9 +29,7 @@ class BannedState(UserState):
 
         return ActiveState()
 
-    def refresh(self, now: AwareDatetime) -> UserState:
+    def effective_at(self, now: AwareDatetime, fallback: UserState) -> UserState:
         if self.until <= now:
-            from .active import ActiveState
-
-            return ActiveState()
+            return fallback
         return self

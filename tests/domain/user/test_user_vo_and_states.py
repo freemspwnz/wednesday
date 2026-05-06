@@ -22,4 +22,4 @@ def test_user_profile_full_name_builds_from_first_and_last_name() -> None:
 @pytest.mark.unit
 def test_banned_state_refresh_unbans_after_until() -> None:
     state = BannedState(until=dt(12))
-    assert isinstance(state.refresh(now=dt(13)), ActiveState)
+    assert isinstance(state.effective_at(now=dt(13), fallback=ActiveState()), ActiveState)

@@ -2,10 +2,17 @@ from dataclasses import dataclass
 
 from ....exceptions import ValidationError
 from ....vo import UserRole
+from .actions import (
+    ChangeProfile,
+    ChangeRole,
+    ChangeState,
+    ChangeSubscription,
+    ManagementAction,
+)
 
 
 @dataclass(frozen=True)
-class ManagementAccessContext:
+class ManagementContext:
     """Context for management access policy.
 
     actor_role: The role of the actor.
@@ -14,6 +21,7 @@ class ManagementAccessContext:
 
     actor_role: UserRole
     target_role: UserRole
+    action: ManagementAction
 
     def __post_init__(self) -> None:
         if not isinstance(self.actor_role, UserRole):
@@ -21,3 +29,6 @@ class ManagementAccessContext:
 
         if not isinstance(self.target_role, UserRole):
             raise ValidationError("target_role must be a UserRole")
+
+        if not isinstance(self.action, ChangeRole | ChangeSubscription | ChangeState | ChangeProfile):
+            raise ValidationError("action must be a ManagementAction")

@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserProfile, UserRole, UserTelegramId
-from domain.user.services import SubscriptionCatalog
+from domain.user.vo import UserSubscription
 
 
 def dt(hour: int) -> AwareDatetime:
@@ -20,6 +20,6 @@ def mk_user(
         id=UserTelegramId(user_id),
         profile=UserProfile(is_bot=False, first_name=NonEmptyStr("Test")),
         role=role,
-        subscription=SubscriptionCatalog.free(),
+        subscription=UserSubscription.free(current),
         now=current,
     )

@@ -1,17 +1,27 @@
 from .policy import ManagementAccessPolicy
 from .vo import (
-    ManagementAccessAllowed,
+    ChangeProfile,
+    ChangeRole,
+    ChangeState,
+    ChangeSubscription,
     ManagementAccessCode,
-    ManagementAccessContext,
     ManagementAccessDecision,
-    ManagementAccessDenied,
+    ManagementAction,
+    ManagementAllowed,
+    ManagementContext,
+    ManagementDenied,
 )
 
 __all__ = [
-    "ManagementAccessAllowed",
+    "ChangeProfile",
+    "ChangeRole",
+    "ChangeState",
+    "ChangeSubscription",
     "ManagementAccessCode",
-    "ManagementAccessContext",
     "ManagementAccessDecision",
-    "ManagementAccessDenied",
     "ManagementAccessPolicy",
+    "ManagementAction",
+    "ManagementAllowed",
+    "ManagementContext",
+    "ManagementDenied",
 ]

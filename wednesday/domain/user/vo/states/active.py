@@ -25,5 +25,5 @@ class ActiveState(UserState):
     def unban() -> ActiveState:
         raise InvalidStateTransitionError("cannot unban active state")
 
-    def refresh(self, now: AwareDatetime) -> UserState:
+    def effective_at(self, now: AwareDatetime, fallback: UserState) -> UserState:
         return self

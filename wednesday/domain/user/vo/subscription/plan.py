@@ -21,3 +21,11 @@ class SubscriptionPlan:
 
         if self.cooldown_minutes < 0:
             raise ValidationError("cooldown_minutes must be >= 0")
+
+    @classmethod
+    def free(cls) -> "SubscriptionPlan":
+        return cls(tier=SubscriptionTier.FREE, daily_limit=3, cooldown_minutes=5)
+
+    @classmethod
+    def premium(cls) -> "SubscriptionPlan":
+        return cls(tier=SubscriptionTier.PREMIUM, daily_limit=10, cooldown_minutes=1)

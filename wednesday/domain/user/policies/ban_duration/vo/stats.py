@@ -5,6 +5,7 @@ from ....exceptions import ValidationError
 
 @dataclass(frozen=True)
 class ViolationStats:
+    hour: int
     today: int
     week: int
     total: int
@@ -19,6 +20,12 @@ class ViolationStats:
         if not isinstance(self.total, int):
             raise ValidationError("total must be an int")
 
+        if not isinstance(self.hour, int):
+            raise ValidationError("hour must be an int")
+
+        if self.hour < 0:
+            raise ValidationError("hour must be >= 0")
+
         if self.today < 0:
             raise ValidationError("today must be >= 0")
 
@@ -27,6 +34,9 @@ class ViolationStats:
 
         if self.total < 0:
             raise ValidationError("total must be >= 0")
+
+        if self.hour > self.today:
+            raise ValidationError("hour must be <= today")
 
         if self.today > self.week:
             raise ValidationError("today must be <= week")
