@@ -1,16 +1,26 @@
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from abc import ABC, abstractmethod
 
 from ....kernel.vo import AwareDatetime
+from ...exceptions import ValidationError
 
 
-@runtime_checkable
-class UserState(Protocol):
+class UserState(ABC):
+    @abstractmethod
     def is_banned_at(self, now: AwareDatetime) -> bool: ...
 
+    @abstractmethod
     def ban_until(self, until: AwareDatetime, now: AwareDatetime) -> UserState: ...
 
+    @abstractmethod
     def unban(self) -> UserState: ...
 
-    def effective_at(self, now: AwareDatetime, fallback: UserState) -> UserState: ...
+    @abstractmethod
+    def effective_at(self, now: AwareDatetime) -> UserState: ...
+
+    @classmethod
+    def ensure(cls, state: UserState) -> UserState:
+        if not isinstance(state, cls):
+            raise ValidationError("state must be a UserState")
+        return state

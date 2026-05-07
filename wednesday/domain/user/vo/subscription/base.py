@@ -15,13 +15,10 @@ class UserSubscription:
     expires_at: AwareDatetime | None  # None = бессрочная
 
     def __post_init__(self) -> None:
-        if not isinstance(self.plan, SubscriptionPlan):
-            raise ValidationError("plan must be a SubscriptionPlan")
-        if not isinstance(self.started_at, AwareDatetime):
-            raise ValidationError("started_at must be a AwareDatetime")
+        SubscriptionPlan.ensure(self.plan)
+        AwareDatetime.ensure(self.started_at)
         if self.expires_at is not None:
-            if not isinstance(self.expires_at, AwareDatetime):
-                raise ValidationError("expires_at must be a AwareDatetime")
+            AwareDatetime.ensure(self.expires_at)
             if self.started_at >= self.expires_at:
                 raise ValidationError("started_at must be before expires_at")
 
@@ -33,11 +30,12 @@ class UserSubscription:
     def effective_at(
         self,
         now: AwareDatetime,
-        fallback: UserSubscription,
     ) -> UserSubscription:
         if self.is_active_at(now):
             return self
-        return fallback
+        if self.expires_at is None:
+            return UserSubscription.free(now)
+        return UserSubscription.free(self.expires_at)
 
     @classmethod
     def free(cls, now: AwareDatetime) -> UserSubscription:
@@ -46,3 +44,9 @@ class UserSubscription:
     @classmethod
     def premium(cls, now: AwareDatetime) -> UserSubscription:
         return cls(plan=SubscriptionPlan.premium(), started_at=now, expires_at=now + timedelta(days=30))
+
+    @classmethod
+    def ensure(cls, subscription: UserSubscription) -> UserSubscription:
+        if not isinstance(subscription, cls):
+            raise ValidationError("subscription must be a UserSubscription")
+        return subscription

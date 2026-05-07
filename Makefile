@@ -1,11 +1,10 @@
 PYTHON ?= python3
 POETRY ?= poetry run
-IMAGE_NAME := wednesday-bot
+IMAGE_NAME := wednesday
 
-DOMAIN_PATHS := wednesday/domain/kernel wednesday/domain/user wednesday/domain/chat \
-	tests/domain/kernel tests/domain/user tests/domain/chat
+DOMAIN_PATHS := wednesday/domain/ tests/domain/
 DOMAIN_TESTS := tests/domain
-DOMAIN_COV := --cov=wednesday/domain/kernel --cov=wednesday/domain/user --cov=wednesday/domain/chat
+DOMAIN_COV := --cov=wednesday/domain/
 
 .DEFAULT_GOAL := help
 

@@ -1,7 +1,8 @@
 from datetime import UTC, datetime
+from uuid import UUID
 
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
-from domain.user import User, UserProfile, UserRole, UserTelegramId
+from domain.user import User, UserId, UserProfile, UserRole
 from domain.user.vo import UserSubscription
 
 
@@ -16,9 +17,9 @@ def mk_user(
     now: AwareDatetime | None = None,
 ) -> User:
     current = now or dt(12)
-    return User.create(
-        id=UserTelegramId(user_id),
-        profile=UserProfile(is_bot=False, first_name=NonEmptyStr("Test")),
+    return User.register(
+        id=UserId(UUID(int=user_id)),
+        profile=UserProfile(telegram_id=100_000 + user_id, is_bot=False, first_name=NonEmptyStr("Test")),
         role=role,
         subscription=UserSubscription.free(current),
         now=current,

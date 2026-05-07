@@ -7,21 +7,21 @@ from ..kernel.exceptions import (
 
 
 class UserBannedError(DomainError):
-    """Пользователь забанен."""
+    """User is banned."""
 
     def __init__(self, message: str = "user is banned") -> None:
         super().__init__(message)
 
 
 class UserNotBannedError(DomainError):
-    """Пользователь не забанен."""
+    """User is not banned."""
 
     def __init__(self, message: str = "user is not banned") -> None:
         super().__init__(message)
 
 
 class LimitViolationError(DomainError):
-    """Нарушение политики лимитов."""
+    """Subscription limits exceeded."""
 
     def __init__(self, code: str, details: dict[str, int]) -> None:
         self.code = code
@@ -30,12 +30,27 @@ class LimitViolationError(DomainError):
 
 
 class CooldownViolationError(DomainError):
-    """Нарушение generation cоoldown."""
+    """Cooldown not passed."""
 
     def __init__(self, code: str, details: dict[str, int]) -> None:
         self.code = code
         self.details = details
         super().__init__(f"cooldown violation: {code}")
+
+
+class ManagementAccessDeniedError(AccessDeniedError):
+    """Denied management action with typed code."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+class StaleWriteError(DomainError):
+    """Command timestamp is older than aggregate clock."""
+
+    def __init__(self, message: str = "stale write") -> None:
+        super().__init__(message)
 
 
 __all__ = [
@@ -44,6 +59,8 @@ __all__ = [
     "DomainError",
     "InvalidStateTransitionError",
     "LimitViolationError",
+    "ManagementAccessDeniedError",
+    "StaleWriteError",
     "UserBannedError",
     "UserNotBannedError",
     "ValidationError",

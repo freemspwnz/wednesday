@@ -1,18 +1,19 @@
 from .actions import (
+    Ban,
     ChangeProfile,
     ChangeRole,
-    ChangeState,
     ChangeSubscription,
     ManagementAction,
+    Unban,
 )
 from .code import ManagementAccessCode
 from .context import ManagementContext
 from .decisions import ManagementAccessDecision, ManagementAllowed, ManagementDenied
 
 __all__ = [
+    "Ban",
     "ChangeProfile",
     "ChangeRole",
-    "ChangeState",
     "ChangeSubscription",
     "ManagementAccessCode",
     "ManagementAccessDecision",
@@ -20,4 +21,5 @@ __all__ = [
     "ManagementAllowed",
     "ManagementContext",
     "ManagementDenied",
+    "Unban",
 ]

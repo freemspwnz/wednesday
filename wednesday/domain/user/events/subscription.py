@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from ..exceptions import ValidationError
 from ..vo import UserSubscription
 from .base import UserEvent
 
@@ -13,11 +12,8 @@ class UserSubscriptionChanged(UserEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-        if not isinstance(self.old_subscription, UserSubscription):
-            raise ValidationError("old_subscription must be a UserSubscription")
-
-        if not isinstance(self.new_subscription, UserSubscription):
-            raise ValidationError("new_subscription must be a UserSubscription")
+        UserSubscription.ensure(self.old_subscription)
+        UserSubscription.ensure(self.new_subscription)
 
 
 @dataclass(frozen=True)
@@ -28,8 +24,5 @@ class UserSubscriptionExpired(UserEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-        if not isinstance(self.old_subscription, UserSubscription):
-            raise ValidationError("old_subscription must be a UserSubscription")
-
-        if not isinstance(self.new_subscription, UserSubscription):
-            raise ValidationError("new_subscription must be a UserSubscription")
+        UserSubscription.ensure(self.old_subscription)
+        UserSubscription.ensure(self.new_subscription)

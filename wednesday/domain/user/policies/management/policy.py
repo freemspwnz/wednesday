@@ -2,33 +2,35 @@ from typing import ClassVar
 
 from ...vo import UserRole
 from .vo import (
+    Ban,
     ChangeProfile,
     ChangeRole,
-    ChangeState,
     ChangeSubscription,
     ManagementAccessCode,
     ManagementAccessDecision,
+    ManagementAction,
     ManagementAllowed,
     ManagementContext,
     ManagementDenied,
+    Unban,
 )
 
 
 class ManagementAccessPolicy:
     """Policy for checking if an actor is allowed to access management commands."""
 
-    matrix: ClassVar[dict[UserRole, dict[UserRole, set[type]]]] = {
+    matrix: ClassVar[dict[UserRole, dict[UserRole, set[type[ManagementAction]]]]] = {
         UserRole.ADMIN: {
-            UserRole.USER: {ChangeState, ChangeSubscription},
+            UserRole.USER: {Ban, Unban, ChangeSubscription},
         },
         UserRole.OWNER: {
-            UserRole.USER: {ChangeState, ChangeSubscription, ChangeRole},
-            UserRole.ADMIN: {ChangeState, ChangeSubscription, ChangeRole},
+            UserRole.USER: {Ban, Unban, ChangeSubscription, ChangeRole},
+            UserRole.ADMIN: {Ban, Unban, ChangeSubscription, ChangeRole},
         },
         UserRole.SYSTEM: {
-            UserRole.USER: {ChangeState, ChangeSubscription, ChangeRole, ChangeProfile},
-            UserRole.ADMIN: {ChangeState, ChangeSubscription, ChangeRole, ChangeProfile},
-            UserRole.OWNER: {ChangeState, ChangeSubscription, ChangeRole, ChangeProfile},
+            UserRole.USER: {Ban, Unban, ChangeSubscription, ChangeRole, ChangeProfile},
+            UserRole.ADMIN: {Ban, Unban, ChangeSubscription, ChangeRole, ChangeProfile},
+            UserRole.OWNER: {Ban, Unban, ChangeSubscription, ChangeRole, ChangeProfile},
         },
     }
 
@@ -40,22 +42,19 @@ class ManagementAccessPolicy:
 
         actions = targets.get(ctx.target_role)
         if actions is None:
-            return cls.deny(ManagementAccessCode.TARGET_UNMANAGEABLE)
+            return cls.deny(ManagementAccessCode.ACCESS_DENIED)
 
-        if type(ctx.action) not in actions:
-            return cls.deny(ManagementAccessCode.NOT_ENOUGH_RIGHTS)
+        if not any(isinstance(ctx.action, allowed) for allowed in actions):
+            return cls.deny(ManagementAccessCode.ACCESS_DENIED)
 
         match ctx.action:
             case ChangeRole(old_role=old_role, new_role=new_role):
                 # sanity: context должен совпадать с action
                 if old_role != ctx.target_role:
-                    return cls.deny(ManagementAccessCode.INVALID_CONTEXT)
-
-                if new_role == old_role:
-                    return cls.deny(ManagementAccessCode.NO_EFFECT)
+                    return cls.deny(ManagementAccessCode.ACCESS_DENIED)
 
                 if new_role >= ctx.actor_role:
-                    return cls.deny(ManagementAccessCode.NOT_ENOUGH_RIGHTS)
+                    return cls.deny(ManagementAccessCode.ACCESS_DENIED)
 
                 return cls.allow()
 
@@ -63,29 +62,25 @@ class ManagementAccessPolicy:
                 old_tier = old_subscription.plan.tier
                 new_tier = new_subscription.plan.tier
 
-                if old_subscription == new_subscription:
-                    return cls.deny(ManagementAccessCode.NO_EFFECT)
-
                 if ctx.actor_role >= UserRole.OWNER:
                     return cls.allow()
 
                 if new_tier < old_tier:
-                    return cls.deny(ManagementAccessCode.NOT_ENOUGH_RIGHTS)
+                    return cls.deny(ManagementAccessCode.ACCESS_DENIED)
 
                 return cls.allow()
 
-            case ChangeState(old_state=old_state, new_state=new_state):
-                if old_state == new_state:
-                    return cls.deny(ManagementAccessCode.NO_EFFECT)
+            case Ban():
                 return cls.allow()
 
-            case ChangeProfile(old_profile=old_profile, new_profile=new_profile):
-                if old_profile == new_profile:
-                    return cls.deny(ManagementAccessCode.NO_EFFECT)
+            case Unban():
+                return cls.allow()
+
+            case ChangeProfile():
                 return cls.allow()
 
             case _:
-                return cls.deny(ManagementAccessCode.INVALID_ACTION)
+                return cls.deny(ManagementAccessCode.ACCESS_DENIED)
 
     @classmethod
     def allow(cls) -> ManagementAllowed:

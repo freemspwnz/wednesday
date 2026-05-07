@@ -1,5 +1,5 @@
+from ...vo import AwareDatetime
 from .vo import (
-    AwareDatetime,
     BanAssigned,
     BanDuration,
     BanDurationCode,
@@ -23,19 +23,19 @@ class BanDurationPolicy:
     def evaluate(
         cls,
         stats: ViolationStats,
-        now: AwareDatetime,
+        at: AwareDatetime,
     ) -> BanDurationDecision:
         if stats.total >= MAX_TOTAL_VIOLATIONS:
-            return cls.assign(now + BanDuration.year(), BanDurationCode.BAN_1_YEAR)
+            return cls.assign(at + BanDuration.year(), BanDurationCode.BAN_1_YEAR)
 
         if stats.week >= MAX_WEEKLY_VIOLATIONS:
-            return cls.assign(now + BanDuration.week(), BanDurationCode.BAN_1_WEEK)
+            return cls.assign(at + BanDuration.week(), BanDurationCode.BAN_1_WEEK)
 
         if stats.today >= MAX_DAILY_VIOLATIONS:
-            return cls.assign(now + BanDuration.day(), BanDurationCode.BAN_1_DAY)
+            return cls.assign(at + BanDuration.day(), BanDurationCode.BAN_1_DAY)
 
         if stats.hour >= MAX_HOURLY_VIOLATIONS:
-            return cls.assign(now + BanDuration.hour(), BanDurationCode.BAN_1_HOUR)
+            return cls.assign(at + BanDuration.hour(), BanDurationCode.BAN_1_HOUR)
 
         return cls.deny()
 

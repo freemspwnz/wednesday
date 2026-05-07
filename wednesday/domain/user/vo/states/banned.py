@@ -10,8 +10,7 @@ class BannedState(UserState):
     until: AwareDatetime
 
     def __post_init__(self) -> None:
-        if not isinstance(self.until, AwareDatetime):
-            raise ValidationError("until must be AwareDatetime")
+        AwareDatetime.ensure(self.until)
 
     def is_banned_at(self, now: AwareDatetime) -> bool:
         return self.until > now
@@ -29,7 +28,9 @@ class BannedState(UserState):
 
         return ActiveState()
 
-    def effective_at(self, now: AwareDatetime, fallback: UserState) -> UserState:
+    def effective_at(self, now: AwareDatetime) -> UserState:
+        from .active import ActiveState
+
         if self.until <= now:
-            return fallback
+            return ActiveState()
         return self

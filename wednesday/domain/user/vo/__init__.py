@@ -3,7 +3,7 @@ from .profile import UserProfile
 from .roles import UserRole
 from .states import ActiveState, BannedState, UserState
 from .subscription import SubscriptionPlan, SubscriptionTier, UserSubscription
-from .user_id import UserTelegramId
+from .user_id import UserId
 
 __all__ = [
     "ActiveState",
@@ -12,9 +12,9 @@ __all__ = [
     "NonEmptyStr",
     "SubscriptionPlan",
     "SubscriptionTier",
+    "UserId",
     "UserProfile",
     "UserRole",
     "UserState",
     "UserSubscription",
-    "UserTelegramId",
 ]

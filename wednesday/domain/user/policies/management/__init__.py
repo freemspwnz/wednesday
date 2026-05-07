@@ -1,8 +1,8 @@
 from .policy import ManagementAccessPolicy
 from .vo import (
+    Ban,
     ChangeProfile,
     ChangeRole,
-    ChangeState,
     ChangeSubscription,
     ManagementAccessCode,
     ManagementAccessDecision,
@@ -10,12 +10,13 @@ from .vo import (
     ManagementAllowed,
     ManagementContext,
     ManagementDenied,
+    Unban,
 )
 
 __all__ = [
+    "Ban",
     "ChangeProfile",
     "ChangeRole",
-    "ChangeState",
     "ChangeSubscription",
     "ManagementAccessCode",
     "ManagementAccessDecision",
@@ -24,4 +25,5 @@ __all__ = [
     "ManagementAllowed",
     "ManagementContext",
     "ManagementDenied",
+    "Unban",
 ]

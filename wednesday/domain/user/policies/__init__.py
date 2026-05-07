@@ -19,9 +19,9 @@ from .limit import (
     UsageStats,
 )
 from .management import (
+    Ban,
     ChangeProfile,
     ChangeRole,
-    ChangeState,
     ChangeSubscription,
     ManagementAccessCode,
     ManagementAccessDecision,
@@ -30,9 +30,11 @@ from .management import (
     ManagementAllowed,
     ManagementContext,
     ManagementDenied,
+    Unban,
 )
 
 __all__ = [
+    "Ban",
     "BanAssigned",
     "BanDuration",
     "BanDurationCode",
@@ -40,7 +42,6 @@ __all__ = [
     "BanDurationPolicy",
     "ChangeProfile",
     "ChangeRole",
-    "ChangeState",
     "ChangeSubscription",
     "CooldownViolation",
     "DailyLimitViolation",
@@ -58,6 +59,7 @@ __all__ = [
     "ManagementContext",
     "ManagementDenied",
     "NoBan",
+    "Unban",
     "UsageStats",
     "ViolationStats",
 ]

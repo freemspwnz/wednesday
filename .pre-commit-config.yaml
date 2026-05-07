@@ -103,7 +103,7 @@ repos:
       - id: mypy
         name: Mypy type checker
         pass_filenames: false
-        args: ["wednesday/domain/user", "wednesday/domain/kernel", "wednesday/domain/chat", "tests/domain"]
+        args: ["wednesday/domain/", "tests/domain/"]
         additional_dependencies:
           - redis==5.2.1
           - tenacity>=8.2.3

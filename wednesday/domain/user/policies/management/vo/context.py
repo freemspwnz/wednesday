@@ -1,14 +1,7 @@
 from dataclasses import dataclass
 
-from ....exceptions import ValidationError
 from ....vo import UserRole
-from .actions import (
-    ChangeProfile,
-    ChangeRole,
-    ChangeState,
-    ChangeSubscription,
-    ManagementAction,
-)
+from .actions import ManagementAction
 
 
 @dataclass(frozen=True)
@@ -24,11 +17,6 @@ class ManagementContext:
     action: ManagementAction
 
     def __post_init__(self) -> None:
-        if not isinstance(self.actor_role, UserRole):
-            raise ValidationError("actor_role must be a UserRole")
-
-        if not isinstance(self.target_role, UserRole):
-            raise ValidationError("target_role must be a UserRole")
-
-        if not isinstance(self.action, ChangeRole | ChangeSubscription | ChangeState | ChangeProfile):
-            raise ValidationError("action must be a ManagementAction")
+        UserRole.ensure(self.actor_role)
+        UserRole.ensure(self.target_role)
+        ManagementAction.ensure(self.action)

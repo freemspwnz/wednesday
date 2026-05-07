@@ -1,9 +1,11 @@
 from .base import UserEvent
 from .lifecycle import (
-    UserBanExpired,
-    UserBanned,
     UserProfileChanged,
     UserRoleChanged,
+)
+from .moderation import (
+    UserBanExpired,
+    UserBanned,
     UserUnbanned,
 )
 from .subscription import (

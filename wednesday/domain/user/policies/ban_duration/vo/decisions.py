@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from ....exceptions import ValidationError
 from ....vo import AwareDatetime
 from .code import BanDurationCode
 
@@ -11,11 +10,8 @@ class BanAssigned:
     code: BanDurationCode
 
     def __post_init__(self) -> None:
-        if not isinstance(self.banned_until, AwareDatetime):
-            raise ValidationError("banned_until must be a AwareDatetime")
-
-        if not isinstance(self.code, BanDurationCode):
-            raise ValidationError("code must be a BanDurationCode")
+        AwareDatetime.ensure(self.banned_until)
+        BanDurationCode.ensure(self.code)
 
 
 @dataclass(frozen=True)

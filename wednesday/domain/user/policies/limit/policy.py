@@ -20,16 +20,8 @@ class LimitPolicy:
         cls,
         subscription: UserSubscription,
         stats: UsageStats,
-        now: AwareDatetime,
+        at: AwareDatetime,
     ) -> LimitDecision:
-        """
-        Evaluates the limit policy.
-        First checks if the daily usage exceeds the limit.
-        Then checks if the cooldown period has passed since the last usage.
-        If both are satisfied, allows the request.
-        If not, denies the request.
-        """
-
         limit = subscription.plan.daily_limit
         cooldown = subscription.plan.cooldown_minutes
         daily_usage = stats.daily_usage
@@ -44,7 +36,7 @@ class LimitPolicy:
             )
 
         if last_usage is not None:
-            remaining = last_usage + timedelta(minutes=cooldown) - now
+            remaining = last_usage + timedelta(minutes=cooldown) - at
             if remaining.total_seconds() > 0:
                 return cls.deny(
                     CooldownViolation(
