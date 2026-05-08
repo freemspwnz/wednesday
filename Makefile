@@ -2,9 +2,9 @@ PYTHON ?= python3
 POETRY ?= poetry run
 IMAGE_NAME := wednesday
 
-DOMAIN_PATHS := wednesday/domain/ tests/domain/
-DOMAIN_TESTS := tests/domain
-DOMAIN_COV := --cov=wednesday/domain/
+PATHS := wednesday/domain/ tests/domain/ wednesday/app/ tests/app/
+TESTS := tests/
+COV := --cov=domain --cov=app
 
 .DEFAULT_GOAL := help
 
@@ -23,24 +23,18 @@ format: ## Применить автоисправления и форматир
 format-check: ## Проверить форматирование ruff
 	$(POETRY) ruff format --check .
 
-type: ## Запустить mypy на всем проекте
-	$(POETRY) mypy .
-
-type-domain: ## Запустить mypy для domain (kernel, user, chat) и их тестов
-	$(POETRY) mypy $(DOMAIN_PATHS)
+type: ## Запустить mypy по всем путям и тестам
+	$(POETRY) mypy $(PATHS)
 
 test: ## Запустить все тесты с покрытием
 	$(POETRY) pytest --cov=wednesday --cov-report=term-missing --cov-report=xml:coverage.xml
 
-test-domain: ## Запустить все тесты из tests/domain
-	$(POETRY) pytest $(DOMAIN_TESTS)
-
-test-cov: ## tests/domain + coverage (kernel, user, chat) + junit-domain.xml
-	$(POETRY) pytest $(DOMAIN_TESTS) $(DOMAIN_COV) --cov-report=term-missing \
-		--cov-report=xml:coverage.xml --junitxml=junit-domain.xml
+test-cov: ## coverage + junit.xml
+	$(POETRY) pytest $(TESTS) $(COV) --cov-report=term-missing \
+		--cov-report=xml:coverage.xml --junitxml=junit.xml
 
 clean: ## Очистить временные артефакты
-	rm -rf .pytest_cache .coverage coverage.xml junit-domain.xml .mypy_cache .ruff_cache
+	rm -rf .pytest_cache .coverage coverage.xml junit.xml .mypy_cache .ruff_cache
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 build: ## Собрать Docker-образ бота

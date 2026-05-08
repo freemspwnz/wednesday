@@ -10,9 +10,9 @@ authors = ["freemspwnz"]
 readme = "README.md"
 license = "MIT"
 packages = [
-  # { include = "app", from = "wednesday" },
-  # { include = "infra", from = "wednesday" },
+  { include = "app", from = "wednesday" },
   { include = "domain", from = "wednesday" },
+  # { include = "infra", from = "wednesday" },
   # { include = "presentation", from = "wednesday" },
 ]
 
@@ -105,6 +105,7 @@ combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ANN401", "PLR6301", "RUF029", "PLR2004"]
+"wednesday/infra/persistence/sqlalchemy/new_models/**/*.py" = ["F821"]
 
 [tool.ruff.format]
 preview = true
