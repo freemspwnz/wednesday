@@ -2,6 +2,7 @@ from ..kernel.exceptions import (
     AccessDeniedError,
     DomainError,
     InvalidStateTransitionError,
+    StaleWriteError,
     ValidationError,
 )
 
@@ -46,15 +47,7 @@ class ManagementAccessDeniedError(AccessDeniedError):
         super().__init__(code)
 
 
-class StaleWriteError(DomainError):
-    """Command timestamp is older than aggregate clock."""
-
-    def __init__(self, message: str = "stale write") -> None:
-        super().__init__(message)
-
-
 __all__ = [
-    "AccessDeniedError",
     "CooldownViolationError",
     "DomainError",
     "InvalidStateTransitionError",

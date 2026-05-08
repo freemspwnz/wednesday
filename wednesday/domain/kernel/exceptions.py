@@ -4,7 +4,8 @@ Hierarchy:
     DomainError
     ├── ValidationError
     ├── AccessDeniedError
-    └── InvalidStateTransitionError
+    ├── InvalidStateTransitionError
+    └── StaleWriteError
 """
 
 
@@ -16,22 +17,20 @@ class DomainError(Exception):
         super().__init__(self.message)
 
 
-# ── Data Validation Errors ──
-
-
 class ValidationError(DomainError):
     """Data does not comply with business rules."""
-
-
-# ── Access Denied Errors ──
 
 
 class AccessDeniedError(DomainError):
     """Access denied."""
 
 
-# ── Policy Violation Errors ──
-
-
 class InvalidStateTransitionError(DomainError):
     """Attempt to make an invalid state transition."""
+
+
+class StaleWriteError(DomainError):
+    """Command timestamp is older than aggregate clock."""
+
+    def __init__(self, message: str = "stale write") -> None:
+        super().__init__(message)
