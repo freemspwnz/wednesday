@@ -33,4 +33,4 @@ jobs:
         run: poetry install --with dev --no-interaction
 
       - name: Run mypy
-        run: poetry run mypy wednesday/domain/user wednesday/domain/kernel tests/domain/user tests/domain/kernel
+        run: make type-domain
