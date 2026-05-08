@@ -1,0 +1,29 @@
+from datetime import timedelta
+from typing import Protocol, TypeVar
+
+from app.dto import ChatContext, UserContext
+from domain.chat import Chat
+from domain.user import User
+
+T = TypeVar("T")
+V = TypeVar("V")
+
+
+class ICacheClient(Protocol):
+    async def get(self, key: str) -> object | None: ...
+    async def set(self, key: str, value: object, expire: int | timedelta | None = None) -> None: ...
+    async def delete(self, key: str) -> None: ...
+    async def exists(self, key: str) -> bool: ...
+
+
+class ICacheRepo[T, V](Protocol):
+    async def get_by_id(self, tg_id: int) -> T | None: ...
+    async def set(self, entity: V, ttl: int | timedelta | None = None) -> None: ...
+    async def invalidate(self, tg_id: int) -> None: ...
+
+
+class ICacheRepoRegistry(Protocol):
+    @property
+    def user(self) -> ICacheRepo[UserContext, User]: ...
+    @property
+    def chat(self) -> ICacheRepo[ChatContext, Chat]: ...
