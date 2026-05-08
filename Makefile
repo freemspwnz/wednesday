@@ -2,7 +2,7 @@ PYTHON ?= python3
 POETRY ?= poetry run
 IMAGE_NAME := wednesday
 
-PATHS := wednesday/domain/ tests/domain/ wednesday/app/ tests/app/
+PATHS := wednesday/domain/ wednesday/app/ tests/
 TESTS := tests/
 COV := --cov=domain --cov=app
 
