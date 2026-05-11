@@ -1,5 +1,6 @@
 """Модуль ошибок application-слоя."""
 
+from .application import ChatNotFoundError, UserNotFoundError
 from .base import AppError, UnexpectedAppError
 from .persistence import (
     SQLAAggregateMappingError,
@@ -22,6 +23,7 @@ from .utils import unwrap_exception
 
 __all__ = [
     "AppError",
+    "ChatNotFoundError",
     "CircuitOpenError",
     "CircuitStateChangeError",
     "RateLimitError",
@@ -36,5 +38,6 @@ __all__ = [
     "UnexpectedRateLimitError",
     "UnexpectedRetryError",
     "UnexpectedSQLAError",
+    "UserNotFoundError",
     "unwrap_exception",
 ]
