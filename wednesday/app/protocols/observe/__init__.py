@@ -1,4 +1,4 @@
-from .logging import ILogger
+from .logging import Logger
 from .metrics import (
     ICacheMetrics,
     ICBMetrics,
@@ -12,10 +12,10 @@ from .metrics import (
 __all__ = [
     "ICBMetrics",
     "ICacheMetrics",
-    "ILogger",
     "IMetricsCollector",
     "IMetricsRegistry",
     "IRLMetrics",
     "IRetryMetrics",
     "ISQLAMetrics",
+    "Logger",
 ]

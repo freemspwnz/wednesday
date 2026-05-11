@@ -2,12 +2,12 @@ from .di import IRequestScope
 from .observe import (
     ICacheMetrics,
     ICBMetrics,
-    ILogger,
     IMetricsCollector,
     IMetricsRegistry,
     IRetryMetrics,
     IRLMetrics,
     ISQLAMetrics,
+    Logger,
 )
 from .persistence import (
     ICacheClient,
@@ -29,7 +29,6 @@ __all__ = [
     "ICacheRepo",
     "ICacheRepoRegistry",
     "ICircuitBreaker",
-    "ILogger",
     "IMetricsCollector",
     "IMetricsRegistry",
     "IRLMetrics",
@@ -40,4 +39,5 @@ __all__ = [
     "ISQLAMetrics",
     "IUoW",
     "IUoWFactory",
+    "Logger",
 ]

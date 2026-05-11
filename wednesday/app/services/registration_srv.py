@@ -4,7 +4,7 @@ from uuid import NAMESPACE_DNS, UUID, uuid5
 from zoneinfo import ZoneInfo
 
 from app.dto import ChatContext, UserContext
-from app.protocols import ILogger
+from app.protocols import Logger
 from domain.chat import Chat, ChatId, ChatProfile, ChatRepo, ChatScheduleSet, Weekday
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubscription
@@ -13,7 +13,7 @@ UTC_TZ = ZoneInfo("UTC")
 
 
 class RegistrationService:
-    def __init__(self, *, logger: ILogger) -> None:
+    def __init__(self, *, logger: Logger) -> None:
         self._logger = logger.bind(module=self.__class__.__name__)
 
     async def get_or_create_user(

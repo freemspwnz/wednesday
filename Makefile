@@ -2,9 +2,9 @@ PYTHON ?= python3
 POETRY ?= poetry run
 IMAGE_NAME := wednesday
 
-PATHS := wednesday/domain/ wednesday/app/ tests/
+PATHS := wednesday/domain/ wednesday/app/ wednesday/infra/observe/ tests/
 TESTS := tests/
-COV := --cov=domain --cov=app
+COV := --cov=domain --cov=app --cov=infra.observe
 
 .DEFAULT_GOAL := help
 
@@ -14,14 +14,14 @@ help: ## Показать доступные цели
 	@grep -E '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 lint: ## Запустить ruff lint
-	$(POETRY) ruff check .
+	$(POETRY) ruff check $(PATHS)
 
 format: ## Применить автоисправления и форматирование ruff
-	$(POETRY) ruff check . --fix
-	$(POETRY) ruff format .
+	$(POETRY) ruff check $(PATHS) --fix
+	$(POETRY) ruff format $(PATHS)
 
 format-check: ## Проверить форматирование ruff
-	$(POETRY) ruff format --check .
+	$(POETRY) ruff format --check $(PATHS)
 
 type: ## Запустить mypy по всем путям и тестам
 	$(POETRY) mypy $(PATHS)

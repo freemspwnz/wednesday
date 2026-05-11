@@ -4,7 +4,7 @@ from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
-class ILogger(Protocol):
+class Logger(Protocol):
     """Протокол для системы логирования."""
 
     def trace(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
@@ -68,7 +68,7 @@ class ILogger(Protocol):
         ...
 
     def critical(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне CRITICAL.
+        """Логирует сообщение на уровне ERROR с обязательным включением traceback.
 
         Args:
             message: Сообщение для логирования (может содержать {} для форматирования).
@@ -98,13 +98,13 @@ class ILogger(Protocol):
         """
         ...
 
-    def bind(self, **kwargs: Any) -> ILogger:  # noqa: ANN401
+    def bind(self, **kwargs: Any) -> Logger:  # noqa: ANN401
         """Создает новый экземпляр логгера с привязанным контекстом.
 
         Args:
             **kwargs: Контекстные данные для привязки ко всем последующим логам.
 
         Returns:
-            Новый экземпляр ILogger с обновленным контекстом.
+            Новый экземпляр Logger с обновленным контекстом.
         """
         ...

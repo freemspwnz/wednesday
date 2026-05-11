@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .observe import ILogger
+from .observe import Logger
 
 
 class IRequestScope(Protocol):
     """Протокол для request scope."""
 
     @property
-    def logger(self) -> ILogger: ...
+    def logger(self) -> Logger: ...
 
     @property
     def registration_uc(self) -> object: ...

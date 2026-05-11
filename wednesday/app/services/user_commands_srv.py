@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.exceptions import UserNotFoundError
-from app.protocols import ILogger
+from app.protocols import Logger
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubscription
 
@@ -9,7 +9,7 @@ from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubsc
 class UserCommandService:
     """Загрузка агрегата, доменная команда и сохранение (без транзакции — её закрывает UoW)."""
 
-    def __init__(self, *, logger: ILogger) -> None:
+    def __init__(self, *, logger: Logger) -> None:
         self._logger = logger.bind(module=self.__class__.__name__)
 
     @staticmethod

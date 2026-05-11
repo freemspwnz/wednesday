@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.protocols import ILogger, IUoW
+from app.protocols import IUoW, Logger
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserId, UserProfile, UserRole, UserSubscription
 
@@ -15,7 +15,7 @@ class UserCommandsUseCase:
         *,
         uow: IUoW,
         user_commands: UserCommandService,
-        logger: ILogger,
+        logger: Logger,
     ) -> None:
         self._uow = uow
         self._user_commands = user_commands

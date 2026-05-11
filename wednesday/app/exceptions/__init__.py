@@ -2,6 +2,7 @@
 
 from .application import ChatNotFoundError, UserNotFoundError
 from .base import AppError, UnexpectedAppError
+from .observe import LogMessageFormatError
 from .persistence import (
     SQLAAggregateMappingError,
     SQLADataIntegrityError,
@@ -26,6 +27,7 @@ __all__ = [
     "ChatNotFoundError",
     "CircuitOpenError",
     "CircuitStateChangeError",
+    "LogMessageFormatError",
     "RateLimitError",
     "RetryError",
     "SQLAAggregateMappingError",
