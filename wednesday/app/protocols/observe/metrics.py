@@ -1,10 +1,9 @@
-from __future__ import annotations
-
-from collections.abc import AsyncGenerator
-from typing import NamedTuple, Protocol
+from contextlib import AbstractAsyncContextManager
+from typing import Protocol, runtime_checkable
 
 
-class IMetricsCollector(Protocol):
+@runtime_checkable
+class MetricsCollector(Protocol):
     """Протокол для сбора метрик."""
 
     def increment(
@@ -31,9 +30,11 @@ class IMetricsCollector(Protocol):
     ) -> None: ...
 
     def export(self) -> bytes: ...
+    def serve(self) -> None: ...
 
 
-class IRetryMetrics(Protocol):
+@runtime_checkable
+class RetryMetrics(Protocol):
     def before_retry(self) -> None: ...
     def after_retry(
         self,
@@ -58,7 +59,8 @@ class IRetryMetrics(Protocol):
     ) -> None: ...
 
 
-class ICBMetrics(Protocol):
+@runtime_checkable
+class CBMetrics(Protocol):
     def before_call(self, method: str) -> None: ...
     def after_call(
         self,
@@ -73,16 +75,26 @@ class ICBMetrics(Protocol):
     ) -> None: ...
 
 
-class ICacheMetrics(Protocol):
-    def track(self, operation: str) -> AsyncGenerator: ...
+class CacheOperation:
+    __slots__ = ("hit",)
+
+    def __init__(self) -> None:
+        self.hit: bool | None = None
+
+
+@runtime_checkable
+class CacheMetrics(Protocol):
+    def track(self, operation: str) -> AbstractAsyncContextManager[CacheOperation]: ...
     def set_queue_size(self, queue_name: str, count: int) -> None: ...
 
 
-class ISQLAMetrics(Protocol):
+@runtime_checkable
+class DBMetrics(Protocol):
     def register(self, engine: object) -> None: ...
 
 
-class IRLMetrics(Protocol):
+@runtime_checkable
+class RLMetrics(Protocol):
     def before_call(self) -> None: ...
     def on_call(
         self,
@@ -90,24 +102,30 @@ class IRLMetrics(Protocol):
         limit: str,
         result: bool,
     ) -> None: ...
-    def on_get_stats(self, name: str, stats: NamedTuple | None) -> None: ...
-    def on_reset(self, name: str) -> None: ...
+    def on_get_stats(
+        self,
+        name: str,
+        reset_time: float,
+        remaining: int,
+    ) -> None: ...
+    def on_reset(self, name: str, limit: int) -> None: ...
 
 
-class IMetricsRegistry(Protocol):
+@runtime_checkable
+class MetricsRegistry(Protocol):
     """Протокол для регистрации метрик."""
 
     @property
-    def retry_metrics(self) -> IRetryMetrics: ...
+    def retry_metrics(self) -> RetryMetrics: ...
 
     @property
-    def cb_metrics(self) -> ICBMetrics: ...
+    def cb_metrics(self) -> CBMetrics: ...
 
     @property
-    def rl_metrics(self) -> IRLMetrics: ...
+    def rl_metrics(self) -> RLMetrics: ...
 
     @property
-    def cache_metrics(self) -> ICacheMetrics: ...
+    def cache_metrics(self) -> CacheMetrics: ...
 
     @property
-    def sqla_metrics(self) -> ISQLAMetrics: ...
+    def db_metrics(self) -> DBMetrics: ...

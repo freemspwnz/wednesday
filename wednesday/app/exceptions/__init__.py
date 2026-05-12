@@ -2,7 +2,12 @@
 
 from .application import ChatNotFoundError, UserNotFoundError
 from .base import AppError, UnexpectedAppError
-from .observe import LogMessageFormatError
+from .observe import (
+    LogMessageFormatError,
+    PrometheusExportError,
+    PrometheusHttpExporterError,
+    PrometheusObserveError,
+)
 from .persistence import (
     SQLAAggregateMappingError,
     SQLADataIntegrityError,
@@ -28,6 +33,9 @@ __all__ = [
     "CircuitOpenError",
     "CircuitStateChangeError",
     "LogMessageFormatError",
+    "PrometheusExportError",
+    "PrometheusHttpExporterError",
+    "PrometheusObserveError",
     "RateLimitError",
     "RetryError",
     "SQLAAggregateMappingError",

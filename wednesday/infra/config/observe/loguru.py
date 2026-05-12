@@ -7,22 +7,22 @@ LogLevel = Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRI
 
 
 class LoggingConfig(BaseModel):
-    """Конфигурация логирования."""
+    """Logging configuration."""
 
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
     )
 
-    level: LogLevel = Field(default="INFO", description="Уровень логирования")
+    level: LogLevel = Field(default="INFO", description="Logging level")
     format: str = Field(
         default="{time:HH:mm:ss} | {level: <8} | {module}:{function}:{line} - {message} | {extra}",
-        description="Формат логирования",
+        description="Logging format",
     )
-    serialize: bool = Field(default=False, description="Сериализовать логирование")
-    to_file: bool = Field(default=False, description="Включить файловое логирование")
-    file_path: Path = Field(default="data/logs/wednesday.log", description="Путь к файлу лога")
+    serialize: bool = Field(default=False, description="Serialize logging")
+    to_file: bool = Field(default=False, description="Enable file logging")
+    file_path: Path = Field(default=Path("data/logs/wednesday.log"), description="Path to the log file")
     noisy_libs: list[str] = Field(
         default=["aiogram", "httpx", "sqlalchemy", "prometheus_client"],
-        description="Библиотеки, которые генерируют много логов",
+        description="Libraries that generate a lot of logs",
     )

@@ -30,7 +30,7 @@ def _minimal_config(**kwargs: object) -> LoggingConfig:
         "noisy_libs": ["lib_a", "lib_b"],
     }
     defaults.update(kwargs)
-    return cast(LoggingConfig, LoggingConfig.model_validate(defaults))
+    return LoggingConfig.model_validate(defaults)
 
 
 @pytest.mark.unit

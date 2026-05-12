@@ -1,6 +1,6 @@
-# Pre-commit hooks configuration для Wednesday Frog Bot
-# Все инструменты используют конфигурацию из pyproject.toml
-# Установка: pre-commit install && pre-commit install --hook-type pre-push
+# Pre-commit hooks configuration для Wednesday
+# All tools use the configuration from pyproject.toml
+# Installation: pre-commit install && pre-commit install --hook-type pre-push
 
 minimum_pre_commit_version: "3.5.0"
 default_stages: [pre-commit]
@@ -8,7 +8,7 @@ default_language_version:
   python: python3.12
 fail_fast: false
 
-# Исключаем служебные каталоги (виртуальные окружения, миграции, кэш и пр.)
+# Exclude service directories (virtual environments, migrations, cache, etc.)
 exclude: |
   (?x)(
     ^migrations/ |
@@ -25,47 +25,47 @@ exclude: |
 
 repos:
   # ---------------------------
-  # Базовые проверки файлов (YAML, JSON, размер, конфликты)
+  # Basic file checks (YAML, JSON, size, conflicts)
   # ---------------------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      # Проверка размера файлов (максимум 1 МБ)
+      # Check file size (maximum 1 MB)
       - id: check-added-large-files
         name: Check for large files
         args: ["--maxkb=1024"]
 
-      # Проверка конфликтов слияния
+      # Check merge conflicts
       - id: check-merge-conflict
         name: Check for merge conflicts
 
-      # Валидация YAML файлов
+      # Validate YAML files
       - id: check-yaml
         name: Check YAML syntax
-        args: ["--unsafe"]  # Разрешаем пользовательские теги
+        args: ["--unsafe"]  # Allow custom tags
 
-      # Валидация JSON файлов
+      # Validate JSON files
       - id: check-json
         name: Check JSON syntax
 
-      # Автоматическое исправление: добавляет пустую строку в конце файла
+      # Automatic correction: add an empty line at the end of the file
       - id: end-of-file-fixer
         name: Fix end of files
-        # Работает только с измененными файлами (по умолчанию)
+        # Works only with modified files (by default)
 
-      # Автоматическое исправление: удаляет пробелы в конце строк
+      # Automatic correction: remove trailing whitespace
       - id: trailing-whitespace
         name: Trim trailing whitespace
         args: [--markdown-linebreak-ext=md]
-        # Работает только с измененными файлами (по умолчанию)
+        # Works only with modified files (by default)
 
-      # Поиск приватных ключей в коде
+      # Search for private keys in the code
       - id: detect-private-key
         name: Detect private keys
 
 
   # ---------------------------
-  # Проверка .env файлов (валидация синтаксиса и дубликатов)
+  # Check .env files (validation of syntax and duplicates)
   # ---------------------------
   - repo: https://github.com/dotenv-linter/dotenv-linter
     rev: v4.0.0
@@ -74,7 +74,7 @@ repos:
         args: ["check"]
         name: Dotenv linter
         files: "^\\.env$|^\\.env\\.(example|local|production)$"
-        # Проверяет только основные .env файлы (исключаем .env.test через files паттерн)
+        # Check only the main .env files (exclude .env.test via files pattern)
 
   # ---------------------------
   # Ruff: линтер и форматтер (использует конфиг из pyproject.toml)
@@ -83,19 +83,18 @@ repos:
     rev: v0.7.1
 
     hooks:
-      # Ruff lint: проверяет весь проект
-      # Автоматически использует [tool.ruff] из pyproject.toml
-      # Для автоисправления можно добавить --fix в args
+      # Ruff lint: check the entire project
+      # For automatic correction add --fix to args
       - id: ruff
         name: Ruff Lint
 
-      # Ruff format: проверяет форматирование
-      # Автоматически использует [tool.ruff.format] из pyproject.toml
+      # Ruff format: check formatting
+
       - id: ruff-format
         name: Ruff Format
 
   # ---------------------------
-  # Mypy: проверка типов (использует конфиг из pyproject.toml)
+  # Mypy: type checking
   # ---------------------------
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.18.2
@@ -103,13 +102,16 @@ repos:
       - id: mypy
         name: Mypy type checker
         pass_filenames: false
-        args: ["wednesday/domain", "wednesday/app", "tests/"]
+        args: ["wednesday/domain", "wednesday/app", "wednesday/infra/observe/", "wednesday/infra/config/observe/", "tests/"]
         additional_dependencies:
           - redis==5.2.1
           - tenacity>=8.2.3
+          - prometheus_client==0.23.1
+          - pydantic==2.12.5
+          - pydantic-settings==2.14.0
 
   # ---------------------------
-  # Gitleaks: поиск секретов в коде (дополнительно к базовым хукам)
+  # Gitleaks: search for secrets in code (additional to basic hooks)
   # ---------------------------
   - repo: https://github.com/zricethezav/gitleaks
     rev: v8.30.0
@@ -119,14 +121,13 @@ repos:
         pass_filenames: false
 
   # ---------------------------
-  # Pre-push: полный запуск pytest с покрытием (как в GitHub Actions)
+  # Pre-push: full pytest run with coverage
   # ---------------------------
   - repo: local
     hooks:
       - id: pytest-pre-push
-        name: Run domain quality gate before push
+        name: Run pytest with coverage before push
         entry: make test-cov
         language: system
         pass_filenames: false
         stages: [pre-push]
-        # Запускает актуальный минимальный контур для domain (kernel, user, chat)

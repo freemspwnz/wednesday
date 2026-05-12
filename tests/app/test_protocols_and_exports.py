@@ -4,14 +4,14 @@ import app.dto as dto_module
 import app.exceptions as exc_module
 import app.protocols as proto_module
 from app.protocols.observe import (
-    ICacheMetrics,
-    ICBMetrics,
-    IMetricsCollector,
-    IMetricsRegistry,
-    IRetryMetrics,
-    IRLMetrics,
-    ISQLAMetrics,
+    CacheMetrics,
+    CBMetrics,
+    DBMetrics,
     Logger,
+    MetricsCollector,
+    MetricsRegistry,
+    RetryMetrics,
+    RLMetrics,
 )
 from app.protocols.persistence import ICacheClient, ICacheRepo, ICacheRepoRegistry, IUoW, IUoWFactory
 from app.protocols.resilience import ICircuitBreaker, IRateLimiter, IRetryPolicy
@@ -32,13 +32,13 @@ def test_protocol_symbols_import_correctly() -> None:
     # runtime smoke for protocol modules and __all__ wiring
     symbols = [
         Logger,
-        IMetricsCollector,
-        IRetryMetrics,
-        ICBMetrics,
-        ICacheMetrics,
-        ISQLAMetrics,
-        IRLMetrics,
-        IMetricsRegistry,
+        MetricsCollector,
+        RetryMetrics,
+        CBMetrics,
+        CacheMetrics,
+        DBMetrics,
+        RLMetrics,
+        MetricsRegistry,
         ICacheClient,
         ICacheRepo,
         ICacheRepoRegistry,
