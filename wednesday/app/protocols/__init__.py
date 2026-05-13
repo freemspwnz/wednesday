@@ -11,9 +11,9 @@ from .observe import (
     RLMetrics,
 )
 from .persistence import (
-    ICacheClient,
-    ICacheRepo,
-    ICacheRepoRegistry,
+    CacheClient,
+    CacheRepo,
+    CacheRepoRegistry,
     IUoW,
     IUoWFactory,
 )
@@ -25,12 +25,12 @@ from .resilience import (
 
 __all__ = [
     "CBMetrics",
+    "CacheClient",
     "CacheMetrics",
     "CacheOperation",
+    "CacheRepo",
+    "CacheRepoRegistry",
     "DBMetrics",
-    "ICacheClient",
-    "ICacheRepo",
-    "ICacheRepoRegistry",
     "ICircuitBreaker",
     "IRateLimiter",
     "IRequestScope",

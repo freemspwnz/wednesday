@@ -7,7 +7,7 @@ from .adapters import (
     SQLAMetrics,
     TenacityMetrics,
 )
-from .client import PrometheusCollector
+from .collector import PrometheusCollector
 from .registry import PrometheusRegistry
 
 __all__ = [

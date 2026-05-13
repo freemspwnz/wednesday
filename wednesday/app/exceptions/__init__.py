@@ -9,10 +9,14 @@ from .observe import (
     PrometheusObserveError,
 )
 from .persistence import (
+    CacheBackendError,
+    CacheTimeoutError,
+    CacheUnavailableError,
     SQLAAggregateMappingError,
     SQLADataIntegrityError,
     SQLAError,
     SQLARepositoryError,
+    UnexpectedCacheError,
     UnexpectedSQLAError,
 )
 from .resilience import (
@@ -29,6 +33,9 @@ from .utils import unwrap_exception
 
 __all__ = [
     "AppError",
+    "CacheBackendError",
+    "CacheTimeoutError",
+    "CacheUnavailableError",
     "ChatNotFoundError",
     "CircuitOpenError",
     "CircuitStateChangeError",
@@ -44,6 +51,7 @@ __all__ = [
     "SQLARepositoryError",
     "TooManyRequests",
     "UnexpectedAppError",
+    "UnexpectedCacheError",
     "UnexpectedCircuitError",
     "UnexpectedRateLimitError",
     "UnexpectedRetryError",

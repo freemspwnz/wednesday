@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from infra.observe.prometheus.adapters.sqla import SQLAMetrics
-from infra.observe.prometheus.client import PrometheusCollector
+from infra.observe.prometheus.collector import PrometheusCollector
 
 
 @pytest.mark.unit

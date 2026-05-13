@@ -1,10 +1,10 @@
-from .cache import ICacheClient, ICacheRepo, ICacheRepoRegistry
+from .cache import CacheClient, CacheRepo, CacheRepoRegistry
 from .uow import IUoW, IUoWFactory
 
 __all__ = [
-    "ICacheClient",
-    "ICacheRepo",
-    "ICacheRepoRegistry",
+    "CacheClient",
+    "CacheRepo",
+    "CacheRepoRegistry",
     "IUoW",
     "IUoWFactory",
 ]

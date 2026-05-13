@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.dto import ChatContext, UserContext
-from app.protocols import ICacheRepoRegistry, IUoW, Logger
+from app.protocols import CacheRepoRegistry, IUoW, Logger
 
 from ..services import RegistrationService
 
@@ -19,7 +19,7 @@ class RegistrationUseCase:
         *,
         uow: IUoW,
         reg_service: RegistrationService,
-        cache_registry: ICacheRepoRegistry,
+        cache_registry: CacheRepoRegistry,
         logger: Logger,
     ) -> None:
         self._uow = uow

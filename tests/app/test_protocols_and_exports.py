@@ -13,7 +13,7 @@ from app.protocols.observe import (
     RetryMetrics,
     RLMetrics,
 )
-from app.protocols.persistence import ICacheClient, ICacheRepo, ICacheRepoRegistry, IUoW, IUoWFactory
+from app.protocols.persistence import CacheClient, CacheRepo, CacheRepoRegistry, IUoW, IUoWFactory
 from app.protocols.resilience import ICircuitBreaker, IRateLimiter, IRetryPolicy
 
 
@@ -39,9 +39,9 @@ def test_protocol_symbols_import_correctly() -> None:
         DBMetrics,
         RLMetrics,
         MetricsRegistry,
-        ICacheClient,
-        ICacheRepo,
-        ICacheRepoRegistry,
+        CacheClient,
+        CacheRepo,
+        CacheRepoRegistry,
         IUoW,
         IUoWFactory,
         ICircuitBreaker,

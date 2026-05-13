@@ -9,7 +9,7 @@ from prometheus_client import CollectorRegistry
 
 from app.exceptions import PrometheusExportError, PrometheusHttpExporterError
 from infra.config import MetricsConfig
-from infra.observe.prometheus.client import PrometheusCollector
+from infra.observe.prometheus.collector import PrometheusCollector
 
 
 @pytest.mark.unit
@@ -83,7 +83,7 @@ class TestPrometheusCollector:
             registry=registry,
             logger=mock_logger,
         )
-        with patch("infra.observe.prometheus.client.start_http_server") as srv:
+        with patch("infra.observe.prometheus.collector.start_http_server") as srv:
             c.serve()
         srv.assert_called_once()
         mock_logger.info.assert_called()
@@ -102,7 +102,7 @@ class TestPrometheusCollector:
             logger=mock_logger,
         )
         with patch(
-            "infra.observe.prometheus.client.start_http_server",
+            "infra.observe.prometheus.collector.start_http_server",
             side_effect=OSError("bind failed"),
         ):
             with pytest.raises(PrometheusHttpExporterError):
@@ -123,7 +123,7 @@ class TestPrometheusCollector:
             logger=mock_logger,
         )
         with patch(
-            "infra.observe.prometheus.client.start_http_server",
+            "infra.observe.prometheus.collector.start_http_server",
             side_effect=RuntimeError("unexpected"),
         ):
             with pytest.raises(PrometheusHttpExporterError):
@@ -144,7 +144,7 @@ class TestPrometheusCollector:
             logger=mock_logger,
         )
         with patch(
-            "infra.observe.prometheus.client.generate_latest",
+            "infra.observe.prometheus.collector.generate_latest",
             side_effect=RuntimeError("boom"),
         ):
             with pytest.raises(PrometheusExportError):

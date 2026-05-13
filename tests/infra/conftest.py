@@ -1,15 +1,17 @@
-"""Фикстуры для тестов prometheus observe."""
+"""Фикстуры для тестов infra (observe, persistence и т.д.)."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from unittest.mock import MagicMock
 
 import pytest
 from loguru import logger
 from prometheus_client import CollectorRegistry
 
-from infra.config import MetricsConfig
+from app.protocols import CacheMetrics, CacheOperation
+from infra.config.observe import MetricsConfig
 from infra.observe.prometheus import PrometheusCollector
 
 
@@ -50,3 +52,17 @@ def collector(
         registry=registry,
         logger=mock_logger,
     )
+
+
+@pytest.fixture
+def cache_metrics() -> MagicMock:
+    """Минимальная реализация ``CacheMetrics`` для тестов persistence (Redis и др.)."""
+
+    @asynccontextmanager
+    async def track(_operation: str) -> AsyncIterator[CacheOperation]:
+        yield CacheOperation()
+
+    m = MagicMock(spec=CacheMetrics)
+    m.track = track
+    m.set_queue_size = MagicMock()
+    return m
