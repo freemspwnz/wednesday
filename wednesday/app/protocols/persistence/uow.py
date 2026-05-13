@@ -10,10 +10,10 @@ from domain.user import UserRepo
 
 
 @runtime_checkable
-class IUoW(Protocol):
+class UoW(Protocol):
     """Протокол для Unit of Work управления транзакциями БД."""
 
-    async def __aenter__(self) -> IUoW:
+    async def __aenter__(self) -> UoW:
         """Вход в контекстный менеджер. Начинает транзакцию."""
         ...
 
@@ -34,13 +34,13 @@ class IUoW(Protocol):
 
 
 @runtime_checkable
-class IUoWFactory(Protocol):
+class UoWFactory(Protocol):
     """Протокол для фабрики создания экземпляров Unit of Work."""
 
-    def __call__(self) -> IUoW:
+    def __call__(self) -> UoW:
         """Создает новый экземпляр Unit of Work.
 
         Returns:
-            Новый экземпляр IUoW для использования в транзакции.
+            Новый экземпляр UoW для использования в транзакции.
         """
         ...

@@ -1,7 +1,7 @@
 # Wednesday Frog Bot 🐸
 
 [![Logo](assets/logo.png)](https://github.com/freemspwnz/wednesday)
-[![CI Status](https://github.com/freemspwnz/wednesday/workflows/CI/badge.svg)](https://github.com/freemspwnz/wednesday/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/freemspwnz/wednesday/ci.yml?branch=main&logo=github&label=CI)](https://github.com/freemspwnz/wednesday/actions?query=event%3Apush+branch%3Amain+workflow%3ACI)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Codecov](https://codecov.io/gh/freemspwnz/wednesday/branch/main/graph/badge.svg)](https://codecov.io/gh/freemspwnz/wednesday)
 

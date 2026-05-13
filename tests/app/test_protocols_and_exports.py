@@ -13,7 +13,7 @@ from app.protocols.observe import (
     RetryMetrics,
     RLMetrics,
 )
-from app.protocols.persistence import CacheClient, CacheRepo, CacheRepoRegistry, IUoW, IUoWFactory
+from app.protocols.persistence import CacheClient, CacheRepo, CacheRepoRegistry, UoW, UoWFactory
 from app.protocols.resilience import ICircuitBreaker, IRateLimiter, IRetryPolicy
 
 
@@ -23,7 +23,7 @@ def test_public_exports_are_available() -> None:
     assert hasattr(dto_module, "ChatContext")
     assert hasattr(exc_module, "SQLARepositoryError")
     assert hasattr(exc_module, "TooManyRequests")
-    assert hasattr(proto_module, "IUoW")
+    assert hasattr(proto_module, "UoW")
     assert hasattr(proto_module, "Logger")
 
 
@@ -42,8 +42,8 @@ def test_protocol_symbols_import_correctly() -> None:
         CacheClient,
         CacheRepo,
         CacheRepoRegistry,
-        IUoW,
-        IUoWFactory,
+        UoW,
+        UoWFactory,
         ICircuitBreaker,
         IRateLimiter,
         IRetryPolicy,

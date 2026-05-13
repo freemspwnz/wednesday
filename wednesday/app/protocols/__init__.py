@@ -14,8 +14,8 @@ from .persistence import (
     CacheClient,
     CacheRepo,
     CacheRepoRegistry,
-    IUoW,
-    IUoWFactory,
+    UoW,
+    UoWFactory,
 )
 from .resilience import (
     ICircuitBreaker,
@@ -35,11 +35,11 @@ __all__ = [
     "IRateLimiter",
     "IRequestScope",
     "IRetryPolicy",
-    "IUoW",
-    "IUoWFactory",
     "Logger",
     "MetricsCollector",
     "MetricsRegistry",
     "RLMetrics",
     "RetryMetrics",
+    "UoW",
+    "UoWFactory",
 ]

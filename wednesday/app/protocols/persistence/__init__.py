@@ -1,10 +1,10 @@
 from .cache import CacheClient, CacheRepo, CacheRepoRegistry
-from .uow import IUoW, IUoWFactory
+from .uow import UoW, UoWFactory
 
 __all__ = [
     "CacheClient",
     "CacheRepo",
     "CacheRepoRegistry",
-    "IUoW",
-    "IUoWFactory",
+    "UoW",
+    "UoWFactory",
 ]

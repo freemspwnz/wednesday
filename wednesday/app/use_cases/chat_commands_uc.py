@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from zoneinfo import ZoneInfo
 
-from app.protocols import IUoW, Logger
+from app.protocols import Logger, UoW
 from domain.chat import Chat, ChatId, ChatProfile, ChatSchedule, ManagementActor, Weekday
 from domain.kernel.vo import AwareDatetime
 
@@ -15,7 +15,7 @@ class ChatCommandsUseCase:
     def __init__(
         self,
         *,
-        uow: IUoW,
+        uow: UoW,
         chat_commands: ChatCommandService,
         logger: Logger,
     ) -> None:
