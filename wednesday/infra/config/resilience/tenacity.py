@@ -2,7 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class RetryConfig(BaseModel):
-    """Конфигурация для retry‑механизмов."""
+    """Configuration for retry mechanisms."""
 
     model_config = ConfigDict(
         extra="forbid",

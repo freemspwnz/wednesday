@@ -10,8 +10,8 @@ _STATE_VALUES: dict[str, float] = {
     "CLOSED": 0.0,
     "HALF_OPEN": 0.5,
     "OPEN": 1.0,
+    "UNKNOWN": -1.0,
 }
-_UNKNOWN_STATE_VALUE = -1.0
 
 
 class AsyncbreakerMetrics(CBMetrics):
@@ -42,7 +42,7 @@ class AsyncbreakerMetrics(CBMetrics):
 
         self._collector.set_gauge(
             name="cb_state",
-            value=self._map_state(new_state),
+            value=_STATE_VALUES.get(new_state.upper(), -1.0),
             labels={"name": name},
         )
         self._collector.increment(
@@ -54,7 +54,3 @@ class AsyncbreakerMetrics(CBMetrics):
             value=duration,
             labels={"name": name, "state": old_state},
         )
-
-    @staticmethod
-    def _map_state(state: str) -> float:
-        return _STATE_VALUES.get(state, _UNKNOWN_STATE_VALUE)

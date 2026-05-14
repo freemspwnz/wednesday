@@ -14,7 +14,7 @@ from app.protocols.observe import (
     RLMetrics,
 )
 from app.protocols.persistence import CacheClient, CacheRepo, CacheRepoRegistry, UoW, UoWFactory
-from app.protocols.resilience import ICircuitBreaker, IRateLimiter, Retrier
+from app.protocols.resilience import CircuitBreaker, IRateLimiter, Retrier
 
 
 @pytest.mark.unit
@@ -45,7 +45,7 @@ def test_protocol_symbols_import_correctly() -> None:
         CacheRepoRegistry,
         UoW,
         UoWFactory,
-        ICircuitBreaker,
+        CircuitBreaker,
         IRateLimiter,
         Retrier,
     ]

@@ -18,8 +18,14 @@ class CircuitOpenError(CircuitError):
         self.retry_after = retry_after
 
 
-class CircuitStateChangeError(CircuitError):
-    """Raised when circuit breaker state cannot be changed."""
+class CircuitStorageError(CircuitError):
+    """Raised when circuit breaker storage is unavailable."""
+
+    def __init__(
+        self,
+        message: str,
+    ) -> None:
+        super().__init__(message)
 
 
 class UnexpectedCircuitError(UnexpectedAppError):

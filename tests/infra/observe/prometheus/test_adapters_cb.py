@@ -29,5 +29,10 @@ class TestAsyncbreakerMetrics:
         assert coll.increment.called
         assert coll.observe.called
 
-    def test_map_state_unknown(self) -> None:
-        assert AsyncbreakerMetrics._map_state("WEIRD") == -1.0
+    def test_on_state_change_unknown_new_state_maps_gauge_to_negative_one(self) -> None:
+        coll = MagicMock()
+        m = AsyncbreakerMetrics(collector=coll)
+        m.on_state_change(name="cb1", old_state="closed", new_state="weird_unknown")
+        gauge_kw = coll.set_gauge.call_args.kwargs
+        assert gauge_kw["name"] == "cb_state"
+        assert gauge_kw["value"] == -1.0

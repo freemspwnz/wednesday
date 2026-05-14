@@ -18,7 +18,7 @@ from .persistence import (
     UoWFactory,
 )
 from .resilience import (
-    ICircuitBreaker,
+    CircuitBreaker,
     IRateLimiter,
     Retrier,
 )
@@ -30,8 +30,8 @@ __all__ = [
     "CacheOperation",
     "CacheRepo",
     "CacheRepoRegistry",
+    "CircuitBreaker",
     "DBMetrics",
-    "ICircuitBreaker",
     "IRateLimiter",
     "IRequestScope",
     "Logger",
