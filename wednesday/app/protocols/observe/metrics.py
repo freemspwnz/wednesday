@@ -40,13 +40,11 @@ class RetryMetrics(Protocol):
         self,
         *,
         name: str,
-        method: str,
     ) -> None: ...
     def on_retry(
         self,
         *,
         name: str,
-        method: str,
         attempt: int,
         status: str,
     ) -> None: ...
@@ -54,14 +52,13 @@ class RetryMetrics(Protocol):
         self,
         *,
         name: str,
-        method: str,
         duration: float,
     ) -> None: ...
 
 
 @runtime_checkable
 class CBMetrics(Protocol):
-    def before_call(self, method: str) -> None: ...
+    def before_call(self) -> None: ...
     def after_call(
         self,
         name: str,

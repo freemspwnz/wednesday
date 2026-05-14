@@ -14,7 +14,7 @@ class TestAsyncbreakerMetrics:
     def test_after_call_records_metrics(self) -> None:
         coll = MagicMock()
         m = AsyncbreakerMetrics(collector=coll)
-        m.before_call(method="fn")
+        m.before_call()
         m.after_call(name="cb1", result="success")
         assert coll.observe.call_count == 1
         assert coll.increment.call_count == 1

@@ -107,8 +107,10 @@ repos:
           "wednesday/app",
           "wednesday/infra/observe/",
           "wednesday/infra/persistence/",
+          "wednesday/infra/resilience/",
           "wednesday/infra/config/observe/",
           "wednesday/infra/config/persistence/",
+          "wednesday/infra/config/resilience/",
           "tests/"
         ]
         additional_dependencies:
