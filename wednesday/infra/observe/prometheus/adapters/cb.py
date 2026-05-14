@@ -1,7 +1,6 @@
 """Asyncbreaker metrics adapter."""
 
 import time
-from contextvars import ContextVar
 
 from app.protocols import CBMetrics, MetricsCollector
 
@@ -14,8 +13,6 @@ _STATE_VALUES: dict[str, float] = {
 }
 _UNKNOWN_STATE_VALUE = -1.0
 
-_method_ctx: ContextVar[str] = ContextVar("_cb_method_ctx", default="unknown")
-
 
 class AsyncbreakerMetrics(CBMetrics):
     """Адаптер метрик для asyncbreaker."""
@@ -25,23 +22,17 @@ class AsyncbreakerMetrics(CBMetrics):
         self._call_timer = TimerContext("_cb_call_timer")
         self._state_started: dict[str, float] = {}
 
-    # --- call flow ---
-
-    def before_call(self, method: str) -> None:
+    def before_call(self) -> None:
         self._call_timer.start()
-        _method_ctx.set(method)
 
     def after_call(self, name: str, result: str) -> None:
-        method = _method_ctx.get()
-        labels = {"name": name, "method": method, "result": result}
+        labels = {"name": name, "result": result}
         self._collector.observe(
             name="cb_call_duration_seconds",
             value=self._call_timer.elapsed(),
             labels=labels,
         )
         self._collector.increment(name="cb_calls_total", labels=labels)
-
-    # --- state management (per-name, not per-task) ---
 
     def on_state_change(self, name: str, old_state: str, new_state: str) -> None:
         now = time.monotonic()

@@ -2,11 +2,12 @@ PYTHON ?= python3
 POETRY ?= poetry run
 IMAGE_NAME := wednesday
 
-PATHS := wednesday/domain/ wednesday/app/ wednesday/infra/observe/ wednesday/infra/persistence/ \
-wednesday/infra/config/observe/ wednesday/infra/config/persistence/ tests/
+PATHS := wednesday/domain/ wednesday/app/ tests/ \
+wednesday/infra/observe wednesday/infra/persistence wednesday/infra/resilience \
+wednesday/infra/config/observe/ wednesday/infra/config/persistence/ wednesday/infra/config/resilience/
 TESTS := tests/
-COV := --cov=domain --cov=app --cov=infra.observe --cov=infra.persistence \
---cov=infra.config.observe --cov=infra.config.persistence
+COV := --cov=domain --cov=app --cov=infra.observe --cov=infra.persistence --cov=infra.resilience \
+--cov=infra.config.observe --cov=infra.config.persistence --cov=infra.config.resilience
 
 .DEFAULT_GOAL := help
 

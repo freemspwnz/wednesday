@@ -1,7 +1,11 @@
 from ..base import AppError, UnexpectedAppError
 
 
-class CircuitOpenError(AppError):
+class CircuitError(AppError):
+    """Base circuit breaker error."""
+
+
+class CircuitOpenError(CircuitError):
     """Raised when circuit breaker is OPEN."""
 
     def __init__(
@@ -14,7 +18,7 @@ class CircuitOpenError(AppError):
         self.retry_after = retry_after
 
 
-class CircuitStateChangeError(AppError):
+class CircuitStateChangeError(CircuitError):
     """Raised when circuit breaker state cannot be changed."""
 
 

@@ -22,6 +22,7 @@ from .persistence import (
 from .resilience import (
     CircuitOpenError,
     CircuitStateChangeError,
+    MaxAttemptsExhaustedError,
     RateLimitError,
     RetryError,
     TooManyRequests,
@@ -40,6 +41,7 @@ __all__ = [
     "CircuitOpenError",
     "CircuitStateChangeError",
     "LogMessageFormatError",
+    "MaxAttemptsExhaustedError",
     "PrometheusExportError",
     "PrometheusHttpExporterError",
     "PrometheusObserveError",

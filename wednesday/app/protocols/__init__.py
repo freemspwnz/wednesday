@@ -20,7 +20,7 @@ from .persistence import (
 from .resilience import (
     ICircuitBreaker,
     IRateLimiter,
-    IRetryPolicy,
+    Retrier,
 )
 
 __all__ = [
@@ -34,11 +34,11 @@ __all__ = [
     "ICircuitBreaker",
     "IRateLimiter",
     "IRequestScope",
-    "IRetryPolicy",
     "Logger",
     "MetricsCollector",
     "MetricsRegistry",
     "RLMetrics",
+    "Retrier",
     "RetryMetrics",
     "UoW",
     "UoWFactory",
