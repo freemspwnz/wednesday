@@ -21,7 +21,7 @@ from .persistence import (
 )
 from .resilience import (
     CircuitOpenError,
-    CircuitStateChangeError,
+    CircuitStorageError,
     MaxAttemptsExhaustedError,
     RateLimitError,
     RetryError,
@@ -39,7 +39,7 @@ __all__ = [
     "CacheUnavailableError",
     "ChatNotFoundError",
     "CircuitOpenError",
-    "CircuitStateChangeError",
+    "CircuitStorageError",
     "LogMessageFormatError",
     "MaxAttemptsExhaustedError",
     "PrometheusExportError",

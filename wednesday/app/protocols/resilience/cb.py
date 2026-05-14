@@ -7,8 +7,10 @@ T = TypeVar("T")
 
 
 @runtime_checkable
-class ICircuitBreaker(Protocol):
+class CircuitBreaker(Protocol):
     """Протокол для circuit breaker."""
+
+    def __call__(self, func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]: ...
 
     async def call(
         self,
@@ -16,3 +18,7 @@ class ICircuitBreaker(Protocol):
         *args: object,
         **kwargs: object,
     ) -> T: ...
+
+    async def open(self) -> None: ...
+    async def half_open(self) -> None: ...
+    async def close(self) -> None: ...
