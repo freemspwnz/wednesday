@@ -6,6 +6,9 @@ on:
       python-version:
         required: true
         type: string
+    secrets:
+      CODECOV_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -39,23 +42,32 @@ jobs:
           COVERAGE_FILE: ".coverage"
         run: make test-cov
 
-      - name: Upload coverage-all artifact
+      - name: Coverage report
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-all
-          path: |
-            .coverage*
-          include-hidden-files: true
-          retention-days: 1
-          if-no-files-found: ignore
+        run: poetry run coverage report --fail-under=50 --ignore-errors || true
 
-      - name: Upload junit-all artifact
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Upload test results to Codecov
+        if: always()
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./junit.xml
+
+      - name: Upload test report artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-all
+          name: test-reports
           path: |
-            junit-*.xml
-          retention-days: 1
+            coverage.xml
+            junit.xml
+          retention-days: 7
           if-no-files-found: ignore

@@ -63,26 +63,6 @@ jobs:
     uses: ./.github/workflows/pytest.yml
     with:
       python-version: ${{ vars.PYTHON_VERSION }}
-
-  # ============================================================================
-  # Объединение результатов тестов
-  # ============================================================================
-
-  coverage-merge:
-    uses: ./.github/workflows/coverage-merge.yml
-    needs: [pytest]
-    if: needs.pytest.result == 'success'
-    with:
-      python-version: ${{ vars.PYTHON_VERSION }}
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  junit-merge:
-    uses: ./.github/workflows/junit-merge.yml
-    needs: [pytest]
-    if: needs.pytest.result == 'success'
-    with:
-      python-version: ${{ vars.PYTHON_VERSION }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 

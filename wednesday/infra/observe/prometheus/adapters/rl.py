@@ -56,7 +56,6 @@ class LimitsMetrics(RLMetrics):
             labels={"name": name, "result": "success"},
         )
 
-
     def on_reset(self, name: str, limit: int) -> None:
         self._collector.observe(
             name="rl_resets_duration_seconds",
