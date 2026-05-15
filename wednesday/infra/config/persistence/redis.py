@@ -19,7 +19,7 @@ class RedisConfig(BaseModel):
     host: str = Field(default="localhost", min_length=1, description="Redis host")
     port: int = Field(default=6379, ge=1, le=65535, description="Redis port")
     db: int = Field(default=0, ge=0, description="Redis logical database number")
-    password: SecretStr = Field(description="Redis password")
+    password: SecretStr = Field(default=SecretStr("redis"), description="Redis password")
 
     decode_responses: bool = Field(default=True, description="Decode responses from Redis to Python objects")
     max_connections: int = Field(default=10, ge=1, le=50_000, description="Maximum number of connections to Redis")
