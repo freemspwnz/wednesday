@@ -3,21 +3,14 @@ from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import TypeVar
 
-from tenacity import (
-    RetryCallState,
-    RetryError as TenacityRetryError,
-    retry_if_exception,
-    stop_after_attempt,
-    wait_exception,
-    wait_exponential_jitter,
-)
+from tenacity import RetryCallState, RetryError as TenacityRetryError
 from tenacity.asyncio import AsyncRetrying
 
-from app.exceptions import AppError, MaxAttemptsExhaustedError, UnexpectedRetryError
+from app.exceptions import AppError, MaxAttemptsExhaustedError
 from app.protocols import Logger, Retrier, RetryMetrics
 from infra.config import RetryConfig
 
-from .backoff import get_retry_after, wait_priority
+from .factory import retrier_factory
 
 T = TypeVar("T")
 STATUS_RETRY = "retry"
@@ -39,18 +32,8 @@ class Tenacity(Retrier):
         logger: Logger,
     ) -> None:
         self._name = config.name
-        self._attempts = config.attempts
-        self._reraise = config.reraise
         self._predicate = predicate
-        self._backoff = wait_priority(
-            wait_exception(get_retry_after),
-            wait_exponential_jitter(
-                initial=config.initial,
-                max=config.max,
-                exp_base=config.exp_base,
-                jitter=config.jitter,
-            ),
-        )
+        self._config = config
         self._metrics = metrics
         self._logger = logger.bind(module=self.__class__.__name__, service=config.name)
 
@@ -70,22 +53,13 @@ class Tenacity(Retrier):
         *args: object,
         **kwargs: object,
     ) -> T:
-        try:
-            retrier = AsyncRetrying(
-                stop=stop_after_attempt(self._attempts),
-                wait=self._backoff,
-                retry=retry_if_exception(self._predicate),
-                before=self._before,
-                after=self._after,
-                before_sleep=self._before_sleep,
-                reraise=self._reraise,
-            )
-        except Exception as e:
-            self._logger.exception(
-                "Error while creating retrier",
-                name=self._name,
-            )
-            raise UnexpectedRetryError(f"Unexpected error while creating retrier {self._name}.") from e
+        retrier = retrier_factory(
+            config=self._config,
+            predicate=self._predicate,
+            before=self._before,
+            after=self._after,
+            before_sleep=self._before_sleep,
+        )
 
         try:
             async for attempt in retrier:

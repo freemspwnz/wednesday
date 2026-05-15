@@ -19,13 +19,6 @@ class _DomainAppError(AppError):
 
 
 @pytest.fixture
-def mock_logger() -> MagicMock:
-    log = MagicMock()
-    log.bind.return_value = log
-    return log
-
-
-@pytest.fixture
 def mock_breaker() -> MagicMock:
     b = MagicMock()
     b.name = "unit-cb"

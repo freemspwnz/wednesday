@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from infra.config.resilience.limits import RateLimitConfig
+from infra.resilience.limits.factory import _limits, rl_factory
 from infra.resilience.limits.limiter import Limits
-from infra.resilience.limits.setup import _limits, rl_factory
 
 
 @pytest.mark.unit
@@ -26,9 +26,7 @@ class TestParseLimits:
 
 @pytest.mark.unit
 class TestRlFactory:
-    def test_memory_factory_returns_limits_with_parsed_items(self) -> None:
-        log = MagicMock()
-        log.bind.return_value = log
+    def test_memory_factory_returns_limits_with_parsed_items(self, mock_logger: MagicMock) -> None:
         config = RateLimitConfig(
             name="unit",
             storage="memory",
@@ -43,10 +41,10 @@ class TestRlFactory:
             redis_dsn="redis://localhost",
             redis_pool=MagicMock(),
             metrics=MagicMock(),
-            logger=log,
+            logger=mock_logger,
         )
 
         assert isinstance(rl, Limits)
         assert "base" in rl.limits
         assert rl.limits["base"].namespace == "unit:base"
-        log.debug.assert_called_once()
+        mock_logger.debug.assert_called_once()

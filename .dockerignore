@@ -1,87 +1,82 @@
-# Python compiled files
+# Git
+.git/
+.gitignore
+
+# Tests
+tests/
+
+# Other
+docs/
+monitoring/
+scripts/
+alembic/
+alembic.ini
+.cursor/
+*.tmp
+CHANGELOG.md
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+coverage-*.xml
+*.cover
+*.py,cover
+.pytest_cache/
+junit.xml
+junit-*.xml
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.env.*
 .venv/
+*.venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
 
-# Environment / secret files
-.env
-.env.*
+# mkdocs documentation
+/site
 
-# Logs
+# mypy
+.mypy_cache/
+
+# Wednesday Frog Bot specific
 logs/
 *.log
 *.jsonl
+secrets/
 
-# Runtime files
-*.tmp
-
-# Test / coverage reports
-tests/
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-coverage.*
-coverage-*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-junit.xml
-junit*.xml
-.junit
-
-# Build / distribution
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Documentation
-docs/_build/
-site/
-
-# IDE / Editor
+# IDE files
 .vscode/
 .idea/
-.spyderproject
-.spyproject
-.ropeproject
 *.swp
 *.swo
 *~
 
-# OS generated
+# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -90,11 +85,11 @@ site/
 ehthumbs.db
 Thumbs.db
 
-# Type check caches
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pyre/
+# Statistics
+data/
+
+# Certificates
+*.pem
 
 # Ruff
 .ruff_cache/
@@ -102,15 +97,7 @@ ruff.log
 ruff_profile.txt
 ruff_*.txt
 
-# Jupyter / IPython
-.ipynb_checkpoints/
-profile_default/
-ipython_config.py
-
-# Wednesday Frog Bot specific
-data/
-
-**/__pycache__/
-**/*.py[cod]
-.pytest_cache/
-.mypy_cache/
+# Development documentation and WIP files
+/docs/dev/
+.ci_failed
+/wip

@@ -1,5 +1,5 @@
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from functools import wraps
 from math import ceil
 from typing import TypeVar
@@ -16,7 +16,7 @@ T = TypeVar("T")
 _DEFAULT_RETRY_AFTER = 1
 
 
-class Limits(RateLimiter):
+class Limits(RateLimiter[RateLimitItem]):
     """Rate limiter based on limits library."""
 
     def __init__(
@@ -26,7 +26,7 @@ class Limits(RateLimiter):
         metrics: RLMetrics,
         logger: Logger,
     ) -> None:
-        self._limits: dict[str, RateLimitItem] = {}
+        self._limits: Mapping[str, RateLimitItem] = {}
         self._limiter = limiter
         self._metrics = metrics
         self._logger = logger.bind(module=self.__class__.__name__)
@@ -50,11 +50,11 @@ class Limits(RateLimiter):
         return decorator
 
     @property
-    def limits(self) -> dict[str, RateLimitItem]:
+    def limits(self) -> Mapping[str, RateLimitItem]:
         return self._limits
 
     @limits.setter
-    def limits(self, limits: dict[str, RateLimitItem]) -> None:
+    def limits(self, limits: Mapping[str, RateLimitItem]) -> None:
         self._limits = limits
 
     async def call(

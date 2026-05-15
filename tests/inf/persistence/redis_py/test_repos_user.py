@@ -1,4 +1,4 @@
-"""Тесты RedisChatRepo без реального Redis."""
+"""Тесты RedisUserRepo без реального Redis."""
 
 from __future__ import annotations
 
@@ -7,66 +7,56 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from infra.persistence.redis.repos.chat import RedisChatRepo
-from infra.persistence.redis.snapshots.chat import ChatSnapshot
+from infra.persistence.redis.repos.user import RedisUserRepo
+from infra.persistence.redis.snapshots.user import UserSnapshot
 
-from .snapshots import chat_snapshot
+from .snapshots import user_snapshot
 
 
 @pytest.mark.unit
-class TestRedisChatRepo:
+class TestRedisUserRepo:
     @pytest.mark.asyncio
     async def test_get_by_id_miss_uses_expected_key(self, mock_logger: MagicMock) -> None:
         client = MagicMock()
         client.get = AsyncMock(return_value=None)
-        mock_logger.bind.return_value = mock_logger
-
-        repo = RedisChatRepo(client=client, logger=mock_logger)
+        repo = RedisUserRepo(client=client, logger=mock_logger)
         assert await repo.get_by_id(42) is None
-        client.get.assert_awaited_once_with("ctx:chat:42")
+        client.get.assert_awaited_once_with("ctx:user:42")
 
     @pytest.mark.asyncio
     async def test_invalidate_deletes_key(self, mock_logger: MagicMock) -> None:
         client = MagicMock()
         client.delete = AsyncMock()
-        mock_logger.bind.return_value = mock_logger
-
-        repo = RedisChatRepo(client=client, logger=mock_logger)
+        repo = RedisUserRepo(client=client, logger=mock_logger)
         await repo.invalidate(7)
-        client.delete.assert_awaited_once_with("ctx:chat:7")
+        client.delete.assert_awaited_once_with("ctx:user:7")
 
     @pytest.mark.asyncio
     async def test_get_by_id_hit_returns_context(self, mock_logger: MagicMock) -> None:
-        payload = chat_snapshot(tg_id=55).model_dump_json()
+        payload = user_snapshot(tg_id=77).model_dump_json()
         client = MagicMock()
         client.get = AsyncMock(return_value=payload)
-        mock_logger.bind.return_value = mock_logger
-
-        repo = RedisChatRepo(client=client, logger=mock_logger)
-        ctx = await repo.get_by_id(55)
+        repo = RedisUserRepo(client=client, logger=mock_logger)
+        ctx = await repo.get_by_id(77)
         assert ctx is not None
-        assert ctx.tg_id == 55
+        assert ctx.tg_id == 77
 
     @pytest.mark.asyncio
     async def test_get_by_id_validation_error_invalidates(self, mock_logger: MagicMock) -> None:
         client = MagicMock()
         client.get = AsyncMock(return_value="{}")
         client.delete = AsyncMock()
-        mock_logger.bind.return_value = mock_logger
-
-        repo = RedisChatRepo(client=client, logger=mock_logger)
+        repo = RedisUserRepo(client=client, logger=mock_logger)
         assert await repo.get_by_id(1) is None
         client.delete.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_get_by_id_stale_version_invalidates(self, mock_logger: MagicMock) -> None:
-        stale = chat_snapshot(v=999).model_dump_json()
+        stale = user_snapshot(v=999).model_dump_json()
         client = MagicMock()
         client.get = AsyncMock(return_value=stale)
         client.delete = AsyncMock()
-        mock_logger.bind.return_value = mock_logger
-
-        repo = RedisChatRepo(client=client, logger=mock_logger)
+        repo = RedisUserRepo(client=client, logger=mock_logger)
         assert await repo.get_by_id(1) is None
         client.delete.assert_awaited()
 
@@ -75,10 +65,8 @@ class TestRedisChatRepo:
         client = MagicMock()
         client.get = AsyncMock(return_value="{}")
         client.delete = AsyncMock()
-        mock_logger.bind.return_value = mock_logger
-
-        with patch.object(ChatSnapshot, "model_validate_json", side_effect=RuntimeError("boom")):
-            repo = RedisChatRepo(client=client, logger=mock_logger)
+        with patch.object(UserSnapshot, "model_validate_json", side_effect=RuntimeError("boom")):
+            repo = RedisUserRepo(client=client, logger=mock_logger)
             assert await repo.get_by_id(1) is None
 
         client.delete.assert_awaited()
@@ -89,18 +77,15 @@ class TestRedisChatRepo:
         fake_snap.model_dump_json.return_value = '{"stub":true}'
         client = MagicMock()
         client.set = AsyncMock()
-        mock_logger.bind.return_value = mock_logger
 
-        chat = MagicMock()
-        chat.profile.telegram_id = 88
+        user = MagicMock()
+        user.profile.telegram_id = 33
 
-        with patch.object(ChatSnapshot, "from_domain", return_value=fake_snap):
-            repo = RedisChatRepo(client=client, logger=mock_logger, ttl=timedelta(minutes=5))
-            await repo.set(chat)
+        with patch.object(UserSnapshot, "from_domain", return_value=fake_snap):
+            repo = RedisUserRepo(client=client, logger=mock_logger, ttl=timedelta(minutes=5))
+            await repo.set(user)
 
         client.set.assert_awaited_once()
-        call_kw = client.set.await_args.kwargs
-        assert call_kw["expire"] == 300
-        pos = client.set.await_args.args
-        assert pos[0] == "ctx:chat:88"
-        assert pos[1] == '{"stub":true}'
+        assert client.set.await_args.args[0] == "ctx:user:33"
+        assert client.set.await_args.args[1] == '{"stub":true}'
+        assert client.set.await_args.kwargs["expire"] == 300

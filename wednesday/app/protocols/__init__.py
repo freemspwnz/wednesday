@@ -1,4 +1,4 @@
-from .di import IRequestScope
+from .di import RequestScope
 from .observe import (
     CacheMetrics,
     CacheOperation,
@@ -32,12 +32,12 @@ __all__ = [
     "CacheRepoRegistry",
     "CircuitBreaker",
     "DBMetrics",
-    "IRequestScope",
     "Logger",
     "MetricsCollector",
     "MetricsRegistry",
     "RLMetrics",
     "RateLimiter",
+    "RequestScope",
     "Retrier",
     "RetryMetrics",
     "UoW",
