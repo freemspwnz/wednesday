@@ -14,13 +14,6 @@ from infra.resilience.limits.limiter import _DEFAULT_RETRY_AFTER, Limits
 
 
 @pytest.fixture
-def mock_logger() -> MagicMock:
-    log = MagicMock()
-    log.bind.return_value = log
-    return log
-
-
-@pytest.fixture
 def mock_metrics() -> MagicMock:
     return MagicMock()
 
@@ -110,7 +103,7 @@ class TestLimitsCall:
     ) -> None:
         mock_backend.hit = AsyncMock(return_value=False)
         mock_backend.get_window_stats = AsyncMock(
-            side_effect=StorageError("redis down"),
+            side_effect=StorageError(RuntimeError("redis down")),
         )
 
         with pytest.raises(TooManyRequests) as ei:
@@ -128,7 +121,7 @@ class TestLimitsCall:
         mock_metrics: MagicMock,
         limit_item: RateLimitItem,
     ) -> None:
-        mock_backend.hit = AsyncMock(side_effect=StorageError("redis down"))
+        mock_backend.hit = AsyncMock(side_effect=StorageError(RuntimeError("redis down")))
 
         with pytest.raises(LimitStorageError) as ei:
             await rate_limits.call(limit_item, "user:1")
@@ -207,7 +200,7 @@ class TestLimitsGetWindowStats:
         mock_backend: MagicMock,
         limit_item: RateLimitItem,
     ) -> None:
-        mock_backend.get_window_stats = AsyncMock(side_effect=StorageError("down"))
+        mock_backend.get_window_stats = AsyncMock(side_effect=StorageError(RuntimeError("down")))
 
         with pytest.raises(LimitStorageError):
             await rate_limits.get_window_stats(limit_item)
@@ -240,7 +233,7 @@ class TestLimitsReset:
         mock_backend: MagicMock,
         limit_item: RateLimitItem,
     ) -> None:
-        mock_backend.clear = AsyncMock(side_effect=StorageError("down"))
+        mock_backend.clear = AsyncMock(side_effect=StorageError(RuntimeError("down")))
 
         with pytest.raises(LimitStorageError):
             await rate_limits.reset(limit_item)

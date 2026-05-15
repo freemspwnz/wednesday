@@ -28,7 +28,7 @@ def test_create_engine_passes_expected_options(monkeypatch: pytest.MonkeyPatch) 
     )
     logger = Mock()
 
-    got = sqla_factory.create_engine(config, logger)
+    got = sqla_factory.create_engine(config=config, logger=logger)
 
     assert got is engine
     assert captured["pool_pre_ping"] is True

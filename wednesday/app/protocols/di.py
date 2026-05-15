@@ -5,7 +5,7 @@ from typing import Protocol
 from .observe import Logger
 
 
-class IRequestScope(Protocol):
+class RequestScope(Protocol):
     """Протокол для request scope."""
 
     @property

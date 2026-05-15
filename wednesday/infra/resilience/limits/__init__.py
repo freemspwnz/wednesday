@@ -1,5 +1,5 @@
+from .factory import rl_factory
 from .limiter import Limits
-from .setup import rl_factory
 
 __all__ = [
     "Limits",

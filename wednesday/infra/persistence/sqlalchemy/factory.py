@@ -13,7 +13,7 @@ from infra.config import PostgresConfig
 _SQLA_CLOSE_TIMEOUT = 5.0
 
 
-def create_engine(config: PostgresConfig, logger: Logger) -> AsyncEngine:
+def create_engine(*, config: PostgresConfig, logger: Logger) -> AsyncEngine:
     """Create AsyncEngine for PostgreSQL via SQLAlchemy."""
     logger.debug("Creating PostgreSQL engine...")
     engine = create_async_engine(
@@ -27,11 +27,7 @@ def create_engine(config: PostgresConfig, logger: Logger) -> AsyncEngine:
     return engine
 
 
-async def close_engine(
-    *,
-    engine: AsyncEngine,
-    logger: Logger,
-) -> None:
+async def close_engine(*, engine: AsyncEngine, logger: Logger) -> None:
     """Close AsyncEngine."""
     logger.debug("Closing PostgreSQL engine...")
     try:

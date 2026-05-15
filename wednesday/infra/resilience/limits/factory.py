@@ -2,7 +2,12 @@ from typing import Literal
 
 from limits import RateLimitItem, parse
 from limits.aio.storage import MemoryStorage, RedisStorage, Storage
-from limits.aio.strategies import STRATEGIES
+from limits.aio.strategies import (
+    FixedWindowRateLimiter,
+    MovingWindowRateLimiter,
+    RateLimiter as Limiter,
+    SlidingWindowCounterRateLimiter,
+)
 from redis.asyncio import ConnectionPool
 
 from app.protocols import Logger, RateLimiter, RLMetrics
@@ -26,7 +31,7 @@ def rl_factory(  # noqa: PLR0913, PLR0917
     logger.debug("Building rate limiter...")
     limits = _limits(config.name, config.limits)
     storage = _storage(config.storage, env, version, redis_dsn, redis_pool)
-    limiter = STRATEGIES[config.strategy](storage=storage)
+    limiter = _limiter(storage, config.strategy)
 
     rl = Limits(
         limiter=limiter,
@@ -47,6 +52,18 @@ def _limits(name: str, limits: dict[str, str]) -> dict[str, RateLimitItem]:
     return result
 
 
+def _limiter(storage: Storage, strategy: STRATEGY) -> Limiter:
+    match strategy:
+        case "fixed-window":
+            return FixedWindowRateLimiter(storage)
+        case "moving-window":
+            return MovingWindowRateLimiter(storage)
+        case "sliding-window-counter":
+            return SlidingWindowCounterRateLimiter(storage)
+        case _:
+            raise ValueError(f"Invalid strategy: {strategy}")
+
+
 def _storage(
     storage: Literal["redis", "memory"],
     env: str,
@@ -61,8 +78,8 @@ def _storage(
                 uri=redis_dsn,
                 wrap_exceptions=True,
                 implementation="redispy",
-                key_prefix=f"wednesday:{env}:{version}",
-                connection_pool=redis_pool,
+                key_prefix=f"wednesday:{env}:{version}:rl",
+                connection_pool=redis_pool,  # type: ignore[arg-type]
             )
         case "memory":
             return MemoryStorage(wrap_exceptions=True)

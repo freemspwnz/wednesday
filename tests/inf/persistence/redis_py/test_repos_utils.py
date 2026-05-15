@@ -45,7 +45,6 @@ class TestTtlToSeconds:
 class TestLogWarningAndInvalidate:
     @pytest.mark.asyncio
     async def test_logs_and_deletes_key(self, mock_logger: MagicMock) -> None:
-        mock_logger.bind.return_value = mock_logger
         client = MagicMock()
         client.delete = AsyncMock()
 
@@ -61,7 +60,6 @@ class TestLogWarningAndInvalidate:
 
     @pytest.mark.asyncio
     async def test_passes_exc_info(self, mock_logger: MagicMock) -> None:
-        mock_logger.bind.return_value = mock_logger
         client = MagicMock()
         client.delete = AsyncMock()
 
