@@ -25,12 +25,12 @@ def test_too_many_requests_keeps_payload_fields() -> None:
         retry_after=30,
         reset_at=123.45,
         remaining=0,
-        limit_name="daily",
+        limit="daily",
     )
     assert exc.retry_after == 30
     assert exc.reset_at == 123.45
     assert exc.remaining == 0
-    assert exc.limit_name == "daily"
+    assert exc.limit == "daily"
 
 
 @pytest.mark.unit

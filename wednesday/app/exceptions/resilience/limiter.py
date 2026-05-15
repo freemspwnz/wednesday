@@ -1,28 +1,32 @@
 from ..base import AppError, UnexpectedAppError
 
 
-class RateLimitError(AppError):
+class LimitError(AppError):
     """Base rate limit error."""
 
 
-class TooManyRequests(RateLimitError):
+class TooManyRequests(LimitError):
     """Too many requests."""
 
     def __init__(
         self,
         message: str = "Too many requests",
         *,
-        retry_after: int | None = None,
-        reset_at: float | None = None,
+        retry_after: int,
+        reset_at: float,
         remaining: int | None = None,
-        limit_name: str | None = None,
+        limit: str,
     ) -> None:
         super().__init__(message)
         self.retry_after = retry_after
         self.reset_at = reset_at
         self.remaining = remaining
-        self.limit_name = limit_name
+        self.limit = limit
 
 
-class UnexpectedRateLimitError(UnexpectedAppError):
+class LimitStorageError(LimitError):
+    """Rate limiter storage backend error."""
+
+
+class UnexpectedLimitError(UnexpectedAppError):
     """Unexpected rate limit error."""

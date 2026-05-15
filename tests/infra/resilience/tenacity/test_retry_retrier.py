@@ -1,4 +1,4 @@
-"""Тесты TenacityRetrier."""
+"""Тесты Tenacity."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 
 from app.exceptions import MaxAttemptsExhaustedError
 from infra.config import RetryConfig
-from infra.resilience.tenacity.retrier import TenacityRetrier
+from infra.resilience.tenacity.retrier import Tenacity
 
 
 def _fast_config(*, attempts: int = 2, reraise: bool = False) -> RetryConfig:
@@ -31,7 +31,7 @@ class TestTenacityRetrier:
         mock_logger: MagicMock,
     ) -> None:
         metrics = MagicMock()
-        r = TenacityRetrier(
+        r = Tenacity(
             config=_fast_config(attempts=1, reraise=False),
             predicate=lambda e: isinstance(e, ValueError),
             metrics=metrics,
@@ -52,7 +52,7 @@ class TestTenacityRetrier:
         mock_logger: MagicMock,
     ) -> None:
         metrics = MagicMock()
-        r = TenacityRetrier(
+        r = Tenacity(
             config=_fast_config(attempts=3, reraise=False),
             predicate=lambda e: isinstance(e, ValueError),
             metrics=metrics,
@@ -75,7 +75,7 @@ class TestTenacityRetrier:
         mock_logger: MagicMock,
     ) -> None:
         metrics = MagicMock()
-        r = TenacityRetrier(
+        r = Tenacity(
             config=_fast_config(attempts=3, reraise=False),
             predicate=lambda e: isinstance(e, ValueError),
             metrics=metrics,
@@ -94,7 +94,7 @@ class TestTenacityRetrier:
         mock_logger: MagicMock,
     ) -> None:
         metrics = MagicMock()
-        r = TenacityRetrier(
+        r = Tenacity(
             config=_fast_config(attempts=2, reraise=False),
             predicate=lambda e: isinstance(e, ValueError),
             metrics=metrics,
@@ -118,7 +118,7 @@ class TestTenacityRetrier:
         mock_logger: MagicMock,
     ) -> None:
         metrics = MagicMock()
-        r = TenacityRetrier(
+        r = Tenacity(
             config=_fast_config(attempts=2, reraise=True),
             predicate=lambda e: isinstance(e, ValueError),
             metrics=metrics,

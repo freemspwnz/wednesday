@@ -1,4 +1,4 @@
-"""Тесты обёртки ``AsyncBreaker`` над asyncbreaker."""
+"""Тесты обёртки ``Asyncbreaker`` над asyncbreaker."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from asyncbreaker.state import CircuitBreakerError
 from asyncbreaker.timeutil import naive_utc_now
 
 from app.exceptions import AppError, CircuitOpenError, CircuitStorageError, UnexpectedCircuitError
-from infra.resilience.asyncbreaker.breaker import AsyncBreaker
+from infra.resilience.asyncbreaker.breaker import Asyncbreaker
 
 
 class _DomainAppError(AppError):
@@ -33,8 +33,8 @@ def mock_breaker() -> MagicMock:
 
 
 @pytest.fixture
-def async_breaker(mock_breaker: MagicMock, mock_logger: MagicMock) -> AsyncBreaker:
-    return AsyncBreaker(breaker=mock_breaker, logger=mock_logger)
+def async_breaker(mock_breaker: MagicMock, mock_logger: MagicMock) -> Asyncbreaker:
+    return Asyncbreaker(breaker=mock_breaker, logger=mock_logger)
 
 
 @pytest.mark.unit
@@ -42,7 +42,7 @@ class TestAsyncBreakerCall:
     @pytest.mark.asyncio
     async def test_success_returns_result(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         async def work(x: int) -> int:
@@ -56,7 +56,7 @@ class TestAsyncBreakerCall:
     @pytest.mark.asyncio
     async def test_decorator_delegates_to_call(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         async def work() -> str:
@@ -69,7 +69,7 @@ class TestAsyncBreakerCall:
     @pytest.mark.asyncio
     async def test_circuit_breaker_error_maps_to_circuit_open(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         async def work() -> None:
@@ -90,7 +90,7 @@ class TestAsyncBreakerCall:
     @pytest.mark.asyncio
     async def test_circuit_breaker_error_without_reopen_zero_retry_after(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         async def work() -> None:
@@ -108,7 +108,7 @@ class TestAsyncBreakerCall:
     @pytest.mark.asyncio
     async def test_storage_error_maps_to_circuit_storage_error(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
         mock_logger: MagicMock,
     ) -> None:
@@ -127,7 +127,7 @@ class TestAsyncBreakerCall:
     @pytest.mark.asyncio
     async def test_app_error_passes_through(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         async def work() -> None:
@@ -144,7 +144,7 @@ class TestAsyncBreakerCall:
     @pytest.mark.asyncio
     async def test_generic_exception_maps_to_unexpected_circuit(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
         mock_logger: MagicMock,
     ) -> None:
@@ -165,7 +165,7 @@ class TestAsyncBreakerStateMutators:
     @pytest.mark.asyncio
     async def test_open_success(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         mock_breaker.open = AsyncMock(return_value=None)
@@ -175,7 +175,7 @@ class TestAsyncBreakerStateMutators:
     @pytest.mark.asyncio
     async def test_open_storage_error(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         mock_breaker.open = AsyncMock(side_effect=StorageError("x"))
@@ -185,7 +185,7 @@ class TestAsyncBreakerStateMutators:
     @pytest.mark.asyncio
     async def test_half_open_storage_error(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         mock_breaker.half_open = AsyncMock(side_effect=StorageError("x"))
@@ -195,7 +195,7 @@ class TestAsyncBreakerStateMutators:
     @pytest.mark.asyncio
     async def test_close_storage_error(
         self,
-        async_breaker: AsyncBreaker,
+        async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
     ) -> None:
         mock_breaker.close = AsyncMock(side_effect=StorageError("x"))

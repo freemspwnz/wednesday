@@ -25,7 +25,7 @@ STATUS_FAILED = "failed"
 STATUS_SUCCESS = "success"
 
 
-class TenacityRetrier(Retrier):
+class Tenacity(Retrier):
     """
     Universal retry policy with adjustable exponential backoff.
     """

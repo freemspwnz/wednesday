@@ -14,7 +14,7 @@ from app.protocols.observe import (
     RLMetrics,
 )
 from app.protocols.persistence import CacheClient, CacheRepo, CacheRepoRegistry, UoW, UoWFactory
-from app.protocols.resilience import CircuitBreaker, IRateLimiter, Retrier
+from app.protocols.resilience import CircuitBreaker, RateLimiter, Retrier
 
 
 @pytest.mark.unit
@@ -46,7 +46,7 @@ def test_protocol_symbols_import_correctly() -> None:
         UoW,
         UoWFactory,
         CircuitBreaker,
-        IRateLimiter,
+        RateLimiter,
         Retrier,
     ]
     assert all(symbol is not None for symbol in symbols)

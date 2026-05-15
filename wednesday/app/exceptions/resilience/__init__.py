@@ -1,15 +1,17 @@
-from .circuit_breaker import CircuitOpenError, CircuitStorageError, UnexpectedCircuitError
-from .rate_limiter import RateLimitError, TooManyRequests, UnexpectedRateLimitError
-from .retry import MaxAttemptsExhaustedError, RetryError, UnexpectedRetryError
+from .breaker import CircuitError, CircuitOpenError, CircuitStorageError, UnexpectedCircuitError
+from .limiter import LimitError, LimitStorageError, TooManyRequests, UnexpectedLimitError
+from .retrier import MaxAttemptsExhaustedError, RetryError, UnexpectedRetryError
 
 __all__ = [
+    "CircuitError",
     "CircuitOpenError",
     "CircuitStorageError",
+    "LimitError",
+    "LimitStorageError",
     "MaxAttemptsExhaustedError",
-    "RateLimitError",
     "RetryError",
     "TooManyRequests",
     "UnexpectedCircuitError",
-    "UnexpectedRateLimitError",
+    "UnexpectedLimitError",
     "UnexpectedRetryError",
 ]
