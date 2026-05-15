@@ -8,7 +8,7 @@ TESTS := tests/
 
 .DEFAULT_GOAL := help
 
-.PHONY: help lint format format-check type type-domain test test-domain test-cov clean build run
+.PHONY: help lint format format-check type test test-cov clean build
 
 help: ## Показать доступные цели
 	@grep -E '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -40,6 +40,3 @@ clean: ## Очистить временные артефакты
 build: ## Собрать Docker-образ бота
 	@docker rmi $(IMAGE_NAME):local 2>/dev/null || true
 	@docker build -t $(IMAGE_NAME):local .
-
-run: ## Запустить бота в Docker-контейнерах
-	@./scripts/docker_run_bot.sh

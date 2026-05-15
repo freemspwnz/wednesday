@@ -33,4 +33,4 @@ jobs:
         run: poetry install --with dev --no-interaction
 
       - name: Run mypy
-        run: make type-domain
+        run: make type
