@@ -19,7 +19,7 @@ from .persistence import (
 )
 from .resilience import (
     CircuitBreaker,
-    IRateLimiter,
+    RateLimiter,
     Retrier,
 )
 
@@ -32,12 +32,12 @@ __all__ = [
     "CacheRepoRegistry",
     "CircuitBreaker",
     "DBMetrics",
-    "IRateLimiter",
     "IRequestScope",
     "Logger",
     "MetricsCollector",
     "MetricsRegistry",
     "RLMetrics",
+    "RateLimiter",
     "Retrier",
     "RetryMetrics",
     "UoW",

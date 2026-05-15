@@ -33,36 +33,29 @@ class LimitsMetrics(RLMetrics):
     def on_get_stats(
         self,
         name: str,
-        reset_time: float | None = None,
-        remaining: int | None = None,
+        reset_time: float,
+        remaining: int,
     ) -> None:
         self._collector.observe(
             name="rl_window_stats_duration_seconds",
             value=self._call_timer.elapsed(),
             labels={"name": name},
         )
-
-        if remaining is not None and reset_time is not None:
-            self._collector.set_gauge(
-                name="rl_window_stats_remaining",
-                value=remaining,
-                labels={"name": name},
-            )
-            self._collector.set_gauge(
-                name="rl_window_stats_reset_timestamp_seconds",
-                value=reset_time,
-                labels={"name": name},
-            )
-            self._collector.increment(
-                name="rl_window_stats_calls_total",
-                labels={"name": name, "result": "success"},
-            )
-            return
-
+        self._collector.set_gauge(
+            name="rl_window_stats_remaining",
+            value=remaining,
+            labels={"name": name},
+        )
+        self._collector.set_gauge(
+            name="rl_window_stats_reset_timestamp_seconds",
+            value=reset_time,
+            labels={"name": name},
+        )
         self._collector.increment(
             name="rl_window_stats_calls_total",
-            labels={"name": name, "result": "failure"},
+            labels={"name": name, "result": "success"},
         )
+
 
     def on_reset(self, name: str, limit: int) -> None:
         self._collector.observe(

@@ -10,7 +10,7 @@ from app.protocols import CircuitBreaker, Logger
 T = TypeVar("T")
 
 
-class AsyncBreaker(CircuitBreaker):
+class Asyncbreaker(CircuitBreaker):
     def __init__(
         self,
         *,

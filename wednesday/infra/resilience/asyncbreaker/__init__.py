@@ -1,9 +1,9 @@
-from .breaker import AsyncBreaker
+from .breaker import Asyncbreaker
 from .listeners import LoggingListener, MetricsListener
 from .state import CircuitState
 
 __all__ = [
-    "AsyncBreaker",
+    "Asyncbreaker",
     "CircuitState",
     "LoggingListener",
     "MetricsListener",

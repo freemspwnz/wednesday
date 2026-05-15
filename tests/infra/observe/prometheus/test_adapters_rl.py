@@ -19,14 +19,6 @@ class TestLimitsMetrics:
         assert coll.observe.called
         assert coll.increment.called
 
-    def test_on_get_stats_none(self) -> None:
-        coll = MagicMock()
-        m = LimitsMetrics(collector=coll)
-        m.before_call()
-        m.on_get_stats(name="ns", reset_time=None, remaining=None)
-        inc = coll.increment.call_args.kwargs
-        assert inc["labels"]["result"] == "failure"
-
     def test_on_get_stats_success(self) -> None:
         coll = MagicMock()
         m = LimitsMetrics(collector=coll)
