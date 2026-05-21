@@ -572,14 +572,14 @@ files = [
 
 [[package]]
 name = "click"
-version = "8.3.3"
+version = "8.4.0"
 description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
 groups = ["docs"]
 files = [
-    {file = "click-8.3.3-py3-none-any.whl", hash = "sha256:a2bf429bb3033c89fa4936ffb35d5cb471e3719e1f3c8a7c3fff0b8314305613"},
-    {file = "click-8.3.3.tar.gz", hash = "sha256:398329ad4837b2ff7cbe1dd166a4c0f8900c3ca3a218de04466f38f6497f18a2"},
+    {file = "click-8.4.0-py3-none-any.whl", hash = "sha256:40c50b7c6c6adac2823d411041ec84f3f103f1b280d5e9ce0d7f998995832f81"},
+    {file = "click-8.4.0.tar.gz", hash = "sha256:638f1338fe1235c8f4e008e4a8a254fb5c5fbdcbb40ece3c9142ebb78e792973"},
 ]
 
 [package.dependencies]
@@ -1084,7 +1084,6 @@ files = [
 ]
 
 [package.dependencies]
-anyio = {version = ">=4.0,<5.0", optional = true, markers = "extra == \"asyncio\""}
 certifi = "*"
 h11 = ">=0.16"
 
@@ -2163,18 +2162,6 @@ files = [
 ]
 
 [[package]]
-name = "pycron"
-version = "3.2.0"
-description = "Simple cron-like parser, which determines if current datetime matches conditions."
-optional = false
-python-versions = "<4.0,>=3.9"
-groups = ["main"]
-files = [
-    {file = "pycron-3.2.0-py3-none-any.whl", hash = "sha256:6d2349746270bd642b71b9f7187cf13f4d9ee2412b4710396a507b5fe4f60dac"},
-    {file = "pycron-3.2.0.tar.gz", hash = "sha256:e125a28aca0295769541a40633f70b602579df48c9cb357c36c28d2628ba2b13"},
-]
-
-[[package]]
 name = "pydantic"
 version = "2.13.4"
 description = "Data validation using Python type hints"
@@ -2648,71 +2635,6 @@ files = [
 ]
 
 [[package]]
-name = "sentry-sdk"
-version = "2.60.0"
-description = "Python client for Sentry (https://sentry.io)"
-optional = false
-python-versions = ">=3.6"
-groups = ["main"]
-files = [
-    {file = "sentry_sdk-2.60.0-py3-none-any.whl", hash = "sha256:28a536c03291c8bcb363cf35c611b32738ec118ff64d8d6383b096448ac4c803"},
-    {file = "sentry_sdk-2.60.0.tar.gz", hash = "sha256:0bd25e54e78ca02d0be512529fa644bbbf9e8470d7b26371294012d4ca93c978"},
-]
-
-[package.dependencies]
-certifi = "*"
-httpcore = {version = "==1.*", extras = ["asyncio"], optional = true, markers = "extra == \"asyncio\""}
-urllib3 = ">=1.26.11"
-
-[package.extras]
-aiohttp = ["aiohttp (>=3.5)"]
-anthropic = ["anthropic (>=0.16)"]
-arq = ["arq (>=0.23)"]
-asyncio = ["httpcore[asyncio] (==1.*)"]
-asyncpg = ["asyncpg (>=0.23)"]
-beam = ["apache-beam (>=2.12)"]
-bottle = ["bottle (>=0.12.13)"]
-celery = ["celery (>=3)"]
-celery-redbeat = ["celery-redbeat (>=2)"]
-chalice = ["chalice (>=1.16.0)"]
-clickhouse-driver = ["clickhouse-driver (>=0.2.0)"]
-django = ["django (>=1.8)"]
-falcon = ["falcon (>=1.4)"]
-fastapi = ["fastapi (>=0.79.0)"]
-flask = ["blinker (>=1.1)", "flask (>=0.11)", "markupsafe"]
-google-genai = ["google-genai (>=1.29.0)"]
-grpcio = ["grpcio (>=1.21.1)", "protobuf (>=3.8.0)"]
-http2 = ["httpcore[http2] (==1.*)"]
-httpx = ["httpx (>=0.16.0)"]
-huey = ["huey (>=2)"]
-huggingface-hub = ["huggingface_hub (>=0.22)"]
-langchain = ["langchain (>=0.0.210)"]
-langgraph = ["langgraph (>=0.6.6)"]
-launchdarkly = ["launchdarkly-server-sdk (>=9.8.0)"]
-litellm = ["litellm (>=1.77.5,!=1.82.7,!=1.82.8)"]
-litestar = ["litestar (>=2.0.0)"]
-loguru = ["loguru (>=0.5)"]
-mcp = ["mcp (>=1.15.0)"]
-openai = ["openai (>=1.0.0)", "tiktoken (>=0.3.0)"]
-openfeature = ["openfeature-sdk (>=0.7.1)"]
-opentelemetry = ["opentelemetry-distro (>=0.35b0)"]
-opentelemetry-experimental = ["opentelemetry-distro"]
-opentelemetry-otlp = ["opentelemetry-distro[otlp] (>=0.35b0)"]
-pure-eval = ["asttokens", "executing", "pure_eval"]
-pydantic-ai = ["pydantic-ai (>=1.0.0)"]
-pymongo = ["pymongo (>=3.1)"]
-pyspark = ["pyspark (>=2.4.4)"]
-quart = ["blinker (>=1.1)", "quart (>=0.16.1)"]
-rq = ["rq (>=0.6)"]
-sanic = ["sanic (>=0.8)"]
-sqlalchemy = ["sqlalchemy (>=1.2)"]
-starlette = ["starlette (>=0.19.1)"]
-starlite = ["starlite (>=1.48)"]
-statsig = ["statsig (>=0.55.3)"]
-tornado = ["tornado (>=6)"]
-unleash = ["UnleashClient (>=6.0.1)"]
-
-[[package]]
 name = "setuptools"
 version = "82.0.1"
 description = "Most extensible Python build backend with support for C/C++ extension modules"
@@ -2860,49 +2782,6 @@ pymysql = ["pymysql"]
 sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
-name = "taskiq"
-version = "0.12.4"
-description = "Distributed task queue with full async support"
-optional = false
-python-versions = "<4,>=3.10"
-groups = ["main"]
-files = [
-    {file = "taskiq-0.12.4-py3-none-any.whl", hash = "sha256:b910d3676e45b317678b4a8a1865ba6c261f696a02541461c765a7773cf4fa4b"},
-    {file = "taskiq-0.12.4.tar.gz", hash = "sha256:887e6acc72eea322a1515d9863551f00be7c81c6a0f72b2961569e58d68edc34"},
-]
-
-[package.dependencies]
-aiohttp = ">=3"
-anyio = ">=4"
-packaging = ">=19"
-prometheus-client = {version = ">=0", optional = true, markers = "extra == \"metrics\""}
-pycron = ">=3.0.0"
-pydantic = ">=1.0,<=3.0"
-taskiq-dependencies = ">=1.3.1,<2"
-
-[package.extras]
-cbor = ["cbor2 (>=5)"]
-metrics = ["prometheus-client (>=0)"]
-msgpack = ["msgpack (>=1.0.7)"]
-opentelemetry = ["opentelemetry-api (>=1.38.0,<2.0.0)", "opentelemetry-instrumentation (>=0.59b0,<1)", "opentelemetry-semantic-conventions (>=0.59b0,<1)"]
-orjson = ["orjson (>=3)"]
-reload = ["gitignore-parser (>=0)", "watchdog (>=4)"]
-uv = ["uvloop (>=0.16.0,<1) ; sys_platform != \"win32\""]
-zmq = ["pyzmq (>=26)"]
-
-[[package]]
-name = "taskiq-dependencies"
-version = "1.5.7"
-description = "FastAPI like dependency injection implementation"
-optional = false
-python-versions = "<4.0,>=3.9"
-groups = ["main"]
-files = [
-    {file = "taskiq_dependencies-1.5.7-py3-none-any.whl", hash = "sha256:6fcee5d159bdb035ef915d4d848826169b6f06fe57cc2297a39b62ea3e76036f"},
-    {file = "taskiq_dependencies-1.5.7.tar.gz", hash = "sha256:0d3b240872ef152b719153b9526d866d2be978aeeaea6600e878414babc2dcb4"},
-]
-
-[[package]]
 name = "tenacity"
 version = "9.1.4"
 description = "Retry code until it succeeds"
@@ -2951,7 +2830,7 @@ version = "2.7.0"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 optional = false
 python-versions = ">=3.10"
-groups = ["main", "docs"]
+groups = ["docs"]
 files = [
     {file = "urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897"},
     {file = "urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c"},
@@ -3271,4 +3150,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "450cf3497051ffea423c265d6a3bc47b36738fff0b76e241479289c92febdb61"
+content-hash = "b161f92536647d2b2f78d9b0ea7c02f7636b9f759d16cde6cfb3dd97accb4048"

@@ -6,9 +6,11 @@ from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from infra.config import Config
 from infra.config.observe import MetricsConfig
+from infra.config.presentation import TelegramConfig
 from infra.di.container import Container
 from infra.di.observe import ObserveContainer
 from infra.di.persistence import PersistenceContainer
@@ -23,6 +25,7 @@ def di_config(monkeypatch: pytest.MonkeyPatch) -> Config:
         ENV="STAGE",
         VERSION="1.2.3",
         metrics=MetricsConfig(enabled=False),
+        telegram=TelegramConfig(token=SecretStr("test-token"), admin_id=1),
     )
 
 

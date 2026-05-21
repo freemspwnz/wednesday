@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .observe import LoggingConfig, MetricsConfig
 from .persistence import PostgresConfig, RedisConfig
+from .presentation import TelegramConfig
 from .resilience import CircuitBreakerConfig, RateLimitConfig, RetryConfig
 
 
@@ -19,6 +20,8 @@ class Config(BaseSettings):
 
     env: str = Field(default="DEV", alias="ENV")
     version: str = Field(default="7.0.0", alias="VERSION")
+
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
@@ -51,6 +54,10 @@ class Config(BaseSettings):
             errors.append("RATE_LIMIT__STORAGE must be redis in PROD")
         if self.circuit_breaker.storage != "redis":
             errors.append("CIRCUIT_BREAKER__STORAGE must be redis in PROD")
+        if self.telegram.token.get_secret_value() == "token":
+            errors.append("TELEGRAM__BOT_TOKEN must be set in PROD")
+        if self.telegram.admin_id == 0:
+            errors.append("TELEGRAM__ADMIN_ID must be set in PROD")
 
         if errors:
             raise ValueError("\n".join(errors))

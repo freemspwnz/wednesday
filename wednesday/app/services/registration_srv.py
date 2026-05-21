@@ -21,7 +21,7 @@ class RegistrationService:
         dto: UserContext,
         repo: UserRepo,
     ) -> User:
-        user_id = dto.id if dto.id is not None else self._user_id_from_tg(dto.tg_id)
+        user_id = dto.id if dto.id is not None else self.user_id_from_tg(dto.tg_id)
 
         entity = await repo.get_by_id(user_id)
         if entity is not None:
@@ -65,7 +65,7 @@ class RegistrationService:
         dto: ChatContext,
         repo: ChatRepo,
     ) -> Chat:
-        chat_id = dto.id if dto.id is not None else self._chat_id_from_tg(dto.tg_id)
+        chat_id = dto.id if dto.id is not None else self.chat_id_from_tg(dto.tg_id)
 
         entity = await repo.get_by_id(chat_id)
         if entity is not None:
@@ -103,10 +103,26 @@ class RegistrationService:
         )
         return entity
 
+    async def get_user_if_exists(
+        self,
+        *,
+        tg_id: int,
+        repo: UserRepo,
+    ) -> User | None:
+        return await repo.get_by_id(self.user_id_from_tg(tg_id))
+
+    async def get_chat_if_exists(
+        self,
+        *,
+        tg_id: int,
+        repo: ChatRepo,
+    ) -> Chat | None:
+        return await repo.get_by_id(self.chat_id_from_tg(tg_id))
+
     @staticmethod
-    def _user_id_from_tg(tg_id: int) -> UserId:
+    def user_id_from_tg(tg_id: int) -> UserId:
         return UserId(UUID(str(uuid5(NAMESPACE_DNS, f"user:{tg_id}"))))
 
     @staticmethod
-    def _chat_id_from_tg(tg_id: int) -> ChatId:
+    def chat_id_from_tg(tg_id: int) -> ChatId:
         return ChatId(UUID(str(uuid5(NAMESPACE_DNS, f"chat:{tg_id}"))))

@@ -1,7 +1,7 @@
-# Pre-commit hooks для Wednesday.
-# Python quality (ruff, mypy) — через Makefile и Poetry (те же цели, что в CI).
+# Pre-commit hooks for Wednesday.
+# Python quality (ruff, mypy) through Makefile and Poetry (the same goals as in CI).
 #
-# Установка:
+# Installation:
 #   pre-commit install
 #   pre-commit install --hook-type pre-push
 
@@ -84,37 +84,37 @@ repos:
   - repo: local
     hooks:
       # pre-commit: apply ruff --fix + format on project PATHS (may touch unstaged files)
-      - id: make-format
-        name: make format
+      - id: ruff-format
+        name: Ruff format
         entry: make format
         language: system
         pass_filenames: false
         files: \.(py|toml)$
         stages: [pre-commit]
 
+      - id: mypy
+        name: Mypy
+        entry: make type
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
       # pre-push: same checks as GitHub Actions
-      - id: make-lint
-        name: make lint
+      - id: ruff-lint
+        name: Ruff lint
         entry: make lint
         language: system
         pass_filenames: false
         stages: [pre-push]
 
-      - id: make-format-check
-        name: make format-check
+      - id: ruff-format-check
+        name: Ruff format check
         entry: make format-check
         language: system
         pass_filenames: false
         stages: [pre-push]
 
-      - id: make-type
-        name: make type
-        entry: make type
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: pytest-pre-push
+      - id: pytest
         name: Run pytest with coverage before push
         entry: make test-cov
         language: system

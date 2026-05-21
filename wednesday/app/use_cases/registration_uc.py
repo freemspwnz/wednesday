@@ -58,6 +58,26 @@ class RegistrationUseCase:
         )
         return UserContext.from_domain(resolved)
 
+    async def find_user_by_tg_id(self, *, tg_id: int) -> UserContext | None:
+        """Return existing user context; never creates a new aggregate."""
+        cache_repo = self._cache_registry.user
+        cached = await cache_repo.get_by_id(tg_id)
+        if cached is not None:
+            self._logger.debug("User lookup cache hit", tg_id=tg_id)
+            return cached
+
+        self._logger.debug("User lookup cache miss", tg_id=tg_id)
+        async with self._uow:
+            entity = await self._reg_service.get_user_if_exists(
+                tg_id=tg_id,
+                repo=self._uow.users,
+            )
+        if entity is None:
+            return None
+
+        await cache_repo.set(entity)
+        return UserContext.from_domain(entity)
+
     async def reg_chat(
         self,
         *,
@@ -88,3 +108,23 @@ class RegistrationUseCase:
             tg_id=dto.tg_id,
         )
         return ChatContext.from_domain(resolved)
+
+    async def find_chat_by_tg_id(self, *, tg_id: int) -> ChatContext | None:
+        """Return existing chat context; never creates a new aggregate."""
+        cache_repo = self._cache_registry.chat
+        cached = await cache_repo.get_by_id(tg_id)
+        if cached is not None:
+            self._logger.debug("Chat lookup cache hit", tg_id=tg_id)
+            return cached
+
+        self._logger.debug("Chat lookup cache miss", tg_id=tg_id)
+        async with self._uow:
+            entity = await self._reg_service.get_chat_if_exists(
+                tg_id=tg_id,
+                repo=self._uow.chats,
+            )
+        if entity is None:
+            return None
+
+        await cache_repo.set(entity)
+        return ChatContext.from_domain(entity)

@@ -1,4 +1,4 @@
-from .di import RequestScope
+from .di import RequestScope, ScopeFactory
 from .observe import (
     CacheMetrics,
     CacheOperation,
@@ -40,6 +40,7 @@ __all__ = [
     "RequestScope",
     "Retrier",
     "RetryMetrics",
+    "ScopeFactory",
     "UoW",
     "UoWFactory",
 ]

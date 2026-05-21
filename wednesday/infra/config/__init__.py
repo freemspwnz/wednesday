@@ -5,6 +5,7 @@
 from .config import Config
 from .observe import LoggingConfig, MetricsConfig
 from .persistence import PostgresConfig, RedisConfig
+from .presentation import TelegramConfig
 from .resilience import CircuitBreakerConfig, RateLimitConfig, RetryConfig
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "RateLimitConfig",
     "RedisConfig",
     "RetryConfig",
+    "TelegramConfig",
 ]

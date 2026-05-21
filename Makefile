@@ -2,8 +2,8 @@ PYTHON ?= python3
 POETRY ?= poetry run
 IMAGE_NAME := wednesday
 
-PATHS := wednesday/domain/ wednesday/app/ wednesday/infra/ tests/
-COV := --cov=domain --cov=app --cov=infra
+PATHS := wednesday/ tests/
+COV := --cov=wednesday
 TESTS := tests/
 
 .DEFAULT_GOAL := help
@@ -26,8 +26,8 @@ format-check: ## Проверить форматирование ruff
 type: ## Запустить mypy по всем путям и тестам
 	$(POETRY) mypy $(PATHS)
 
-test: ## Запустить все тесты с покрытием
-	$(POETRY) pytest --cov=wednesday --cov-report=term-missing --cov-report=xml:coverage.xml
+test: ## Запустить все тесты
+	$(POETRY) pytest $(TESTS)
 
 test-cov: ## coverage + junit.xml
 	$(POETRY) pytest $(TESTS) $(COV) --cov-report=term-missing \

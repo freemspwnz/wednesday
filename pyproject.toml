@@ -13,7 +13,7 @@ packages = [
   { include = "app", from = "wednesday" },
   { include = "domain", from = "wednesday" },
   { include = "infra", from = "wednesday" },
-  # { include = "presentation", from = "wednesday" },
+  { include = "presentation", from = "wednesday" },
 ]
 
 [tool.poetry.dependencies]
@@ -22,11 +22,12 @@ python = ">=3.12,<3.15"
 # Core bot
 aiogram = "^3.17.0"
 
-# HTTP client
+# HTTP client & server
 httpx = { version = "^0.28.1", extras = ["http2"] }
+# fastapi = "^0.136.1"
 
 # Async tasks
-taskiq = { version = "^0.12.0", extras = ["redis", "metrics"] }
+# taskiq = { version = "^0.12.0", extras = ["redis", "metrics"] }
 
 # Database & ORM
 redis = "^7.4.0"
@@ -41,7 +42,7 @@ pydantic-settings = "^2.14.1"
 
 # Metrics & Monitoring & Logging
 prometheus_client = "^0.23.1"
-sentry-sdk = { version = "^2.46.0", extras = ["asyncio"] }
+# sentry-sdk = { version = "^2.46.0", extras = ["asyncio"] }
 loguru = "^0.7.3"
 
 # Resilience
@@ -103,7 +104,6 @@ combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ANN401", "PLR6301", "RUF029", "PLR2004"]
-"tests/inf/conftest.py" = ["ANN401", "PLR6301", "RUF029", "PLR2004", "E402"]
 
 [tool.ruff.format]
 preview = true
