@@ -49,6 +49,8 @@ COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY --chown=app:app wednesday/ /app/wednesday/
+COPY --chown=app:app alembic/ /app/alembic/
+COPY --chown=app:app alembic.ini /app/alembic.ini
 
 # Копируем entrypoint и даем права
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

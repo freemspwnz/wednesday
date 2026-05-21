@@ -10,5 +10,5 @@ class MetricsConfig(BaseModel):
     )
 
     enabled: bool = Field(default=False, description="Enable/disable prometheus HTTP server")
-    host: str = Field(default="0.0.0.0", description="Host to listen on")
+    host: str = Field(default="localhost", description="Host to listen on")
     port: int = Field(default=8080, description="Port to listen on")

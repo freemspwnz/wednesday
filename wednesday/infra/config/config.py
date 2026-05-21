@@ -55,9 +55,11 @@ class Config(BaseSettings):
         if self.circuit_breaker.storage != "redis":
             errors.append("CIRCUIT_BREAKER__STORAGE must be redis in PROD")
         if self.telegram.token.get_secret_value() == "token":
-            errors.append("TELEGRAM__BOT_TOKEN must be set in PROD")
+            errors.append("TELEGRAM__TOKEN must be set in PROD")
         if self.telegram.admin_id == 0:
             errors.append("TELEGRAM__ADMIN_ID must be set in PROD")
+        if self.telegram.rate_limit.storage != "redis":
+            errors.append("TELEGRAM__RATE_LIMIT__STORAGE must be redis in PROD")
 
         if errors:
             raise ValueError("\n".join(errors))

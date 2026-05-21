@@ -66,12 +66,8 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # ============================================================================
-  # Docker Build (только для тегов)
-  # ============================================================================
-
   docker-build:
-    name: Build Docker image (release only)
+    name: Docker image (release tags only)
     needs: [lint, format, mypy, actionlint, pytest, prometheus, loki-dashboards]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -81,4 +77,4 @@ jobs:
       id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
-      image-name: wednesday-bot
+      image-name: wednesday

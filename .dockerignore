@@ -9,8 +9,6 @@ tests/
 docs/
 monitoring/
 scripts/
-alembic/
-alembic.ini
 .cursor/
 *.tmp
 CHANGELOG.md

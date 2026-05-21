@@ -95,7 +95,7 @@ services:
     networks:
       - wednesday
     expose:
-      - "${METRICS_PORT:-8000}"
+      - "${METRICS_PORT:-8080}"
     deploy:
       resources:
         limits:

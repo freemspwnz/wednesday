@@ -9,6 +9,7 @@ from infra.config import Config
 from infra.config.observe import LoggingConfig, MetricsConfig
 from infra.config.persistence.postgres import PostgresConfig
 from infra.config.persistence.redis import RedisConfig
+from infra.config.presentation import TelegramConfig
 from infra.config.resilience.asyncbreaker import CircuitBreakerConfig
 from infra.config.resilience.limits import RateLimitConfig
 
@@ -65,6 +66,16 @@ class TestConfigProdValidation:
             ({"redis": RedisConfig(password=SecretStr("redis"))}, "REDIS__PASSWORD"),
             ({"rate_limit": RateLimitConfig(storage="memory")}, "RATE_LIMIT__STORAGE"),
             ({"circuit_breaker": CircuitBreakerConfig(storage="memory")}, "CIRCUIT_BREAKER__STORAGE"),
+            (
+                {
+                    "telegram": TelegramConfig(
+                        token=SecretStr("prod-telegram-token"),
+                        admin_id=1,
+                        rate_limit=RateLimitConfig(storage="memory", name="telegram"),
+                    ),
+                },
+                "TELEGRAM__RATE_LIMIT__STORAGE",
+            ),
         ],
     )
     def test_prod_rejects_invalid(
