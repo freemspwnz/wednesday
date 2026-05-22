@@ -19,7 +19,7 @@ class Config(BaseSettings):
     )
 
     env: str = Field(default="DEV", alias="ENV")
-    version: str = Field(default="7.0.0", alias="VERSION")
+    version: str = Field(default="7.1.1", alias="VERSION")
 
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 

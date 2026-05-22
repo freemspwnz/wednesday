@@ -21,7 +21,7 @@ class TestConfigDefaults:
         cfg = Config(_env_file=None, ENV="DEV", metrics=MetricsConfig(enabled=False))
 
         assert cfg.env == "DEV"
-        assert cfg.version == "7.0.0"
+        assert cfg.version == "7.1.1"
         assert cfg.rate_limit.storage == "memory"
         assert cfg.circuit_breaker.storage == "memory"
         assert cfg.logging.serialize is False
