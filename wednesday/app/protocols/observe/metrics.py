@@ -87,7 +87,17 @@ class CacheMetrics(Protocol):
 
 @runtime_checkable
 class DBMetrics(Protocol):
-    def register(self, engine: object) -> None: ...
+    def on_before_cursor_execute(self, *, context: object, statement: str) -> None: ...
+
+    def on_after_cursor_execute(self, *, context: object, statement: str) -> None: ...
+
+    def on_cursor_error(
+        self,
+        *,
+        statement: str,
+        error_type: str,
+        context: object | None = None,
+    ) -> None: ...
 
 
 @runtime_checkable

@@ -1,77 +1,45 @@
-"""SQLAlchemy metrics adapter."""
+"""SQLAlchemy query metrics adapter (timing + Prometheus; no sqlalchemy import)."""
+
+from __future__ import annotations
 
 import re
 import time
 import weakref
 from typing import Any
 
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
-from sqlalchemy.engine.interfaces import ExceptionContext
-
 from app.protocols import DBMetrics, MetricsCollector
 
+_PREFIX = "sqlalchemy"
 _COMMAND_RE = re.compile(r"^\s*(\w+)", re.IGNORECASE)
 
 
 class SQLAMetrics(DBMetrics):
-    """Адаптер метрик для SQLAlchemy."""
-
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector
         self._start_times: weakref.WeakKeyDictionary[Any, float] = weakref.WeakKeyDictionary()
 
-    def register(self, engine: object) -> None:
-        if not isinstance(engine, Engine):
-            raise TypeError(f"Expected sqlalchemy.engine.Engine, got {type(engine).__name__}")
-        event.listen(engine, "before_cursor_execute", self._before_cursor_execute)
-        event.listen(engine, "after_cursor_execute", self._after_cursor_execute)
-        event.listen(engine, "handle_error", self._handle_error)
-
-    def _before_cursor_execute(  # noqa: PLR0913, PLR0917
-        self,
-        conn: object,
-        cursor: object,
-        statement: str,
-        parameters: object,
-        context: object,
-        executemany: bool,
-    ) -> None:
+    def on_before_cursor_execute(self, *, context: object, statement: str) -> None:
         self._start_times[context] = time.perf_counter()
 
-    def _after_cursor_execute(  # noqa: PLR0913, PLR0917
-        self,
-        conn: object,
-        cursor: object,
-        statement: str,
-        parameters: object,
-        context: object,
-        executemany: bool,
-    ) -> None:
+    def on_after_cursor_execute(self, *, context: object, statement: str) -> None:
         start = self._start_times.pop(context, None)
         if start is None:
             return
-        duration = time.perf_counter() - start
-        command = self._extract_command(statement)
-        self._collector.observe(
-            name="sqlalchemy_query_duration_seconds",
-            value=duration,
-            labels={"command": command},
-        )
-        self._collector.increment(
-            name="sqlalchemy_queries_total",
-            labels={"command": command, "status": "success"},
+        self._emit_success(
+            command=self._extract_command(statement),
+            duration_seconds=time.perf_counter() - start,
         )
 
-    def _handle_error(self, exception_context: ExceptionContext) -> None:
-        command = self._extract_command(exception_context.statement or "")
-        self._collector.increment(
-            name="sqlalchemy_errors_total",
-            labels={
-                "command": command,
-                "error_type": type(exception_context.original_exception).__name__,
-            },
-        )
+    def on_cursor_error(
+        self,
+        *,
+        statement: str,
+        error_type: str,
+        context: object | None = None,
+    ) -> None:
+        if context is not None:
+            self._start_times.pop(context, None)
+        self._emit_error(command=self._extract_command(statement), error_type=error_type)
 
     @staticmethod
     def _extract_command(statement: str) -> str:
@@ -79,3 +47,21 @@ class SQLAMetrics(DBMetrics):
             return "unknown"
         match = _COMMAND_RE.match(statement)
         return match.group(1).upper() if match else "unknown"
+
+    def _emit_success(self, *, command: str, duration_seconds: float) -> None:
+        labels = {"command": command}
+        self._collector.observe(
+            name=f"{_PREFIX}_query_duration_seconds",
+            value=duration_seconds,
+            labels=labels,
+        )
+        self._collector.increment(
+            name=f"{_PREFIX}_queries_total",
+            labels={**labels, "status": "success"},
+        )
+
+    def _emit_error(self, *, command: str, error_type: str) -> None:
+        self._collector.increment(
+            name=f"{_PREFIX}_errors_total",
+            labels={"command": command, "error_type": error_type},
+        )

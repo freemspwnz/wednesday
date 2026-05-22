@@ -73,12 +73,11 @@ class PersistenceContainer:
 
     @cached_property
     def _db_engine(self) -> AsyncEngine:
-        engine = create_engine(
+        return create_engine(
             config=self._config.postgres,
+            metrics=self._observe.metrics_registry.db_metrics,
             logger=self._observe.logger,
         )
-        self._observe.metrics_registry.db_metrics.register(engine.sync_engine)
-        return engine
 
     async def shutdown(self) -> None:
         self._logger.info("Shutting down persistence container...")

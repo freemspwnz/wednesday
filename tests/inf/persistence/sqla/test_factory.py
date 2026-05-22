@@ -1,24 +1,31 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+from sqlalchemy import create_engine as create_sync_engine, text
 
 import infra.persistence.sqlalchemy.factory as sqla_factory
 from infra.config.persistence.postgres import PostgresConfig
+from infra.observe.prometheus.adapters.sqla import SQLAMetrics
 
 
 @pytest.mark.unit
 @pytest.mark.infra
 def test_create_engine_passes_expected_options(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
+    sync_engine = Mock()
     engine = Mock()
+    engine.sync_engine = sync_engine
+    metrics = MagicMock()
+    attach = MagicMock()
 
     def _fake_create_async_engine(**kwargs: object) -> Mock:
         captured.update(kwargs)
         return engine
 
     monkeypatch.setattr(sqla_factory, "create_async_engine", _fake_create_async_engine)
+    monkeypatch.setattr(sqla_factory, "_attach_engine_metrics", attach)
     config = PostgresConfig(
         url="postgresql://user:pass@localhost:5432/test_db",
         pool_pre_ping=True,
@@ -28,13 +35,41 @@ def test_create_engine_passes_expected_options(monkeypatch: pytest.MonkeyPatch) 
     )
     logger = Mock()
 
-    got = sqla_factory.create_engine(config=config, logger=logger)
+    got = sqla_factory.create_engine(config=config, metrics=metrics, logger=logger)
 
     assert got is engine
     assert captured["pool_pre_ping"] is True
     assert captured["pool_size"] == 3
     assert captured["max_overflow"] == 7
     assert str(captured["url"]).startswith("postgresql+asyncpg://")
+    attach.assert_called_once_with(sync_engine, metrics)
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+def test_attach_engine_metrics_delegates_to_db_metrics(mock_logger: MagicMock) -> None:
+    from prometheus_client import CollectorRegistry
+
+    from infra.config.observe import MetricsConfig
+    from infra.observe.prometheus import PrometheusCollector
+
+    collector = PrometheusCollector(
+        config=MetricsConfig(enabled=False, host="127.0.0.1", port=0),
+        env="TEST",
+        version="0.0.1",
+        registry=CollectorRegistry(),
+        logger=mock_logger,
+    )
+    metrics = SQLAMetrics(collector=collector)
+    engine = create_sync_engine("sqlite:///:memory:")
+    sqla_factory._attach_engine_metrics(engine, metrics)
+
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+
+    out = collector.export().decode()
+    assert "sqlalchemy_queries_total" in out
+    engine.dispose()
 
 
 @pytest.mark.unit

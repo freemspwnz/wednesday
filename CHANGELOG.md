@@ -16,6 +16,10 @@ ThrottlingMiddleware and RateLimitRequestMW as private static methods;
 keep shared is_chat and require_request_scope in middlewares.utils.
 Update presentation tests accordingly.
 
+Move sqlalchemy.event wiring into create_engine; SQLAMetrics handles
+cursor timing and Prometheus emission without importing sqlalchemy.
+Pass db_metrics through the factory instead of registering from DI.
+
 ## [7.0.0]
 
 ### Added
