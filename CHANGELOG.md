@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+Write an up-to-date Redis user snapshot after successful UoW
+commits for role, ban, subscription, and profile changes so
+RegistrationMiddleware sees fresh UserContext without waiting
+for cache TTL.
+
+Show role, subscription limits, and ban status from UserContext
+after registration middleware; format text in messages/profile.
+
 ## [7.0.0]
 
 ### Added

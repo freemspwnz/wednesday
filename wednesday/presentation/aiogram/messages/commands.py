@@ -8,6 +8,7 @@ WELCOME = (
     "Доступные команды:\n"
     "/start - Показать это сообщение\n"
     "/help - Справка по командам\n"
+    "/me - Ваш профиль (роль, подписка, статус)\n"
     "/generate - Сгенерировать изображение (в рамках индивидуального лимита)\n"
 )
 
@@ -16,6 +17,7 @@ HELP = (
     "Доступные команды:\n"
     "/start - Показать это сообщение\n"
     "/help - Справка по командам\n"
+    "/me - Ваш профиль (роль, подписка, статус)\n"
     "/generate - Сгенерировать изображение (в рамках индивидуального лимита)\n"
 )
 
@@ -29,6 +31,7 @@ SET_MODEL_USAGE = "Использование: /set_model <модель>"
 BOT_COMMANDS: tuple[BotCommand, ...] = (
     BotCommand(command="start", description="Приветствие и список команд"),
     BotCommand(command="help", description="Справка по командам"),
+    BotCommand(command="me", description="Ваш профиль"),
     BotCommand(command="generate", description="Сгенерировать изображение"),
     BotCommand(command="set_model", description="Выбрать модель для генерации изображений"),
     BotCommand(command="list_models", description="Список доступных моделей"),

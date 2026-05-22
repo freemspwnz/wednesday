@@ -6,10 +6,18 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
+from app.dto import UserContext
+
 from ..filters import InsufficientCommandArgs, RequireCommandArgs
-from ..messages import commands as cmd_msg
+from ..messages import commands as cmd_msg, profile as profile_msg
 
 user_router = Router(name="user")
+
+
+@user_router.message(Command("me"))
+async def cmd_me(message: Message, user: UserContext) -> None:
+    """Show caller role, subscription, and ban status from registration context."""
+    await message.answer(text=profile_msg.format_me(user))
 
 
 @user_router.message(Command("generate"))
