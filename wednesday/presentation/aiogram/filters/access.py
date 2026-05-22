@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from aiogram.filters import BaseFilter
+from aiogram.types import TelegramObject
 
 from app.dto import UserContext
 from app.protocols import Logger
@@ -15,7 +16,12 @@ class AdminAccessFilter(BaseFilter):
     def __init__(self, logger: Logger) -> None:
         self._logger = logger.bind(module=self.__class__.__name__)
 
-    async def __call__(self, user: UserContext | None = None) -> bool:
+    async def __call__(
+        self,
+        event: TelegramObject,
+        user: UserContext | None = None,
+    ) -> bool:
+        """Check if user has ADMIN or OWNER role."""
         if isinstance(user, UserContext) and user.role in {
             UserRole.ADMIN,
             UserRole.OWNER,

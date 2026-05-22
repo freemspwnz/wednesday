@@ -45,4 +45,4 @@ async def test_admin_access_filter(
     user: UserContext | None,
     expected: bool,
 ) -> None:
-    assert await admin_filter(user=user) is expected
+    assert await admin_filter(event=MagicMock(), user=user) is expected
