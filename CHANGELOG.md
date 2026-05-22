@@ -20,6 +20,8 @@ Move sqlalchemy.event wiring into create_engine; SQLAMetrics handles
 cursor timing and Prometheus emission without importing sqlalchemy.
 Pass db_metrics through the factory instead of registering from DI.
 
+Add Codecov badge and tidy README tree comments
+
 ## [7.0.0]
 
 ### Added

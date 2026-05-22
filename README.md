@@ -1,6 +1,7 @@
 # Wednesday Frog Bot 🐸
 
 [![CI](https://img.shields.io/github/actions/workflow/status/freemspwnz/wednesday/ci.yml?branch=main&logo=github&label=CI)](https://github.com/freemspwnz/wednesday/actions?query=event%3Apush+branch%3Amain+workflow%3ACI)
+[![Coverage](https://codecov.io/gh/freemspwnz/wednesday/branch/main/graph/badge.svg)](https://codecov.io/gh/freemspwnz/wednesday)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Telegram-бот с асинхронной архитектурой (aiogram 3, SQLAlchemy async, Redis, Prometheus).
@@ -49,11 +50,11 @@ wednesday/
 ├── main.py                 # Composition root: Config → Container → aiogram polling
 ├── app/                    # DTO, протоколы, исключения приложения
 ├── domain/                 # Агрегаты и доменная логика
-├── infra/                  # Config, DI, persistence (SQLAlchemy, Redis), observe
+├── infra/                  # Config, DI, persistence, observe, resilience
 └── presentation/aiogram/   # Bot, dispatcher, routers, middlewares
 
 alembic/                    # Миграции PostgreSQL (схема wednesday_schema)
-tests/
+tests/                      # Тесты
 ```
 
 Слои **не смешиваются**: эволюция схемы — только Alembic; runtime — `main.py` + DI.
