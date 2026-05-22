@@ -23,7 +23,7 @@ python = ">=3.12,<3.15"
 aiogram = "^3.17.0"
 
 # HTTP client & server
-httpx = { version = "^0.28.1", extras = ["http2"] }
+# httpx = { version = "^0.28.1", extras = ["http2"] }
 # fastapi = "^0.136.1"
 
 # Async tasks

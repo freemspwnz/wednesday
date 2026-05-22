@@ -35,6 +35,7 @@ class ScopeContainer(RequestScope):
         return UserCommandsUseCase(
             uow=self._uow_factory(),
             user_commands=self._user_commands_service,
+            cache_registry=self._cache_registry,
             logger=self._logger,
         )
 

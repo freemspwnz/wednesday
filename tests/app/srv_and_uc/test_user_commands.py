@@ -48,6 +48,12 @@ def _logger() -> Mock:
     return log
 
 
+class _CacheRegistry:
+    def __init__(self) -> None:
+        self.user = AsyncMock()
+        self.chat = AsyncMock()
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_service_change_role_persists_via_repo() -> None:
@@ -82,15 +88,21 @@ class _FakeUoW:
         self.exit_count += 1
 
 
-def _make_uc(*, repo: AsyncMock) -> tuple[UserCommandsUseCase, _FakeUoW]:
+def _make_uc(
+    *,
+    repo: AsyncMock,
+    cache_registry: _CacheRegistry | None = None,
+) -> tuple[UserCommandsUseCase, _FakeUoW, _CacheRegistry]:
     log = _logger()
     uow = _FakeUoW(repo)
+    cache = cache_registry or _CacheRegistry()
     uc = UserCommandsUseCase(
         uow=uow,
         user_commands=UserCommandService(logger=log),
+        cache_registry=cache,
         logger=log,
     )
-    return uc, uow
+    return uc, uow, cache
 
 
 @pytest.mark.unit
@@ -99,13 +111,14 @@ async def test_uc_change_role_happy_path_persists_and_closes_uow() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10), role=UserRole.USER)
     repo.get_by_id.return_value = user
-    uc, uow = _make_uc(repo=repo)
+    uc, uow, cache = _make_uc(repo=repo)
 
     got = await uc.change_role(user_id=user.id, actor=UserRole.OWNER, new_role=UserRole.ADMIN, at=dt(11))
 
     assert got.role == UserRole.ADMIN
     repo.get_by_id.assert_awaited_once_with(user.id)
     repo.save.assert_awaited_once_with(user)
+    cache.user.set.assert_awaited_once_with(got)
     assert uow.enter_count == uow.exit_count == 1
 
 
@@ -114,7 +127,7 @@ async def test_uc_change_role_happy_path_persists_and_closes_uow() -> None:
 async def test_uc_user_not_found_does_not_save() -> None:
     repo = AsyncMock()
     repo.get_by_id.return_value = None
-    uc, uow = _make_uc(repo=repo)
+    uc, uow, cache = _make_uc(repo=repo)
     uid = UserId(UUID(int=99))
 
     with pytest.raises(UserNotFoundError) as ei:
@@ -122,6 +135,7 @@ async def test_uc_user_not_found_does_not_save() -> None:
 
     assert ei.value.user_id == uid
     repo.save.assert_not_awaited()
+    cache.user.set.assert_not_awaited()
     assert uow.enter_count == uow.exit_count == 1
 
 
@@ -131,12 +145,13 @@ async def test_uc_management_access_denied_propagates_and_skips_save() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10), role=UserRole.USER)
     repo.get_by_id.return_value = user
-    uc, _uow = _make_uc(repo=repo)
+    uc, _uow, cache = _make_uc(repo=repo)
 
     with pytest.raises(ManagementAccessDeniedError):
         await uc.change_role(user_id=user.id, actor=UserRole.USER, new_role=UserRole.ADMIN, at=dt(11))
 
     repo.save.assert_not_awaited()
+    cache.user.set.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -145,7 +160,7 @@ async def test_uc_change_profile_happy_path() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10))
     repo.get_by_id.return_value = user
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _ = _make_uc(repo=repo)
     new_profile = UserProfile(telegram_id=user.profile.telegram_id, is_bot=False, first_name=NonEmptyStr(" Neo"))
 
     await uc.change_profile(user_id=user.id, actor=UserRole.SYSTEM, new_profile=new_profile, at=dt(11))
@@ -160,7 +175,7 @@ async def test_uc_change_subscription_happy_path() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10), role=UserRole.USER)
     repo.get_by_id.return_value = user
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _ = _make_uc(repo=repo)
     new_sub = UserSubscription.premium(dt(11))
 
     await uc.change_subscription(
@@ -180,7 +195,7 @@ async def test_uc_ban_and_unban_happy_path() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10), role=UserRole.USER)
     repo.get_by_id.return_value = user
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _ = _make_uc(repo=repo)
 
     await uc.ban(user_id=user.id, actor=UserRole.OWNER, until=dt(20), at=dt(12))
     assert user.state.is_banned_at(dt(15))
@@ -196,7 +211,7 @@ async def test_uc_expire_ban_and_subscription_emit_domain_events() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10), role=UserRole.USER)
     repo.get_by_id.return_value = user
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _ = _make_uc(repo=repo)
 
     await uc.ban(user_id=user.id, actor=UserRole.OWNER, until=dt(11), at=dt(10))
     await uc.change_subscription(
@@ -227,7 +242,7 @@ async def test_uc_mark_seen_happy_path() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10))
     repo.get_by_id.return_value = user
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _ = _make_uc(repo=repo)
 
     await uc.mark_seen(user_id=user.id, at=dt(15))
 
@@ -241,11 +256,11 @@ async def test_uc_mark_seen_stale_write_propagates() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10))
     repo.get_by_id.return_value = user
-    uc, _ = _make_uc(repo=repo)
+    uc, _, cache = _make_uc(repo=repo)
 
     with pytest.raises(StaleWriteError):
         await uc.mark_seen(user_id=user.id, at=dt(9))
-
+    cache.user.set.assert_not_awaited()
     repo.save.assert_not_awaited()
 
 
@@ -255,9 +270,57 @@ async def test_uc_unban_active_propagates_invalid_transition() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10))
     repo.get_by_id.return_value = user
-    uc, _ = _make_uc(repo=repo)
+    uc, _, cache = _make_uc(repo=repo)
 
     with pytest.raises(InvalidStateTransitionError):
         await uc.unban(user_id=user.id, actor=UserRole.OWNER, at=dt(11))
-
+    cache.user.set.assert_not_awaited()
     repo.save.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_change_role_refreshes_user_cache_snapshot() -> None:
+    repo = AsyncMock()
+    user = mk_user(now=dt(10), role=UserRole.USER)
+    repo.get_by_id.return_value = user
+    uc, _, cache = _make_uc(repo=repo)
+
+    got = await uc.change_role(
+        user_id=user.id,
+        actor=UserRole.OWNER,
+        new_role=UserRole.ADMIN,
+        at=dt(11),
+    )
+
+    cache.user.set.assert_awaited_once_with(got)
+    assert got.profile.telegram_id == user.profile.telegram_id
+    assert got.role == UserRole.ADMIN
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_ban_refreshes_user_cache_snapshot() -> None:
+    repo = AsyncMock()
+    user = mk_user(now=dt(10))
+    repo.get_by_id.return_value = user
+    uc, _, cache = _make_uc(repo=repo)
+
+    got = await uc.ban(user_id=user.id, actor=UserRole.OWNER, until=dt(20), at=dt(12))
+
+    cache.user.set.assert_awaited_once_with(got)
+    assert got.state.is_banned_at(dt(15))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_unban_after_ban_refreshes_cache_twice() -> None:
+    repo = AsyncMock()
+    user = mk_user(now=dt(10))
+    repo.get_by_id.return_value = user
+    uc, _, cache = _make_uc(repo=repo)
+
+    await uc.ban(user_id=user.id, actor=UserRole.OWNER, until=dt(20), at=dt(12))
+    await uc.unban(user_id=user.id, actor=UserRole.OWNER, at=dt(13))
+
+    assert cache.user.set.await_count == 2

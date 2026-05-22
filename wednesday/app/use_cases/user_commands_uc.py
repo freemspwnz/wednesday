@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from app.protocols import Logger, UoW
+from collections.abc import Awaitable, Callable
+
+from app.protocols import CacheRepoRegistry, Logger, UoW
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserId, UserProfile, UserRole, UserSubscription
 
@@ -15,10 +17,12 @@ class UserCommandsUseCase:
         *,
         uow: UoW,
         user_commands: UserCommandService,
+        cache_registry: CacheRepoRegistry,
         logger: Logger,
     ) -> None:
         self._uow = uow
         self._user_commands = user_commands
+        self._cache_registry = cache_registry
         self._logger = logger.bind(module=self.__class__.__name__)
 
     def _log_scenario_start(self, *, action: str, user_id: UserId) -> None:
@@ -28,6 +32,24 @@ class UserCommandsUseCase:
             user_id=str(user_id),
         )
 
+    async def _run_mutating(
+        self,
+        *,
+        action: str,
+        user_id: UserId,
+        runner: Callable[[], Awaitable[User]],
+    ) -> User:
+        self._log_scenario_start(action=action, user_id=user_id)
+        async with self._uow:
+            user = await runner()
+        await self._cache_registry.user.set(user)
+        self._logger.debug(
+            "User cache snapshot refreshed",
+            action=action,
+            tg_id=user.profile.telegram_id,
+        )
+        return user
+
     async def change_role(
         self,
         *,
@@ -36,15 +58,17 @@ class UserCommandsUseCase:
         new_role: UserRole,
         at: AwareDatetime,
     ) -> User:
-        self._log_scenario_start(action="change_role", user_id=user_id)
-        async with self._uow:
-            return await self._user_commands.change_role(
+        return await self._run_mutating(
+            action="change_role",
+            user_id=user_id,
+            runner=lambda: self._user_commands.change_role(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
                 new_role=new_role,
                 at=at,
-            )
+            ),
+        )
 
     async def change_profile(
         self,
@@ -54,15 +78,17 @@ class UserCommandsUseCase:
         new_profile: UserProfile,
         at: AwareDatetime,
     ) -> User:
-        self._log_scenario_start(action="change_profile", user_id=user_id)
-        async with self._uow:
-            return await self._user_commands.change_profile(
+        return await self._run_mutating(
+            action="change_profile",
+            user_id=user_id,
+            runner=lambda: self._user_commands.change_profile(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
                 new_profile=new_profile,
                 at=at,
-            )
+            ),
+        )
 
     async def change_subscription(
         self,
@@ -72,15 +98,17 @@ class UserCommandsUseCase:
         new_subscription: UserSubscription,
         at: AwareDatetime,
     ) -> User:
-        self._log_scenario_start(action="change_subscription", user_id=user_id)
-        async with self._uow:
-            return await self._user_commands.change_subscription(
+        return await self._run_mutating(
+            action="change_subscription",
+            user_id=user_id,
+            runner=lambda: self._user_commands.change_subscription(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
                 new_subscription=new_subscription,
                 at=at,
-            )
+            ),
+        )
 
     async def ban(
         self,
@@ -90,15 +118,17 @@ class UserCommandsUseCase:
         until: AwareDatetime,
         at: AwareDatetime,
     ) -> User:
-        self._log_scenario_start(action="ban", user_id=user_id)
-        async with self._uow:
-            return await self._user_commands.ban(
+        return await self._run_mutating(
+            action="ban",
+            user_id=user_id,
+            runner=lambda: self._user_commands.ban(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
                 until=until,
                 at=at,
-            )
+            ),
+        )
 
     async def unban(
         self,
@@ -107,32 +137,38 @@ class UserCommandsUseCase:
         actor: UserRole,
         at: AwareDatetime,
     ) -> User:
-        self._log_scenario_start(action="unban", user_id=user_id)
-        async with self._uow:
-            return await self._user_commands.unban(
+        return await self._run_mutating(
+            action="unban",
+            user_id=user_id,
+            runner=lambda: self._user_commands.unban(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
                 at=at,
-            )
+            ),
+        )
 
     async def expire_ban_if_due(self, *, user_id: UserId, at: AwareDatetime) -> User:
-        self._log_scenario_start(action="expire_ban_if_due", user_id=user_id)
-        async with self._uow:
-            return await self._user_commands.expire_ban_if_due(
+        return await self._run_mutating(
+            action="expire_ban_if_due",
+            user_id=user_id,
+            runner=lambda: self._user_commands.expire_ban_if_due(
                 repo=self._uow.users,
                 user_id=user_id,
                 at=at,
-            )
+            ),
+        )
 
     async def expire_subscription_if_due(self, *, user_id: UserId, at: AwareDatetime) -> User:
-        self._log_scenario_start(action="expire_subscription_if_due", user_id=user_id)
-        async with self._uow:
-            return await self._user_commands.expire_subscription_if_due(
+        return await self._run_mutating(
+            action="expire_subscription_if_due",
+            user_id=user_id,
+            runner=lambda: self._user_commands.expire_subscription_if_due(
                 repo=self._uow.users,
                 user_id=user_id,
                 at=at,
-            )
+            ),
+        )
 
     async def mark_seen(self, *, user_id: UserId, at: AwareDatetime) -> User:
         self._log_scenario_start(action="mark_seen", user_id=user_id)
