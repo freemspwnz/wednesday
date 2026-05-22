@@ -3,9 +3,9 @@ from aiogram.exceptions import TelegramAPIError
 
 from app.protocols import Logger, RateLimiter, Retrier, ScopeFactory
 
+from .filters import AdminAccessFilter
 from .messages import commands as cmd_msg, system as system_msg
 from .middlewares import (
-    AdminAccessMiddleware,
     DIMiddleware,
     RateLimitRequestMW,
     RegistrationMiddleware,
@@ -69,10 +69,7 @@ def setup_dp(
     log = logger.bind(module="Dispatcher")
     log.info("Setting up dispatcher...")
 
-    setup_routers(
-        admin_id=admin_id,
-        logger=logger,
-    )
+    setup_routers(logger=logger)
 
     dp.include_router(build_root_router())
 
@@ -131,18 +128,10 @@ def build_root_router() -> Router:
     return root_router
 
 
-def setup_routers(
-    admin_id: int,
-    logger: Logger,
-) -> None:
-    """Add middlewares to routers."""
+def setup_routers(*, logger: Logger) -> None:
+    """Attach router-level filters."""
 
     log = logger.bind(module="Router")
     log.info("Setting up routers")
 
-    admin_router.message.middleware(
-        AdminAccessMiddleware(
-            admin_id=admin_id,
-            logger=logger,
-        )
-    )
+    admin_router.message.filter(AdminAccessFilter(logger=logger))

@@ -1,4 +1,4 @@
-"""Тесты presentation.aiogram.middlewares.utils."""
+"""Тесты presentation.aiogram.middlewares.utils (shared helpers)."""
 
 from __future__ import annotations
 
@@ -10,10 +10,6 @@ from presentation.aiogram.middlewares.utils import (
     is_chat,
     is_request_scope,
     require_request_scope,
-    rl_global_key,
-    rl_outbound_chat_key,
-    rl_outbound_user_key,
-    rl_throttle_key,
 )
 
 
@@ -24,15 +20,6 @@ from presentation.aiogram.middlewares.utils import (
 )
 def test_is_chat(chat_id: int | str, expected: bool) -> None:
     assert is_chat(chat_id) is expected
-
-
-@pytest.mark.unit
-def test_rate_limit_keys() -> None:
-    assert rl_global_key() == "global"
-    assert rl_outbound_chat_key(-1001) == "group:-1001"
-    assert rl_outbound_user_key(42) == "user:42"
-    assert rl_throttle_key(99) == "throttle:99"
-    assert "rl:" not in rl_outbound_chat_key(1)
 
 
 def _valid_scope() -> MagicMock:

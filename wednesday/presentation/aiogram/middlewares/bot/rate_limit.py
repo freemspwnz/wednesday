@@ -7,7 +7,7 @@ from aiogram.methods import Response, TelegramMethod
 from app.exceptions import LimitStorageError, TooManyRequests
 from app.protocols import Logger, RateLimiter
 
-from ..utils import is_chat, rl_global_key, rl_outbound_chat_key, rl_outbound_user_key
+from ..utils import is_chat
 
 T = TypeVar("T")
 
@@ -40,16 +40,16 @@ class RateLimitRequestMW(BaseRequestMiddleware):
 
         try:
             limit = self._limits["global"]
-            key = rl_global_key()
+            key = "global"
             await self._limiter.call(limit, key)
 
             if chat_id is not None:
                 if is_chat(chat_id):
                     limit = self._limits["chat"]
-                    key = rl_outbound_chat_key(chat_id)
+                    key = self._rl_outbound_chat_key(chat_id)
                 else:
                     limit = self._limits["user"]
-                    key = rl_outbound_user_key(chat_id)
+                    key = self._rl_outbound_user_key(chat_id)
 
                 await self._limiter.call(limit, key)
 
@@ -78,3 +78,11 @@ class RateLimitRequestMW(BaseRequestMiddleware):
                 key=key,
             )
             raise
+
+    @staticmethod
+    def _rl_outbound_chat_key(chat_id: int | str) -> str:
+        return f"group:{chat_id}"
+
+    @staticmethod
+    def _rl_outbound_user_key(user_id: int | str) -> str:
+        return f"user:{user_id}"

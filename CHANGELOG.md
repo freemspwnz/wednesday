@@ -10,6 +10,12 @@ for cache TTL.
 Show role, subscription limits, and ban status from UserContext
 after registration middleware; format text in messages/profile.
 
+Replace AdminAccessMiddleware with AdminAccessFilter on admin_router
+(ADMIN/OWNER only, no denial message). Move rate-limit key builders into
+ThrottlingMiddleware and RateLimitRequestMW as private static methods;
+keep shared is_chat and require_request_scope in middlewares.utils.
+Update presentation tests accordingly.
+
 ## [7.0.0]
 
 ### Added

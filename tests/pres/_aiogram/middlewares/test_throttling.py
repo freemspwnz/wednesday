@@ -114,3 +114,10 @@ async def test_group_chat_uses_chat_limit_key(mock_rate_limiter: MagicMock, mock
     await middleware(handler, MagicMock(), data)
 
     assert mock_rate_limiter.call.await_count == 2
+    assert mock_rate_limiter.call.await_args_list[1].args[1] == ThrottlingMiddleware._rl_throttle_key(-1001)
+
+
+@pytest.mark.unit
+def test_throttle_key_format() -> None:
+    assert ThrottlingMiddleware._rl_throttle_key(99) == "throttle:99"
+    assert ThrottlingMiddleware._rl_throttle_key(-100) == "throttle:-100"

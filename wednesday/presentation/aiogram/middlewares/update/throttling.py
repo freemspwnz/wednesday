@@ -13,7 +13,7 @@ from app.exceptions import LimitStorageError, TooManyRequests
 from app.protocols import Logger, RateLimiter
 
 from ...messages import throttling as throttling_msg
-from ..utils import is_chat, rl_global_key, rl_throttle_key
+from ..utils import is_chat
 
 
 class ThrottlingMiddleware(BaseMiddleware):
@@ -42,11 +42,11 @@ class ThrottlingMiddleware(BaseMiddleware):
         chat_id = int(chat.tg_id) if chat is not None else None
         if chat_id is not None:
             try:
-                await self._limiter.call(self._limits["global"], rl_global_key())
+                await self._limiter.call(self._limits["global"], "global")
                 if is_chat(chat_id):
-                    await self._limiter.call(self._limits["chat"], rl_throttle_key(chat_id))
+                    await self._limiter.call(self._limits["chat"], self._rl_throttle_key(chat_id))
                 else:
-                    await self._limiter.call(self._limits["user"], rl_throttle_key(chat_id))
+                    await self._limiter.call(self._limits["user"], self._rl_throttle_key(chat_id))
 
             except LimitStorageError:
                 self._logger.warning(
@@ -77,3 +77,7 @@ class ThrottlingMiddleware(BaseMiddleware):
                 return
 
         return await handler(event, data)
+
+    @staticmethod
+    def _rl_throttle_key(chat_id: int | str) -> str:
+        return f"throttle:{chat_id}"

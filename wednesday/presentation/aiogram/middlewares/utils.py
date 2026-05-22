@@ -17,22 +17,6 @@ def is_chat(chat_id: int | str) -> bool:
     return (isinstance(chat_id, int) and chat_id < 0) or isinstance(chat_id, str)
 
 
-def rl_global_key() -> str:
-    return "global"
-
-
-def rl_outbound_chat_key(chat_id: int | str) -> str:
-    return f"group:{chat_id}"
-
-
-def rl_outbound_user_key(user_id: int | str) -> str:
-    return f"user:{user_id}"
-
-
-def rl_throttle_key(chat_id: int | str) -> str:
-    return f"throttle:{chat_id}"
-
-
 def is_request_scope(scope: object) -> TypeGuard[RequestScope]:
     return (
         hasattr(scope, "registration_uc")

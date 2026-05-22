@@ -1,7 +1,5 @@
 """Filter that requires a minimum number of command arguments."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from aiogram.filters import BaseFilter, CommandObject

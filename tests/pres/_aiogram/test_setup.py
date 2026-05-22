@@ -39,11 +39,15 @@ def test_setup_bot_registers_session_middleware(mock_logger: MagicMock, mock_rat
 
 
 @pytest.mark.unit
-def test_setup_routers_attaches_admin_middleware(mock_logger: MagicMock) -> None:
+def test_setup_routers_attaches_admin_access_filter(mock_logger: MagicMock) -> None:
+    from presentation.aiogram.filters.access import AdminAccessFilter
     from presentation.aiogram.routers.admin import admin_router
 
-    setup_routers(admin_id=1, logger=mock_logger)
-    assert admin_router.message.middleware is not None
+    setup_routers(logger=mock_logger)
+
+    root_filters = admin_router.message._handler.filters
+    assert root_filters is not None
+    assert any(isinstance(fo.callback, AdminAccessFilter) for fo in root_filters)
 
 
 @pytest.mark.unit

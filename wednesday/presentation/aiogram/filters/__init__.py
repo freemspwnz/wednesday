@@ -5,11 +5,11 @@ Validation of argument values and user-facing errors belong in handlers / app la
 Filters must not send messages.
 """
 
-from __future__ import annotations
-
+from .access import AdminAccessFilter
 from .command import InsufficientCommandArgs, RequireCommandArgs
 
 __all__ = [
+    "AdminAccessFilter",
     "InsufficientCommandArgs",
     "RequireCommandArgs",
 ]

@@ -1,6 +1,6 @@
 """Admin command handlers.
 
-Admin access is enforced by AdminAccessMiddleware on the router.
+Admin access is enforced by AdminAccessFilter on the router (ADMIN or OWNER role).
 """
 
 from __future__ import annotations
