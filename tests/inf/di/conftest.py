@@ -41,11 +41,13 @@ def persistence_container(
 ) -> Iterator[PersistenceContainer]:
     mock_redis = MagicMock()
     mock_redis.connection_pool = MagicMock()
+    mock_uow_factory = MagicMock()
+    mock_uow_factory.aclose = AsyncMock()
 
     with (
         patch("infra.di.persistence.build_redis", return_value=mock_redis),
         patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
-        patch("infra.di.persistence.close_engine", new_callable=AsyncMock),
+        patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
         patch("infra.di.persistence.close_redis", new_callable=AsyncMock),
     ):
         yield PersistenceContainer(config=di_config, observe=observe_container)
@@ -55,11 +57,13 @@ def persistence_container(
 def container(di_config: Config) -> Iterator[Container]:
     mock_redis = MagicMock()
     mock_redis.connection_pool = MagicMock()
+    mock_uow_factory = MagicMock()
+    mock_uow_factory.aclose = AsyncMock()
 
     with (
         patch("infra.di.persistence.build_redis", return_value=mock_redis),
         patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
-        patch("infra.di.persistence.close_engine", new_callable=AsyncMock),
+        patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
         patch("infra.di.persistence.close_redis", new_callable=AsyncMock),
     ):
         yield Container(config=di_config)

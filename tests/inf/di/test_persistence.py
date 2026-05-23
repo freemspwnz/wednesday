@@ -35,15 +35,37 @@ class TestPersistenceContainer:
         observe_container: ObserveContainer,
     ) -> None:
         mock_redis = MagicMock()
+        mock_uow_factory = MagicMock()
+        mock_uow_factory.aclose = AsyncMock()
         with (
             patch("infra.di.persistence.build_redis", return_value=mock_redis),
             patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
+            patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
             patch("infra.di.persistence.close_redis", new_callable=AsyncMock) as close_redis,
-            patch("infra.di.persistence.close_engine", new_callable=AsyncMock) as close_engine,
         ):
             pc = PersistenceContainer(config=di_config, observe=observe_container)
             _ = pc.redis
             await pc.shutdown()
 
         close_redis.assert_awaited_once()
-        close_engine.assert_not_awaited()
+        mock_uow_factory.aclose.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_closes_initialized_uow_factory(
+        self,
+        di_config: Config,
+        observe_container: ObserveContainer,
+    ) -> None:
+        mock_uow_factory = MagicMock()
+        mock_uow_factory.aclose = AsyncMock()
+        with (
+            patch("infra.di.persistence.build_redis", return_value=MagicMock()),
+            patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
+            patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
+            patch("infra.di.persistence.close_redis", new_callable=AsyncMock),
+        ):
+            pc = PersistenceContainer(config=di_config, observe=observe_container)
+            _ = pc.uow_factory
+            await pc.shutdown()
+
+        mock_uow_factory.aclose.assert_awaited_once()

@@ -39,10 +39,7 @@ class TestContainer:
 
     @pytest.mark.asyncio
     async def test_shutdown_without_touching_persistence(self, di_config: Config) -> None:
-        with (
-            patch("infra.di.persistence.build_redis"),
-            patch("infra.di.persistence.create_engine"),
-        ):
+        with patch("infra.di.persistence.build_redis"):
             bare = Container(config=di_config)
             await bare.shutdown()
 

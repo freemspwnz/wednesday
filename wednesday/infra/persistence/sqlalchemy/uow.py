@@ -19,12 +19,12 @@ REPO_REGISTRY: dict[str, type[SQLAUserRepo | SQLAChatRepo]] = {
 
 
 class SQLAUoW(UoW):
-    """Unit of Work поверх SQLAlchemy AsyncSession.
+    """Unit of Work above SQLAlchemy AsyncSession.
 
-    При выходе из контекста:
-    - при отсутствии ошибок выполняется commit()
-    - при наличии ошибок выполняется rollback()
-    - сессия всегда закрывается
+    On context exit:
+    - while no errors occured - commit()
+    - on error - rollback()
+    - always close session
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -56,7 +56,7 @@ class SQLAUoW(UoW):
         finally:
             await self.session.close()
             self.session = None
-            self._repos.clear()  # очистка репозиториев после транзакции
+            self._repos.clear()  # clean repos after transaction
 
     def __getattr__(self, name: str) -> SQLAUserRepo | SQLAChatRepo:
         if name in REPO_REGISTRY:

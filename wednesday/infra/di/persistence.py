@@ -2,9 +2,8 @@ import asyncio
 from functools import cached_property
 
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from app.protocols import CacheClient, CacheRepoRegistry, UoW
+from app.protocols import CacheClient, CacheRepoRegistry, UoWFactory
 from infra.config import Config
 from infra.persistence.redis import (
     RedisClient,
@@ -12,11 +11,7 @@ from infra.persistence.redis import (
     build_redis,
     close_redis,
 )
-from infra.persistence.sqlalchemy import (
-    SQLAUoW,
-    close_engine,
-    create_engine,
-)
+from infra.persistence.sqlalchemy import SQLAUoWFactory
 
 from .observe import ObserveContainer
 
@@ -36,8 +31,13 @@ class PersistenceContainer:
         self._observe = observe
         self._logger = observe.logger.bind(module=self.__class__.__name__)
 
-    def uow_factory(self) -> UoW:
-        return SQLAUoW(self._session_factory)
+    @cached_property
+    def uow_factory(self) -> UoWFactory:
+        return SQLAUoWFactory(
+            config=self._config.postgres,
+            metrics=self._observe.metrics_registry.db_metrics,
+            logger=self._observe.logger,
+        )
 
     @cached_property
     def cache_repo_registry(self) -> CacheRepoRegistry:
@@ -63,22 +63,6 @@ class PersistenceContainer:
             logger=self._observe.logger,
         )
 
-    @cached_property
-    def _session_factory(self) -> async_sessionmaker:
-        return async_sessionmaker(
-            bind=self._db_engine,
-            autoflush=False,
-            expire_on_commit=False,
-        )
-
-    @cached_property
-    def _db_engine(self) -> AsyncEngine:
-        return create_engine(
-            config=self._config.postgres,
-            metrics=self._observe.metrics_registry.db_metrics,
-            logger=self._observe.logger,
-        )
-
     async def shutdown(self) -> None:
         self._logger.info("Shutting down persistence container...")
 
@@ -86,8 +70,8 @@ class PersistenceContainer:
             async with asyncio.timeout(_PERSISTENCE_SHUTDOWN_TIMEOUT):
                 tasks = []
 
-                if self.__dict__.get("_db_engine") is not None:
-                    tasks.append(close_engine(engine=self._db_engine, logger=self._observe.logger))
+                if self.__dict__.get("uow_factory") is not None:
+                    tasks.append(self.uow_factory.aclose())
                 if self.__dict__.get("redis") is not None:
                     tasks.append(close_redis(redis=self.redis, logger=self._observe.logger))
 

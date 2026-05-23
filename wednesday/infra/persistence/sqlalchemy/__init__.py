@@ -1,8 +1,7 @@
-from .factory import close_engine, create_engine
+from .factory import SQLAUoWFactory
 from .uow import SQLAUoW
 
 __all__ = [
     "SQLAUoW",
-    "close_engine",
-    "create_engine",
+    "SQLAUoWFactory",
 ]

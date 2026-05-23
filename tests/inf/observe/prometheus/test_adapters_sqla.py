@@ -88,11 +88,11 @@ class TestSQLAMetricsEngineIntegration:
     def test_attach_engine_metrics_emits_on_query(self, collector: PrometheusCollector) -> None:
         from sqlalchemy import create_engine as create_sync_engine, text
 
-        from infra.persistence.sqlalchemy.factory import _attach_engine_metrics
+        from infra.persistence.sqlalchemy.factory import SQLAUoWFactory
 
         metrics = SQLAMetrics(collector=collector)
         engine = create_sync_engine("sqlite:///:memory:")
-        _attach_engine_metrics(engine, metrics)
+        SQLAUoWFactory._attach_engine_metrics(engine, metrics)
 
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
