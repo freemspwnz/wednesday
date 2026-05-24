@@ -1,0 +1,92 @@
+{
+  "id": null,
+  "uid": "wednesday-logs",
+  "title": "Wednesday Logs",
+  "tags": ["wednesday", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "label": "Env",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki_ds" },
+        "query": "label_values(env)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki_ds" },
+        "query": "label_values({env=~\"$env\"}, service)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "level",
+        "label": "Level",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki_ds" },
+        "query": "label_values({env=~\"$env\", service=~\"$service\"}, level)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Log rate by level",
+      "id": 1,
+      "datasource": { "type": "loki", "uid": "loki_ds" },
+      "fieldConfig": { "defaults": { "custom": {} }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (level) (rate({env=~\"$env\", service=~\"$service\", level=~\"$level\"}[$__interval]))",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error / critical rate",
+      "id": 2,
+      "datasource": { "type": "loki", "uid": "loki_ds" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate({env=~\"$env\", service=~\"$service\", level=~\"ERROR|CRITICAL\"}[$__interval]))",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Recent logs",
+      "id": 3,
+      "datasource": { "type": "loki", "uid": "loki_ds" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 16 },
+      "options": { "showLabels": true, "showTime": true, "wrapLogMessage": true },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{env=~\"$env\", service=~\"$service\", level=~\"$level\"}",
+          "queryType": "range"
+        }
+      ]
+    }
+  ]
+}

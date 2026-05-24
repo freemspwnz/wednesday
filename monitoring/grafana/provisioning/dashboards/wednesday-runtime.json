@@ -1,0 +1,141 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "vm_ds" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "color": "red", "index": 0, "text": "DOWN" } }, "type": "value" },
+            { "options": { "1": { "color": "green", "index": 1, "text": "UP" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{ "expr": "up{job=\"wednesday\", service=~\"$service\"}", "legendFormat": "{{instance}}", "refId": "A" }],
+      "title": "Exporter status",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "vm_ds" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 4, "w": 18, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "sum by (name, status) (rate(wednesday_retry_attempts_total[5m]))", "legendFormat": "{{name}} | {{status}}", "refId": "A" },
+        { "expr": "sum by (name, result) (rate(wednesday_cb_calls_total[5m]))", "legendFormat": "cb {{name}} | {{result}}", "refId": "B" }
+      ],
+      "title": "Retry / circuit breaker RPS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "vm_ds" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le, name) (rate(wednesday_retry_call_duration_seconds_bucket[5m])))", "legendFormat": "retry p95 {{name}}", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le, name) (rate(wednesday_cb_call_duration_seconds_bucket[5m])))", "legendFormat": "cb p95 {{name}}", "refId": "B" }
+      ],
+      "title": "Resilience latency p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "vm_ds" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "CLOSED" } }, "type": "value" },
+            { "options": { "0.5": { "color": "yellow", "index": 1, "text": "HALF_OPEN" } }, "type": "value" },
+            { "options": { "1": { "color": "red", "index": 2, "text": "OPEN" } }, "type": "value" }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "wednesday_cb_state", "legendFormat": "{{name}}", "refId": "A" },
+        { "expr": "sum by (name) (rate(wednesday_rl_calls_total{result=\"failure\"}[5m]))", "legendFormat": "rl fail {{name}}", "refId": "B" }
+      ],
+      "title": "Circuit breaker state / RL failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "vm_ds" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "sum by (operation, status) (rate(wednesday_redis_operations_total[5m]))", "legendFormat": "{{operation}} | {{status}}", "refId": "A" }
+      ],
+      "title": "Redis operations RPS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "vm_ds" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le, command) (rate(wednesday_sqlalchemy_query_duration_seconds_bucket[5m])))", "legendFormat": "sqla p95 {{command}}", "refId": "A" },
+        { "expr": "sum by (command, error_type) (rate(wednesday_sqlalchemy_errors_total[5m]))", "legendFormat": "sqla err {{command}} | {{error_type}}", "refId": "B" }
+      ],
+      "title": "SQLAlchemy p95 / errors",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["wednesday", "metrics", "runtime"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "vm_ds" },
+        "definition": "label_values(up{job=\"wednesday\"}, service)",
+        "includeAll": true,
+        "multi": true,
+        "name": "service",
+        "query": { "query": "label_values(up{job=\"wednesday\"}, service)", "refId": "Prometheus-service-Variable-Query" },
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Wednesday Runtime",
+  "uid": "wednesday-runtime",
+  "version": 1,
+  "weekStart": ""
+}

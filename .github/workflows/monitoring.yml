@@ -1,4 +1,4 @@
-name: Prometheus Check
+name: Monitoring Check
 
 on:
   workflow_call:
@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  prometheus-check:
-    name: Prometheus config checks
+  monitoring-check:
+    name: Monitoring config checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -25,8 +25,5 @@ jobs:
           sudo mv /tmp/prometheus-${PROM_VERSION}.linux-amd64/promtool /usr/local/bin/promtool
           promtool --version
 
-      - name: Check Prometheus config
-        run: promtool check config monitoring/prometheus/prometheus.yml
-
-      - name: Test Prometheus rules
-        run: promtool test rules monitoring/prometheus/rules/metrics-rules.test.yml
+      - name: Check VM promscrape config
+        run: promtool check config monitoring/vm/scrape.yml

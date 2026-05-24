@@ -16,4 +16,5 @@ jobs:
 
       - name: Validate Loki dashboard JSON
         run: |
-          python -m json.tool monitoring/grafana/provisioning/dashboards/wednesday-logs-dashboard.json >/dev/null
+          python -m json.tool monitoring/grafana/provisioning/dashboards/wednesday-logs.json >/dev/null
+          python -m json.tool monitoring/grafana/provisioning/dashboards/wednesday-runtime.json >/dev/null

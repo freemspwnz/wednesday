@@ -49,8 +49,8 @@ jobs:
   # Дополнительные проверки (параллельно с тестами)
   # ============================================================================
 
-  prometheus:
-    uses: ./.github/workflows/prometheus.yml
+  monitoring:
+    uses: ./.github/workflows/monitoring.yml
 
   loki-dashboards:
     uses: ./.github/workflows/loki.yml
@@ -68,7 +68,7 @@ jobs:
 
   docker-build:
     name: Docker image (release tags only)
-    needs: [lint, format, mypy, actionlint, pytest, prometheus, loki-dashboards]
+    needs: [lint, format, mypy, actionlint, pytest, monitoring, loki-dashboards]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
