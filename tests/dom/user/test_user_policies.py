@@ -22,7 +22,6 @@ from domain.user.policies import (
     ManagementAccessPolicy,
     ManagementContext,
     ManagementDenied,
-    ModelSelectionCode,
     ModelSelectionDenied,
     ModelSelectionPolicy,
     NoBan,
@@ -30,6 +29,7 @@ from domain.user.policies import (
     UsageStats,
     ViolationStats,
 )
+from domain.user.policies.model_selection import ModelSelectionCode
 from domain.user.vo import ActiveState, BannedState, UserProfile, UserRole, UserSubscription
 
 from .factories import descriptor_pro, dt

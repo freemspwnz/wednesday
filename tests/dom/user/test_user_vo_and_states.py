@@ -58,6 +58,7 @@ def test_public_init_exports_are_minimal_and_stable() -> None:
     expected = {
         "User",
         "UserRepo",
+        "ModelRepo",
         "UserId",
         "UserRole",
         "UserProfile",
@@ -69,6 +70,8 @@ def test_public_init_exports_are_minimal_and_stable() -> None:
         "UserEvent",
         "GenerationAccessService",
         "UserModerationService",
+        "UsageStats",
+        "ViolationStats",
     }
     for name in expected:
         assert hasattr(user_api, name), name

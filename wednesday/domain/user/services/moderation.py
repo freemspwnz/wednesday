@@ -3,23 +3,24 @@ from ..policies import (
     BanAssigned,
     BanDurationPolicy,
     NoBan,
-    ViolationStats,
 )
+from ..protocols import ViolationRepo
 from ..user import User
 from ..vo import AwareDatetime, UserRole
 
 
 class UserModerationService:
     @staticmethod
-    def assign_ban(
+    async def assign_ban(
         user: User,
-        stats: ViolationStats,
+        repo: ViolationRepo,
         at: AwareDatetime,
     ) -> None:
         user = User.ensure(user)
-        if not isinstance(stats, ViolationStats):
-            raise ValidationError("stats must be a ViolationStats")
+        repo = ViolationRepo.ensure(repo)
         at = AwareDatetime.ensure(at)
+
+        stats = await repo.get_violation_stats(user.id)
 
         decision = BanDurationPolicy.evaluate(
             stats=stats,

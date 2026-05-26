@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Self
 from uuid import UUID
 
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
-from domain.user.protocols import ModelRepo
+from domain.user.policies import UsageStats, ViolationStats
+from domain.user.protocols import ModelRepo, UsageRepo, ViolationRepo
 from domain.user.vo import (
     Model,
     ModelDescriptor,
@@ -53,7 +55,7 @@ def descriptor_pro(*, active: bool = True) -> ModelDescriptor:
 
 
 @dataclass
-class FakeModelRepo:
+class FakeModelRepo(ModelRepo):
     """In-memory ModelRepo for domain tests."""
 
     entries: dict[str, ModelDescriptor] = field(default_factory=dict)
@@ -79,9 +81,47 @@ class FakeModelRepo:
         return Model.parse("gigachat-2-lite")
 
     @classmethod
-    def ensure(cls, repo: ModelRepo) -> ModelRepo:
+    def ensure(cls, repo: Self) -> Self:
         if not isinstance(repo, ModelRepo):
             raise TypeError("repo must be a ModelRepo")
+        return repo
+
+
+@dataclass
+class FakeUsageRepo(UsageRepo):
+    """In-memory UsageRepo for domain tests."""
+
+    stats: UsageStats = field(
+        default_factory=lambda: UsageStats(last_usage=None, daily_usage=0),
+    )
+
+    async def get_usage_stats(self, user_id: UserId) -> UsageStats:
+        _ = UserId.ensure(user_id)
+        return self.stats
+
+    @classmethod
+    def ensure(cls, repo: Self) -> Self:
+        if not isinstance(repo, UsageRepo):
+            raise TypeError("repo must be a UsageRepo")
+        return repo
+
+
+@dataclass
+class FakeViolationRepo(ViolationRepo):
+    """In-memory ViolationRepo for domain tests."""
+
+    stats: ViolationStats = field(
+        default_factory=lambda: ViolationStats(hour=0, today=0, week=0, total=0),
+    )
+
+    async def get_violation_stats(self, user_id: UserId) -> ViolationStats:
+        _ = UserId.ensure(user_id)
+        return self.stats
+
+    @classmethod
+    def ensure(cls, repo: Self) -> Self:
+        if not isinstance(repo, ViolationRepo):
+            raise TypeError("repo must be a ViolationRepo")
         return repo
 
 

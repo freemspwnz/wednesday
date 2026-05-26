@@ -12,7 +12,7 @@ from domain.user.policies.limit.vo import LimitDenied
 from domain.user.policies.limit.vo.violations import CooldownViolation, DailyLimitViolation
 from domain.user.policies.management.vo.decisions import ManagementDenied
 from domain.user.policies.model_selection import ModelSelectionDenied
-from domain.user.protocols import UserRepo
+from domain.user.protocols import ModelRepo, UsageRepo, UserRepo, ViolationRepo
 from domain.user.vo import ActiveState, BannedState, UserSubscription
 
 from .factories import default_settings, dt, mk_user
@@ -81,7 +81,12 @@ def test_policy_vos_and_decisions_validate_types() -> None:
 
 
 @pytest.mark.unit
-def test_repo_protocol_shape() -> None:
+def test_repo_protocol_shapes() -> None:
     assert hasattr(UserRepo, "get_by_id")
     assert hasattr(UserRepo, "save")
     assert hasattr(UserRepo, "exists")
+    assert hasattr(ModelRepo, "get_by_model")
+    assert hasattr(ModelRepo, "list_active")
+    assert hasattr(ModelRepo, "default_for_tier")
+    assert hasattr(UsageRepo, "get_usage_stats")
+    assert hasattr(ViolationRepo, "get_violation_stats")

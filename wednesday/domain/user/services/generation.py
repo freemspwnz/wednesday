@@ -7,8 +7,8 @@ from ..policies import (
     LimitAllowed,
     LimitDenied,
     LimitPolicy,
-    UsageStats,
 )
+from ..protocols import UsageRepo
 from ..user import User
 from ..vo import AwareDatetime
 
@@ -17,15 +17,16 @@ class GenerationAccessService:
     """Проверки перед генерацией: бан, статистика, лимиты по эффективной подписке."""
 
     @staticmethod
-    def assert_generation_allowed(
+    async def assert_generation_allowed(
         user: User,
-        stats: UsageStats,
+        repo: UsageRepo,
         at: AwareDatetime,
     ) -> None:
         user = User.ensure(user)
-        if not isinstance(stats, UsageStats):
-            raise ValidationError("stats must be a UsageStats")
+        repo = UsageRepo.ensure(repo)
         at = AwareDatetime.ensure(at)
+
+        stats = await repo.get_usage_stats(user.id)
 
         subscription = user.subscription.effective_at(at)
         state = user.state.effective_at(at)

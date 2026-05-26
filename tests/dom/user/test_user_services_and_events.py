@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -20,39 +22,40 @@ from domain.user.exceptions import ValidationError
 from domain.user.policies import NoBan, UsageStats, ViolationStats
 from domain.user.vo import UserSubscription
 
-from .factories import dt, mk_user
+from .factories import FakeUsageRepo, FakeViolationRepo, dt, mk_user
 
 
 @pytest.mark.unit
-def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     user = mk_user(now=dt(10))
 
-    GenerationAccessService.assert_generation_allowed(
+    await GenerationAccessService.assert_generation_allowed(
         user=user,
-        stats=UsageStats(last_usage=dt(1), daily_usage=0),
+        repo=FakeUsageRepo(stats=UsageStats(last_usage=dt(1), daily_usage=0)),
         at=dt(12),
     )
 
     user.ban(actor=UserRole.OWNER, until=dt(20), at=dt(11))
     with pytest.raises(UserBannedError):
-        GenerationAccessService.assert_generation_allowed(
+        await GenerationAccessService.assert_generation_allowed(
             user=user,
-            stats=UsageStats(last_usage=None, daily_usage=0),
+            repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
             at=dt(12),
         )
     user.unban(actor=UserRole.OWNER, at=dt(12))
 
     with pytest.raises(LimitViolationError):
-        GenerationAccessService.assert_generation_allowed(
+        await GenerationAccessService.assert_generation_allowed(
             user=user,
-            stats=UsageStats(last_usage=None, daily_usage=100),
+            repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=100)),
             at=dt(12),
         )
 
     with pytest.raises(CooldownViolationError):
-        GenerationAccessService.assert_generation_allowed(
+        await GenerationAccessService.assert_generation_allowed(
             user=user,
-            stats=UsageStats(last_usage=dt(12), daily_usage=0),
+            repo=FakeUsageRepo(stats=UsageStats(last_usage=dt(12), daily_usage=0)),
             at=dt(12),
         )
 
@@ -61,22 +64,23 @@ def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) -> Non
         lambda **_: cast(Any, object()),
     )
     with pytest.raises(ValidationError):
-        GenerationAccessService.assert_generation_allowed(
+        await GenerationAccessService.assert_generation_allowed(
             user=user,
-            stats=UsageStats(last_usage=None, daily_usage=0),
+            repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
             at=dt(12),
         )
 
 
 @pytest.mark.unit
-def test_generation_access_uses_effective_state_without_mutation() -> None:
+@pytest.mark.asyncio
+async def test_generation_access_uses_effective_state_without_mutation() -> None:
     user = mk_user(now=dt(10))
     user.ban(actor=UserRole.OWNER, until=dt(11), at=dt(10))
     user.pull_events()
 
-    GenerationAccessService.assert_generation_allowed(
+    await GenerationAccessService.assert_generation_allowed(
         user=user,
-        stats=UsageStats(last_usage=None, daily_usage=0),
+        repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
         at=dt(12),
     )
 
@@ -85,7 +89,8 @@ def test_generation_access_uses_effective_state_without_mutation() -> None:
 
 
 @pytest.mark.unit
-def test_generation_access_uses_effective_subscription_without_mutation() -> None:
+@pytest.mark.asyncio
+async def test_generation_access_uses_effective_subscription_without_mutation() -> None:
     user = mk_user(now=dt(10))
     expired_premium = UserSubscription(
         plan=SubscriptionPlan.premium(),
@@ -96,9 +101,14 @@ def test_generation_access_uses_effective_subscription_without_mutation() -> Non
     user.pull_events()
 
     with pytest.raises(LimitViolationError):
-        GenerationAccessService.assert_generation_allowed(
+        await GenerationAccessService.assert_generation_allowed(
             user=user,
-            stats=UsageStats(last_usage=None, daily_usage=SubscriptionPlan.free().daily_limit),
+            repo=FakeUsageRepo(
+                stats=UsageStats(
+                    last_usage=None,
+                    daily_usage=SubscriptionPlan.free().daily_limit,
+                ),
+            ),
             at=dt(12),
         )
 
@@ -107,18 +117,19 @@ def test_generation_access_uses_effective_subscription_without_mutation() -> Non
 
 
 @pytest.mark.unit
-def test_moderation_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_moderation_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     user = mk_user(now=dt(10))
-    UserModerationService.assign_ban(
+    await UserModerationService.assign_ban(
         user=user,
-        stats=ViolationStats(hour=0, today=0, week=0, total=0),
+        repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
         at=dt(12),
     )
     assert user.pull_events() == []
 
-    UserModerationService.assign_ban(
+    await UserModerationService.assign_ban(
         user=user,
-        stats=ViolationStats(hour=2, today=2, week=2, total=2),
+        repo=FakeViolationRepo(stats=ViolationStats(hour=2, today=2, week=2, total=2)),
         at=dt(12),
     )
     assert isinstance(user.pull_events()[0], UserBanned)
@@ -128,23 +139,23 @@ def test_moderation_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda **_: cast(Any, object()),
     )
     with pytest.raises(ValidationError):
-        UserModerationService.assign_ban(
+        await UserModerationService.assign_ban(
             user=user,
-            stats=ViolationStats(hour=0, today=0, week=0, total=0),
+            repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
             at=dt(12),
         )
 
     with pytest.raises(ValidationError):
-        UserModerationService.assign_ban(
+        await UserModerationService.assign_ban(
             user="bad",  # type: ignore[arg-type]
-            stats=ViolationStats(hour=0, today=0, week=0, total=0),
+            repo=FakeViolationRepo(),
             at=dt(12),
         )
 
     with pytest.raises(ValidationError):
-        UserModerationService.assign_ban(
+        await UserModerationService.assign_ban(
             user=user,
-            stats=cast(Any, "bad"),
+            repo=cast(Any, "bad"),
             at=dt(12),
         )
 
@@ -152,9 +163,9 @@ def test_moderation_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
         "domain.user.services.moderation.BanDurationPolicy.evaluate",
         lambda **_: NoBan(),
     )
-    UserModerationService.assign_ban(
+    await UserModerationService.assign_ban(
         user=user,
-        stats=ViolationStats(hour=0, today=0, week=0, total=0),
+        repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
         at=dt(12),
     )
 
