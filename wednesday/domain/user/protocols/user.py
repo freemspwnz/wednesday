@@ -1,9 +1,10 @@
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
-from .user import User
-from .vo import UserId
+from ..user import User
+from ..vo import UserId
 
 
+@runtime_checkable
 class UserRepo(Protocol):
     """User repository protocol."""
 

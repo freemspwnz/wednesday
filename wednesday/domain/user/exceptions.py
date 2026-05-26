@@ -47,12 +47,30 @@ class ManagementAccessDeniedError(AccessDeniedError):
         super().__init__(code)
 
 
+class ModelSelectionError(DomainError):
+    """Model selection error."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+class ModelNotFoundError(DomainError):
+    """Model not found."""
+
+    def __init__(self, model: str) -> None:
+        self.model = model
+        super().__init__(f"model not found: {model}")
+
+
 __all__ = [
     "CooldownViolationError",
     "DomainError",
     "InvalidStateTransitionError",
     "LimitViolationError",
     "ManagementAccessDeniedError",
+    "ModelNotFoundError",
+    "ModelSelectionError",
     "StaleWriteError",
     "UserBannedError",
     "UserNotBannedError",

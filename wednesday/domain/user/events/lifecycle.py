@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from ..vo import UserProfile, UserRole
+from ..vo import UserProfile, UserRole, UserSettings
 from .base import UserEvent
 
 
@@ -26,3 +26,15 @@ class UserProfileChanged(UserEvent):
 
         UserProfile.ensure(self.new_profile)
         UserProfile.ensure(self.old_profile)
+
+
+@dataclass(frozen=True)
+class UserSettingsChanged(UserEvent):
+    old_settings: UserSettings
+    new_settings: UserSettings
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+
+        UserSettings.ensure(self.old_settings)
+        UserSettings.ensure(self.new_settings)

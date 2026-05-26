@@ -1,0 +1,43 @@
+vendors:
+  - code: sber
+    active: true
+    display_name: Sber
+    series:
+      - code: gigachat
+        active: true
+        display_name: GigaChat
+        min_tier: 0
+        models:
+          - code: gigachat-2-lite
+            active: true
+            min_tier: 0
+            display_name: GigaChat 2 Lite
+          - code: gigachat-2-pro
+            active: true
+            min_tier: 1
+            display_name: GigaChat 2 Pro
+          - code: gigachat-2-max
+            active: true
+            min_tier: 1
+            display_name: GigaChat 2 Max
+  - code: yandex
+    active: false
+    display_name: Yandex
+    series:
+      - code: alicegpt
+        active: false
+        display_name: AliceGPT
+        min_tier: 0
+        models:
+          - code: alicegpt-lite
+            active: false
+            min_tier: 0
+            display_name: AliceGPT Lite
+          - code: alicegpt-pro
+            active: false
+            min_tier: 1
+            display_name: AliceGPT Pro
+          - code: alicegpt-max
+            active: false
+            min_tier: 1
+            display_name: AliceGPT Max

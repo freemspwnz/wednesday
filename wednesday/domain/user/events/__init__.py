@@ -2,6 +2,7 @@ from .base import UserEvent
 from .lifecycle import (
     UserProfileChanged,
     UserRoleChanged,
+    UserSettingsChanged,
 )
 from .moderation import (
     UserBanExpired,
@@ -19,6 +20,7 @@ __all__ = [
     "UserEvent",
     "UserProfileChanged",
     "UserRoleChanged",
+    "UserSettingsChanged",
     "UserSubscriptionChanged",
     "UserSubscriptionExpired",
     "UserUnbanned",

@@ -8,12 +8,14 @@ from .events import (
     UserEvent,
     UserProfileChanged,
     UserRoleChanged,
+    UserSettingsChanged,
     UserSubscriptionChanged,
     UserSubscriptionExpired,
     UserUnbanned,
 )
 from .exceptions import (
     ManagementAccessDeniedError,
+    ModelSelectionError,
     StaleWriteError,
     ValidationError,
 )
@@ -27,9 +29,22 @@ from .policies import (
     ManagementAllowed,
     ManagementContext,
     ManagementDenied,
+    ModelSelectionAllowed,
+    ModelSelectionDenied,
+    ModelSelectionPolicy,
     Unban,
 )
-from .vo import ActiveState, AwareDatetime, UserId, UserProfile, UserRole, UserState, UserSubscription
+from .vo import (
+    ActiveState,
+    AwareDatetime,
+    ModelDescriptor,
+    UserId,
+    UserProfile,
+    UserRole,
+    UserSettings,
+    UserState,
+    UserSubscription,
+)
 
 
 @dataclass(slots=True, eq=False)  # noqa: PLR0904
@@ -39,6 +54,7 @@ class User:
     _role: UserRole
     _state: UserState
     _subscription: UserSubscription
+    _settings: UserSettings
     _created_at: AwareDatetime
     _updated_at: AwareDatetime
     _last_seen_at: AwareDatetime
@@ -48,25 +64,26 @@ class User:
         self._validate()
 
     @classmethod
-    def register(
+    def register(  # noqa: PLR0913
         cls,
         *,
         id: UserId,
         profile: UserProfile,
         role: UserRole,
         subscription: UserSubscription,
-        now: AwareDatetime,
+        settings: UserSettings,
+        at: AwareDatetime,
     ) -> User:
-        now = AwareDatetime.ensure(now)
         return cls(
             _id=id,
             _profile=profile,
             _role=role,
             _state=ActiveState(),
             _subscription=subscription,
-            _created_at=now,
-            _updated_at=now,
-            _last_seen_at=now,
+            _settings=settings,
+            _created_at=at,
+            _updated_at=at,
+            _last_seen_at=at,
         )
 
     @classmethod
@@ -78,6 +95,7 @@ class User:
         role: UserRole,
         state: UserState,
         subscription: UserSubscription,
+        settings: UserSettings,
         created_at: AwareDatetime,
         updated_at: AwareDatetime,
         last_seen_at: AwareDatetime,
@@ -88,6 +106,7 @@ class User:
             _role=role,
             _state=state,
             _subscription=subscription,
+            _settings=settings,
             _created_at=created_at,
             _updated_at=updated_at,
             _last_seen_at=last_seen_at,
@@ -118,6 +137,10 @@ class User:
     @property
     def subscription(self) -> UserSubscription:
         return self._subscription
+
+    @property
+    def settings(self) -> UserSettings:
+        return self._settings
 
     @property
     def created_at(self) -> AwareDatetime:
@@ -214,6 +237,24 @@ class User:
                     occurred_at=at,
                     old_subscription=old_subscription,
                     new_subscription=new_subscription,
+                )
+            )
+
+    def change_settings(self, *, descriptor: ModelDescriptor, at: AwareDatetime) -> None:
+        descriptor = ModelDescriptor.ensure(descriptor)
+        at = AwareDatetime.ensure(at)
+        self._ensure_model_allowed(descriptor=descriptor, at=at)
+        new = UserSettings.from_descriptor(descriptor)
+        if new != self._settings:
+            self._update_at(at)
+            old = self._settings
+            self._settings = new
+            self._record_event(
+                UserSettingsChanged(
+                    user_id=self._id,
+                    occurred_at=at,
+                    old_settings=old,
+                    new_settings=new,
                 )
             )
 
@@ -318,6 +359,20 @@ class User:
             case _:
                 raise ValidationError("unknown management decision")
 
+    def _ensure_model_allowed(self, *, descriptor: ModelDescriptor, at: AwareDatetime) -> None:
+        decision = ModelSelectionPolicy.evaluate(
+            subscription=self._subscription,
+            descriptor=descriptor,
+            at=at,
+        )
+        match decision:
+            case ModelSelectionAllowed():
+                return
+            case ModelSelectionDenied(code=code):
+                raise ModelSelectionError(code)
+            case _:
+                raise ValidationError("unknown model selection decision")
+
     def _update_at(self, at: AwareDatetime) -> None:
         if at < self._updated_at:
             raise StaleWriteError("at must be >= updated_at")
@@ -334,6 +389,7 @@ class User:
         UserRole.ensure(self._role)
         UserState.ensure(self._state)
         UserSubscription.ensure(self._subscription)
+        UserSettings.ensure(self._settings)
         if not isinstance(self._events, list):
             raise ValidationError("events must be a list[UserEvent]")
         for event in self._events:

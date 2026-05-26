@@ -11,10 +11,11 @@ from domain.user.policies.ban_duration.vo import BanAssigned, BanDurationCode, V
 from domain.user.policies.limit.vo import LimitDenied
 from domain.user.policies.limit.vo.violations import CooldownViolation, DailyLimitViolation
 from domain.user.policies.management.vo.decisions import ManagementDenied
-from domain.user.repo import UserRepo
+from domain.user.policies.model_selection import ModelSelectionDenied
+from domain.user.protocols import UserRepo
 from domain.user.vo import ActiveState, BannedState, UserSubscription
 
-from .factories import dt, mk_user
+from .factories import default_settings, dt, mk_user
 
 
 @pytest.mark.unit
@@ -32,6 +33,7 @@ def test_events_and_model_validations() -> None:
             _profile=UserProfile(telegram_id=1, is_bot=False, first_name=NonEmptyStr("A")),
             _role=UserRole.USER,
             _subscription=UserSubscription.free(dt(12)),
+            _settings=default_settings(),
             _events=["bad"],  # type: ignore[list-item]
             _state=ActiveState(),
             _created_at=dt(12),
@@ -74,6 +76,8 @@ def test_policy_vos_and_decisions_validate_types() -> None:
         ManagementDenied(code="bad")  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
         BanAssigned(banned_until="bad", code=BanDurationCode.BAN_1_HOUR)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        ModelSelectionDenied(code="bad")  # type: ignore[arg-type]
 
 
 @pytest.mark.unit

@@ -32,6 +32,12 @@ from .management import (
     ManagementDenied,
     Unban,
 )
+from .model_selection import (
+    ModelSelectionAllowed,
+    ModelSelectionDecision,
+    ModelSelectionDenied,
+    ModelSelectionPolicy,
+)
 
 __all__ = [
     "Ban",
@@ -58,6 +64,10 @@ __all__ = [
     "ManagementAllowed",
     "ManagementContext",
     "ManagementDenied",
+    "ModelSelectionAllowed",
+    "ModelSelectionDecision",
+    "ModelSelectionDenied",
+    "ModelSelectionPolicy",
     "NoBan",
     "Unban",
     "UsageStats",

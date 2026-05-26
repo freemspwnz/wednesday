@@ -31,7 +31,7 @@ from .policies import (
     UsageStats,
     ViolationStats,
 )
-from .repo import UserRepo
+from .protocols import ModelRepo, UserRepo
 from .services import GenerationAccessService, UserModerationService
 from .user import User
 from .vo import (
@@ -62,6 +62,7 @@ __all__ = [
     "ManagementAccessDeniedError",
     "ManagementAccessPolicy",
     "ManagementContext",
+    "ModelRepo",
     "StaleWriteError",
     "SubscriptionPlan",
     "SubscriptionTier",

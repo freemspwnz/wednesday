@@ -6,8 +6,9 @@ import domain.user as user_api
 from domain.kernel.vo import NonEmptyStr
 from domain.user import ActiveState, BannedState, UserId, UserProfile
 from domain.user.exceptions import InvalidStateTransitionError, ValidationError
+from domain.user.vo import Model, UserSettings
 
-from .factories import dt
+from .factories import default_settings, descriptor_lite, dt
 
 
 @pytest.mark.unit
@@ -29,6 +30,15 @@ def test_user_id_and_profile_helpers() -> None:
         UserProfile(telegram_id=0, is_bot=False, first_name=NonEmptyStr("A"))
     with pytest.raises(ValidationError):
         UserProfile(telegram_id=1, is_bot=False, first_name=NonEmptyStr("A"), username="a" * 65)
+
+
+@pytest.mark.unit
+def test_model_vendor_series_and_settings_helpers() -> None:
+    assert str(Model.parse("GigaChat-2-Lite")) == "gigachat-2-lite"
+    settings = default_settings()
+    assert settings == UserSettings.from_descriptor(descriptor_lite())
+    with pytest.raises(ValidationError):
+        Model.parse("bad slug")
 
 
 @pytest.mark.unit

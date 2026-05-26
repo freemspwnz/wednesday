@@ -3,7 +3,6 @@ from datetime import timedelta
 import pytest
 
 from domain.kernel.vo import NonEmptyStr
-from domain.user import UserProfile, UserRole, UserSubscription
 from domain.user.exceptions import ValidationError
 from domain.user.policies import (
     Ban,
@@ -23,14 +22,17 @@ from domain.user.policies import (
     ManagementAccessPolicy,
     ManagementContext,
     ManagementDenied,
+    ModelSelectionCode,
+    ModelSelectionDenied,
+    ModelSelectionPolicy,
     NoBan,
     Unban,
     UsageStats,
     ViolationStats,
 )
-from domain.user.vo import ActiveState, BannedState
+from domain.user.vo import ActiveState, BannedState, UserProfile, UserRole, UserSubscription
 
-from .factories import dt
+from .factories import descriptor_pro, dt
 
 
 @pytest.mark.unit
@@ -160,3 +162,21 @@ def test_management_policy_matrix_and_rules() -> None:
         ),
         type(ManagementAccessPolicy.allow()),
     )
+
+
+@pytest.mark.unit
+def test_model_selection_policy_on_premium_subscription() -> None:
+    decision = ModelSelectionPolicy.evaluate(
+        subscription=UserSubscription.premium(dt(12)),
+        descriptor=descriptor_pro(),
+        at=dt(12),
+    )
+    assert not isinstance(decision, ModelSelectionDenied)
+
+    denied = ModelSelectionPolicy.evaluate(
+        subscription=UserSubscription.free(dt(12)),
+        descriptor=descriptor_pro(),
+        at=dt(12),
+    )
+    assert isinstance(denied, ModelSelectionDenied)
+    assert denied.code == ModelSelectionCode.TIER_TOO_LOW
