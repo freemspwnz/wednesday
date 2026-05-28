@@ -3,10 +3,11 @@ from uuid import UUID
 import pytest
 
 import domain.user as user_api
+from domain.catalog import Model, ModelDescriptor, Series, SubscriptionTier, Vendor
 from domain.kernel.vo import NonEmptyStr
 from domain.user import ActiveState, BannedState, UserId, UserProfile
 from domain.user.exceptions import InvalidStateTransitionError, ValidationError
-from domain.user.vo import Model, UserSettings
+from domain.user.vo import UserSettings
 
 from .factories import default_settings, descriptor_lite, dt
 
@@ -42,6 +43,24 @@ def test_model_vendor_series_and_settings_helpers() -> None:
 
 
 @pytest.mark.unit
+def test_model_descriptor_and_settings_from_descriptor_validate() -> None:
+    descriptor = descriptor_lite()
+    settings = UserSettings.from_descriptor(descriptor)
+    assert settings.model == descriptor.model
+    assert settings.vendor == descriptor.vendor
+    assert settings.series == descriptor.series
+
+    with pytest.raises(ValidationError):
+        ModelDescriptor(
+            model=Model.parse("gigachat-2-lite"),
+            vendor=Vendor.parse("sber"),
+            series=Series.parse("gigachat"),
+            display_name=" ",
+            min_tier=SubscriptionTier.FREE,
+        )
+
+
+@pytest.mark.unit
 def test_state_and_subscription_helpers() -> None:
     state = BannedState(until=dt(12))
     assert state.is_banned_at(dt(11))
@@ -58,13 +77,10 @@ def test_public_init_exports_are_minimal_and_stable() -> None:
     expected = {
         "User",
         "UserRepo",
-        "ModelRepo",
         "UserId",
         "UserRole",
         "UserProfile",
         "UserSubscription",
-        "SubscriptionPlan",
-        "SubscriptionTier",
         "ActiveState",
         "BannedState",
         "UserEvent",

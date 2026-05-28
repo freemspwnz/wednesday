@@ -4,6 +4,7 @@ from .events import (
     UserEvent,
     UserProfileChanged,
     UserRoleChanged,
+    UserSettingsChanged,
     UserSubscriptionChanged,
     UserSubscriptionExpired,
     UserUnbanned,
@@ -31,17 +32,16 @@ from .policies import (
     UsageStats,
     ViolationStats,
 )
-from .protocols import ModelRepo, UserRepo
-from .services import GenerationAccessService, UserModerationService
+from .protocols import UserRepo
+from .services import GenerationAccessService, ModelSelectionService, UserModerationService
 from .user import User
 from .vo import (
     ActiveState,
     BannedState,
-    SubscriptionPlan,
-    SubscriptionTier,
     UserId,
     UserProfile,
     UserRole,
+    UserSettings,
     UserState,
     UserSubscription,
 )
@@ -62,10 +62,8 @@ __all__ = [
     "ManagementAccessDeniedError",
     "ManagementAccessPolicy",
     "ManagementContext",
-    "ModelRepo",
+    "ModelSelectionService",
     "StaleWriteError",
-    "SubscriptionPlan",
-    "SubscriptionTier",
     "Unban",
     "UsageStats",
     "User",
@@ -81,6 +79,8 @@ __all__ = [
     "UserRepo",
     "UserRole",
     "UserRoleChanged",
+    "UserSettings",
+    "UserSettingsChanged",
     "UserState",
     "UserSubscription",
     "UserSubscriptionChanged",

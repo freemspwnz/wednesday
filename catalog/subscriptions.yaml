@@ -1,0 +1,9 @@
+plans:
+  - tier: 0
+    daily_limit: 3
+    cooldown_minutes: 3
+    display_name: Free
+  - tier: 1
+    daily_limit: 10
+    cooldown_minutes: 1
+    display_name: Premium

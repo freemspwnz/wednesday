@@ -1,4 +1,6 @@
-from ...vo import AwareDatetime, ModelDescriptor, UserSubscription
+from domain.catalog import ModelDescriptor
+
+from ...vo import UserSubscription
 from .vo import (
     ModelSelectionAllowed,
     ModelSelectionCode,
@@ -13,11 +15,9 @@ class ModelSelectionPolicy:
     @classmethod
     def evaluate(
         cls,
-        subscription: UserSubscription,
+        effective: UserSubscription,
         descriptor: ModelDescriptor,
-        at: AwareDatetime,
     ) -> ModelSelectionDecision:
-        effective = subscription.effective_at(at)
         if not descriptor.active:
             return cls.deny(ModelSelectionCode.MODEL_NOT_ACTIVE)
         if effective.plan.tier < descriptor.min_tier:

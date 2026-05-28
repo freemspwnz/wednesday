@@ -31,6 +31,7 @@ class UserModerationService:
             case NoBan():
                 return
             case BanAssigned(banned_until=until):
+                await repo.record_violation(user.id, at)
                 user.ban(actor=UserRole.SYSTEM, until=until, at=at)
             case _:
                 raise ValidationError("unknown ban duration decision")

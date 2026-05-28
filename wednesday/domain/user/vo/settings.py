@@ -1,11 +1,8 @@
 from dataclasses import dataclass
 from typing import Self
 
-from ...exceptions import ValidationError
-from .descriptor import ModelDescriptor
-from .model import Model
-from .series import Series
-from .vendor import Vendor
+from ...catalog import Model, ModelDescriptor, Series, Vendor
+from ..exceptions import ValidationError
 
 
 @dataclass(frozen=True)
@@ -20,15 +17,15 @@ class UserSettings:
         Model.ensure(self.model)
 
     @classmethod
-    def ensure(cls, settings: Self) -> Self:
-        if not isinstance(settings, cls):
-            raise ValidationError("settings must be a UserSettings")
-        return settings
-
-    @classmethod
     def from_descriptor(cls, descriptor: ModelDescriptor) -> Self:
         return cls(
             vendor=descriptor.vendor,
             series=descriptor.series,
             model=descriptor.model,
         )
+
+    @classmethod
+    def ensure(cls, settings: Self) -> Self:
+        if not isinstance(settings, cls):
+            raise ValidationError("settings must be a UserSettings")
+        return settings

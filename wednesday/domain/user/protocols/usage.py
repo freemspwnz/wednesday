@@ -2,7 +2,7 @@ from typing import Protocol, Self, runtime_checkable
 
 from ..exceptions import ValidationError
 from ..policies import UsageStats
-from ..user import UserId
+from ..vo import AwareDatetime, UserId
 
 
 @runtime_checkable
@@ -14,6 +14,14 @@ class UsageRepo(Protocol):
         user_id: UserId,
     ) -> UsageStats:
         """Get usage stats by user ID."""
+        ...
+
+    async def record_usage(
+        self,
+        user_id: UserId,
+        at: AwareDatetime,
+    ) -> None:
+        """Record usage by user ID."""
         ...
 
     @classmethod

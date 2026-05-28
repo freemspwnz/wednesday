@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from domain.catalog import SubscriptionCatalog
+
 from ..exceptions import CooldownViolationError, LimitViolationError, UserBannedError, ValidationError
 from ..policies import (
     CooldownViolation,
@@ -20,15 +22,18 @@ class GenerationAccessService:
     async def assert_generation_allowed(
         user: User,
         repo: UsageRepo,
+        catalog: SubscriptionCatalog,
         at: AwareDatetime,
     ) -> None:
         user = User.ensure(user)
         repo = UsageRepo.ensure(repo)
+        catalog = SubscriptionCatalog.ensure(catalog)
         at = AwareDatetime.ensure(at)
 
         stats = await repo.get_usage_stats(user.id)
+        default_plan = await catalog.default_plan()
 
-        subscription = user.subscription.effective_at(at)
+        subscription = user.subscription.effective_at(default_plan, at)
         state = user.state.effective_at(at)
         if state.is_banned_at(at):
             raise UserBannedError("user is banned")
@@ -41,7 +46,7 @@ class GenerationAccessService:
 
         match decision:
             case LimitAllowed():
-                return
+                await repo.record_usage(user.id, at)
             case LimitDenied(violation=v):
                 GenerationAccessService._raise_limit_violation(v)
             case _:

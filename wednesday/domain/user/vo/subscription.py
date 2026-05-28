@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
 
-from ....kernel.vo import AwareDatetime
-from ...exceptions import ValidationError
-from .plan import SubscriptionPlan
+from ...catalog.subscription import SubscriptionPlan
+from ...kernel.vo import AwareDatetime
+from ..exceptions import ValidationError
 
 
 @dataclass(frozen=True)
 class UserSubscription:
     plan: SubscriptionPlan
     started_at: AwareDatetime
-    expires_at: AwareDatetime | None  # None = бессрочная
+    expires_at: AwareDatetime | None  # None = infinite subscription (free)
 
     def __post_init__(self) -> None:
         SubscriptionPlan.ensure(self.plan)
@@ -22,28 +21,23 @@ class UserSubscription:
             if self.started_at >= self.expires_at:
                 raise ValidationError("started_at must be before expires_at")
 
-    def is_active_at(self, now: AwareDatetime) -> bool:
+    def is_active_at(self, at: AwareDatetime) -> bool:
         if self.expires_at is None:
             return True
-        return self.started_at <= now < self.expires_at
+        return self.started_at <= at < self.expires_at
 
     def effective_at(
         self,
-        now: AwareDatetime,
+        fallback: SubscriptionPlan,
+        at: AwareDatetime,
     ) -> UserSubscription:
-        if self.is_active_at(now):
+        if self.is_active_at(at):
             return self
-        if self.expires_at is None:
-            return UserSubscription.free(now)
-        return UserSubscription.free(self.expires_at)
-
-    @classmethod
-    def free(cls, now: AwareDatetime) -> UserSubscription:
-        return cls(plan=SubscriptionPlan.free(), started_at=now, expires_at=None)
-
-    @classmethod
-    def premium(cls, now: AwareDatetime) -> UserSubscription:
-        return cls(plan=SubscriptionPlan.premium(), started_at=now, expires_at=now + timedelta(days=30))
+        return UserSubscription(
+            plan=fallback,
+            started_at=self.expires_at or at,
+            expires_at=None,
+        )
 
     @classmethod
     def ensure(cls, subscription: UserSubscription) -> UserSubscription:

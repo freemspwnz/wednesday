@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-from ...exceptions import ValidationError
+from ....kernel import ValidationError
 
 
 class SubscriptionTier(IntEnum):

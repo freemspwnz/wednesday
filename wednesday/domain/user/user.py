@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from domain.catalog import ModelDescriptor, SubscriptionPlan
+
 from .events import (
     UserBanExpired,
     UserBanned,
@@ -37,7 +39,6 @@ from .policies import (
 from .vo import (
     ActiveState,
     AwareDatetime,
-    ModelDescriptor,
     UserId,
     UserProfile,
     UserRole,
@@ -240,10 +241,18 @@ class User:
                 )
             )
 
-    def change_settings(self, *, descriptor: ModelDescriptor, at: AwareDatetime) -> None:
+    def change_settings(
+        self,
+        *,
+        fallback: SubscriptionPlan,
+        descriptor: ModelDescriptor,
+        at: AwareDatetime,
+    ) -> None:
+        fallback = SubscriptionPlan.ensure(fallback)
         descriptor = ModelDescriptor.ensure(descriptor)
         at = AwareDatetime.ensure(at)
-        self._ensure_model_allowed(descriptor=descriptor, at=at)
+        effective = self._subscription.effective_at(fallback, at)
+        self._ensure_model_allowed(effective=effective, descriptor=descriptor)
         new = UserSettings.from_descriptor(descriptor)
         if new != self._settings:
             self._update_at(at)
@@ -314,9 +323,9 @@ class User:
             self._state = effective
             self._record_event(UserBanExpired(user_id=self._id, occurred_at=at))
 
-    def expire_subscription_if_due(self, *, at: AwareDatetime) -> None:
+    def expire_subscription_if_due(self, *, fallback: SubscriptionPlan, at: AwareDatetime) -> None:
         at = AwareDatetime.ensure(at)
-        effective = self._subscription.effective_at(at)
+        effective = self._subscription.effective_at(fallback, at)
         if effective != self._subscription:
             self._updated_at = max(self._updated_at, at)
             old = self._subscription
@@ -359,11 +368,11 @@ class User:
             case _:
                 raise ValidationError("unknown management decision")
 
-    def _ensure_model_allowed(self, *, descriptor: ModelDescriptor, at: AwareDatetime) -> None:
+    @staticmethod
+    def _ensure_model_allowed(*, effective: UserSubscription, descriptor: ModelDescriptor) -> None:
         decision = ModelSelectionPolicy.evaluate(
-            subscription=self._subscription,
+            effective=effective,
             descriptor=descriptor,
-            at=at,
         )
         match decision:
             case ModelSelectionAllowed():

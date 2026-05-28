@@ -2,7 +2,7 @@ from typing import Protocol, Self, runtime_checkable
 
 from ..exceptions import ValidationError
 from ..policies import ViolationStats
-from ..vo import UserId
+from ..vo import AwareDatetime, UserId
 
 
 @runtime_checkable
@@ -14,6 +14,14 @@ class ViolationRepo(Protocol):
         user_id: UserId,
     ) -> ViolationStats:
         """Get violation stats by user ID."""
+        ...
+
+    async def record_violation(
+        self,
+        user_id: UserId,
+        at: AwareDatetime,
+    ) -> None:
+        """Record violation by user ID."""
         ...
 
     @classmethod

@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import pytest
 
+from domain.catalog import Model, ModelDescriptor, Series, SubscriptionTier, Vendor
 from domain.kernel.vo import NonEmptyStr
 from domain.user.exceptions import ValidationError
 from domain.user.policies import (
@@ -22,6 +23,7 @@ from domain.user.policies import (
     ManagementAccessPolicy,
     ManagementContext,
     ManagementDenied,
+    ModelSelectionAllowed,
     ModelSelectionDenied,
     ModelSelectionPolicy,
     NoBan,
@@ -30,15 +32,15 @@ from domain.user.policies import (
     ViolationStats,
 )
 from domain.user.policies.model_selection import ModelSelectionCode
-from domain.user.vo import ActiveState, BannedState, UserProfile, UserRole, UserSubscription
+from domain.user.vo import ActiveState, BannedState, UserProfile, UserRole
 
-from .factories import descriptor_pro, dt
+from .factories import descriptor_lite, descriptor_pro, dt, subscription_free, subscription_premium
 
 
 @pytest.mark.unit
 def test_limit_policy_decisions_and_validations() -> None:
     denied_daily = LimitPolicy.evaluate(
-        subscription=UserSubscription.free(dt(12)),
+        subscription=subscription_free(dt(12)),
         stats=UsageStats(last_usage=None, daily_usage=3),
         at=dt(12),
     )
@@ -46,7 +48,7 @@ def test_limit_policy_decisions_and_validations() -> None:
     assert isinstance(denied_daily.violation, DailyLimitViolation)
 
     denied_cooldown = LimitPolicy.evaluate(
-        subscription=UserSubscription.premium(dt(12)),
+        subscription=subscription_premium(dt(12)),
         stats=UsageStats(last_usage=dt(12), daily_usage=0),
         at=dt(12),
     )
@@ -55,7 +57,7 @@ def test_limit_policy_decisions_and_validations() -> None:
     assert denied_cooldown.violation.remaining > timedelta(0)
 
     allowed = LimitPolicy.evaluate(
-        subscription=UserSubscription.free(dt(12)),
+        subscription=subscription_free(dt(12)),
         stats=UsageStats(last_usage=dt(10), daily_usage=0),
         at=dt(12),
     )
@@ -90,8 +92,8 @@ def test_ban_duration_policy_paths() -> None:
 @pytest.mark.unit
 def test_management_policy_matrix_and_rules() -> None:
     user_profile = UserProfile(telegram_id=1, is_bot=False, first_name=NonEmptyStr("A"))
-    free = UserSubscription.free(dt(11))
-    premium = UserSubscription.premium(dt(11))
+    free = subscription_free(dt(11))
+    premium = subscription_premium(dt(11))
     old_state = ActiveState()
     banned_state = BannedState(until=dt(20))
 
@@ -167,16 +169,55 @@ def test_management_policy_matrix_and_rules() -> None:
 @pytest.mark.unit
 def test_model_selection_policy_on_premium_subscription() -> None:
     decision = ModelSelectionPolicy.evaluate(
-        subscription=UserSubscription.premium(dt(12)),
+        effective=subscription_premium(dt(12)),
         descriptor=descriptor_pro(),
-        at=dt(12),
     )
     assert not isinstance(decision, ModelSelectionDenied)
 
     denied = ModelSelectionPolicy.evaluate(
-        subscription=UserSubscription.free(dt(12)),
+        effective=subscription_free(dt(12)),
         descriptor=descriptor_pro(),
-        at=dt(12),
     )
     assert isinstance(denied, ModelSelectionDenied)
     assert denied.code == ModelSelectionCode.TIER_TOO_LOW
+
+
+@pytest.mark.unit
+def test_model_selection_policy_allows_free_tier_for_lite() -> None:
+    decision = ModelSelectionPolicy.evaluate(
+        effective=subscription_free(dt(10)),
+        descriptor=descriptor_lite(),
+    )
+    assert isinstance(decision, ModelSelectionAllowed)
+
+
+@pytest.mark.unit
+def test_model_selection_policy_denies_inactive_model() -> None:
+    decision = ModelSelectionPolicy.evaluate(
+        effective=subscription_premium(dt(10)),
+        descriptor=descriptor_pro(active=False),
+    )
+    assert isinstance(decision, ModelSelectionDenied)
+    assert decision.code == ModelSelectionCode.MODEL_NOT_ACTIVE
+
+
+@pytest.mark.unit
+def test_model_selection_policy_denies_premium_model_on_free() -> None:
+    decision = ModelSelectionPolicy.evaluate(
+        effective=subscription_free(dt(10)),
+        descriptor=descriptor_pro(),
+    )
+    assert isinstance(decision, ModelSelectionDenied)
+    assert decision.code == ModelSelectionCode.TIER_TOO_LOW
+
+
+@pytest.mark.unit
+def test_catalog_model_descriptor_validation_is_enforced() -> None:
+    with pytest.raises(ValidationError):
+        ModelDescriptor(
+            model=Model.parse("gigachat-2-lite"),
+            vendor=Vendor.parse("sber"),
+            series=Series.parse("gigachat"),
+            display_name=" ",
+            min_tier=SubscriptionTier.FREE,
+        )

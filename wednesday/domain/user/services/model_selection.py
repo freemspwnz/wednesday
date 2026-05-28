@@ -1,7 +1,8 @@
+from domain.catalog import Model, ModelCatalog, SubscriptionCatalog
+
 from ..exceptions import ModelNotFoundError
-from ..protocols import ModelRepo
 from ..user import User
-from ..vo import AwareDatetime, Model
+from ..vo import AwareDatetime
 
 
 class ModelSelectionService:
@@ -12,16 +13,20 @@ class ModelSelectionService:
         *,
         user: User,
         model: Model,
-        repo: ModelRepo,
+        model_catalog: ModelCatalog,
+        sub_catalog: SubscriptionCatalog,
         at: AwareDatetime,
     ) -> None:
         user = User.ensure(user)
         model = Model.ensure(model)
-        repo = ModelRepo.ensure(repo)
+        model_catalog = ModelCatalog.ensure(model_catalog)
+        sub_catalog = SubscriptionCatalog.ensure(sub_catalog)
         at = AwareDatetime.ensure(at)
 
-        descriptor = await repo.get_by_model(model)
+        descriptor = await model_catalog.get_by_model(model)
         if descriptor is None:
             raise ModelNotFoundError(str(model))
 
-        user.change_settings(descriptor=descriptor, at=at)
+        fallback = await sub_catalog.default_plan()
+
+        user.change_settings(fallback=fallback, descriptor=descriptor, at=at)

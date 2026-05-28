@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from typing import Self
 
-from ...exceptions import ValidationError
+from ....kernel import ValidationError
 
 _MAX_CODE_LENGTH = 64
 _CODE_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")

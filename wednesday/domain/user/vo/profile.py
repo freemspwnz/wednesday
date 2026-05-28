@@ -26,13 +26,13 @@ class UserProfile:
         if self.username and len(self.username) > MAX_USERNAME_LENGTH:
             raise ValidationError("username too long")
 
+    @property
+    def full_name(self) -> NonEmptyStr:
+        parts = [str(p) for p in (self.first_name, self.last_name) if p and str(p).strip()]
+        return NonEmptyStr(" ".join(parts))
+
     @classmethod
     def ensure(cls, profile: UserProfile) -> UserProfile:
         if not isinstance(profile, UserProfile):
             raise ValidationError("profile must be a UserProfile")
         return profile
-
-    @property
-    def full_name(self) -> NonEmptyStr:
-        parts = [str(p) for p in (self.first_name, self.last_name) if p and str(p).strip()]
-        return NonEmptyStr(" ".join(parts))

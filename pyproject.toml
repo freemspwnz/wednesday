@@ -134,18 +134,18 @@ warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 markers = [
-  "unit: быстрые модульные тесты без внешних зависимостей",
-  "integration: интеграционные тесты с Postgres/Redis без taskiq e2e",
-  "db: тест требует Postgres",
-  "redis: тест требует Redis",
-  "taskiq: тест требует taskiq worker/beat",
-  "e2e: end-to-end сценарии с внешними сервисами",
-  "infra: инфраструктурные/диагностические проверки (запуск редко)",
-  "slow: долгие сценарии, исключаются из быстрых прогонов",
+  "unit: fast module tests without external dependencies",
+  "integration: integration tests with Postgres/Redis",
+  "db: tests demand Postgres",
+  "redis: tests demand Redis",
+  "taskiq: tests demand Taskiq worker/beat",
+  "e2e: end-to-end scenario with external services",
+  "infra: infra/diagnose checks",
+  "slow: slow tests",
 ]
 addopts = "-v -ra --tb=short"
 testpaths = ["tests"]
-pythonpath = ["wednesday"]
+pythonpath = ["wednesday", "tests"]
 asyncio_mode = "strict"
 asyncio_default_test_loop_scope = "session"
 asyncio_default_fixture_loop_scope = "session"
