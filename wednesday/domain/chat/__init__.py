@@ -11,8 +11,9 @@ from .events import (
     ChatScheduleTimezoneChanged,
 )
 from .exceptions import (
+    AccessDeniedError,
+    ChatError,
     InvalidStateTransitionError,
-    ManagementAccessDeniedError,
     ScheduleLimitExceededError,
     StaleWriteError,
     ValidationError,
@@ -23,7 +24,7 @@ from .policies import (
     ManagementContext,
     ManagementDenied,
 )
-from .repo import ChatRepo
+from .protocols import ChatRepo
 from .vo import (
     ActiveState,
     ChatId,
@@ -42,10 +43,12 @@ from .vo import (
 )
 
 __all__ = [
+    "AccessDeniedError",
     "ActiveState",
     "Chat",
     "ChatActivated",
     "ChatDeactivated",
+    "ChatError",
     "ChatEvent",
     "ChatId",
     "ChatMember",
@@ -65,7 +68,6 @@ __all__ = [
     "ChatType",
     "InactiveState",
     "InvalidStateTransitionError",
-    "ManagementAccessDeniedError",
     "ManagementAccessPolicy",
     "ManagementActor",
     "ManagementAllowed",

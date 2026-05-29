@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from domain.chat import (
+    AccessDeniedError,
     ActiveState,
     Chat,
     ChatActivated,
@@ -18,7 +19,6 @@ from domain.chat import (
     ChatType,
     InactiveState,
     InvalidStateTransitionError,
-    ManagementAccessDeniedError,
     StaleWriteError,
     ValidationError,
     Weekday,
@@ -166,7 +166,7 @@ def test_change_schedule_timezone_emits_old_and_new() -> None:
 def test_change_profile_denied_for_member_role() -> None:
     chat = mk_chat(now=dt(10))
     new_profile = ChatProfile(type=ChatType.GROUP, telegram_id=-1001, title="Y")
-    with pytest.raises(ManagementAccessDeniedError):
+    with pytest.raises(AccessDeniedError):
         chat.change_profile(actor=member(), new_profile=new_profile, at=dt(11))
 
 
@@ -276,5 +276,5 @@ def test_management_unknown_decision_is_validation_error(monkeypatch: pytest.Mon
         "domain.chat.chat.ManagementAccessPolicy.evaluate",
         lambda _: ManagementDenied(code=ManagementAccessCode.NOT_ENOUGH_RIGHTS),
     )
-    with pytest.raises(ManagementAccessDeniedError):
+    with pytest.raises(AccessDeniedError):
         chat.change_profile(actor=owner(), new_profile=new_profile, at=dt(12))

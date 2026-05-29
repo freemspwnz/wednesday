@@ -7,25 +7,21 @@ from ..kernel.exceptions import (
 )
 
 
-class ScheduleLimitExceededError(DomainError):
+class ChatError(DomainError):
+    """Errors from the chat bounded context."""
+
+
+class ScheduleLimitExceededError(ChatError):
     """Exceeded the maximum number of schedules."""
 
     def __init__(self, max_schedules: int) -> None:
         super().__init__(f"schedules must be <= {max_schedules}")
 
 
-class ManagementAccessDeniedError(AccessDeniedError):
-    """Management access denied."""
-
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(f"management access denied: {code}")
-
-
 __all__ = [
-    "DomainError",
+    "AccessDeniedError",
+    "ChatError",
     "InvalidStateTransitionError",
-    "ManagementAccessDeniedError",
     "ScheduleLimitExceededError",
     "StaleWriteError",
     "ValidationError",

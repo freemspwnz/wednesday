@@ -3,7 +3,7 @@
 Hierarchy:
     DomainError
     ├── ValidationError
-    ├── AccessDeniedError
+    ├── AccessDeniedError (code: str)
     ├── InvalidStateTransitionError
     └── StaleWriteError
 """
@@ -22,7 +22,11 @@ class ValidationError(DomainError):
 
 
 class AccessDeniedError(DomainError):
-    """Access denied."""
+    """Access denied with a typed policy code."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(f"access denied: {code}")
 
 
 class InvalidStateTransitionError(DomainError):

@@ -16,7 +16,7 @@ from .events import (
     UserUnbanned,
 )
 from .exceptions import (
-    ManagementAccessDeniedError,
+    AccessDeniedError,
     ModelSelectionError,
     StaleWriteError,
     ValidationError,
@@ -364,7 +364,7 @@ class User:
             case ManagementAllowed():
                 return
             case ManagementDenied():
-                raise ManagementAccessDeniedError(decision.code.value)
+                raise AccessDeniedError(str(decision.code))
             case _:
                 raise ValidationError("unknown management decision")
 

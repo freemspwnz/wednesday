@@ -14,7 +14,7 @@ from .events import (
     ChatScheduleRemoved,
     ChatScheduleTimezoneChanged,
 )
-from .exceptions import ManagementAccessDeniedError, StaleWriteError, ValidationError
+from .exceptions import AccessDeniedError, StaleWriteError, ValidationError
 from .policies import (
     ManagementAccessPolicy,
     ManagementAllowed,
@@ -315,7 +315,7 @@ class Chat:
             case ManagementAllowed():
                 return
             case ManagementDenied():
-                raise ManagementAccessDeniedError(decision.code)
+                raise AccessDeniedError(str(decision.code))
             case _:
                 raise ValidationError("unknown management decision")
 

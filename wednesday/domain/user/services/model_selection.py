@@ -1,27 +1,37 @@
+from __future__ import annotations
+
 from domain.catalog import Model, ModelCatalog, SubscriptionCatalog
 
-from ..exceptions import ModelNotFoundError
+from ..exceptions import ModelNotFoundError, UserNotFoundError, ValidationError
+from ..protocols import UserRepo
 from ..user import User
-from ..vo import AwareDatetime
+from ..vo import AwareDatetime, UserId
 
 
 class ModelSelectionService:
     """Service for selecting a model for a user."""
 
     @staticmethod
-    async def select_model(
+    async def select_model(  # noqa: PLR0913
         *,
-        user: User,
+        user_id: UserId,
         model: Model,
+        user_repo: UserRepo,
         model_catalog: ModelCatalog,
         sub_catalog: SubscriptionCatalog,
         at: AwareDatetime,
-    ) -> None:
-        user = User.ensure(user)
+    ) -> User:
+        user_id = UserId.ensure(user_id)
         model = Model.ensure(model)
+        at = AwareDatetime.ensure(at)
+        if not isinstance(user_repo, UserRepo):
+            raise ValidationError("user_repo must implement UserRepo")
         model_catalog = ModelCatalog.ensure(model_catalog)
         sub_catalog = SubscriptionCatalog.ensure(sub_catalog)
-        at = AwareDatetime.ensure(at)
+
+        user = await user_repo.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(str(user_id))
 
         descriptor = await model_catalog.get_by_model(model)
         if descriptor is None:
@@ -30,3 +40,5 @@ class ModelSelectionService:
         fallback = await sub_catalog.default_plan()
 
         user.change_settings(fallback=fallback, descriptor=descriptor, at=at)
+        await user_repo.save(user)
+        return user

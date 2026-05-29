@@ -1,9 +1,9 @@
 import pytest
 
 from domain.user import (
+    AccessDeniedError,
     ActiveState,
     BannedState,
-    ManagementAccessDeniedError,
     StaleWriteError,
     User,
     UserRole,
@@ -70,7 +70,7 @@ def test_ban_with_same_until_is_noop() -> None:
 @pytest.mark.unit
 def test_user_guardrails_and_errors() -> None:
     user = mk_user(now=dt(10), role=UserRole.USER)
-    with pytest.raises(ManagementAccessDeniedError):
+    with pytest.raises(AccessDeniedError):
         user.change_role(actor=UserRole.USER, new_role=UserRole.ADMIN, at=dt(11))
     with pytest.raises(InvalidStateTransitionError):
         user.unban(actor=UserRole.OWNER, at=dt(11))
@@ -152,5 +152,5 @@ def test_management_unknown_decision_is_validation_error(monkeypatch: pytest.Mon
         "domain.user.user.ManagementAccessPolicy.evaluate",
         lambda _: ManagementDenied(code=ManagementAccessCode.ACCESS_DENIED),
     )
-    with pytest.raises(ManagementAccessDeniedError):
+    with pytest.raises(AccessDeniedError):
         user._ensure_management_allowed(actor=UserRole.OWNER, action=action)

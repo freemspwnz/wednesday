@@ -18,7 +18,7 @@ from domain.catalog import (
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
 from domain.user.policies import UsageStats, ViolationStats
-from domain.user.protocols import UsageRepo, ViolationRepo
+from domain.user.protocols import UsageRepo, UserRepo, ViolationRepo
 from domain.user.vo import UserSettings, UserSubscription
 
 from ..catalog import FREE_PLAN, PREMIUM_PLAN
@@ -151,6 +151,36 @@ class FakeModelCatalog(ModelCatalog):
     def ensure(cls, repo: Self) -> Self:
         if not isinstance(repo, ModelCatalog):
             raise TypeError("repo must be a ModelCatalog")
+        return repo
+
+
+@dataclass
+class FakeUserRepo(UserRepo):
+    """In-memory UserRepo for domain tests."""
+
+    users: dict[UserId, User] = field(default_factory=dict)
+
+    async def get_by_id(self, user_id: UserId) -> User | None:
+        return self.users.get(UserId.ensure(user_id))
+
+    async def save(self, user: User) -> None:
+        entity = User.ensure(user)
+        self.users[entity.id] = entity
+
+    async def exists(self, user_id: UserId) -> bool:
+        return UserId.ensure(user_id) in self.users
+
+    @classmethod
+    def ensure(cls, repo: Self) -> Self:
+        if not isinstance(repo, UserRepo):
+            raise TypeError("repo must be a UserRepo")
+        return repo
+
+    @classmethod
+    def with_users(cls, *users: User) -> FakeUserRepo:
+        repo = cls()
+        for user in users:
+            repo.users[user.id] = user
         return repo
 
 

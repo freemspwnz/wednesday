@@ -4,30 +4,34 @@ from typing import Any, cast
 
 import pytest
 
-from domain.user import UserBanned, UserModerationService
+from domain.user import UserBanned, UserModerationService, UserNotFoundError
 from domain.user.exceptions import ValidationError
 from domain.user.policies import NoBan, ViolationStats
 
-from ..factories import FakeViolationRepo, dt, mk_user
+from ..factories import FakeUserRepo, FakeViolationRepo, dt, mk_user
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_moderation_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     user = mk_user(now=dt(10))
-    await UserModerationService.assign_ban(
-        user=user,
-        repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
-        at=dt(12),
-    )
-    assert user.pull_events() == []
+    user_repo = FakeUserRepo.with_users(user)
 
-    await UserModerationService.assign_ban(
-        user=user,
-        repo=FakeViolationRepo(stats=ViolationStats(hour=2, today=2, week=2, total=2)),
+    result = await UserModerationService.assign_ban(
+        user_id=user.id,
+        user_repo=user_repo,
+        violation_repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
         at=dt(12),
     )
-    assert isinstance(user.pull_events()[0], UserBanned)
+    assert result.pull_events() == []
+
+    result = await UserModerationService.assign_ban(
+        user_id=user.id,
+        user_repo=user_repo,
+        violation_repo=FakeViolationRepo(stats=ViolationStats(hour=2, today=2, week=2, total=2)),
+        at=dt(12),
+    )
+    assert isinstance(result.pull_events()[0], UserBanned)
 
     monkeypatch.setattr(
         "domain.user.services.moderation.BanDurationPolicy.evaluate",
@@ -35,22 +39,33 @@ async def test_moderation_service_paths(monkeypatch: pytest.MonkeyPatch) -> None
     )
     with pytest.raises(ValidationError):
         await UserModerationService.assign_ban(
-            user=user,
-            repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
+            user_id=user.id,
+            user_repo=user_repo,
+            violation_repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
             at=dt(12),
         )
 
     with pytest.raises(ValidationError):
         await UserModerationService.assign_ban(
-            user="bad",  # type: ignore[arg-type]
-            repo=FakeViolationRepo(),
+            user_id="bad",  # type: ignore[arg-type]
+            user_repo=user_repo,
+            violation_repo=FakeViolationRepo(),
             at=dt(12),
         )
 
     with pytest.raises(ValidationError):
         await UserModerationService.assign_ban(
-            user=user,
-            repo=cast(Any, "bad"),
+            user_id=user.id,
+            user_repo=cast(Any, "bad"),
+            violation_repo=FakeViolationRepo(),
+            at=dt(12),
+        )
+
+    with pytest.raises(UserNotFoundError):
+        await UserModerationService.assign_ban(
+            user_id=mk_user(user_id=99, now=dt(10)).id,
+            user_repo=FakeUserRepo.with_users(user),
+            violation_repo=FakeViolationRepo(),
             at=dt(12),
         )
 
@@ -58,8 +73,10 @@ async def test_moderation_service_paths(monkeypatch: pytest.MonkeyPatch) -> None
         "domain.user.services.moderation.BanDurationPolicy.evaluate",
         lambda **_: NoBan(),
     )
-    await UserModerationService.assign_ban(
-        user=user,
-        repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
+    result = await UserModerationService.assign_ban(
+        user_id=user.id,
+        user_repo=user_repo,
+        violation_repo=FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0)),
         at=dt(12),
     )
+    assert result.pull_events() == []

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .chat import Chat
-from .vo import ChatId
+from ..chat import Chat
+from ..vo import ChatId
 
 
 class ChatRepo(Protocol):

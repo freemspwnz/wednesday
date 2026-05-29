@@ -10,13 +10,17 @@ from .events import (
     UserUnbanned,
 )
 from .exceptions import (
+    AccessDeniedError,
     CooldownViolationError,
     InvalidStateTransitionError,
     LimitViolationError,
-    ManagementAccessDeniedError,
+    ModelNotFoundError,
+    ModelSelectionError,
     StaleWriteError,
     UserBannedError,
+    UserError,
     UserNotBannedError,
+    UserNotFoundError,
     ValidationError,
 )
 from .policies import (
@@ -47,6 +51,7 @@ from .vo import (
 )
 
 __all__ = [
+    "AccessDeniedError",
     "ActiveState",
     "Ban",
     "BanDurationPolicy",
@@ -59,9 +64,10 @@ __all__ = [
     "InvalidStateTransitionError",
     "LimitPolicy",
     "LimitViolationError",
-    "ManagementAccessDeniedError",
     "ManagementAccessPolicy",
     "ManagementContext",
+    "ModelNotFoundError",
+    "ModelSelectionError",
     "ModelSelectionService",
     "StaleWriteError",
     "Unban",
@@ -70,10 +76,12 @@ __all__ = [
     "UserBanExpired",
     "UserBanned",
     "UserBannedError",
+    "UserError",
     "UserEvent",
     "UserId",
     "UserModerationService",
     "UserNotBannedError",
+    "UserNotFoundError",
     "UserProfile",
     "UserProfileChanged",
     "UserRepo",

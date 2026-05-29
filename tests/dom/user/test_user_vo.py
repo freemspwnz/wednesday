@@ -91,4 +91,4 @@ def test_public_init_exports_are_minimal_and_stable() -> None:
     }
     for name in expected:
         assert hasattr(user_api, name), name
-    assert not hasattr(user_api, "AccessDeniedError")
+    assert hasattr(user_api, "AccessDeniedError")
