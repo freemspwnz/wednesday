@@ -1094,18 +1094,6 @@ editorconfig = ">=0.12.2"
 six = ">=1.13.0"
 
 [[package]]
-name = "junitparser"
-version = "4.0.2"
-description = "Manipulates JUnit/xUnit Result XML files"
-optional = false
-python-versions = ">=3.6"
-groups = ["dev"]
-files = [
-    {file = "junitparser-4.0.2-py3-none-any.whl", hash = "sha256:94c3570e41fcaedc64cc3c634ca99457fe41a84dd1aa8ff74e9e12e66223a155"},
-    {file = "junitparser-4.0.2.tar.gz", hash = "sha256:d5d07cece6d4a600ff3b7b96c8db5ffa45a91eed695cb86c45c3db113c1ca0f8"},
-]
-
-[[package]]
 name = "librt"
 version = "0.11.0"
 description = "Mypyc runtime library"
@@ -2373,7 +2361,7 @@ version = "6.0.3"
 description = "YAML parser and emitter for Python"
 optional = false
 python-versions = ">=3.8"
-groups = ["docs"]
+groups = ["main", "docs"]
 files = [
     {file = "PyYAML-6.0.3-cp38-cp38-macosx_10_13_x86_64.whl", hash = "sha256:c2514fceb77bc5e7a2f7adfaa1feb2fb311607c9cb518dbc378688ec73d8292f"},
     {file = "PyYAML-6.0.3-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:9c57bb8c96f6d1808c030b1687b9b5fb476abaa47f0db9c0101f5e9f394e97f4"},
@@ -2697,6 +2685,18 @@ files = [
 [package.extras]
 doc = ["reno", "sphinx"]
 test = ["pytest", "tornado (>=4.5)", "typeguard"]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20260518"
+description = "Typing stubs for PyYAML"
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "types_pyyaml-6.0.12.20260518-py3-none-any.whl", hash = "sha256:d2150f75a231c9fe9c7463bd29487d93e60bac90400287351384bc2284eba7cd"},
+    {file = "types_pyyaml-6.0.12.20260518.tar.gz", hash = "sha256:d917f83fb38462550338c1297faedd860b3ec83912b96b1e3d73255f7473e466"},
+]
 
 [[package]]
 name = "typing-extensions"
@@ -3027,4 +3027,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "ee0ffe2791a7c476487fd184b7351ff93d777701a0be04484af9996ad922d086"
+content-hash = "9e0461bb8d3f62d145e5e71831154e6b2ba0ecd7f6b2fba5299c1e7c6352bfeb"

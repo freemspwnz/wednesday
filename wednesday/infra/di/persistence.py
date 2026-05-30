@@ -12,6 +12,7 @@ from infra.persistence.redis import (
     close_redis,
 )
 from infra.persistence.sqlalchemy import SQLAUoWFactory
+from infra.persistence.yaml import YamlCatalogFactory
 
 from .observe import ObserveContainer
 
@@ -52,6 +53,13 @@ class PersistenceContainer:
     def redis(self) -> Redis:
         return build_redis(
             config=self._config.redis,
+            logger=self._observe.logger,
+        )
+
+    @cached_property
+    def catalog_factory(self) -> YamlCatalogFactory:
+        return YamlCatalogFactory(
+            config=self._config.yaml,
             logger=self._observe.logger,
         )
 

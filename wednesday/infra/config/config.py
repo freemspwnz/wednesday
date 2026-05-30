@@ -4,7 +4,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .observe import LoggingConfig, MetricsConfig
-from .persistence import PostgresConfig, RedisConfig
+from .persistence import PostgresConfig, RedisConfig, YamlConfig
 from .presentation import TelegramConfig
 from .resilience import CircuitBreakerConfig, RateLimitConfig, RetryConfig
 
@@ -25,6 +25,7 @@ class Config(BaseSettings):
 
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
+    yaml: YamlConfig = Field(default_factory=YamlConfig)
 
     retry: RetryConfig = Field(default_factory=RetryConfig)
     rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)

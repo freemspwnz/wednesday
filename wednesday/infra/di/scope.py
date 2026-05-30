@@ -3,6 +3,8 @@ from functools import cached_property
 from app.protocols import CacheRepoRegistry, Logger, RequestScope, UoWFactory
 from app.services import ChatCommandService, RegistrationService, UserCommandService
 from app.use_cases import ChatCommandsUseCase, RegistrationUseCase, UserCommandsUseCase
+from domain.catalog import ModelCatalog, SubscriptionCatalog
+from infra.persistence.yaml import YamlCatalogFactory
 
 
 class ScopeContainer(RequestScope):
@@ -11,15 +13,25 @@ class ScopeContainer(RequestScope):
         *,
         uow_factory: UoWFactory,
         cache_registry: CacheRepoRegistry,
+        catalog_factory: YamlCatalogFactory,
         logger: Logger,
     ) -> None:
         self._uow_factory = uow_factory
         self._cache_registry = cache_registry
+        self._catalog_factory = catalog_factory
         self._logger = logger
 
     @cached_property
     def logger(self) -> Logger:
         return self._logger
+
+    @cached_property
+    def model_catalog(self) -> ModelCatalog:
+        return self._catalog_factory.model_catalog
+
+    @cached_property
+    def subscription_catalog(self) -> SubscriptionCatalog:
+        return self._catalog_factory.subscription_catalog
 
     @cached_property
     def registration_uc(self) -> RegistrationUseCase:

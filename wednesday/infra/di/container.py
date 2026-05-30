@@ -54,6 +54,7 @@ class Container:
         scope = ScopeContainer(
             uow_factory=self.persistence.uow_factory,
             cache_registry=self.persistence.cache_repo_registry,
+            catalog_factory=self.persistence.catalog_factory,
             logger=self.observe.logger,
         )
         yield scope

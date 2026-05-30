@@ -35,6 +35,7 @@ asyncpg = "^0.31.0"
 sqlalchemy = { version = "^2.0.44", extras = ["asyncio"] }
 alembic = "^1.18.4"
 greenlet = "^3.4.0"
+pyyaml = "^6.0.2"
 
 # Pydantic
 pydantic = "^2.13.4"
@@ -59,7 +60,7 @@ pytest-cov = "^7.0.0"
 # Linting and formatting
 mypy = "^1.18.2"
 ruff = "^0.7.1"
-junitparser = "^4.0.2"
+types-pyyaml = "^6.0.12.20260518"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.6.0"

@@ -4,6 +4,8 @@ from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Protocol
 
+from domain.catalog import ModelCatalog, SubscriptionCatalog
+
 from .observe import Logger
 
 if TYPE_CHECKING:
@@ -18,6 +20,12 @@ class RequestScope(Protocol):
 
     @property
     def registration_uc(self) -> RegistrationUseCase: ...
+
+    @property
+    def model_catalog(self) -> ModelCatalog: ...
+
+    @property
+    def subscription_catalog(self) -> SubscriptionCatalog: ...
 
     @property
     def user_commands_uc(self) -> UserCommandsUseCase: ...
