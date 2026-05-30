@@ -4,10 +4,11 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.dto import UserContext
+from domain.catalog import SubscriptionTier
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
-from domain.user import BannedState, SubscriptionTier, User, UserId, UserRole
+from domain.user import BannedState, User, UserId, UserRole
 
-USER_SNAPSHOT_VERSION = 1
+USER_SNAPSHOT_VERSION = 2
 
 
 class UserSnapshot(BaseModel):
@@ -29,6 +30,9 @@ class UserSnapshot(BaseModel):
     subscription_cooldown_minutes: int
     subscription_started_at: datetime
     subscription_expires_at: datetime | None = None
+    model_vendor: str
+    model_series: str
+    model: str
     created_at: datetime
     updated_at: datetime
     last_seen_at: datetime
@@ -57,6 +61,9 @@ class UserSnapshot(BaseModel):
             subscription_expires_at=(
                 user.subscription.expires_at.value if user.subscription.expires_at is not None else None
             ),
+            model_vendor=str(user.settings.vendor),
+            model_series=str(user.settings.series),
+            model=str(user.settings.model),
             created_at=user.created_at.value,
             updated_at=user.updated_at.value,
             last_seen_at=user.last_seen_at.value,
@@ -84,6 +91,9 @@ class UserSnapshot(BaseModel):
             subscription_expires_at=(
                 AwareDatetime(self.subscription_expires_at) if self.subscription_expires_at else None
             ),
+            model_vendor=self.model_vendor,
+            model_series=self.model_series,
+            model=self.model,
             created_at=AwareDatetime(self.created_at),
             updated_at=AwareDatetime(self.updated_at),
             last_seen_at=AwareDatetime(self.last_seen_at),

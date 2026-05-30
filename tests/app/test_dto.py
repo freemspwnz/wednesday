@@ -5,9 +5,12 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.dto import ChatContext, UserContext
+from domain.catalog import Model, Series, SubscriptionTier, Vendor
 from domain.chat import Chat, ChatId, ChatProfile, ChatSchedule, ChatScheduleSet, ChatType, Weekday
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
-from domain.user import User, UserId, UserProfile, UserRole, UserSubscription
+from domain.user import User, UserId, UserProfile, UserRole
+from domain.user.vo import UserSettings, UserSubscription
+from tests.dom.catalog.plans import PREMIUM_PLAN
 
 
 def _dt(hour: int) -> AwareDatetime:
@@ -28,8 +31,17 @@ def test_user_context_from_domain_maps_new_aggregate_shape() -> None:
             has_tg_premium=True,
         ),
         role=UserRole.ADMIN,
-        subscription=UserSubscription.premium(_dt(10)),
-        now=_dt(10),
+        subscription=UserSubscription(
+            plan=PREMIUM_PLAN,
+            started_at=_dt(10),
+            expires_at=None,
+        ),
+        settings=UserSettings(
+            vendor=Vendor.parse("sber"),
+            series=Series.parse("gigachat"),
+            model=Model.parse("gigachat-2-pro"),
+        ),
+        at=_dt(10),
     )
     user.ban(actor=UserRole.OWNER, until=_dt(12), at=_dt(11))
 
@@ -40,8 +52,11 @@ def test_user_context_from_domain_maps_new_aggregate_shape() -> None:
     assert ctx.has_tg_premium is True
     assert ctx.is_banned is True
     assert isinstance(ctx.banned_until, AwareDatetime)
-    assert ctx.subscription_tier == user.subscription.plan.tier
+    assert ctx.subscription_tier == SubscriptionTier.PREMIUM
     assert ctx.subscription_daily_limit == user.subscription.plan.daily_limit
+    assert ctx.model_vendor == "sber"
+    assert ctx.model_series == "gigachat"
+    assert ctx.model == "gigachat-2-pro"
 
 
 @pytest.mark.unit

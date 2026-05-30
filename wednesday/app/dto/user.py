@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
+from domain.catalog import SubscriptionTier
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
-from domain.user import BannedState, SubscriptionTier, User, UserId, UserRole
+from domain.user import BannedState, User, UserId, UserRole
 
 
 @dataclass
@@ -23,6 +24,9 @@ class UserContext:
     subscription_cooldown_minutes: int | None = None
     subscription_started_at: AwareDatetime | None = None
     subscription_expires_at: AwareDatetime | None = None
+    model_vendor: str | None = None
+    model_series: str | None = None
+    model: str | None = None
     created_at: AwareDatetime | None = None
     updated_at: AwareDatetime | None = None
     last_seen_at: AwareDatetime | None = None
@@ -49,6 +53,9 @@ class UserContext:
             subscription_cooldown_minutes=user.subscription.plan.cooldown_minutes,
             subscription_started_at=user.subscription.started_at,
             subscription_expires_at=user.subscription.expires_at,
+            model_vendor=str(user.settings.vendor),
+            model_series=str(user.settings.series),
+            model=str(user.settings.model),
             created_at=user.created_at,
             updated_at=user.updated_at,
             last_seen_at=user.last_seen_at,

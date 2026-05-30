@@ -51,6 +51,16 @@ class TestRedisUserRepo:
         client.delete.assert_awaited()
 
     @pytest.mark.asyncio
+    async def test_get_by_id_legacy_v1_snapshot_invalidates(self, mock_logger: MagicMock) -> None:
+        legacy = user_snapshot(v=1).model_dump_json()
+        client = MagicMock()
+        client.get = AsyncMock(return_value=legacy)
+        client.delete = AsyncMock()
+        repo = RedisUserRepo(client=client, logger=mock_logger)
+        assert await repo.get_by_id(1) is None
+        client.delete.assert_awaited()
+
+    @pytest.mark.asyncio
     async def test_get_by_id_stale_version_invalidates(self, mock_logger: MagicMock) -> None:
         stale = user_snapshot(v=999).model_dump_json()
         client = MagicMock()

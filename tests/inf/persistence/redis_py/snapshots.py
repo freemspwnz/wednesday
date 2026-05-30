@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from domain.catalog import SubscriptionTier
 from domain.user.vo.roles import UserRole
-from domain.user.vo.subscription.tier import SubscriptionTier
 from infra.persistence.redis.snapshots.chat import CHAT_SNAPSHOT_VERSION, ChatSnapshot
 from infra.persistence.redis.snapshots.user import USER_SNAPSHOT_VERSION, UserSnapshot
 
@@ -26,6 +26,9 @@ def user_snapshot(**kwargs: object) -> UserSnapshot:
         "subscription_daily_limit": 3,
         "subscription_cooldown_minutes": 0,
         "subscription_started_at": now,
+        "model_vendor": "sber",
+        "model_series": "gigachat",
+        "model": "gigachat-2-lite",
         "created_at": now,
         "updated_at": now,
         "last_seen_at": now,
