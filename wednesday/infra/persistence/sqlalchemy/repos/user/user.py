@@ -11,25 +11,32 @@ from app.exceptions import (
     SQLARepositoryError,
     UnexpectedSQLAError,
 )
+from domain.catalog import Model, Series, SubscriptionPlan, SubscriptionTier, Vendor
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import (
     ActiveState,
     BannedState,
-    SubscriptionPlan,
-    SubscriptionTier,
     User,
     UserId,
     UserProfile,
     UserRepo,
     UserRole,
+    UserSettings,
     UserSubscription,
 )
 
-from ..models import UserORM, UserProfileORM, UserRoleORM, UserStateORM, UserSubscriptionORM
+from ...models import (
+    UserORM,
+    UserProfileORM,
+    UserRoleORM,
+    UserSettingsORM,
+    UserStateORM,
+    UserSubscriptionORM,
+)
 
 
 class SQLAUserRepo(UserRepo):
-    """Репозиторий пользователей на базе SQLAlchemy AsyncSession."""
+    """User aggregate repository backed by SQLAlchemy AsyncSession."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -151,6 +158,24 @@ class SQLAUserRepo(UserRepo):
                     },
                 )
             )
+
+            await self._session.execute(
+                insert(UserSettingsORM)
+                .values(
+                    user_id=user.id.value,
+                    vendor=str(user.settings.vendor),
+                    series=str(user.settings.series),
+                    model=str(user.settings.model),
+                )
+                .on_conflict_do_update(
+                    index_elements=[UserSettingsORM.user_id],
+                    set_={
+                        "vendor": str(user.settings.vendor),
+                        "series": str(user.settings.series),
+                        "model": str(user.settings.model),
+                    },
+                )
+            )
         except IntegrityError as exc:
             raise SQLADataIntegrityError(
                 "User save violated database constraints.",
@@ -185,7 +210,7 @@ class SQLAUserRepo(UserRepo):
 
 
 def _user_from_orm(orm: UserORM) -> User:
-    if orm.profile is None or orm.role is None or orm.state is None or orm.subscription is None:
+    if orm.profile is None or orm.role is None or orm.state is None or orm.subscription is None or orm.settings is None:
         raise ValueError(f"Incomplete user aggregate loaded for user_id={orm.id}")
 
     state = (
@@ -216,12 +241,18 @@ def _user_from_orm(orm: UserORM) -> User:
         language_code=orm.profile.language_code,
         has_tg_premium=orm.profile.has_tg_premium,
     )
+    settings = UserSettings(
+        vendor=Vendor.parse(orm.settings.vendor),
+        series=Series.parse(orm.settings.series),
+        model=Model.parse(orm.settings.model),
+    )
     return User.restore(
         id=UserId(orm.id),
         profile=profile,
         role=UserRole(orm.role.role),
         state=state,
         subscription=subscription,
+        settings=settings,
         created_at=AwareDatetime.from_datetime(orm.created_at),
         updated_at=AwareDatetime.from_datetime(orm.updated_at),
         last_seen_at=AwareDatetime.from_datetime(orm.last_seen_at),

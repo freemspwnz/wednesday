@@ -9,12 +9,32 @@ from app.protocols import UoW
 
 from .repos import (
     SQLAChatRepo,
+    SQLAImageRepo,
+    SQLAImageSeenRepo,
+    SQLAImageVoteRepo,
+    SQLAUsageRepo,
     SQLAUserRepo,
+    SQLAViolationRepo,
 )
 
-REPO_REGISTRY: dict[str, type[SQLAUserRepo | SQLAChatRepo]] = {
+RepoInstance = (
+    SQLAChatRepo
+    | SQLAImageRepo
+    | SQLAImageSeenRepo
+    | SQLAImageVoteRepo
+    | SQLAUsageRepo
+    | SQLAUserRepo
+    | SQLAViolationRepo
+)
+
+REPO_REGISTRY: dict[str, type[RepoInstance]] = {
     "users": SQLAUserRepo,
     "chats": SQLAChatRepo,
+    "usage": SQLAUsageRepo,
+    "violations": SQLAViolationRepo,
+    "images": SQLAImageRepo,
+    "seen": SQLAImageSeenRepo,
+    "votes": SQLAImageVoteRepo,
 }
 
 
@@ -30,7 +50,7 @@ class SQLAUoW(UoW):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
         self.session: AsyncSession | None = None
-        self._repos: dict[str, SQLAUserRepo | SQLAChatRepo] = {}
+        self._repos: dict[str, RepoInstance] = {}
 
     async def __aenter__(self) -> SQLAUoW:
         self.session = self._session_factory()
@@ -58,7 +78,7 @@ class SQLAUoW(UoW):
             self.session = None
             self._repos.clear()  # clean repos after transaction
 
-    def __getattr__(self, name: str) -> SQLAUserRepo | SQLAChatRepo:
+    def __getattr__(self, name: str) -> RepoInstance:
         if name in REPO_REGISTRY:
             return self._get_repo(name)
         raise AttributeError(f"Repository {name} not found in UoW")
@@ -71,6 +91,26 @@ class SQLAUoW(UoW):
     def chats(self) -> SQLAChatRepo:
         return self._get_repo("chats")
 
+    @property
+    def usage(self) -> SQLAUsageRepo:
+        return self._get_repo("usage")
+
+    @property
+    def violations(self) -> SQLAViolationRepo:
+        return self._get_repo("violations")
+
+    @property
+    def images(self) -> SQLAImageRepo:
+        return self._get_repo("images")
+
+    @property
+    def seen(self) -> SQLAImageSeenRepo:
+        return self._get_repo("seen")
+
+    @property
+    def votes(self) -> SQLAImageVoteRepo:
+        return self._get_repo("votes")
+
     @overload
     def _get_repo(self, name: Literal["users"]) -> SQLAUserRepo: ...
 
@@ -78,9 +118,24 @@ class SQLAUoW(UoW):
     def _get_repo(self, name: Literal["chats"]) -> SQLAChatRepo: ...
 
     @overload
-    def _get_repo(self, name: str) -> SQLAUserRepo | SQLAChatRepo: ...
+    def _get_repo(self, name: Literal["usage"]) -> SQLAUsageRepo: ...
 
-    def _get_repo(self, name: str) -> SQLAUserRepo | SQLAChatRepo:
+    @overload
+    def _get_repo(self, name: Literal["violations"]) -> SQLAViolationRepo: ...
+
+    @overload
+    def _get_repo(self, name: Literal["images"]) -> SQLAImageRepo: ...
+
+    @overload
+    def _get_repo(self, name: Literal["seen"]) -> SQLAImageSeenRepo: ...
+
+    @overload
+    def _get_repo(self, name: Literal["votes"]) -> SQLAImageVoteRepo: ...
+
+    @overload
+    def _get_repo(self, name: str) -> RepoInstance: ...
+
+    def _get_repo(self, name: str) -> RepoInstance:
         if self.session is None:
             raise RuntimeError("Session not initialized. Use 'async with uow' context.")
         if self._repos.get(name) is None:

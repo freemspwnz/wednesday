@@ -1,4 +1,4 @@
-"""1:1 — timezone + weekday из доменного ChatScheduleSet."""
+"""1:1 — timezone and weekday from domain ChatScheduleSet."""
 
 from __future__ import annotations
 

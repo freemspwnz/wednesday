@@ -1,4 +1,4 @@
-"""1:N — слоты ChatSchedule (hour, minute); timezone/weekday в chat_schedule_settings."""
+"""1:N — ChatSchedule slots (hour, minute); timezone/weekday in chat_schedule_settings."""
 
 from __future__ import annotations
 

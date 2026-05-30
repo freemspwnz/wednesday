@@ -1,4 +1,4 @@
-"""ORM: агрегат Chat — корень + 1:1 сателлиты + слоты расписания."""
+"""ORM: Chat aggregate — root, 1:1 satellites, schedule slots."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class ChatORM(Base):
-    """Корень агрегата: идентичность и updated/created."""
+    """Aggregate root: identity and created/updated timestamps."""
 
     __tablename__ = "chats"
 

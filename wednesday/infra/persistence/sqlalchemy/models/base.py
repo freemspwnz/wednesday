@@ -3,6 +3,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
-    """Базовый класс декларативных моделей SQLAlchemy."""
+    """Base class for SQLAlchemy declarative models."""
 
     metadata = MetaData(schema="wednesday_schema")

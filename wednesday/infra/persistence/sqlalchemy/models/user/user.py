@@ -1,4 +1,4 @@
-"""ORM: агрегат User"""
+"""ORM: User aggregate root."""
 
 from __future__ import annotations
 
@@ -15,12 +15,13 @@ from ..base import Base
 if TYPE_CHECKING:
     from .profile import UserProfileORM
     from .role import UserRoleORM
+    from .settings import UserSettingsORM
     from .state import UserStateORM
     from .subscription import UserSubscriptionORM
 
 
 class UserORM(Base):
-    """Корень агрегата: идентичность и временные метки."""
+    """Aggregate root: identity and timestamps."""
 
     __tablename__ = "users"
 
@@ -55,6 +56,14 @@ class UserORM(Base):
     )
     subscription: Mapped[UserSubscriptionORM] = relationship(
         "UserSubscriptionORM",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+        single_parent=True,
+        lazy="joined",
+    )
+    settings: Mapped[UserSettingsORM] = relationship(
+        "UserSettingsORM",
         back_populates="user",
         cascade="all, delete-orphan",
         uselist=False,

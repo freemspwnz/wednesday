@@ -11,7 +11,7 @@ from .user import UserORM
 
 
 class UserRoleORM(Base):
-    """1:1 — текущий UserRole."""
+    """1:1 — current UserRole."""
 
     __tablename__ = "user_roles"
     __table_args__ = (CheckConstraint("role IN (0, 1, 2, 3)", name="ck_user_roles_role"),)

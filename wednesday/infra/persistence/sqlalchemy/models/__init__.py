@@ -1,4 +1,4 @@
-"""ORM-модели."""
+"""SQLAlchemy ORM models."""
 
 from .base import Base
 from .chat import (
@@ -8,12 +8,16 @@ from .chat import (
     ChatScheduleSlotORM,
     ChatStateORM,
 )
+from .image import ImageORM, ImageSeenORM, ImageVoteORM
 from .user import (
     UserORM,
     UserProfileORM,
     UserRoleORM,
+    UserSettingsORM,
     UserStateORM,
     UserSubscriptionORM,
+    UserUsageORM,
+    UserViolationORM,
 )
 
 __all__ = [
@@ -23,9 +27,15 @@ __all__ = [
     "ChatScheduleSettingsORM",
     "ChatScheduleSlotORM",
     "ChatStateORM",
+    "ImageORM",
+    "ImageSeenORM",
+    "ImageVoteORM",
     "UserORM",
     "UserProfileORM",
     "UserRoleORM",
+    "UserSettingsORM",
     "UserStateORM",
     "UserSubscriptionORM",
+    "UserUsageORM",
+    "UserViolationORM",
 ]
