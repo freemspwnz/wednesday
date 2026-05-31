@@ -9,9 +9,9 @@ import pytest
 
 from app.exceptions import AppError, ChatNotFoundError, LimitStorageError, UserNotFoundError
 from domain.chat import ChatId
-from domain.chat.exceptions import ManagementAccessDeniedError as ChatDenied, ScheduleLimitExceededError
+from domain.chat.exceptions import AccessDeniedError as ChatAccessDeniedError, ScheduleLimitExceededError
+from domain.image.exceptions import ImageNotFoundError
 from domain.kernel.exceptions import (
-    AccessDeniedError,
     DomainError,
     InvalidStateTransitionError,
     StaleWriteError,
@@ -19,26 +19,37 @@ from domain.kernel.exceptions import (
 )
 from domain.user import UserId
 from domain.user.exceptions import (
+    AccessDeniedError as UserAccessDeniedError,
     CooldownViolationError,
     LimitViolationError,
-    ManagementAccessDeniedError as UserDenied,
+    ModelNotFoundError,
+    ModelSelectionError,
     UserBannedError,
+    UserNotFoundError as DomainUserNotFoundError,
 )
-from presentation.aiogram.messages.exceptions import user_message_for_exception
+from presentation.aiogram.messages.exceptions import (
+    IMAGE_NOT_FOUND,
+    MODEL_NOT_FOUND,
+    user_message_for_exception,
+)
 
 
 def _cases() -> list[tuple[Callable[[], BaseException], str | None]]:
     return [
         (lambda: UserNotFoundError(UserId(UUID(int=1))), "Пользователь не найден."),
+        (lambda: DomainUserNotFoundError("u-1"), "Пользователь не найден."),
         (lambda: ChatNotFoundError(ChatId(value=UUID(int=2))), "Чат не найден."),
         (lambda: LimitStorageError("x"), "Сервис временно перегружен. Попробуйте позже."),
         (lambda: UserBannedError("banned"), "Доступ ограничен."),
-        (lambda: UserDenied("no"), "Недостаточно прав для этой операции."),
-        (lambda: ChatDenied("no"), "Недостаточно прав для этой операции."),
-        (lambda: AccessDeniedError("no"), "Недостаточно прав для этой операции."),
+        (lambda: UserAccessDeniedError("no"), "Недостаточно прав для этой операции."),
+        (lambda: ChatAccessDeniedError("no"), "Недостаточно прав для этой операции."),
         (lambda: LimitViolationError("lim", {}), "Лимит исчерпан. Попробуйте позже."),
         (lambda: CooldownViolationError("cd", {}), "Лимит исчерпан. Попробуйте позже."),
         (lambda: ScheduleLimitExceededError(5), "Достигнут лимит расписаний для чата."),
+        (lambda: ImageNotFoundError("img-1"), IMAGE_NOT_FOUND),
+        (lambda: ModelNotFoundError("missing-model"), MODEL_NOT_FOUND),
+        (lambda: ModelSelectionError("tier_too_low"), "Модель недоступна для вашей подписки."),
+        (lambda: ModelSelectionError("model_not_active"), "Эта модель недоступна."),
         (lambda: InvalidStateTransitionError("st"), "Операция недоступна в текущем состоянии."),
         (lambda: StaleWriteError("old"), "Данные устарели. Повторите команду."),
         (lambda: ValidationError("bad"), "bad"),

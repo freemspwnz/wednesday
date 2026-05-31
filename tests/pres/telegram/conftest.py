@@ -1,4 +1,4 @@
-"""Shared fixtures for presentation _aiogram tests."""
+"""Shared fixtures for presentation telegram tests."""
 
 from __future__ import annotations
 

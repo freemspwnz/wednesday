@@ -8,8 +8,9 @@ import pytest
 from aiogram.types import Message
 
 from app.dto import UserContext
+from domain.catalog import SubscriptionTier
 from domain.kernel.vo import NonEmptyStr
-from domain.user import SubscriptionTier, UserRole
+from domain.user import UserRole
 from presentation.aiogram.messages import profile as profile_msg
 from presentation.aiogram.routers import user as handlers
 

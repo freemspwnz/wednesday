@@ -7,8 +7,9 @@ from datetime import UTC, datetime
 import pytest
 
 from app.dto import UserContext
+from domain.catalog import SubscriptionTier
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
-from domain.user import SubscriptionTier, UserRole
+from domain.user import UserRole
 from presentation.aiogram.messages import profile as profile_msg
 
 
@@ -44,7 +45,14 @@ def test_format_me_active_user() -> None:
     assert "Лимит в день: 3" in text
     assert "Перерыв: 5 мин" in text
     assert "Действует до: бессрочно" in text
+    assert "Модель: не выбрана" in text
     assert "Статус: Активен" in text
+
+
+@pytest.mark.unit
+def test_format_me_shows_selected_model() -> None:
+    text = profile_msg.format_me(_user(model="gigachat-2-pro"))
+    assert "Модель: gigachat-2-pro" in text
 
 
 @pytest.mark.unit

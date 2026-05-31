@@ -1,26 +1,26 @@
-"""Статические тексты ошибок, fallback-сообщения и маппинг исключений → UX."""
+"""Static error messages, fallback messages, and mapping exceptions to UX."""
 
 from __future__ import annotations
 
 from builtins import BaseException
 
 from app.exceptions import AppError, ChatNotFoundError, LimitStorageError, UserNotFoundError
-from domain.chat.exceptions import (
-    ManagementAccessDeniedError as ChatManagementAccessDeniedError,
-    ScheduleLimitExceededError,
-)
+from domain.chat.exceptions import AccessDeniedError as ChatAccessDeniedError, ScheduleLimitExceededError
+from domain.image.exceptions import ImageNotFoundError
 from domain.kernel.exceptions import (
-    AccessDeniedError,
     DomainError,
     InvalidStateTransitionError,
     StaleWriteError,
     ValidationError,
 )
 from domain.user.exceptions import (
+    AccessDeniedError as UserAccessDeniedError,
     CooldownViolationError,
     LimitViolationError,
-    ManagementAccessDeniedError as UserManagementAccessDeniedError,
+    ModelNotFoundError,
+    ModelSelectionError,
     UserBannedError,
+    UserNotFoundError as DomainUserNotFoundError,
 )
 
 SERVER_ERROR = "⚠️ Произошла ошибка на сервере. Мы уже в курсе и чиним!"
@@ -45,10 +45,19 @@ INVALID_STATE = "Операция недоступна в текущем сос�
 
 STALE_WRITE = "Данные устарели. Повторите команду."
 
+IMAGE_NOT_FOUND = "Изображение не найдено."
+
+MODEL_NOT_FOUND = "Модель не найдена."
+
+_MODEL_SELECTION_MESSAGES: dict[str, str] = {
+    "model_not_active": "Эта модель недоступна.",
+    "tier_too_low": "Модель недоступна для вашей подписки.",
+}
+
 
 def user_message_for_exception(exc: BaseException) -> str | None:
     """User-facing text; None means use a generic fallback message."""
-    if isinstance(exc, UserNotFoundError):
+    if isinstance(exc, UserNotFoundError | DomainUserNotFoundError):
         return USER_NOT_FOUND
     if isinstance(exc, ChatNotFoundError):
         return CHAT_NOT_FOUND
@@ -56,15 +65,18 @@ def user_message_for_exception(exc: BaseException) -> str | None:
         return LIMIT_STORAGE_BUSY
     if isinstance(exc, UserBannedError):
         return ACCESS_RESTRICTED
-    if isinstance(
-        exc,
-        UserManagementAccessDeniedError | ChatManagementAccessDeniedError | AccessDeniedError,
-    ):
+    if isinstance(exc, UserAccessDeniedError | ChatAccessDeniedError):
         return INSUFFICIENT_PERMISSIONS
     if isinstance(exc, LimitViolationError | CooldownViolationError):
         return LIMIT_EXHAUSTED
     if isinstance(exc, ScheduleLimitExceededError):
         return SCHEDULE_LIMIT_EXCEEDED
+    if isinstance(exc, ImageNotFoundError):
+        return IMAGE_NOT_FOUND
+    if isinstance(exc, ModelNotFoundError):
+        return MODEL_NOT_FOUND
+    if isinstance(exc, ModelSelectionError):
+        return _MODEL_SELECTION_MESSAGES.get(exc.code, exc.message)
     if isinstance(exc, InvalidStateTransitionError):
         return INVALID_STATE
     if isinstance(exc, StaleWriteError):

@@ -1,4 +1,4 @@
-"""Shared helpers for _aiogram tests (not pytest fixtures)."""
+"""Shared helpers for presentation telegram tests (not pytest fixtures)."""
 
 from __future__ import annotations
 

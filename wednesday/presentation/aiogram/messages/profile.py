@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from app.dto import UserContext
+from domain.catalog import SubscriptionTier
 from domain.kernel.vo import AwareDatetime
-from domain.user import SubscriptionTier, UserRole
+from domain.user import UserRole
 
 ROLE_UNKNOWN = "Не удалось определить вашу роль. Попробуйте позже или обратитесь к администратору."
 
@@ -23,6 +24,7 @@ _TIER_LABELS: dict[SubscriptionTier, str] = {
 _STATUS_ACTIVE = "Активен"
 _STATUS_BANNED = "Заблокирован"
 _SUBSCRIPTION_UNKNOWN = "не определена"
+_MODEL_UNKNOWN = "не выбрана"
 _UNLIMITED = "бессрочно"
 
 
@@ -35,6 +37,7 @@ def format_me(user: UserContext) -> str:
         "",
         f"Роль: {_ROLE_LABELS[user.role]}",
         *_subscription_lines(user),
+        *_model_lines(user),
         "",
         f"Статус: {_status_line(user)}",
     ]
@@ -56,6 +59,12 @@ def _subscription_lines(user: UserContext) -> list[str]:
     else:
         lines.append(f"Действует до: {_UNLIMITED}")
     return lines
+
+
+def _model_lines(user: UserContext) -> list[str]:
+    if user.model is None:
+        return [f"Модель: {_MODEL_UNKNOWN}"]
+    return [f"Модель: {user.model}"]
 
 
 def _status_line(user: UserContext) -> str:

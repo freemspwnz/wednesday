@@ -172,7 +172,7 @@ async def test_mod_denied_by_domain_policy(
     mock_logger: MagicMock,
     admin_user: UserContext,
 ) -> None:
-    from domain.user.exceptions import ManagementAccessDeniedError
+    from domain.user.exceptions import AccessDeniedError
 
     target = UserContext(
         tg_id=42,
@@ -181,7 +181,7 @@ async def test_mod_denied_by_domain_policy(
         id=UserId(UUID(int=2)),
     )
     mock_scope.registration_uc.find_user_by_tg_id.return_value = target
-    mock_scope.user_commands_uc.change_role.side_effect = ManagementAccessDeniedError("access_denied")
+    mock_scope.user_commands_uc.change_role.side_effect = AccessDeniedError("access_denied")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
         await h.cmd_mod(make_message(user_id=2), ["42"], mock_logger, mock_scope, admin_user)
