@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from prometheus_client import CollectorRegistry
 
-from app.exceptions import PrometheusExportError, PrometheusHttpExporterError
+from app.exceptions import MetricsExportError, MetricsHttpExporterError
 from infra.config import MetricsConfig
 from infra.observe.prometheus.collector import PrometheusCollector
 
@@ -105,7 +105,7 @@ class TestPrometheusCollector:
             "infra.observe.prometheus.collector.start_http_server",
             side_effect=OSError("bind failed"),
         ):
-            with pytest.raises(PrometheusHttpExporterError):
+            with pytest.raises(MetricsHttpExporterError):
                 c.serve()
         mock_logger.exception.assert_called()
 
@@ -126,7 +126,7 @@ class TestPrometheusCollector:
             "infra.observe.prometheus.collector.start_http_server",
             side_effect=RuntimeError("unexpected"),
         ):
-            with pytest.raises(PrometheusHttpExporterError):
+            with pytest.raises(MetricsHttpExporterError):
                 c.serve()
         mock_logger.exception.assert_called()
 
@@ -147,7 +147,7 @@ class TestPrometheusCollector:
             "infra.observe.prometheus.collector.generate_latest",
             side_effect=RuntimeError("boom"),
         ):
-            with pytest.raises(PrometheusExportError):
+            with pytest.raises(MetricsExportError):
                 c.export()
         mock_logger.exception.assert_called()
 

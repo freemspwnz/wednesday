@@ -13,7 +13,7 @@ from prometheus_client import (
     start_http_server,
 )
 
-from app.exceptions import PrometheusExportError, PrometheusHttpExporterError
+from app.exceptions import MetricsExportError, MetricsHttpExporterError
 from app.protocols import Logger, MetricsCollector
 from infra.config import MetricsConfig
 
@@ -67,7 +67,7 @@ class PrometheusCollector(MetricsCollector):
             return generate_latest(self._registry)
         except Exception as e:
             self._logger.exception("Prometheus export failed")
-            raise PrometheusExportError("Prometheus export failed") from e
+            raise MetricsExportError("Prometheus export failed") from e
 
     def serve(self) -> None:
         if not self._config.enabled:
@@ -85,7 +85,7 @@ class PrometheusCollector(MetricsCollector):
                 host=self._config.host,
                 port=self._config.port,
             )
-            raise PrometheusHttpExporterError("Prometheus HTTP exporter failed to start") from e
+            raise MetricsHttpExporterError("Prometheus HTTP exporter failed to start") from e
         self._logger.info(f"Prometheus HTTP exporter started on {self._config.host}:{self._config.port}")
 
     def _get_or_create(

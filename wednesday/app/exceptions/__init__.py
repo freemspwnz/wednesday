@@ -2,27 +2,23 @@
 
 from .application import ChatNotFoundError, UserNotFoundError
 from .base import AppError, UnexpectedAppError
-from .observe import (
-    LogMessageFormatError,
-    PrometheusExportError,
-    PrometheusHttpExporterError,
-    PrometheusObserveError,
-)
+from .observe import LoggingError, LogMessageFormatError, MetricsError, MetricsExportError, MetricsHttpExporterError
 from .persistence import (
+    AggregateMappingError,
     CacheBackendError,
+    CacheError,
     CacheTimeoutError,
     CacheUnavailableError,
     CatalogError,
     CatalogFormatError,
     CatalogNotFoundError,
     CatalogParseError,
-    SQLAAggregateMappingError,
-    SQLADataIntegrityError,
-    SQLAError,
-    SQLARepositoryError,
+    DataIntegrityError,
+    DBError,
+    RepositoryError,
     UnexpectedCacheError,
     UnexpectedCatalogError,
-    UnexpectedSQLAError,
+    UnexpectedDBError,
 )
 from .resilience import (
     CircuitError,
@@ -40,8 +36,10 @@ from .resilience import (
 from .utils import unwrap_exception
 
 __all__ = [
+    "AggregateMappingError",
     "AppError",
     "CacheBackendError",
+    "CacheError",
     "CacheTimeoutError",
     "CacheUnavailableError",
     "CatalogError",
@@ -52,26 +50,26 @@ __all__ = [
     "CircuitError",
     "CircuitOpenError",
     "CircuitStorageError",
+    "DBError",
+    "DataIntegrityError",
     "LimitError",
     "LimitStorageError",
     "LogMessageFormatError",
+    "LoggingError",
     "MaxAttemptsExhaustedError",
-    "PrometheusExportError",
-    "PrometheusHttpExporterError",
-    "PrometheusObserveError",
+    "MetricsError",
+    "MetricsExportError",
+    "MetricsHttpExporterError",
+    "RepositoryError",
     "RetryError",
-    "SQLAAggregateMappingError",
-    "SQLADataIntegrityError",
-    "SQLAError",
-    "SQLARepositoryError",
     "TooManyRequests",
     "UnexpectedAppError",
     "UnexpectedCacheError",
     "UnexpectedCatalogError",
     "UnexpectedCircuitError",
+    "UnexpectedDBError",
     "UnexpectedLimitError",
     "UnexpectedRetryError",
-    "UnexpectedSQLAError",
     "UserNotFoundError",
     "unwrap_exception",
 ]

@@ -8,10 +8,10 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import (
-    SQLAAggregateMappingError,
-    SQLADataIntegrityError,
-    SQLARepositoryError,
-    UnexpectedSQLAError,
+    AggregateMappingError,
+    DataIntegrityError,
+    RepositoryError,
+    UnexpectedDBError,
 )
 from domain.catalog import Model
 from domain.image import (
@@ -45,21 +45,21 @@ class SQLAImageRepo(ImageRepo):
                 return None
             return _image_from_orm(orm_image)
         except ValueError as exc:
-            raise SQLAAggregateMappingError(
+            raise AggregateMappingError(
                 "Failed to map ORM image aggregate.",
                 operation="get_by_id",
                 entity="image",
                 entity_id=image_id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to load image aggregate.",
                 operation="get_by_id",
                 entity="image",
                 entity_id=image_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while reading image aggregate.") from exc
+            raise UnexpectedDBError("Unexpected error while reading image aggregate.") from exc
 
     async def save(self, image: Image) -> None:
         try:
@@ -94,21 +94,21 @@ class SQLAImageRepo(ImageRepo):
                 )
             )
         except IntegrityError as exc:
-            raise SQLADataIntegrityError(
+            raise DataIntegrityError(
                 "Image save violated database constraints.",
                 operation="save",
                 entity="image",
                 entity_id=image.id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to persist image aggregate.",
                 operation="save",
                 entity="image",
                 entity_id=image.id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while saving image aggregate.") from exc
+            raise UnexpectedDBError("Unexpected error while saving image aggregate.") from exc
 
     async def exists_by_telegram_file_id(self, file_id: TelegramFileId) -> bool:
         try:
@@ -116,13 +116,13 @@ class SQLAImageRepo(ImageRepo):
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to check image file id existence.",
                 operation="exists_by_telegram_file_id",
                 entity="image",
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while checking image file id existence.") from exc
+            raise UnexpectedDBError("Unexpected error while checking image file id existence.") from exc
 
     async def get_by_telegram_file_id(self, file_id: TelegramFileId) -> Image | None:
         try:
@@ -133,19 +133,19 @@ class SQLAImageRepo(ImageRepo):
                 return None
             return _image_from_orm(orm_image)
         except ValueError as exc:
-            raise SQLAAggregateMappingError(
+            raise AggregateMappingError(
                 "Failed to map ORM image aggregate.",
                 operation="get_by_telegram_file_id",
                 entity="image",
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to load image by telegram file id.",
                 operation="get_by_telegram_file_id",
                 entity="image",
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while loading image by telegram file id.") from exc
+            raise UnexpectedDBError("Unexpected error while loading image by telegram file id.") from exc
 
     async def get_random_unseen_for_chat(
         self,
@@ -178,19 +178,19 @@ class SQLAImageRepo(ImageRepo):
                 return None
             return _image_from_orm(orm_image)
         except ValueError as exc:
-            raise SQLAAggregateMappingError(
+            raise AggregateMappingError(
                 "Failed to map ORM image aggregate.",
                 operation="get_random_unseen_for_chat",
                 entity="image",
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to pick random unseen image.",
                 operation="get_random_unseen_for_chat",
                 entity="image",
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while picking random unseen image.") from exc
+            raise UnexpectedDBError("Unexpected error while picking random unseen image.") from exc
 
 
 def _status_to_orm(image: Image) -> tuple[str, str | None]:

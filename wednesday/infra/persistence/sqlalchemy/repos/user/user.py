@@ -5,12 +5,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import (
-    SQLAAggregateMappingError,
-    SQLADataIntegrityError,
-    SQLARepositoryError,
-    UnexpectedSQLAError,
-)
+from app.exceptions import AggregateMappingError, DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.catalog import Model, Series, SubscriptionPlan, SubscriptionTier, Vendor
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import (
@@ -50,21 +45,21 @@ class SQLAUserRepo(UserRepo):
                 return None
             return _user_from_orm(orm_user)
         except ValueError as exc:
-            raise SQLAAggregateMappingError(
+            raise AggregateMappingError(
                 "Failed to map ORM user aggregate.",
                 operation="get_by_id",
                 entity="user",
                 entity_id=user_id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to load user aggregate.",
                 operation="get_by_id",
                 entity="user",
                 entity_id=user_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while reading user aggregate.") from exc
+            raise UnexpectedDBError("Unexpected error while reading user aggregate.") from exc
 
     async def save(self, user: User) -> None:
         try:
@@ -177,21 +172,21 @@ class SQLAUserRepo(UserRepo):
                 )
             )
         except IntegrityError as exc:
-            raise SQLADataIntegrityError(
+            raise DataIntegrityError(
                 "User save violated database constraints.",
                 operation="save",
                 entity="user",
                 entity_id=user.id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to persist user aggregate.",
                 operation="save",
                 entity="user",
                 entity_id=user.id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while saving user aggregate.") from exc
+            raise UnexpectedDBError("Unexpected error while saving user aggregate.") from exc
 
     async def exists(self, user_id: UserId) -> bool:
         try:
@@ -199,14 +194,14 @@ class SQLAUserRepo(UserRepo):
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to check user existence.",
                 operation="exists",
                 entity="user",
                 entity_id=user_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while checking user existence.") from exc
+            raise UnexpectedDBError("Unexpected error while checking user existence.") from exc
 
 
 def _user_from_orm(orm: UserORM) -> User:

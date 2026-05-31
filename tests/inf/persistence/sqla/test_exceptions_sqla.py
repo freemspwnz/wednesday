@@ -1,12 +1,12 @@
 import pytest
 
-from app.exceptions import SQLADataIntegrityError, SQLARepositoryError, UnexpectedSQLAError
+from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError
 
 
 @pytest.mark.unit
 @pytest.mark.infra
-def test_sqla_repository_error_keeps_context() -> None:
-    err = SQLARepositoryError(
+def test_repository_error_keeps_context() -> None:
+    err = RepositoryError(
         "failed",
         operation="save",
         entity="user",
@@ -19,12 +19,12 @@ def test_sqla_repository_error_keeps_context() -> None:
 
 @pytest.mark.unit
 @pytest.mark.infra
-def test_sqla_error_hierarchy() -> None:
-    integrity_error = SQLADataIntegrityError(
+def test_db_error_hierarchy() -> None:
+    integrity_error = DataIntegrityError(
         "broken",
         operation="save",
         entity="chat",
         entity_id="abc",
     )
-    assert isinstance(integrity_error, SQLARepositoryError)
-    assert isinstance(UnexpectedSQLAError("oops"), Exception)
+    assert isinstance(integrity_error, RepositoryError)
+    assert isinstance(UnexpectedDBError("oops"), Exception)

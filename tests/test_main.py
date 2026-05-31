@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from main import main
 
-from app.exceptions import PrometheusHttpExporterError
+from app.exceptions import MetricsHttpExporterError
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ async def test_main_closes_bot_and_shuts_down_container(main_mocks: dict[str, Ma
 async def test_main_fails_when_prometheus_exporter_unavailable_and_shuts_down(
     main_mocks: dict[str, MagicMock | AsyncMock],
 ) -> None:
-    main_mocks["container"].observe.collector.serve.side_effect = PrometheusHttpExporterError("down")
+    main_mocks["container"].observe.collector.serve.side_effect = MetricsHttpExporterError("down")
 
     with (
         patch("main.Config", return_value=main_mocks["config"]),
@@ -72,7 +72,7 @@ async def test_main_fails_when_prometheus_exporter_unavailable_and_shuts_down(
         patch("main.Dispatcher", return_value=main_mocks["dp"]),
         patch("main.setup_bot"),
         patch("main.setup_dp"),
-        pytest.raises(PrometheusHttpExporterError, match="down"),
+        pytest.raises(MetricsHttpExporterError, match="down"),
     ):
         await main()
 

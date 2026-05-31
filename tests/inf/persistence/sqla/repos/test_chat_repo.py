@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.exceptions import SQLAAggregateMappingError, SQLADataIntegrityError
+from app.exceptions import AggregateMappingError, DataIntegrityError
 from domain.chat import (
     Chat,
     ChatId,
@@ -69,7 +69,7 @@ async def test_save_wraps_integrity_error() -> None:
     session.execute.side_effect = IntegrityError("stmt", {}, Exception("boom"))
     repo = SQLAChatRepo(session=session)
 
-    with pytest.raises(SQLADataIntegrityError):
+    with pytest.raises(DataIntegrityError):
         await repo.save(mk_chat())
 
 
@@ -88,5 +88,5 @@ async def test_get_by_id_wraps_mapping_errors() -> None:
     session.execute.return_value = result
     repo = SQLAChatRepo(session=session)
 
-    with pytest.raises(SQLAAggregateMappingError):
+    with pytest.raises(AggregateMappingError):
         await repo.get_by_id(mk_chat().id)

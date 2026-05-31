@@ -1,10 +1,18 @@
 import pytest
 
 from app.exceptions import (
+    AggregateMappingError,
+    CacheError,
+    CacheTimeoutError,
+    CacheUnavailableError,
     CircuitOpenError,
-    SQLAAggregateMappingError,
-    SQLADataIntegrityError,
-    SQLARepositoryError,
+    DataIntegrityError,
+    LoggingError,
+    LogMessageFormatError,
+    MetricsError,
+    MetricsExportError,
+    MetricsHttpExporterError,
+    RepositoryError,
     TooManyRequests,
     unwrap_exception,
 )
@@ -34,19 +42,48 @@ def test_too_many_requests_keeps_payload_fields() -> None:
 
 
 @pytest.mark.unit
-def test_sqla_error_hierarchy_and_context() -> None:
-    base = SQLARepositoryError("boom", operation="save", entity="user", entity_id=42)
-    integrity = SQLADataIntegrityError("integrity", operation="save", entity="chat", entity_id="x")
-    mapping = SQLAAggregateMappingError("mapping", operation="get_by_id", entity="chat")
+def test_db_error_hierarchy_and_context() -> None:
+    base = RepositoryError("boom", operation="save", entity="user", entity_id=42)
+    integrity = DataIntegrityError("integrity", operation="save", entity="chat", entity_id="x")
+    mapping = AggregateMappingError("mapping", operation="get_by_id", entity="chat")
 
     assert base.operation == "save"
     assert base.entity == "user"
     assert base.entity_id == 42
-    assert isinstance(integrity, SQLARepositoryError)
-    assert isinstance(mapping, SQLARepositoryError)
+    assert isinstance(integrity, RepositoryError)
+    assert isinstance(mapping, RepositoryError)
 
 
 @pytest.mark.unit
 def test_circuit_open_error_keeps_retry_after() -> None:
     exc = CircuitOpenError("open", retry_after=1.5)
     assert exc.retry_after == 1.5
+
+
+@pytest.mark.unit
+def test_cache_error_hierarchy_and_operation() -> None:
+    timeout = CacheTimeoutError("timed out", operation="get")
+    unavailable = CacheUnavailableError("down", operation="set")
+
+    assert isinstance(timeout, CacheError)
+    assert isinstance(unavailable, CacheError)
+    assert timeout.operation == "get"
+    assert unavailable.operation == "set"
+
+
+@pytest.mark.unit
+def test_metrics_error_hierarchy() -> None:
+    export_error = MetricsExportError("export failed")
+    http_error = MetricsHttpExporterError("bind failed")
+
+    assert isinstance(export_error, MetricsError)
+    assert isinstance(http_error, MetricsError)
+
+
+@pytest.mark.unit
+def test_logging_error_hierarchy() -> None:
+    err = LogMessageFormatError("msg {x}", (1,))
+
+    assert isinstance(err, LoggingError)
+    assert err.template == "msg {x}"
+    assert err.log_args == (1,)

@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from app.exceptions import SQLAAggregateMappingError, SQLADataIntegrityError, SQLARepositoryError
+from app.exceptions import AggregateMappingError, DataIntegrityError, RepositoryError
 from domain.image import ImageId, TelegramFileId
 from domain.image.vote import Vote
 from infra.persistence.sqlalchemy.models import ImageORM, ImageVoteORM
@@ -43,7 +43,7 @@ async def test_image_save_wraps_integrity_error() -> None:
     session.execute.side_effect = IntegrityError("stmt", {}, Exception("boom"))
     repo = SQLAImageRepo(session=session)
 
-    with pytest.raises(SQLADataIntegrityError):
+    with pytest.raises(DataIntegrityError):
         await repo.save(mk_image())
 
 
@@ -97,7 +97,7 @@ async def test_image_get_by_id_wraps_mapping_errors() -> None:
     session.execute.return_value = result
     repo = SQLAImageRepo(session=session)
 
-    with pytest.raises(SQLAAggregateMappingError):
+    with pytest.raises(AggregateMappingError):
         await repo.get_by_id(ImageId(UUID(int=2)))
 
 
@@ -238,7 +238,7 @@ async def test_seen_mark_seen_wraps_integrity_error() -> None:
     session.execute.side_effect = IntegrityError("stmt", {}, Exception("boom"))
     repo = SQLAImageSeenRepo(session=session)
 
-    with pytest.raises(SQLADataIntegrityError):
+    with pytest.raises(DataIntegrityError):
         await repo.mark_seen(UUID(int=3), ImageId(UUID(int=4)), dt(12))
 
 
@@ -250,5 +250,5 @@ async def test_vote_get_wraps_sqla_error() -> None:
     session.execute.side_effect = SQLAlchemyError("db down")
     repo = SQLAImageVoteRepo(session=session)
 
-    with pytest.raises(SQLARepositoryError):
+    with pytest.raises(RepositoryError):
         await repo.get(ImageId(UUID(int=1)), UUID(int=2))

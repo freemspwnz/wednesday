@@ -5,21 +5,33 @@ from __future__ import annotations
 from ..base import AppError, UnexpectedAppError
 
 
-class CacheBackendError(AppError):
-    """Базовая ошибка бэкенда кэша с указанием операции."""
+class CacheError(AppError):
+    """Base exception for cache persistence errors."""
+
+
+class CacheBackendError(CacheError):
+    """Base cache backend error with operation specification."""
 
     def __init__(self, message: str, *, operation: str) -> None:
         super().__init__(message)
         self.operation = operation
 
 
-class CacheUnavailableError(CacheBackendError):
-    """Кэш временно недоступен (сеть, пул, перегруз Redis)."""
+class CacheUnavailableError(CacheError):
+    """Cache is temporarily unavailable (network, pool, Redis overload)."""
+
+    def __init__(self, message: str, *, operation: str) -> None:
+        super().__init__(message)
+        self.operation = operation
 
 
-class CacheTimeoutError(CacheBackendError):
-    """Операция кэша превысила таймаут сокета/клиента."""
+class CacheTimeoutError(CacheError):
+    """Cache operation exceeded socket/client timeout."""
+
+    def __init__(self, message: str, *, operation: str) -> None:
+        super().__init__(message)
+        self.operation = operation
 
 
 class UnexpectedCacheError(UnexpectedAppError):
-    """Неожиданная ошибка Redis, не отнесённая к явным классам выше."""
+    """Unexpected Redis error, not belonging to explicit classes above."""

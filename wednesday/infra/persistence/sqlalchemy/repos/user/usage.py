@@ -5,11 +5,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import SQLADataIntegrityError, SQLARepositoryError, UnexpectedSQLAError
+from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.kernel.vo import AwareDatetime
-from domain.user import UserId
-from domain.user.policies import UsageStats
-from domain.user.protocols import UsageRepo
+from domain.user import UsageRepo, UsageStats, UserId
 
 from ...models import UserUsageORM
 
@@ -32,14 +30,14 @@ class SQLAUsageRepo(UsageRepo):
                 return UsageStats(last_usage=last_usage, daily_usage=0)
             return UsageStats(last_usage=last_usage, daily_usage=row.daily_usage)
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to load usage stats.",
                 operation="get_usage_stats",
                 entity="user_usage",
                 entity_id=user_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while loading usage stats.") from exc
+            raise UnexpectedDBError("Unexpected error while loading usage stats.") from exc
 
     async def record_usage(self, user_id: UserId, at: AwareDatetime) -> None:
         at = AwareDatetime.ensure(at)
@@ -74,18 +72,18 @@ class SQLAUsageRepo(UsageRepo):
                 )
             )
         except IntegrityError as exc:
-            raise SQLADataIntegrityError(
+            raise DataIntegrityError(
                 "Usage record violated database constraints.",
                 operation="record_usage",
                 entity="user_usage",
                 entity_id=user_id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to record usage.",
                 operation="record_usage",
                 entity="user_usage",
                 entity_id=user_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while recording usage.") from exc
+            raise UnexpectedDBError("Unexpected error while recording usage.") from exc

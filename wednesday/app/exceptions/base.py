@@ -1,8 +1,8 @@
-"""Модуль ошибок application-слоя."""
+"""Application-layer errors."""
 
 
 class AppError(Exception):
-    """Базовый класс для всех ошибок application-слоя."""
+    """Base class for all application-layer errors."""
 
 
 class UnexpectedAppError(AppError):

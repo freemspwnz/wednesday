@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import SQLADataIntegrityError, SQLARepositoryError, UnexpectedSQLAError
+from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.image import ImageId, ImageVoteRepo
 from domain.image.vote import Vote
 
@@ -30,14 +30,14 @@ class SQLAImageVoteRepo(ImageVoteRepo):
                 return None
             return Vote(image_id=image_id, voter_id=voter_id, value=row.value)
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to load image vote.",
                 operation="get",
                 entity="image_vote",
                 entity_id=image_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while loading image vote.") from exc
+            raise UnexpectedDBError("Unexpected error while loading image vote.") from exc
 
     async def upsert(self, vote: Vote) -> None:
         try:
@@ -54,21 +54,21 @@ class SQLAImageVoteRepo(ImageVoteRepo):
                 )
             )
         except IntegrityError as exc:
-            raise SQLADataIntegrityError(
+            raise DataIntegrityError(
                 "Image vote save violated database constraints.",
                 operation="upsert",
                 entity="image_vote",
                 entity_id=vote.image_id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to persist image vote.",
                 operation="upsert",
                 entity="image_vote",
                 entity_id=vote.image_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while saving image vote.") from exc
+            raise UnexpectedDBError("Unexpected error while saving image vote.") from exc
 
     async def list_for_image(self, image_id: ImageId) -> list[Vote]:
         try:
@@ -77,11 +77,11 @@ class SQLAImageVoteRepo(ImageVoteRepo):
             rows = result.scalars().all()
             return [Vote(image_id=image_id, voter_id=row.voter_id, value=row.value) for row in rows]
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to list image votes.",
                 operation="list_for_image",
                 entity="image_vote",
                 entity_id=image_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while listing image votes.") from exc
+            raise UnexpectedDBError("Unexpected error while listing image votes.") from exc

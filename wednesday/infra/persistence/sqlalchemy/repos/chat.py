@@ -8,10 +8,10 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import (
-    SQLAAggregateMappingError,
-    SQLADataIntegrityError,
-    SQLARepositoryError,
-    UnexpectedSQLAError,
+    AggregateMappingError,
+    DataIntegrityError,
+    RepositoryError,
+    UnexpectedDBError,
 )
 from domain.chat import (
     ActiveState,
@@ -43,21 +43,21 @@ class SQLAChatRepo(ChatRepo):
                 return None
             return _chat_from_orm(orm_chat)
         except ValueError as exc:
-            raise SQLAAggregateMappingError(
+            raise AggregateMappingError(
                 "Failed to map ORM chat aggregate.",
                 operation="get_by_id",
                 entity="chat",
                 entity_id=chat_id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to load chat aggregate.",
                 operation="get_by_id",
                 entity="chat",
                 entity_id=chat_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while reading chat aggregate.") from exc
+            raise UnexpectedDBError("Unexpected error while reading chat aggregate.") from exc
 
     async def save(self, chat: Chat) -> None:
         try:
@@ -159,21 +159,21 @@ class SQLAChatRepo(ChatRepo):
                     delete(ChatScheduleSlotORM).where(ChatScheduleSlotORM.chat_id == chat.id.value)
                 )
         except IntegrityError as exc:
-            raise SQLADataIntegrityError(
+            raise DataIntegrityError(
                 "Chat save violated database constraints.",
                 operation="save",
                 entity="chat",
                 entity_id=chat.id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to persist chat aggregate.",
                 operation="save",
                 entity="chat",
                 entity_id=chat.id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while saving chat aggregate.") from exc
+            raise UnexpectedDBError("Unexpected error while saving chat aggregate.") from exc
 
     async def exists(self, chat_id: ChatId) -> bool:
         try:
@@ -181,14 +181,14 @@ class SQLAChatRepo(ChatRepo):
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to check chat existence.",
                 operation="exists",
                 entity="chat",
                 entity_id=chat_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while checking chat existence.") from exc
+            raise UnexpectedDBError("Unexpected error while checking chat existence.") from exc
 
 
 def _chat_from_orm(orm: ChatORM) -> Chat:

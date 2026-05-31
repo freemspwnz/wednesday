@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import SQLADataIntegrityError, SQLARepositoryError, UnexpectedSQLAError
+from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.image import ImageId, ImageSeenRepo
 from domain.kernel.vo import AwareDatetime
 
@@ -29,13 +29,13 @@ class SQLAImageSeenRepo(ImageSeenRepo):
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to check image seen status.",
                 operation="is_seen",
                 entity="image_seen",
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while checking image seen status.") from exc
+            raise UnexpectedDBError("Unexpected error while checking image seen status.") from exc
 
     async def mark_seen(
         self,
@@ -56,18 +56,18 @@ class SQLAImageSeenRepo(ImageSeenRepo):
                 )
             )
         except IntegrityError as exc:
-            raise SQLADataIntegrityError(
+            raise DataIntegrityError(
                 "Image seen mark violated database constraints.",
                 operation="mark_seen",
                 entity="image_seen",
                 entity_id=image_id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to mark image as seen.",
                 operation="mark_seen",
                 entity="image_seen",
                 entity_id=image_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while marking image as seen.") from exc
+            raise UnexpectedDBError("Unexpected error while marking image as seen.") from exc

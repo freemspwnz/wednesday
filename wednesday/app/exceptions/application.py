@@ -1,4 +1,4 @@
-"""Ошибки прикладного сценария, не принадлежащие домену."""
+"""Application-layer errors not belonging to the domain."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from .base import AppError
 
 
 class ChatNotFoundError(AppError):
-    """Чат отсутствует в хранилище."""
+    """Chat is not found in the storage."""
 
     def __init__(self, chat_id: ChatId) -> None:
         self.chat_id = chat_id
@@ -17,7 +17,7 @@ class ChatNotFoundError(AppError):
 
 
 class UserNotFoundError(AppError):
-    """Пользователь отсутствует в хранилище."""
+    """User is not found in the storage."""
 
     def __init__(self, user_id: UserId) -> None:
         self.user_id = user_id

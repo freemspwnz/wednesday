@@ -5,7 +5,7 @@ from uuid import UUID
 import pytest
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from app.exceptions import SQLAAggregateMappingError, SQLADataIntegrityError, SQLARepositoryError
+from app.exceptions import AggregateMappingError, DataIntegrityError, RepositoryError
 from domain.catalog import Model, Series, Vendor
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
@@ -70,7 +70,7 @@ async def test_save_wraps_integrity_error() -> None:
     repo = SQLAUserRepo(session=session)
     user = mk_user()
 
-    with pytest.raises(SQLADataIntegrityError):
+    with pytest.raises(DataIntegrityError):
         await repo.save(user)
 
 
@@ -90,7 +90,7 @@ async def test_get_by_id_wraps_mapping_errors() -> None:
     session.execute.return_value = result
     repo = SQLAUserRepo(session=session)
 
-    with pytest.raises(SQLAAggregateMappingError):
+    with pytest.raises(AggregateMappingError):
         await repo.get_by_id(mk_user().id)
 
 
@@ -149,5 +149,5 @@ async def test_exists_wraps_sqla_error() -> None:
     session.execute.side_effect = SQLAlchemyError("db down")
     repo = SQLAUserRepo(session=session)
 
-    with pytest.raises(SQLARepositoryError):
+    with pytest.raises(RepositoryError):
         await repo.exists(mk_user().id)

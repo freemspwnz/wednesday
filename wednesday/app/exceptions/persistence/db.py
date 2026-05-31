@@ -1,11 +1,11 @@
 from ..base import AppError, UnexpectedAppError
 
 
-class SQLAError(AppError):
-    """Base exception for SQLAlchemy errors."""
+class DBError(AppError):
+    """Base exception for database persistence errors."""
 
 
-class SQLARepositoryError(SQLAError):
+class RepositoryError(DBError):
     """Repository operation failed."""
 
     def __init__(
@@ -22,13 +22,13 @@ class SQLARepositoryError(SQLAError):
         self.entity_id = entity_id
 
 
-class SQLADataIntegrityError(SQLARepositoryError):
+class DataIntegrityError(RepositoryError):
     """Constraint or integrity violation in persistence layer."""
 
 
-class SQLAAggregateMappingError(SQLARepositoryError):
-    """Invalid ORM payload for domain aggregate reconstruction."""
+class AggregateMappingError(RepositoryError):
+    """Invalid persistence payload for domain aggregate reconstruction."""
 
 
-class UnexpectedSQLAError(UnexpectedAppError):
-    """Unexpected SQLAlchemy infrastructure error."""
+class UnexpectedDBError(UnexpectedAppError):
+    """Unexpected database infrastructure error."""

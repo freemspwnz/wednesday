@@ -1,5 +1,6 @@
 from .cache import (
     CacheBackendError,
+    CacheError,
     CacheTimeoutError,
     CacheUnavailableError,
     UnexpectedCacheError,
@@ -11,21 +12,22 @@ from .catalog import (
     CatalogParseError,
     UnexpectedCatalogError,
 )
-from .sqla import SQLAAggregateMappingError, SQLADataIntegrityError, SQLAError, SQLARepositoryError, UnexpectedSQLAError
+from .db import AggregateMappingError, DataIntegrityError, DBError, RepositoryError, UnexpectedDBError
 
 __all__ = [
+    "AggregateMappingError",
     "CacheBackendError",
+    "CacheError",
     "CacheTimeoutError",
     "CacheUnavailableError",
     "CatalogError",
     "CatalogFormatError",
     "CatalogNotFoundError",
     "CatalogParseError",
-    "SQLAAggregateMappingError",
-    "SQLADataIntegrityError",
-    "SQLAError",
-    "SQLARepositoryError",
+    "DBError",
+    "DataIntegrityError",
+    "RepositoryError",
     "UnexpectedCacheError",
     "UnexpectedCatalogError",
-    "UnexpectedSQLAError",
+    "UnexpectedDBError",
 ]

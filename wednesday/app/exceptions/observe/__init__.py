@@ -1,13 +1,10 @@
-from .loguru import LogMessageFormatError
-from .prometheus import (
-    PrometheusExportError,
-    PrometheusHttpExporterError,
-    PrometheusObserveError,
-)
+from .logging import LoggingError, LogMessageFormatError
+from .metrics import MetricsError, MetricsExportError, MetricsHttpExporterError
 
 __all__ = [
     "LogMessageFormatError",
-    "PrometheusExportError",
-    "PrometheusHttpExporterError",
-    "PrometheusObserveError",
+    "LoggingError",
+    "MetricsError",
+    "MetricsExportError",
+    "MetricsHttpExporterError",
 ]

@@ -6,11 +6,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import SQLADataIntegrityError, SQLARepositoryError, UnexpectedSQLAError
+from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.kernel.vo import AwareDatetime
-from domain.user import UserId
-from domain.user.policies import ViolationStats
-from domain.user.protocols import ViolationRepo
+from domain.user import UserId, ViolationRepo, ViolationStats
 
 from ...models import UserViolationORM
 
@@ -43,14 +41,14 @@ class SQLAViolationRepo(ViolationRepo):
                 total=int(row.total),
             )
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to load violation stats.",
                 operation="get_violation_stats",
                 entity="user_violations",
                 entity_id=user_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while loading violation stats.") from exc
+            raise UnexpectedDBError("Unexpected error while loading violation stats.") from exc
 
     async def record_violation(self, user_id: UserId, at: AwareDatetime) -> None:
         at = AwareDatetime.ensure(at)
@@ -62,18 +60,18 @@ class SQLAViolationRepo(ViolationRepo):
             self._session.add(row)
             await self._session.flush()
         except IntegrityError as exc:
-            raise SQLADataIntegrityError(
+            raise DataIntegrityError(
                 "Violation record violated database constraints.",
                 operation="record_violation",
                 entity="user_violations",
                 entity_id=user_id.value,
             ) from exc
         except SQLAlchemyError as exc:
-            raise SQLARepositoryError(
+            raise RepositoryError(
                 "SQLAlchemy failed to record violation.",
                 operation="record_violation",
                 entity="user_violations",
                 entity_id=user_id.value,
             ) from exc
         except Exception as exc:
-            raise UnexpectedSQLAError("Unexpected error while recording violation.") from exc
+            raise UnexpectedDBError("Unexpected error while recording violation.") from exc
