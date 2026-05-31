@@ -1,11 +1,13 @@
 """Application services"""
 
-from .chat_commands_srv import ChatCommandService
-from .registration_srv import RegistrationService
-from .user_commands_srv import UserCommandService
+from .chat_commands import ChatCommandService
+from .image_random import ImageRandomService
+from .registration import RegistrationService
+from .user_commands import UserCommandService
 
 __all__ = [
     "ChatCommandService",
+    "ImageRandomService",
     "RegistrationService",
     "UserCommandService",
 ]

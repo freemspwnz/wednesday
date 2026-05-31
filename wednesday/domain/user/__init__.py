@@ -36,7 +36,7 @@ from .policies import (
     UsageStats,
     ViolationStats,
 )
-from .protocols import UserRepo
+from .protocols import UsageRepo, UserRepo, ViolationRepo
 from .services import GenerationAccessService, ModelSelectionService, UserModerationService
 from .user import User
 from .vo import (
@@ -71,6 +71,7 @@ __all__ = [
     "ModelSelectionService",
     "StaleWriteError",
     "Unban",
+    "UsageRepo",
     "UsageStats",
     "User",
     "UserBanExpired",
@@ -95,5 +96,6 @@ __all__ = [
     "UserSubscriptionExpired",
     "UserUnbanned",
     "ValidationError",
+    "ViolationRepo",
     "ViolationStats",
 ]

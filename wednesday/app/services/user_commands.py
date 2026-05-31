@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.exceptions import UserNotFoundError
 from app.protocols import Logger
+from domain.catalog import SubscriptionCatalog
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubscription
 
@@ -9,7 +10,8 @@ from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubsc
 class UserCommandService:
     """Загрузка агрегата, доменная команда и сохранение (без транзакции — её закрывает UoW)."""
 
-    def __init__(self, *, logger: Logger) -> None:
+    def __init__(self, *, subscription_catalog: SubscriptionCatalog, logger: Logger) -> None:
+        self._subscription_catalog = subscription_catalog
         self._logger = logger.bind(module=self.__class__.__name__)
 
     @staticmethod
@@ -139,7 +141,8 @@ class UserCommandService:
         at: AwareDatetime,
     ) -> User:
         user = await self._load_user_or_raise(repo, user_id)
-        user.expire_subscription_if_due(at=at)
+        fallback = await self._subscription_catalog.default_plan()
+        user.expire_subscription_if_due(fallback=fallback, at=at)
         await repo.save(user)
         self._logger.debug(
             "User aggregate persisted",

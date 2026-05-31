@@ -1,8 +1,15 @@
 from functools import cached_property
 
 from app.protocols import CacheRepoRegistry, Logger, RequestScope, UoWFactory
-from app.services import ChatCommandService, RegistrationService, UserCommandService
-from app.use_cases import ChatCommandsUseCase, RegistrationUseCase, UserCommandsUseCase
+from app.services import ChatCommandService, ImageRandomService, RegistrationService, UserCommandService
+from app.use_cases import (
+    ChatCommandsUseCase,
+    ImageRandomUseCase,
+    ImageVoteUseCase,
+    ModelSelectionUseCase,
+    RegistrationUseCase,
+    UserCommandsUseCase,
+)
 from domain.catalog import ModelCatalog, SubscriptionCatalog
 from infra.persistence.yaml import YamlCatalogFactory
 
@@ -60,19 +67,53 @@ class ScopeContainer(RequestScope):
         )
 
     @cached_property
+    def model_selection_uc(self) -> ModelSelectionUseCase:
+        return ModelSelectionUseCase(
+            uow=self._uow_factory(),
+            cache_registry=self._cache_registry,
+            model_catalog=self.model_catalog,
+            subscription_catalog=self.subscription_catalog,
+            logger=self._logger,
+        )
+
+    @cached_property
+    def image_random_uc(self) -> ImageRandomUseCase:
+        return ImageRandomUseCase(
+            uow=self._uow_factory(),
+            image_random=self._image_random_service,
+            logger=self._logger,
+        )
+
+    @cached_property
+    def image_vote_uc(self) -> ImageVoteUseCase:
+        return ImageVoteUseCase(
+            uow=self._uow_factory(),
+            logger=self._logger,
+        )
+
+    @cached_property
     def _registration_service(self) -> RegistrationService:
         return RegistrationService(
+            model_catalog=self.model_catalog,
+            subscription_catalog=self.subscription_catalog,
             logger=self._logger,
         )
 
     @cached_property
     def _user_commands_service(self) -> UserCommandService:
         return UserCommandService(
+            subscription_catalog=self.subscription_catalog,
             logger=self._logger,
         )
 
     @cached_property
     def _chat_commands_service(self) -> ChatCommandService:
         return ChatCommandService(
+            logger=self._logger,
+        )
+
+    @cached_property
+    def _image_random_service(self) -> ImageRandomService:
+        return ImageRandomService(
             logger=self._logger,
         )

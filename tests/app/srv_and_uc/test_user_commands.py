@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
+from dom.user.factories import (
+    FakeSubscriptionCatalog,
+    default_settings,
+    subscription_free,
+    subscription_premium,
+)
 
 from app.exceptions import UserNotFoundError
-from app.services.user_commands_srv import UserCommandService
-from app.use_cases.user_commands_uc import UserCommandsUseCase
+from app.services.user_commands import UserCommandService
+from app.use_cases.user_commands import UserCommandsUseCase
+from domain.catalog import SubscriptionPlan, SubscriptionTier
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import (
+    AccessDeniedError,
     ActiveState,
-    ManagementAccessDeniedError,
     StaleWriteError,
-    SubscriptionPlan,
     User,
     UserId,
     UserProfile,
@@ -25,6 +31,8 @@ from domain.user import (
     UserSubscriptionExpired,
 )
 from domain.user.exceptions import InvalidStateTransitionError
+
+from ..factories import FakeCacheRegistry, FakeUoW, mk_logger
 
 
 def dt(hour: int) -> AwareDatetime:
@@ -37,21 +45,17 @@ def mk_user(*, user_id: int = 1, role: UserRole = UserRole.USER, now: AwareDatet
         id=UserId(UUID(int=user_id)),
         profile=UserProfile(telegram_id=100_000 + user_id, is_bot=False, first_name=NonEmptyStr("Test")),
         role=role,
-        subscription=UserSubscription.free(current),
-        now=current,
+        subscription=subscription_free(current),
+        settings=default_settings(),
+        at=current,
     )
 
 
-def _logger() -> Mock:
-    log = Mock()
-    log.bind.return_value = log
-    return log
-
-
-class _CacheRegistry:
-    def __init__(self) -> None:
-        self.user = AsyncMock()
-        self.chat = AsyncMock()
+def _user_commands_service() -> UserCommandService:
+    return UserCommandService(
+        subscription_catalog=FakeSubscriptionCatalog(),
+        logger=mk_logger(),
+    )
 
 
 @pytest.mark.unit
@@ -60,7 +64,7 @@ async def test_service_change_role_persists_via_repo() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10))
     repo.get_by_id.return_value = user
-    srv = UserCommandService(logger=_logger())
+    srv = _user_commands_service()
 
     await srv.change_role(
         repo=repo,
@@ -73,32 +77,17 @@ async def test_service_change_role_persists_via_repo() -> None:
     repo.save.assert_awaited_once_with(user)
 
 
-class _FakeUoW:
-    def __init__(self, users_repo: AsyncMock) -> None:
-        self.users = users_repo
-        self.chats = AsyncMock()
-        self.enter_count = 0
-        self.exit_count = 0
-
-    async def __aenter__(self) -> _FakeUoW:
-        self.enter_count += 1
-        return self
-
-    async def __aexit__(self, *_args: object) -> None:
-        self.exit_count += 1
-
-
 def _make_uc(
     *,
     repo: AsyncMock,
-    cache_registry: _CacheRegistry | None = None,
-) -> tuple[UserCommandsUseCase, _FakeUoW, _CacheRegistry]:
-    log = _logger()
-    uow = _FakeUoW(repo)
-    cache = cache_registry or _CacheRegistry()
+    cache_registry: FakeCacheRegistry | None = None,
+) -> tuple[UserCommandsUseCase, FakeUoW, FakeCacheRegistry]:
+    log = mk_logger()
+    uow = FakeUoW(users=repo)
+    cache = cache_registry or FakeCacheRegistry()
     uc = UserCommandsUseCase(
         uow=uow,
-        user_commands=UserCommandService(logger=log),
+        user_commands=_user_commands_service(),
         cache_registry=cache,
         logger=log,
     )
@@ -147,7 +136,7 @@ async def test_uc_management_access_denied_propagates_and_skips_save() -> None:
     repo.get_by_id.return_value = user
     uc, _uow, cache = _make_uc(repo=repo)
 
-    with pytest.raises(ManagementAccessDeniedError):
+    with pytest.raises(AccessDeniedError):
         await uc.change_role(user_id=user.id, actor=UserRole.USER, new_role=UserRole.ADMIN, at=dt(11))
 
     repo.save.assert_not_awaited()
@@ -176,7 +165,7 @@ async def test_uc_change_subscription_happy_path() -> None:
     user = mk_user(now=dt(10), role=UserRole.USER)
     repo.get_by_id.return_value = user
     uc, _, _ = _make_uc(repo=repo)
-    new_sub = UserSubscription.premium(dt(11))
+    new_sub = subscription_premium(dt(11))
 
     await uc.change_subscription(
         user_id=user.id,
@@ -218,7 +207,7 @@ async def test_uc_expire_ban_and_subscription_emit_domain_events() -> None:
         user_id=user.id,
         actor=UserRole.ADMIN,
         new_subscription=UserSubscription(
-            plan=SubscriptionPlan.premium(),
+            plan=SubscriptionPlan(tier=SubscriptionTier.PREMIUM, daily_limit=10, cooldown_minutes=1),
             started_at=dt(10),
             expires_at=dt(11),
         ),

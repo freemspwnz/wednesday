@@ -144,7 +144,7 @@ markers = [
   "infra: infra/diagnose checks",
   "slow: slow tests",
 ]
-addopts = "-v -ra --tb=short"
+addopts = "-v -ra --tb=short --import-mode=importlib"
 testpaths = ["tests"]
 pythonpath = ["wednesday", "tests"]
 asyncio_mode = "strict"

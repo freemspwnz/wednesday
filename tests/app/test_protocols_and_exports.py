@@ -21,7 +21,10 @@ from app.protocols.resilience import CircuitBreaker, RateLimiter, Retrier
 def test_public_exports_are_available() -> None:
     assert hasattr(dto_module, "UserContext")
     assert hasattr(dto_module, "ChatContext")
-    assert hasattr(exc_module, "SQLARepositoryError")
+    assert hasattr(exc_module, "RepositoryError")
+    assert hasattr(exc_module, "DBError")
+    assert hasattr(exc_module, "MetricsError")
+    assert hasattr(exc_module, "CacheError")
     assert hasattr(exc_module, "TooManyRequests")
     assert hasattr(exc_module, "MaxAttemptsExhaustedError")
     assert hasattr(proto_module, "UoW")

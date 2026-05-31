@@ -9,7 +9,14 @@ from domain.catalog import ModelCatalog, SubscriptionCatalog
 from .observe import Logger
 
 if TYPE_CHECKING:
-    from app.use_cases import ChatCommandsUseCase, RegistrationUseCase, UserCommandsUseCase
+    from app.use_cases import (
+        ChatCommandsUseCase,
+        ImageRandomUseCase,
+        ImageVoteUseCase,
+        ModelSelectionUseCase,
+        RegistrationUseCase,
+        UserCommandsUseCase,
+    )
 
 
 class RequestScope(Protocol):
@@ -32,6 +39,15 @@ class RequestScope(Protocol):
 
     @property
     def chat_commands_uc(self) -> ChatCommandsUseCase: ...
+
+    @property
+    def model_selection_uc(self) -> ModelSelectionUseCase: ...
+
+    @property
+    def image_random_uc(self) -> ImageRandomUseCase: ...
+
+    @property
+    def image_vote_uc(self) -> ImageVoteUseCase: ...
 
 
 ScopeFactory = Callable[[], AbstractAsyncContextManager[RequestScope]]

@@ -5,15 +5,24 @@ from zoneinfo import ZoneInfo
 
 from app.dto import ChatContext, UserContext
 from app.protocols import Logger
+from domain.catalog import ModelCatalog, SubscriptionCatalog
 from domain.chat import Chat, ChatId, ChatProfile, ChatRepo, ChatScheduleSet, Weekday
 from domain.kernel.vo import AwareDatetime
-from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubscription
+from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSettings, UserSubscription
 
 UTC_TZ = ZoneInfo("UTC")
 
 
 class RegistrationService:
-    def __init__(self, *, logger: Logger) -> None:
+    def __init__(
+        self,
+        *,
+        model_catalog: ModelCatalog,
+        subscription_catalog: SubscriptionCatalog,
+        logger: Logger,
+    ) -> None:
+        self._model_catalog = model_catalog
+        self._subscription_catalog = subscription_catalog
         self._logger = logger.bind(module=self.__class__.__name__)
 
     async def get_or_create_user(
@@ -44,12 +53,19 @@ class RegistrationService:
             language_code=dto.language_code,
             has_tg_premium=dto.has_tg_premium,
         )
+        default_plan = await self._subscription_catalog.default_plan()
+        default_descriptor = await self._model_catalog.default_for_tier(default_plan.tier)
         entity = User.register(
             id=user_id,
             profile=profile,
             role=dto.role or UserRole.USER,
-            subscription=UserSubscription.free(now),
-            now=now,
+            subscription=UserSubscription(
+                plan=default_plan,
+                started_at=now,
+                expires_at=None,
+            ),
+            settings=UserSettings.from_descriptor(default_descriptor),
+            at=now,
         )
 
         await repo.save(entity)

@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from app.exceptions import ChatNotFoundError
-from app.services.chat_commands_srv import ChatCommandService
-from app.use_cases.chat_commands_uc import ChatCommandsUseCase
+from app.services.chat_commands import ChatCommandService
+from app.use_cases.chat_commands import ChatCommandsUseCase
 from domain.chat import (
+    AccessDeniedError,
     ActiveState,
     Chat,
     ChatId,
@@ -23,12 +24,13 @@ from domain.chat import (
     ChatSchedule,
     ChatScheduleSet,
     ChatType,
-    ManagementAccessDeniedError,
     StaleWriteError,
     Weekday,
 )
 from domain.chat.exceptions import InvalidStateTransitionError, ScheduleLimitExceededError
 from domain.kernel.vo import AwareDatetime
+
+from ..factories import FakeUoW, mk_logger
 
 
 def dt(hour: int) -> AwareDatetime:
@@ -62,19 +64,13 @@ def member_actor(chat: Chat) -> ChatMember:
     return ChatMember(id=ChatMemberId(3), role=ChatMemberRole.MEMBER, chat_id=chat.id)
 
 
-def _logger() -> Mock:
-    log = Mock()
-    log.bind.return_value = log
-    return log
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_service_change_profile_persists_via_repo() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    srv = ChatCommandService(logger=_logger())
+    srv = ChatCommandService(logger=mk_logger())
     new_profile = ChatProfile(type=ChatType.GROUP, telegram_id=-1001, title="Direct")
 
     await srv.change_profile(
@@ -88,24 +84,9 @@ async def test_service_change_profile_persists_via_repo() -> None:
     repo.save.assert_awaited_once_with(chat)
 
 
-class _FakeUoW:
-    def __init__(self, chats_repo: AsyncMock) -> None:
-        self.chats = chats_repo
-        self.users = AsyncMock()
-        self.enter_count = 0
-        self.exit_count = 0
-
-    async def __aenter__(self) -> _FakeUoW:
-        self.enter_count += 1
-        return self
-
-    async def __aexit__(self, *_args: object) -> None:
-        self.exit_count += 1
-
-
-def _make_uc(*, repo: AsyncMock) -> tuple[ChatCommandsUseCase, _FakeUoW]:
-    log = _logger()
-    uow = _FakeUoW(repo)
+def _make_uc(*, repo: AsyncMock) -> tuple[ChatCommandsUseCase, FakeUoW]:
+    log = mk_logger()
+    uow = FakeUoW(chats=repo)
     uc = ChatCommandsUseCase(
         uow=uow,
         chat_commands=ChatCommandService(logger=log),
@@ -162,7 +143,7 @@ async def test_uc_management_access_denied_propagates_and_skips_save() -> None:
     uc, _ = _make_uc(repo=repo)
     new_profile = ChatProfile(type=ChatType.GROUP, telegram_id=-1001, title="X")
 
-    with pytest.raises(ManagementAccessDeniedError):
+    with pytest.raises(AccessDeniedError):
         await uc.change_profile(
             chat_id=chat.id,
             actor=member_actor(chat),

@@ -3,14 +3,16 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
+from dom.catalog.plans import PREMIUM_PLAN
+from dom.image.factories import mk_image
 
-from app.dto import ChatContext, UserContext
+from app.dto import ChatContext, ImageCard, UserContext
 from domain.catalog import Model, Series, SubscriptionTier, Vendor
 from domain.chat import Chat, ChatId, ChatProfile, ChatSchedule, ChatScheduleSet, ChatType, Weekday
+from domain.image import TelegramFileId
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
 from domain.user.vo import UserSettings, UserSubscription
-from tests.dom.catalog.plans import PREMIUM_PLAN
 
 
 def _dt(hour: int) -> AwareDatetime:
@@ -85,3 +87,25 @@ def test_chat_context_from_domain_maps_schedule_fields() -> None:
     assert ctx.timezone == ZoneInfo("UTC")
     assert ctx.weekday == Weekday.MONDAY
     assert ctx.schedules == chat.schedules.schedules
+
+
+@pytest.mark.unit
+def test_image_card_from_domain_maps_fields() -> None:
+    image = mk_image(image_id=7, score=3, created_at=_dt(10))
+    image.attach_file_id(file_id=TelegramFileId.parse("AgACAgIAAxkB"), at=_dt(11))
+
+    card = ImageCard.from_domain(image)
+
+    assert card.id == image.id
+    assert card.file_id == "AgACAgIAAxkB"
+    assert card.score == 3
+
+
+@pytest.mark.unit
+def test_image_card_from_domain_without_file_id() -> None:
+    image = mk_image(image_id=8, score=1, created_at=_dt(10))
+
+    card = ImageCard.from_domain(image)
+
+    assert card.file_id is None
+    assert card.score == 1
