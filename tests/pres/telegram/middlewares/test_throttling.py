@@ -7,10 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram import Bot
 
-from app.dto import ChatContext
 from app.exceptions import LimitStorageError, TooManyRequests
 from domain.chat import ChatType
 from presentation.aiogram.middlewares.update.throttling import ThrottlingMiddleware
+
+from ..factories import mk_chat_context
 
 
 @pytest.mark.unit
@@ -33,7 +34,7 @@ async def test_passes_through_when_no_chat_in_data(mock_rate_limiter: MagicMock,
 async def test_calls_handler_when_limits_ok(mock_rate_limiter: MagicMock, mock_logger: MagicMock) -> None:
     middleware = ThrottlingMiddleware(rate_limiter=mock_rate_limiter, logger=mock_logger)
     handler = AsyncMock(return_value="ok")
-    chat = ChatContext(tg_id=42, type=ChatType.PRIVATE)
+    chat = mk_chat_context(tg_id=42, chat_type=ChatType.PRIVATE)
     data: dict[str, object] = {"chat": chat}
 
     result = await middleware(handler, MagicMock(), data)
@@ -48,7 +49,7 @@ async def test_fail_open_on_limit_storage_error(mock_rate_limiter: MagicMock, mo
     mock_rate_limiter.call.side_effect = LimitStorageError("down")
     middleware = ThrottlingMiddleware(rate_limiter=mock_rate_limiter, logger=mock_logger)
     handler = AsyncMock(return_value="ok")
-    data: dict[str, object] = {"chat": ChatContext(tg_id=42, type=ChatType.PRIVATE)}
+    data: dict[str, object] = {"chat": mk_chat_context(tg_id=42, chat_type=ChatType.PRIVATE)}
 
     result = await middleware(handler, MagicMock(), data)
 
@@ -69,7 +70,7 @@ async def test_drops_update_and_warns_on_throttle(mock_rate_limiter: MagicMock, 
     middleware = ThrottlingMiddleware(rate_limiter=mock_rate_limiter, logger=mock_logger)
     handler = AsyncMock()
     data: dict[str, object] = {
-        "chat": ChatContext(tg_id=42, type=ChatType.PRIVATE),
+        "chat": mk_chat_context(tg_id=42, chat_type=ChatType.PRIVATE),
         "bot": bot,
     }
 
@@ -95,7 +96,7 @@ async def test_skips_warning_when_throttle_notify_limit_hit(
     middleware = ThrottlingMiddleware(rate_limiter=mock_rate_limiter, logger=mock_logger)
     handler = AsyncMock()
     data: dict[str, object] = {
-        "chat": ChatContext(tg_id=-100, type=ChatType.SUPERGROUP),
+        "chat": mk_chat_context(tg_id=-100, chat_type=ChatType.SUPERGROUP),
         "bot": bot,
     }
 
@@ -109,7 +110,7 @@ async def test_skips_warning_when_throttle_notify_limit_hit(
 async def test_group_chat_uses_chat_limit_key(mock_rate_limiter: MagicMock, mock_logger: MagicMock) -> None:
     middleware = ThrottlingMiddleware(rate_limiter=mock_rate_limiter, logger=mock_logger)
     handler = AsyncMock()
-    data: dict[str, object] = {"chat": ChatContext(tg_id=-1001, type=ChatType.SUPERGROUP)}
+    data: dict[str, object] = {"chat": mk_chat_context(tg_id=-1001, chat_type=ChatType.SUPERGROUP)}
 
     await middleware(handler, MagicMock(), data)
 

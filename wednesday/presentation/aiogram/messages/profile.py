@@ -7,8 +7,6 @@ from domain.catalog import SubscriptionTier
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserRole
 
-ROLE_UNKNOWN = "Не удалось определить вашу роль. Попробуйте позже или обратитесь к администратору."
-
 _ROLE_LABELS: dict[UserRole, str] = {
     UserRole.USER: "Пользователь",
     UserRole.ADMIN: "Администратор",
@@ -23,15 +21,10 @@ _TIER_LABELS: dict[SubscriptionTier, str] = {
 
 _STATUS_ACTIVE = "Активен"
 _STATUS_BANNED = "Заблокирован"
-_SUBSCRIPTION_UNKNOWN = "не определена"
-_MODEL_UNKNOWN = "не выбрана"
 _UNLIMITED = "бессрочно"
 
 
 def format_me(user: UserContext) -> str:
-    if user.role is None:
-        return ROLE_UNKNOWN
-
     lines = [
         "👤 Ваш профиль",
         "",
@@ -45,15 +38,9 @@ def format_me(user: UserContext) -> str:
 
 
 def _subscription_lines(user: UserContext) -> list[str]:
-    tier = user.subscription_tier
-    if tier is None:
-        return [f"Подписка: {_SUBSCRIPTION_UNKNOWN}"]
-
-    lines = [f"Подписка: {_TIER_LABELS[tier]}"]
-    if user.subscription_daily_limit is not None:
-        lines.append(f"Лимит в день: {user.subscription_daily_limit}")
-    if user.subscription_cooldown_minutes is not None:
-        lines.append(f"Перерыв: {user.subscription_cooldown_minutes} мин")
+    lines = [f"Подписка: {_TIER_LABELS[user.subscription_tier]}"]
+    lines.append(f"Лимит в день: {user.subscription_daily_limit}")
+    lines.append(f"Перерыв: {user.subscription_cooldown_minutes} мин")
     if user.subscription_expires_at is not None:
         lines.append(f"Действует до: {_format_dt(user.subscription_expires_at)}")
     else:
@@ -62,8 +49,6 @@ def _subscription_lines(user: UserContext) -> list[str]:
 
 
 def _model_lines(user: UserContext) -> list[str]:
-    if user.model is None:
-        return [f"Модель: {_MODEL_UNKNOWN}"]
     return [f"Модель: {user.model}"]
 
 

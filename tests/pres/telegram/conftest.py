@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID
 
 import pytest
 
 from app.dto import ChatContext, UserContext
-from domain.chat import ChatId, ChatType
-from domain.kernel.vo import NonEmptyStr
 from domain.user import UserRole
 
-from .helpers import make_message
+from .factories import make_message, mk_chat_context, mk_user_context
 
 __all__ = ["make_message"]
 
@@ -44,23 +41,18 @@ def mock_scope(mock_logger: MagicMock) -> MagicMock:
     scope.registration_uc = AsyncMock()
     scope.user_commands_uc = AsyncMock()
     scope.chat_commands_uc = AsyncMock()
+    scope.model_selection_uc = AsyncMock()
+    scope.model_catalog = AsyncMock()
+    scope.image_random_uc = AsyncMock()
+    scope.image_vote_uc = AsyncMock()
     return scope
 
 
 @pytest.fixture
 def admin_user() -> UserContext:
-    return UserContext(
-        tg_id=1,
-        is_bot=False,
-        first_name=NonEmptyStr("Admin"),
-        role=UserRole.ADMIN,
-    )
+    return mk_user_context(role=UserRole.ADMIN)
 
 
 @pytest.fixture
 def chat_context() -> ChatContext:
-    return ChatContext(
-        tg_id=-1001,
-        type=ChatType.SUPERGROUP,
-        id=ChatId(value=UUID(int=10)),
-    )
+    return mk_chat_context()

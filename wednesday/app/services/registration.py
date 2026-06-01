@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import NAMESPACE_DNS, UUID, uuid5
 from zoneinfo import ZoneInfo
 
-from app.dto import ChatContext, UserContext
 from app.protocols import Logger
 from domain.catalog import ModelCatalog, SubscriptionCatalog
 from domain.chat import Chat, ChatId, ChatProfile, ChatRepo, ChatScheduleSet, Weekday
@@ -27,10 +26,10 @@ class RegistrationService:
 
     async def get_or_create_user(
         self,
-        dto: UserContext,
+        profile: UserProfile,
         repo: UserRepo,
     ) -> User:
-        user_id = dto.id if dto.id is not None else self.user_id_from_tg(dto.tg_id)
+        user_id = self.user_id_from_tg(profile.telegram_id)
 
         entity = await repo.get_by_id(user_id)
         if entity is not None:
@@ -39,26 +38,17 @@ class RegistrationService:
             self._logger.debug(
                 "Existing user refreshed (last_seen)",
                 user_id=str(entity.id),
-                tg_id=dto.tg_id,
+                tg_id=profile.telegram_id,
             )
             return entity
 
         now = AwareDatetime.now_utc()
-        profile = UserProfile(
-            telegram_id=dto.tg_id,
-            is_bot=dto.is_bot,
-            first_name=dto.first_name,
-            last_name=dto.last_name,
-            username=dto.username,
-            language_code=dto.language_code,
-            has_tg_premium=dto.has_tg_premium,
-        )
         default_plan = await self._subscription_catalog.default_plan()
         default_descriptor = await self._model_catalog.default_for_tier(default_plan.tier)
         entity = User.register(
             id=user_id,
             profile=profile,
-            role=dto.role or UserRole.USER,
+            role=UserRole.USER,
             subscription=UserSubscription(
                 plan=default_plan,
                 started_at=now,
@@ -78,31 +68,25 @@ class RegistrationService:
 
     async def get_or_create_chat(
         self,
-        dto: ChatContext,
+        profile: ChatProfile,
         repo: ChatRepo,
     ) -> Chat:
-        chat_id = dto.id if dto.id is not None else self.chat_id_from_tg(dto.tg_id)
+        chat_id = self.chat_id_from_tg(profile.telegram_id)
 
         entity = await repo.get_by_id(chat_id)
         if entity is not None:
             self._logger.debug(
                 "Existing chat returned unchanged",
                 chat_id=str(entity.id.value),
-                tg_id=dto.tg_id,
+                tg_id=profile.telegram_id,
             )
             return entity
 
         now = AwareDatetime.now_utc()
-        profile = ChatProfile(
-            type=dto.type,
-            telegram_id=dto.tg_id,
-            title=dto.title,
-            username=dto.username,
-        )
         schedules = ChatScheduleSet(
-            timezone=dto.timezone or UTC_TZ,
-            weekday=dto.weekday or Weekday.WEDNESDAY,
-            schedules=dto.schedules,
+            timezone=UTC_TZ,
+            weekday=Weekday.WEDNESDAY,
+            schedules=(),
         )
         entity = Chat.register(
             id=chat_id,

@@ -7,24 +7,26 @@ from domain.kernel.vo import AwareDatetime
 
 @dataclass
 class ChatContext:
+    """Registered chat read-model for handlers and cache (always fully materialized)."""
+
+    id: ChatId
     tg_id: int
     type: ChatType
-    id: ChatId | None = None
+    is_active: bool
+    timezone: ZoneInfo
+    weekday: Weekday
+    schedules: tuple[ChatSchedule, ...]
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
     title: str | None = None
     username: str | None = None
-    is_active: bool = True
-    timezone: ZoneInfo | None = None
-    weekday: Weekday | None = None
-    schedules: tuple[ChatSchedule, ...] = ()
-    created_at: AwareDatetime | None = None
-    updated_at: AwareDatetime | None = None
 
     @classmethod
     def from_domain(cls, chat: Chat) -> "ChatContext":
         return ChatContext(
+            id=chat.id,
             tg_id=chat.profile.telegram_id,
             type=chat.profile.type,
-            id=chat.id,
             title=chat.profile.title,
             username=chat.profile.username,
             is_active=isinstance(chat.state, ActiveState),

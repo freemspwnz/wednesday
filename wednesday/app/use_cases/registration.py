@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from app.dto import ChatContext, UserContext
 from app.protocols import CacheRepoRegistry, Logger, UoW
+from domain.chat import ChatProfile
+from domain.user import UserProfile
 
 from ..services import RegistrationService
 
@@ -30,31 +32,31 @@ class RegistrationUseCase:
     async def reg_user(
         self,
         *,
-        dto: UserContext,
+        profile: UserProfile,
     ) -> UserContext:
         cache_repo = self._cache_registry.user
-        cached = await cache_repo.get_by_id(dto.tg_id)
+        cached = await cache_repo.get_by_id(profile.telegram_id)
         if cached is not None:
             self._logger.debug(
                 "Registration cache hit",
                 entity="user",
-                tg_id=dto.tg_id,
+                tg_id=profile.telegram_id,
             )
             return cached
 
         self._logger.debug(
             "Registration cache miss, loading user",
             entity="user",
-            tg_id=dto.tg_id,
+            tg_id=profile.telegram_id,
         )
         async with self._uow:
-            resolved = await self._reg_service.get_or_create_user(dto=dto, repo=self._uow.users)
+            resolved = await self._reg_service.get_or_create_user(profile=profile, repo=self._uow.users)
 
         await cache_repo.set(resolved)
         self._logger.debug(
             "Registration user context materialized",
             entity="user",
-            tg_id=dto.tg_id,
+            tg_id=profile.telegram_id,
         )
         return UserContext.from_domain(resolved)
 
@@ -81,31 +83,31 @@ class RegistrationUseCase:
     async def reg_chat(
         self,
         *,
-        dto: ChatContext,
+        profile: ChatProfile,
     ) -> ChatContext:
         cache_repo = self._cache_registry.chat
-        cached = await cache_repo.get_by_id(dto.tg_id)
+        cached = await cache_repo.get_by_id(profile.telegram_id)
         if cached is not None:
             self._logger.debug(
                 "Registration cache hit",
                 entity="chat",
-                tg_id=dto.tg_id,
+                tg_id=profile.telegram_id,
             )
             return cached
 
         self._logger.debug(
             "Registration cache miss, loading chat",
             entity="chat",
-            tg_id=dto.tg_id,
+            tg_id=profile.telegram_id,
         )
         async with self._uow:
-            resolved = await self._reg_service.get_or_create_chat(dto=dto, repo=self._uow.chats)
+            resolved = await self._reg_service.get_or_create_chat(profile=profile, repo=self._uow.chats)
 
         await cache_repo.set(resolved)
         self._logger.debug(
             "Registration chat context materialized",
             entity="chat",
-            tg_id=dto.tg_id,
+            tg_id=profile.telegram_id,
         )
         return ChatContext.from_domain(resolved)
 

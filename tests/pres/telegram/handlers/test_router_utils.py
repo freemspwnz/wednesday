@@ -17,7 +17,7 @@ from presentation.aiogram.routers.utils import (
     run_message_handler,
 )
 
-from ..helpers import make_message
+from ..factories import make_message
 
 
 @pytest.mark.unit

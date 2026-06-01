@@ -10,18 +10,22 @@ from zoneinfo import ZoneInfo
 import pytest
 from dom.user.factories import FakeModelCatalog, FakeSubscriptionCatalog, default_settings, subscription_free
 
-from app.dto import ChatContext, UserContext
+from app.dto import ChatContext
 from app.services.registration import RegistrationService
 from app.use_cases.registration import RegistrationUseCase
 from domain.chat import Chat, ChatId, ChatProfile, ChatScheduleSet, ChatType, Weekday
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
 
-from ..factories import FakeCacheRegistry, FakeUoW, mk_logger
+from ..factories import FakeCacheRegistry, FakeUoW, mk_chat_context, mk_logger, mk_user_context
 
 
 def dt(hour: int) -> AwareDatetime:
     return AwareDatetime(datetime(2026, 1, 1, hour, 0, tzinfo=UTC))
+
+
+def _profile(*, tg_id: int = 999, first_name: str = "A") -> UserProfile:
+    return UserProfile(telegram_id=tg_id, is_bot=False, first_name=NonEmptyStr(first_name))
 
 
 def _mk_service() -> RegistrationService:
@@ -46,9 +50,8 @@ async def test_service_get_or_create_user_returns_existing_and_updates_seen() ->
         at=dt(9),
     )
     repo.get_by_id.return_value = existing
-    dto = UserContext(tg_id=999, is_bot=False, first_name=NonEmptyStr("A"))
 
-    result = await service.get_or_create_user(dto=dto, repo=repo)
+    result = await service.get_or_create_user(profile=_profile(tg_id=999), repo=repo)
 
     assert result is existing
     repo.get_by_id.assert_awaited_once()
@@ -61,19 +64,18 @@ async def test_service_get_or_create_user_creates_new_entity() -> None:
     service = _mk_service()
     repo = AsyncMock()
     repo.get_by_id.return_value = None
-    dto = UserContext(
-        tg_id=111,
+    profile = UserProfile(
+        telegram_id=111,
         is_bot=False,
         first_name=NonEmptyStr("John"),
-        role=UserRole.ADMIN,
         has_tg_premium=True,
     )
 
-    result = await service.get_or_create_user(dto=dto, repo=repo)
+    result = await service.get_or_create_user(profile=profile, repo=repo)
 
     assert isinstance(result, User)
     assert result.profile.telegram_id == 111
-    assert result.role == UserRole.ADMIN
+    assert result.role == UserRole.USER
     assert result.profile.has_tg_premium is True
     assert str(result.settings.model) == "gigachat-2-lite"
     repo.save.assert_awaited_once_with(result)
@@ -91,9 +93,11 @@ async def test_service_get_or_create_chat_returns_existing() -> None:
         at=dt(10),
     )
     repo.get_by_id.return_value = existing
-    dto = ChatContext(tg_id=222, type=ChatType.PRIVATE)
 
-    result = await service.get_or_create_chat(dto=dto, repo=repo)
+    result = await service.get_or_create_chat(
+        profile=ChatProfile(type=ChatType.PRIVATE, telegram_id=222),
+        repo=repo,
+    )
 
     assert result is existing
     repo.save.assert_not_awaited()
@@ -105,21 +109,19 @@ async def test_service_get_or_create_chat_creates_new_entity() -> None:
     service = _mk_service()
     repo = AsyncMock()
     repo.get_by_id.return_value = None
-    dto = ChatContext(
-        tg_id=-100123,
+    profile = ChatProfile(
         type=ChatType.GROUP,
+        telegram_id=-100123,
         title="Ops",
         username="ops_chat",
-        timezone=ZoneInfo("UTC"),
-        weekday=Weekday.FRIDAY,
     )
 
-    result = await service.get_or_create_chat(dto=dto, repo=repo)
+    result = await service.get_or_create_chat(profile=profile, repo=repo)
 
     assert isinstance(result, Chat)
     assert result.profile.telegram_id == -100123
     assert result.profile.type == ChatType.GROUP
-    assert result.schedules.weekday == Weekday.FRIDAY
+    assert result.schedules.weekday == Weekday.WEDNESDAY
     repo.save.assert_awaited_once_with(result)
 
 
@@ -132,38 +134,6 @@ def test_service_id_generation_is_deterministic() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_service_get_user_if_exists_returns_none_when_missing() -> None:
-    service = _mk_service()
-    repo = AsyncMock()
-    repo.get_by_id.return_value = None
-
-    result = await service.get_user_if_exists(tg_id=999, repo=repo)
-
-    assert result is None
-    repo.save.assert_not_awaited()
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_service_get_chat_if_exists_returns_entity_without_save() -> None:
-    service = _mk_service()
-    repo = AsyncMock()
-    existing = Chat.register(
-        id=ChatId(UUID(int=21)),
-        profile=ChatProfile(type=ChatType.PRIVATE, telegram_id=333),
-        schedules=ChatScheduleSet(timezone=ZoneInfo("UTC"), weekday=Weekday.WEDNESDAY),
-        at=dt(10),
-    )
-    repo.get_by_id.return_value = existing
-
-    result = await service.get_chat_if_exists(tg_id=333, repo=repo)
-
-    assert result is existing
-    repo.save.assert_not_awaited()
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
 async def test_uc_reg_user_returns_cached_value_without_uow() -> None:
     logger = mk_logger()
     cache = FakeCacheRegistry()
@@ -171,12 +141,13 @@ async def test_uc_reg_user_returns_cached_value_without_uow() -> None:
     service = AsyncMock()
     uc = RegistrationUseCase(uow=uow, reg_service=service, cache_registry=cache, logger=logger)
 
-    dto = UserContext(tg_id=42, is_bot=False, first_name=NonEmptyStr("A"))
-    cache.user.get_by_id.return_value = dto
+    profile = _profile(tg_id=42)
+    cached = mk_user_context(user_id=42)
+    cache.user.get_by_id.return_value = cached
 
-    got = await uc.reg_user(dto=dto)
+    got = await uc.reg_user(profile=profile)
 
-    assert got is dto
+    assert got is cached
     cache.user.get_by_id.assert_awaited_once_with(42)
     assert not service.get_or_create_user.await_args_list
 
@@ -195,7 +166,7 @@ async def test_uc_reg_chat_loads_via_service_and_caches() -> None:
         logger=logger,
     )
 
-    dto = ChatContext(tg_id=-100, type=ChatType.GROUP, title="T")
+    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
     cache.chat.get_by_id.return_value = None
     domain_chat = Chat.register(
         id=ChatId(UUID(int=7)),
@@ -205,7 +176,7 @@ async def test_uc_reg_chat_loads_via_service_and_caches() -> None:
     )
     service.get_or_create_chat.return_value = domain_chat
 
-    got = await uc.reg_chat(dto=dto)
+    got = await uc.reg_chat(profile=profile)
 
     assert isinstance(got, ChatContext)
     assert got.tg_id == -100
@@ -222,12 +193,13 @@ async def test_uc_reg_chat_returns_cached_value_without_uow() -> None:
     service = AsyncMock()
     uc = RegistrationUseCase(uow=uow, reg_service=service, cache_registry=cache, logger=logger)
 
-    dto = ChatContext(tg_id=-100, type=ChatType.GROUP, title="T")
-    cache.chat.get_by_id.return_value = dto
+    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
+    cached = mk_chat_context(tg_id=-100, chat_type=ChatType.GROUP)
+    cache.chat.get_by_id.return_value = cached
 
-    got = await uc.reg_chat(dto=dto)
+    got = await uc.reg_chat(profile=profile)
 
-    assert got is dto
+    assert got is cached
     cache.chat.get_by_id.assert_awaited_once_with(-100)
     assert not service.get_or_create_chat.await_args_list
 

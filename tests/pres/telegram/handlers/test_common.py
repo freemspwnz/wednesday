@@ -10,7 +10,7 @@ from aiogram.types import Message
 from presentation.aiogram.messages import commands as cmd_msg
 from presentation.aiogram.routers import common as handlers
 
-from ..helpers import make_message
+from ..factories import make_message
 
 
 @pytest.mark.unit

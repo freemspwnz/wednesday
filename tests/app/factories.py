@@ -5,10 +5,17 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Self
 from unittest.mock import AsyncMock, Mock
+from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from domain.chat import ChatRepo
+from dom.user.factories import dt, mk_user
+
+from app.dto import ChatContext, UserContext
+from domain.chat import Chat, ChatId, ChatProfile, ChatRepo, ChatScheduleSet, ChatType, Weekday
 from domain.image import ImageRepo, ImageSeenRepo, ImageVoteRepo
-from domain.user.protocols import UsageRepo, UserRepo, ViolationRepo
+from domain.kernel.vo import AwareDatetime
+from domain.user import User, UserRepo, UserRole, ViolationRepo
+from domain.user.protocols import UsageRepo
 
 
 def mk_logger() -> Mock:
@@ -58,3 +65,32 @@ class FakeUoW:
         tb: TracebackType | None,
     ) -> None:
         self.exit_count += 1
+
+
+def mk_user_context(
+    *,
+    user: User | None = None,
+    user_id: int = 1,
+    role: UserRole = UserRole.USER,
+    now: AwareDatetime | None = None,
+) -> UserContext:
+    entity = user or mk_user(user_id=user_id, role=role, now=now)
+    return UserContext.from_domain(entity)
+
+
+def mk_chat_context(
+    *,
+    chat: Chat | None = None,
+    tg_id: int = -1001,
+    chat_type: ChatType = ChatType.SUPERGROUP,
+    domain_id: int = 10,
+) -> ChatContext:
+    if chat is not None:
+        return ChatContext.from_domain(chat)
+    entity = Chat.register(
+        id=ChatId(value=UUID(int=domain_id)),
+        profile=ChatProfile(type=chat_type, telegram_id=tg_id, title="Test"),
+        schedules=ChatScheduleSet(timezone=ZoneInfo("UTC"), weekday=Weekday.WEDNESDAY),
+        at=dt(9),
+    )
+    return ChatContext.from_domain(entity)

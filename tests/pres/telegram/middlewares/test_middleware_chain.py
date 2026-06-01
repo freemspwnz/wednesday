@@ -19,15 +19,12 @@ from aiogram.types import (
     User,
 )
 
-from app.dto import ChatContext, UserContext
 from app.exceptions import TooManyRequests
-from domain.chat import ChatType
-from domain.kernel.vo import NonEmptyStr
 from presentation.aiogram.middlewares.update.di import DIMiddleware
 from presentation.aiogram.middlewares.update.registration import RegistrationMiddleware
 from presentation.aiogram.middlewares.update.throttling import ThrottlingMiddleware
 
-from ..helpers import ScopeCM, make_message
+from ..factories import ScopeCM, make_message, mk_chat_context, mk_user_context
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -100,8 +97,8 @@ async def test_message_chain_injects_scope_registers_and_throttles(
     mock_logger: MagicMock,
     mock_rate_limiter: MagicMock,
 ) -> None:
-    reg_user = UserContext(tg_id=1, is_bot=False, first_name=NonEmptyStr("A"))
-    reg_chat = ChatContext(tg_id=1, type=ChatType.PRIVATE)
+    reg_user = mk_user_context()
+    reg_chat = mk_chat_context(tg_id=1)
     mock_scope.registration_uc.reg_user.return_value = reg_user
     mock_scope.registration_uc.reg_chat.return_value = reg_chat
     mock_scope.logger = mock_logger
@@ -158,12 +155,8 @@ async def test_throttling_drops_update_before_handler(
     mock_logger: MagicMock,
     mock_rate_limiter: MagicMock,
 ) -> None:
-    reg_chat = ChatContext(tg_id=1, type=ChatType.PRIVATE)
-    mock_scope.registration_uc.reg_user.return_value = UserContext(
-        tg_id=1,
-        is_bot=False,
-        first_name=NonEmptyStr("A"),
-    )
+    reg_chat = mk_chat_context(tg_id=1)
+    mock_scope.registration_uc.reg_user.return_value = mk_user_context()
     mock_scope.registration_uc.reg_chat.return_value = reg_chat
     mock_scope.logger = mock_logger
     mock_rate_limiter.call.side_effect = [

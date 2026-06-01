@@ -19,17 +19,19 @@ from aiogram.types import (
     User,
 )
 
-from app.dto import ChatContext, UserContext
 from domain.chat import ChatType
 from domain.kernel.vo import NonEmptyStr
+from domain.user import UserProfile
 from presentation.aiogram.middlewares.update.registration import RegistrationMiddleware
+
+from ..factories import mk_chat_context, mk_user_context
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 @pytest.mark.unit
 class TestMapping:
-    def test_to_user_ctx(self) -> None:
+    def test_to_user_profile(self) -> None:
         tg_user = User(
             id=42,
             is_bot=False,
@@ -39,23 +41,22 @@ class TestMapping:
             language_code="en",
             is_premium=True,
         )
-        ctx = RegistrationMiddleware._to_user_ctx(tg_user)
-        assert ctx == UserContext(
-            tg_id=42,
+        profile = RegistrationMiddleware._to_user_profile(tg_user)
+        assert profile == UserProfile(
+            telegram_id=42,
             is_bot=False,
             first_name=NonEmptyStr("Ada"),
             last_name=NonEmptyStr("Lovelace"),
             username="ada",
             language_code="en",
             has_tg_premium=True,
-            is_active=True,
         )
 
-    def test_to_chat_ctx(self) -> None:
-        ctx = RegistrationMiddleware._to_chat_ctx(Chat(id=-1001, type="supergroup", title="Ops"))
-        assert ctx.tg_id == -1001
-        assert ctx.type == ChatType.SUPERGROUP
-        assert ctx.title == "Ops"
+    def test_to_chat_profile(self) -> None:
+        profile = RegistrationMiddleware._to_chat_profile(Chat(id=-1001, type="supergroup", title="Ops"))
+        assert profile.telegram_id == -1001
+        assert profile.type == ChatType.SUPERGROUP
+        assert profile.title == "Ops"
 
     @pytest.mark.parametrize(
         ("entity_type", "event_factory"),
@@ -121,8 +122,8 @@ def _bot_left_event(*, joined: bool = False) -> ChatMemberUpdated:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_call_registers_user_and_chat(mock_scope: MagicMock, mock_logger: MagicMock) -> None:
-    reg_user = UserContext(tg_id=1, is_bot=False, first_name=NonEmptyStr("A"))
-    reg_chat = ChatContext(tg_id=1, type=ChatType.PRIVATE)
+    reg_user = mk_user_context()
+    reg_chat = mk_chat_context(tg_id=1, chat_type=ChatType.PRIVATE)
     mock_scope.registration_uc.reg_user.return_value = reg_user
     mock_scope.registration_uc.reg_chat.return_value = reg_chat
 
@@ -141,6 +142,9 @@ async def test_call_registers_user_and_chat(mock_scope: MagicMock, mock_logger: 
     assert data["user"] == reg_user
     assert data["chat"] == reg_chat
     handler.assert_awaited_once()
+    mock_scope.registration_uc.reg_user.assert_awaited_once()
+    call_kwargs = mock_scope.registration_uc.reg_user.await_args.kwargs
+    assert call_kwargs["profile"].telegram_id == 1
 
 
 @pytest.mark.unit

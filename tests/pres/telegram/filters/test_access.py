@@ -6,19 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.dto import UserContext
-from domain.kernel.vo import NonEmptyStr
 from domain.user import UserRole
 from presentation.aiogram.filters.access import AdminAccessFilter
 
-
-def _user(*, role: UserRole | None = UserRole.USER) -> UserContext:
-    return UserContext(
-        tg_id=1,
-        is_bot=False,
-        first_name=NonEmptyStr("Test"),
-        role=role,
-    )
+from ..factories import mk_user_context
 
 
 @pytest.fixture
@@ -31,18 +22,23 @@ def admin_filter() -> AdminAccessFilter:
 @pytest.mark.unit
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("user", "expected"),
+    ("role", "expected"),
     [
-        (_user(role=UserRole.USER), False),
-        (_user(role=UserRole.ADMIN), True),
-        (_user(role=UserRole.OWNER), True),
-        (_user(role=None), False),
-        (None, False),
+        (UserRole.USER, False),
+        (UserRole.ADMIN, True),
+        (UserRole.OWNER, True),
     ],
 )
-async def test_admin_access_filter(
+async def test_admin_access_filter_by_role(
     admin_filter: AdminAccessFilter,
-    user: UserContext | None,
+    role: UserRole,
     expected: bool,
 ) -> None:
+    user = mk_user_context(role=role)
     assert await admin_filter(event=MagicMock(), user=user) is expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_admin_access_filter_rejects_none_user(admin_filter: AdminAccessFilter) -> None:
+    assert await admin_filter(event=MagicMock(), user=None) is False

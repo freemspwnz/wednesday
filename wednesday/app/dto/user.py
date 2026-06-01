@@ -7,39 +7,41 @@ from domain.user import BannedState, User, UserId, UserRole
 
 @dataclass
 class UserContext:
+    """Registered user read-model for handlers and cache (always fully materialized)."""
+
+    id: UserId
     tg_id: int
     is_bot: bool
     first_name: NonEmptyStr
-    id: UserId | None = None
+    role: UserRole
+    is_active: bool
+    is_banned: bool
+    subscription_tier: SubscriptionTier
+    subscription_daily_limit: int
+    subscription_cooldown_minutes: int
+    subscription_started_at: AwareDatetime
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+    last_seen_at: AwareDatetime
+    model_vendor: str
+    model_series: str
+    model: str
     last_name: NonEmptyStr | None = None
     username: str | None = None
     language_code: str | None = None
     has_tg_premium: bool = False
-    role: UserRole | None = None
-    is_active: bool = True
-    is_banned: bool = False
     banned_until: AwareDatetime | None = None
-    subscription_tier: SubscriptionTier | None = None
-    subscription_daily_limit: int | None = None
-    subscription_cooldown_minutes: int | None = None
-    subscription_started_at: AwareDatetime | None = None
     subscription_expires_at: AwareDatetime | None = None
-    model_vendor: str | None = None
-    model_series: str | None = None
-    model: str | None = None
-    created_at: AwareDatetime | None = None
-    updated_at: AwareDatetime | None = None
-    last_seen_at: AwareDatetime | None = None
 
     @classmethod
     def from_domain(cls, user: User) -> "UserContext":
         is_banned = isinstance(user.state, BannedState)
         banned_until = user.state.until if isinstance(user.state, BannedState) else None
         return UserContext(
+            id=user.id,
             tg_id=user.profile.telegram_id,
             is_bot=user.profile.is_bot,
             first_name=user.profile.first_name,
-            id=user.id,
             last_name=user.profile.last_name,
             username=user.profile.username,
             language_code=user.profile.language_code,

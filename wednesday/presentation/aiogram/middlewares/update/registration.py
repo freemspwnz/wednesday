@@ -6,8 +6,9 @@ from aiogram.types import Chat, ChatMemberUpdated, TelegramObject, User
 
 from app.dto import ChatContext, UserContext
 from app.protocols import Logger
-from domain.chat import ChatType
+from domain.chat import ChatProfile, ChatType
 from domain.kernel.vo import NonEmptyStr
+from domain.user import UserProfile
 
 from ..utils import CHAT_MEMBER_LEFT_STATUSES, require_request_scope
 
@@ -46,12 +47,14 @@ class RegistrationMiddleware(BaseMiddleware):
         tg_chat = self._extract_chat(event)
 
         if tg_user is not None:
-            user = self._to_user_ctx(tg_user)
-            user = await request_scope.registration_uc.reg_user(dto=user)
+            user = await request_scope.registration_uc.reg_user(
+                profile=self._to_user_profile(tg_user),
+            )
 
         if tg_chat is not None:
-            chat = self._to_chat_ctx(tg_chat)
-            chat = await request_scope.registration_uc.reg_chat(dto=chat)
+            chat = await request_scope.registration_uc.reg_chat(
+                profile=self._to_chat_profile(tg_chat),
+            )
 
         data["user"] = user
         data["chat"] = chat
@@ -82,18 +85,15 @@ class RegistrationMiddleware(BaseMiddleware):
     ) -> User | Chat | None:
         if entity_type == "chat":
             direct_chat = getattr(event, "chat", None)
+            search = "chat"
             if isinstance(direct_chat, Chat):
                 return direct_chat
 
         if entity_type == "user":
             direct_user = getattr(event, "from_user", None)
+            search = "from_user"
             if isinstance(direct_user, User):
                 return direct_user
-
-        if entity_type == "user":
-            search = "from_user"
-        else:
-            search = "chat"
 
         entity = getattr(event, search, None)
         if entity_type == "user" and isinstance(entity, User):
@@ -115,24 +115,22 @@ class RegistrationMiddleware(BaseMiddleware):
         return None
 
     @staticmethod
-    def _to_user_ctx(user: User) -> UserContext:
-        return UserContext(
-            tg_id=user.id,
+    def _to_user_profile(user: User) -> UserProfile:
+        return UserProfile(
+            telegram_id=user.id,
             is_bot=user.is_bot,
             first_name=NonEmptyStr(user.first_name),
             last_name=NonEmptyStr(user.last_name) if user.last_name else None,
             username=user.username,
             language_code=user.language_code,
             has_tg_premium=bool(user.is_premium),
-            is_active=True,
         )
 
     @staticmethod
-    def _to_chat_ctx(chat: Chat) -> ChatContext:
-        return ChatContext(
-            tg_id=chat.id,
+    def _to_chat_profile(chat: Chat) -> ChatProfile:
+        return ChatProfile(
             type=ChatType(chat.type),
+            telegram_id=chat.id,
             title=chat.title,
             username=chat.username,
-            is_active=True,
         )

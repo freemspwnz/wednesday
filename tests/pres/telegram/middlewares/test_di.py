@@ -8,7 +8,7 @@ import pytest
 
 from presentation.aiogram.middlewares.update.di import DIMiddleware
 
-from ..helpers import ScopeCM
+from ..factories import ScopeCM
 
 
 @pytest.mark.unit
