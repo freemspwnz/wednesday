@@ -1,7 +1,5 @@
 """Access filters for admin router (role-based; no user-facing messages)."""
 
-from __future__ import annotations
-
 from aiogram.filters import BaseFilter
 from aiogram.types import TelegramObject
 

@@ -1,7 +1,5 @@
 """Handlers for common commands: /start, /help."""
 
-from __future__ import annotations
-
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message

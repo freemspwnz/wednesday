@@ -1,6 +1,4 @@
-"""Тексты пользовательских команд (/start, /help, заглушки)."""
-
-from __future__ import annotations
+"""User-facing command texts (/start, /help, stubs)."""
 
 from collections.abc import Sequence
 
@@ -17,6 +15,7 @@ WELCOME = (
     "/random - Случайное изображение из каталога\n"
     "/set_model - Выбрать модель генерации\n"
     "/list_models - Список доступных моделей\n"
+    "/schedule help - Показать команды для настройки расписания\n"
 )
 
 HELP = (
@@ -29,6 +28,7 @@ HELP = (
     "/random - Случайное изображение из каталога\n"
     "/set_model - Выбрать модель генерации\n"
     "/list_models - Список доступных моделей\n"
+    "/schedule help - Показать команды для настройки расписания\n"
 )
 
 UNKNOWN_COMMAND = "❓ Неизвестная команда!\n\nИспользуйте /help для получения списка команд."

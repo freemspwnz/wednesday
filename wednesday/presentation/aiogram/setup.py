@@ -14,7 +14,7 @@ from .middlewares import (
 )
 from .routers import (
     admin_router,
-    chat_event_router,
+    chat_router,
     common_router,
     error_handler,
     image_router,
@@ -123,7 +123,7 @@ def build_root_router() -> Router:
     root_router = Router(name="root")
 
     root_router.include_router(admin_router)
-    root_router.include_router(chat_event_router)
+    root_router.include_router(chat_router)
     root_router.include_router(image_router)
     root_router.include_router(user_router)
     root_router.include_router(common_router)

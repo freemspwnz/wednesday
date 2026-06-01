@@ -1,7 +1,5 @@
 """Static error messages, fallback messages, and mapping exceptions to UX."""
 
-from __future__ import annotations
-
 from builtins import BaseException
 
 from app.exceptions import AppError, ChatNotFoundError, LimitStorageError, UserNotFoundError

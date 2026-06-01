@@ -1,6 +1,4 @@
-"""Тексты профиля пользователя (/me)."""
-
-from __future__ import annotations
+"""User-facing /me profile message templates."""
 
 from app.dto import UserContext
 from domain.catalog import SubscriptionTier

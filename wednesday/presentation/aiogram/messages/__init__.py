@@ -1,1 +1,1 @@
-"""Пользовательские тексты бота (константы), сгруппированные по модулям."""
+"""Bot user-facing text constants, grouped by module."""

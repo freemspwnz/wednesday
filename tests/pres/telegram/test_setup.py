@@ -16,9 +16,9 @@ from presentation.aiogram.setup import build_root_router, setup_bot, setup_dp, s
 
 @pytest.mark.unit
 def test_build_root_router_includes_routers(monkeypatch: pytest.MonkeyPatch) -> None:
-    children = [Router(name=n) for n in ("admin", "chat_event", "image", "user", "common")]
+    children = [Router(name=n) for n in ("admin", "chat", "image", "user", "common")]
     monkeypatch.setattr(setup_mod, "admin_router", children[0])
-    monkeypatch.setattr(setup_mod, "chat_event_router", children[1])
+    monkeypatch.setattr(setup_mod, "chat_router", children[1])
     monkeypatch.setattr(setup_mod, "image_router", children[2])
     monkeypatch.setattr(setup_mod, "user_router", children[3])
     monkeypatch.setattr(setup_mod, "common_router", children[4])

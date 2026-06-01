@@ -6,10 +6,12 @@ Filters must not send messages.
 """
 
 from .access import AdminAccessFilter
+from .chat import GroupChatFilter
 from .command import InsufficientCommandArgs, RequireCommandArgs
 
 __all__ = [
     "AdminAccessFilter",
+    "GroupChatFilter",
     "InsufficientCommandArgs",
     "RequireCommandArgs",
 ]

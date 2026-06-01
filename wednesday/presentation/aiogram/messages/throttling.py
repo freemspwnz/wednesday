@@ -1,4 +1,4 @@
-"""Сообщения при срабатывании входящего throttling."""
+"""User-facing messages when incoming throttling triggers."""
 
 GROUP = [
     "Помедленнее! Я записываю...",

@@ -1,7 +1,5 @@
 """Incoming update throttling middleware (Redis-backed)."""
 
-from __future__ import annotations
-
 import random
 from collections.abc import Awaitable, Callable
 from typing import Any

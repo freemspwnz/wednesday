@@ -1,4 +1,4 @@
-"""Системные уведомления (startup / shutdown)."""
+"""System notifications (startup / shutdown)."""
 
 BOT_STARTED = "Bot started"
 
