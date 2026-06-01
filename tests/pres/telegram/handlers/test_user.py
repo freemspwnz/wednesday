@@ -2,32 +2,23 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiogram.types import Message
+from dom.user.factories import descriptor_lite, descriptor_pro, dt, mk_user
 
 from app.dto import UserContext
-from domain.catalog import SubscriptionTier
-from domain.kernel.vo import NonEmptyStr
-from domain.user import UserRole
-from presentation.aiogram.messages import profile as profile_msg
+from domain.user.exceptions import ModelNotFoundError, ModelSelectionError
+from presentation.aiogram.messages import commands as cmd_msg, exceptions as exc_msg, profile as profile_msg
 from presentation.aiogram.routers import user as handlers
 
-from ..helpers import make_message
+from ..factories import make_message, mk_user_context
 
 
 @pytest.fixture
 def user_context() -> UserContext:
-    return UserContext(
-        tg_id=1,
-        is_bot=False,
-        first_name=NonEmptyStr("U"),
-        role=UserRole.USER,
-        subscription_tier=SubscriptionTier.FREE,
-        subscription_daily_limit=3,
-        subscription_cooldown_minutes=5,
-    )
+    return mk_user_context()
 
 
 @pytest.mark.unit
@@ -42,9 +33,98 @@ async def test_cmd_me_replies_with_profile(user_context: UserContext) -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cmd_me_role_unknown(user_context: UserContext) -> None:
-    user_context.role = None
-    message = make_message(text="/me")
+async def test_set_model_usage() -> None:
+    message = make_message(text="/set_model")
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
-        await handlers.cmd_me(message, user_context)
-    answer.assert_awaited_once_with(text=profile_msg.ROLE_UNKNOWN)
+        await handlers.cmd_set_model_usage(message)
+    answer.assert_awaited_once_with(cmd_msg.SET_MODEL_USAGE)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_set_model_success(user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock) -> None:
+    updated = mk_user(user_id=1, now=dt(10))
+    mock_scope.model_selection_uc.select_model = AsyncMock(return_value=updated)
+    message = make_message(text="/set_model gigachat-2-lite")
+
+    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+        await handlers.cmd_set_model(
+            message,
+            ["gigachat-2-lite"],
+            user_context,
+            mock_scope,
+            mock_logger,
+        )
+
+    mock_scope.model_selection_uc.select_model.assert_awaited_once()
+    answer.assert_awaited_once_with(cmd_msg.format_set_model_success("gigachat-2-lite"))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_set_model_not_found(user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock) -> None:
+    mock_scope.model_selection_uc.select_model = AsyncMock(
+        side_effect=ModelNotFoundError("missing-model"),
+    )
+    message = make_message(text="/set_model missing-model")
+
+    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+        await handlers.cmd_set_model(
+            message,
+            ["missing-model"],
+            user_context,
+            mock_scope,
+            mock_logger,
+        )
+
+    answer.assert_awaited_once_with(exc_msg.MODEL_NOT_FOUND)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_set_model_tier_denied(user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock) -> None:
+    mock_scope.model_selection_uc.select_model = AsyncMock(
+        side_effect=ModelSelectionError("tier_too_low"),
+    )
+    message = make_message(text="/set_model gigachat-2-pro")
+
+    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+        await handlers.cmd_set_model(
+            message,
+            ["gigachat-2-pro"],
+            user_context,
+            mock_scope,
+            mock_logger,
+        )
+
+    answer.assert_awaited_once_with("Модель недоступна для вашей подписки.")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_models_filters_by_tier(
+    user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock
+) -> None:
+    mock_scope.model_catalog.list_active = AsyncMock(
+        return_value=[descriptor_lite(), descriptor_pro()],
+    )
+    message = make_message(text="/list_models")
+
+    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+        await handlers.cmd_list_models(message, user_context, mock_scope, mock_logger)
+
+    answer.assert_awaited_once_with(cmd_msg.format_list_models(["gigachat-2-lite"]))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_models_empty_for_tier(
+    user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock
+) -> None:
+    mock_scope.model_catalog.list_active = AsyncMock(return_value=[descriptor_pro()])
+    message = make_message(text="/list_models")
+
+    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+        await handlers.cmd_list_models(message, user_context, mock_scope, mock_logger)
+
+    answer.assert_awaited_once_with(cmd_msg.LIST_MODELS_EMPTY)

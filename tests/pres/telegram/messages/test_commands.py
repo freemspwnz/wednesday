@@ -1,5 +1,3 @@
-"""Tests for command message texts and formatters."""
-
 from __future__ import annotations
 
 import pytest

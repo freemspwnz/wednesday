@@ -14,7 +14,9 @@ from aiogram.types import Chat, Message, TelegramObject, Update, User
 from app.exceptions import AppError
 from domain.kernel.exceptions import ValidationError
 from presentation.aiogram.messages.exceptions import SERVER_ERROR
-from presentation.aiogram.routers.error import error_handler
+from presentation.aiogram.routers.error import error_handler, send_text_to_update
+
+from ..factories import make_message
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -75,3 +77,19 @@ async def _feed_with(exc: BaseException) -> AsyncMock:
 async def test_dp_errors_replies(exc: BaseException, expected: str) -> None:
     answer = await _feed_with(exc)
     answer.assert_awaited_once_with(expected)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_send_text_to_message() -> None:
+    answer = AsyncMock()
+    update = Update(update_id=1, message=make_message(text="x"))
+    with patch.object(Message, "answer", answer):
+        assert await send_text_to_update(update, "hi") is True
+    answer.assert_awaited_once_with("hi")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_send_text_unsupported_update() -> None:
+    assert await send_text_to_update(Update(update_id=1), "x") is False

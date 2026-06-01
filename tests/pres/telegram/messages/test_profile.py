@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
+from dom.user.factories import mk_user, subscription_premium
 
-from domain.kernel.vo import AwareDatetime
+from domain.catalog import Model, Series, Vendor
 from domain.user import UserRole
+from domain.user.vo import UserSettings
 from presentation.aiogram.messages import profile as profile_msg
 
-from .factories import mk_user_context
-
-
-def dt(hour: int) -> AwareDatetime:
-    return AwareDatetime(datetime(2026, 5, 22, hour, 0, tzinfo=UTC))
+from ..factories import dt, mk_user_context
 
 
 @pytest.mark.unit
@@ -31,11 +27,6 @@ def test_format_me_active_user() -> None:
 
 @pytest.mark.unit
 def test_format_me_shows_selected_model() -> None:
-    from dom.user.factories import mk_user
-
-    from domain.catalog import Model, Series, Vendor
-    from domain.user.vo import UserSettings
-
     user = mk_user(
         settings=UserSettings(
             vendor=Vendor.parse("sber"),
@@ -49,8 +40,6 @@ def test_format_me_shows_selected_model() -> None:
 
 @pytest.mark.unit
 def test_format_me_banned_with_until() -> None:
-    from dom.user.factories import mk_user
-
     entity = mk_user()
     entity.ban(actor=UserRole.OWNER, until=dt(18), at=dt(17))
     text = profile_msg.format_me(mk_user_context(user=entity))
@@ -59,9 +48,17 @@ def test_format_me_banned_with_until() -> None:
 
 
 @pytest.mark.unit
-def test_format_me_premium_with_expiry() -> None:
-    from dom.user.factories import mk_user, subscription_premium
+def test_format_me_banned_without_until() -> None:
+    ctx = mk_user_context()
+    ctx.is_banned = True
+    ctx.banned_until = None
+    text = profile_msg.format_me(ctx)
+    assert "Статус: Заблокирован" in text
+    assert "до" not in text.split("Статус:")[1]
 
+
+@pytest.mark.unit
+def test_format_me_premium_with_expiry() -> None:
     entity = mk_user(
         role=UserRole.ADMIN,
         now=dt(10),

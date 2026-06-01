@@ -8,6 +8,7 @@ from .admin import admin_router
 from .chat_event import chat_event_router
 from .common import common_router
 from .error import error_handler
+from .image import image_router
 from .user import user_router
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "chat_event_router",
     "common_router",
     "error_handler",
+    "image_router",
     "user_router",
 ]

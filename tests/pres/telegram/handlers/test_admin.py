@@ -10,6 +10,7 @@ from aiogram.types import Message
 
 from app.dto import ChatContext, UserContext
 from domain.kernel.exceptions import InvalidStateTransitionError
+from domain.user.exceptions import AccessDeniedError
 from presentation.aiogram.messages import admin as admin_msg, commands as cmd_msg, exceptions as exc_msg
 from presentation.aiogram.routers import admin as h
 
@@ -161,8 +162,6 @@ async def test_mod_denied_by_domain_policy(
     mock_logger: MagicMock,
     admin_user: UserContext,
 ) -> None:
-    from domain.user.exceptions import AccessDeniedError
-
     target = mk_user_context(user_id=2)
     target.tg_id = 42
     mock_scope.registration_uc.find_user_by_tg_id.return_value = target

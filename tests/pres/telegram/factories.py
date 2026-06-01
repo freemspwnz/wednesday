@@ -8,7 +8,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from aiogram.types import CallbackQuery, Chat as TgChat, Message, User as TgUser
-from dom.user.factories import dt, mk_user
+from dom.user.factories import mk_user
 
 from app.dto import ChatContext, UserContext
 from domain.chat import Chat, ChatId, ChatProfile, ChatScheduleSet, ChatType, Weekday
@@ -16,6 +16,10 @@ from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserRole
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def dt(hour: int) -> AwareDatetime:
+    return AwareDatetime(datetime(2026, 5, 22, hour, 0, tzinfo=UTC))
 
 
 def make_message(*, text: str = "/cmd", user_id: int = 1, chat_id: int = 1) -> Message:

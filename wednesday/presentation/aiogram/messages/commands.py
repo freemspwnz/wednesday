@@ -39,6 +39,8 @@ SET_MODEL_USAGE = "Использование: /set_model <модель>"
 
 RANDOM_CATALOG_EMPTY = "Каталог изображений пуст для этого чата.\nСгенерируйте новое: /generate"
 
+IMAGE_UNAVAILABLE = "Изображение недоступно для отправки."
+
 LIST_MODELS_EMPTY = "Нет доступных моделей для вашей подписки."
 
 LIST_MODELS_HEADER = "Доступные модели:"

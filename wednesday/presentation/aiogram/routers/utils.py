@@ -8,7 +8,7 @@ from typing import TypeVar
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from app.exceptions import unwrap_exception
 from app.protocols import Logger
@@ -69,17 +69,48 @@ async def run_message_handler(
     logger: Logger,
     action: Callable[[], Awaitable[T]],
 ) -> T | None:
-    """Run handler body and reply to the user on expected errors."""
+    async def reply(text: str) -> None:
+        await message.answer(text)
+
+    return await _run_handler(
+        logger,
+        action,
+        log_event="Command handler failed",
+        log_extra={"command": _command_name(message)},
+        reply=reply,
+    )
+
+
+async def run_callback_handler(
+    callback: CallbackQuery,
+    logger: Logger,
+    action: Callable[[], Awaitable[T]],
+) -> T | None:
+    async def reply(text: str) -> None:
+        await callback.answer(text, show_alert=True)
+
+    return await _run_handler(
+        logger,
+        action,
+        log_event="Callback handler failed",
+        log_extra={"callback_data": callback.data},
+        reply=reply,
+    )
+
+
+async def _run_handler(
+    logger: Logger,
+    action: Callable[[], Awaitable[T]],
+    *,
+    log_event: str,
+    log_extra: dict[str, object],
+    reply: Callable[[str], Awaitable[None]],
+) -> T | None:
     try:
         return await action()
     except Exception as exc:
         root = unwrap_exception(exc)
-        text = user_message_for_exception(root)
-        logger.warning(
-            "Command handler failed",
-            command=_command_name(message),
-            error_type=type(root).__name__,
-            error=str(root),
-        )
-        await message.answer(text or COMMAND_FAILURE)
+        text = user_message_for_exception(root) or COMMAND_FAILURE
+        logger.warning(log_event, **log_extra, error_type=type(root).__name__, error=str(root))
+        await reply(text)
         return None

@@ -17,11 +17,13 @@ from .routers import (
     chat_event_router,
     common_router,
     error_handler,
+    image_router,
     user_router,
 )
 
 POLLING_ALLOWED_UPDATES: list[str] = [
     "message",
+    "callback_query",
     "my_chat_member",
     "chat_member",
 ]
@@ -122,6 +124,7 @@ def build_root_router() -> Router:
 
     root_router.include_router(admin_router)
     root_router.include_router(chat_event_router)
+    root_router.include_router(image_router)
     root_router.include_router(user_router)
     root_router.include_router(common_router)
 

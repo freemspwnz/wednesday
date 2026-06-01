@@ -9,21 +9,24 @@ from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramAPIError
 
 import presentation.aiogram.setup as setup_mod
+from presentation.aiogram.filters.access import AdminAccessFilter
+from presentation.aiogram.routers.admin import admin_router
 from presentation.aiogram.setup import build_root_router, setup_bot, setup_dp, setup_routers
 
 
 @pytest.mark.unit
 def test_build_root_router_includes_routers(monkeypatch: pytest.MonkeyPatch) -> None:
-    children = [Router(name=n) for n in ("admin", "chat_event", "user", "common")]
+    children = [Router(name=n) for n in ("admin", "chat_event", "image", "user", "common")]
     monkeypatch.setattr(setup_mod, "admin_router", children[0])
     monkeypatch.setattr(setup_mod, "chat_event_router", children[1])
-    monkeypatch.setattr(setup_mod, "user_router", children[2])
-    monkeypatch.setattr(setup_mod, "common_router", children[3])
+    monkeypatch.setattr(setup_mod, "image_router", children[2])
+    monkeypatch.setattr(setup_mod, "user_router", children[3])
+    monkeypatch.setattr(setup_mod, "common_router", children[4])
 
     root = build_root_router()
 
     assert root.name == "root"
-    assert len(root.sub_routers) == 4
+    assert len(root.sub_routers) == 5
 
 
 @pytest.mark.unit
@@ -40,9 +43,6 @@ def test_setup_bot_registers_session_middleware(mock_logger: MagicMock, mock_rat
 
 @pytest.mark.unit
 def test_setup_routers_attaches_admin_access_filter(mock_logger: MagicMock) -> None:
-    from presentation.aiogram.filters.access import AdminAccessFilter
-    from presentation.aiogram.routers.admin import admin_router
-
     setup_routers(logger=mock_logger)
 
     root_filters = admin_router.message._handler.filters
