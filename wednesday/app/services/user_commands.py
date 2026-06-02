@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from app.exceptions import UserNotFoundError
 from app.protocols import Logger
 from domain.catalog import SubscriptionCatalog
@@ -8,7 +6,7 @@ from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubsc
 
 
 class UserCommandService:
-    """Загрузка агрегата, доменная команда и сохранение (без транзакции — её закрывает UoW)."""
+    """Load user aggregate, domain command and save."""
 
     def __init__(self, *, subscription_catalog: SubscriptionCatalog, logger: Logger) -> None:
         self._subscription_catalog = subscription_catalog

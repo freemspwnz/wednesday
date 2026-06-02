@@ -30,7 +30,7 @@ from domain.chat import (
 from domain.chat.exceptions import InvalidStateTransitionError, ScheduleLimitExceededError
 from domain.kernel.vo import AwareDatetime
 
-from ..factories import FakeUoW, mk_logger
+from ..factories import FakeCacheRegistry, FakeUoW, mk_logger
 
 
 def dt(hour: int) -> AwareDatetime:
@@ -84,15 +84,17 @@ async def test_service_change_profile_persists_via_repo() -> None:
     repo.save.assert_awaited_once_with(chat)
 
 
-def _make_uc(*, repo: AsyncMock) -> tuple[ChatCommandsUseCase, FakeUoW]:
+def _make_uc(*, repo: AsyncMock) -> tuple[ChatCommandsUseCase, FakeUoW, FakeCacheRegistry]:
     log = mk_logger()
     uow = FakeUoW(chats=repo)
+    cache = FakeCacheRegistry()
     uc = ChatCommandsUseCase(
         uow=uow,
         chat_commands=ChatCommandService(logger=log),
+        cache_registry=cache,
         logger=log,
     )
-    return uc, uow
+    return uc, uow, cache
 
 
 @pytest.mark.unit
@@ -101,7 +103,7 @@ async def test_uc_change_profile_happy_path_persists_and_closes_uow() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, uow = _make_uc(repo=repo)
+    uc, uow, cache = _make_uc(repo=repo)
     new_profile = ChatProfile(type=ChatType.GROUP, telegram_id=-1001, title="Ops")
 
     got = await uc.change_profile(
@@ -115,6 +117,7 @@ async def test_uc_change_profile_happy_path_persists_and_closes_uow() -> None:
     repo.get_by_id.assert_awaited_once_with(chat.id)
     repo.save.assert_awaited_once_with(chat)
     assert uow.enter_count == uow.exit_count == 1
+    cache.chat.set.assert_awaited_once_with(got)
 
 
 @pytest.mark.unit
@@ -122,7 +125,7 @@ async def test_uc_change_profile_happy_path_persists_and_closes_uow() -> None:
 async def test_uc_chat_not_found_does_not_save() -> None:
     repo = AsyncMock()
     repo.get_by_id.return_value = None
-    uc, uow = _make_uc(repo=repo)
+    uc, uow, _cache = _make_uc(repo=repo)
     cid = ChatId(value=UUID(int=99))
     dummy = mk_chat(chat_id=99)
 
@@ -140,7 +143,7 @@ async def test_uc_management_access_denied_propagates_and_skips_save() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _cache = _make_uc(repo=repo)
     new_profile = ChatProfile(type=ChatType.GROUP, telegram_id=-1001, title="X")
 
     with pytest.raises(AccessDeniedError):
@@ -160,7 +163,7 @@ async def test_uc_change_schedule_day_and_timezone_happy_path() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _cache = _make_uc(repo=repo)
     london = ZoneInfo("Europe/London")
 
     await uc.change_schedule_day(
@@ -187,7 +190,7 @@ async def test_uc_add_remove_clear_schedules_happy_path() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _cache = _make_uc(repo=repo)
     slot = ChatSchedule(9, 30)
 
     await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=slot, at=dt(11))
@@ -205,13 +208,14 @@ async def test_uc_deactivate_and_activate_happy_path() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _ = _make_uc(repo=repo)
+    uc, _, cache = _make_uc(repo=repo)
 
     await uc.deactivate(chat_id=chat.id, actor=owner_actor(chat), at=dt(11))
     await uc.activate(chat_id=chat.id, actor=owner_actor(chat), at=dt(12))
 
     assert isinstance(chat.state, ActiveState)
     assert repo.save.await_count == 2
+    assert cache.chat.set.await_count == 2
 
 
 @pytest.mark.unit
@@ -220,7 +224,7 @@ async def test_uc_stale_write_propagates() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _cache = _make_uc(repo=repo)
 
     await uc.change_schedule_day(
         chat_id=chat.id,
@@ -246,7 +250,7 @@ async def test_uc_activate_when_already_active_propagates() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _cache = _make_uc(repo=repo)
 
     with pytest.raises(InvalidStateTransitionError):
         await uc.activate(chat_id=chat.id, actor=owner_actor(chat), at=dt(11))
@@ -260,7 +264,7 @@ async def test_uc_schedule_limit_exceeded_propagates() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _ = _make_uc(repo=repo)
+    uc, _, _cache = _make_uc(repo=repo)
 
     await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=ChatSchedule(8, 0), at=dt(11))
     await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=ChatSchedule(9, 0), at=dt(12))

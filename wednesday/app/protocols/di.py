@@ -11,16 +11,14 @@ from .observe import Logger
 if TYPE_CHECKING:
     from app.use_cases import (
         ChatCommandsUseCase,
-        ImageRandomUseCase,
-        ImageVoteUseCase,
-        ModelSelectionUseCase,
+        ImageCommandsUseCase,
         RegistrationUseCase,
         UserCommandsUseCase,
     )
 
 
 class RequestScope(Protocol):
-    """Протокол request scope: use case'ы и logger на время обработки update."""
+    """Request scope protocol: use cases and logger for the lifetime of one update handling."""
 
     @property
     def logger(self) -> Logger: ...
@@ -41,13 +39,7 @@ class RequestScope(Protocol):
     def chat_commands_uc(self) -> ChatCommandsUseCase: ...
 
     @property
-    def model_selection_uc(self) -> ModelSelectionUseCase: ...
-
-    @property
-    def image_random_uc(self) -> ImageRandomUseCase: ...
-
-    @property
-    def image_vote_uc(self) -> ImageVoteUseCase: ...
+    def image_commands_uc(self) -> ImageCommandsUseCase: ...
 
 
 ScopeFactory = Callable[[], AbstractAsyncContextManager[RequestScope]]

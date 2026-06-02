@@ -1,12 +1,10 @@
 from functools import cached_property
 
 from app.protocols import CacheRepoRegistry, Logger, RequestScope, UoWFactory
-from app.services import ChatCommandService, ImageRandomService, RegistrationService, UserCommandService
+from app.services import ChatCommandService, ImageCommandService, RegistrationService, UserCommandService
 from app.use_cases import (
     ChatCommandsUseCase,
-    ImageRandomUseCase,
-    ImageVoteUseCase,
-    ModelSelectionUseCase,
+    ImageCommandsUseCase,
     RegistrationUseCase,
     UserCommandsUseCase,
 )
@@ -55,6 +53,8 @@ class ScopeContainer(RequestScope):
             uow=self._uow_factory(),
             user_commands=self._user_commands_service,
             cache_registry=self._cache_registry,
+            model_catalog=self.model_catalog,
+            subscription_catalog=self.subscription_catalog,
             logger=self._logger,
         )
 
@@ -63,31 +63,15 @@ class ScopeContainer(RequestScope):
         return ChatCommandsUseCase(
             uow=self._uow_factory(),
             chat_commands=self._chat_commands_service,
-            logger=self._logger,
-        )
-
-    @cached_property
-    def model_selection_uc(self) -> ModelSelectionUseCase:
-        return ModelSelectionUseCase(
-            uow=self._uow_factory(),
             cache_registry=self._cache_registry,
-            model_catalog=self.model_catalog,
-            subscription_catalog=self.subscription_catalog,
             logger=self._logger,
         )
 
     @cached_property
-    def image_random_uc(self) -> ImageRandomUseCase:
-        return ImageRandomUseCase(
+    def image_commands_uc(self) -> ImageCommandsUseCase:
+        return ImageCommandsUseCase(
             uow=self._uow_factory(),
-            image_random=self._image_random_service,
-            logger=self._logger,
-        )
-
-    @cached_property
-    def image_vote_uc(self) -> ImageVoteUseCase:
-        return ImageVoteUseCase(
-            uow=self._uow_factory(),
+            image_commands=self._image_commands_service,
             logger=self._logger,
         )
 
@@ -113,7 +97,7 @@ class ScopeContainer(RequestScope):
         )
 
     @cached_property
-    def _image_random_service(self) -> ImageRandomService:
-        return ImageRandomService(
+    def _image_commands_service(self) -> ImageCommandService:
+        return ImageCommandService(
             logger=self._logger,
         )

@@ -8,6 +8,7 @@ from uuid import UUID
 
 import pytest
 from dom.user.factories import (
+    FakeModelCatalog,
     FakeSubscriptionCatalog,
     default_settings,
     subscription_free,
@@ -89,6 +90,8 @@ def _make_uc(
         uow=uow,
         user_commands=_user_commands_service(),
         cache_registry=cache,
+        model_catalog=FakeModelCatalog(),
+        subscription_catalog=FakeSubscriptionCatalog(),
         logger=log,
     )
     return uc, uow, cache

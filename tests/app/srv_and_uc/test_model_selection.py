@@ -1,4 +1,4 @@
-"""Тесты ModelSelectionUseCase."""
+"""Тесты select_model в UserCommandsUseCase."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 import pytest
 from dom.user.factories import FakeModelCatalog, FakeSubscriptionCatalog, FakeUserRepo, mk_user, subscription_premium
 
-from app.use_cases.model_selection import ModelSelectionUseCase
+from app.services.user_commands import UserCommandService
+from app.use_cases.user_commands import UserCommandsUseCase
 from domain.catalog import Model
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserRole
@@ -31,8 +32,12 @@ async def test_uc_select_model_persists_and_refreshes_cache() -> None:
     user.pull_events()
     user_repo = FakeUserRepo.with_users(user)
     cache = FakeCacheRegistry()
-    uc = ModelSelectionUseCase(
+    uc = UserCommandsUseCase(
         uow=FakeUoW(users=user_repo),
+        user_commands=UserCommandService(
+            subscription_catalog=FakeSubscriptionCatalog(),
+            logger=mk_logger(),
+        ),
         cache_registry=cache,
         model_catalog=FakeModelCatalog(),
         subscription_catalog=FakeSubscriptionCatalog(),
@@ -56,8 +61,12 @@ async def test_uc_select_model_closes_uow() -> None:
     user = mk_user(user_id=6, now=dt(10))
     user_repo = FakeUserRepo.with_users(user)
     uow = FakeUoW(users=user_repo)
-    uc = ModelSelectionUseCase(
+    uc = UserCommandsUseCase(
         uow=uow,
+        user_commands=UserCommandService(
+            subscription_catalog=FakeSubscriptionCatalog(),
+            logger=mk_logger(),
+        ),
         cache_registry=FakeCacheRegistry(),
         model_catalog=FakeModelCatalog(),
         subscription_catalog=FakeSubscriptionCatalog(),

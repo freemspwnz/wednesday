@@ -1,8 +1,7 @@
-from __future__ import annotations
-
+from collections.abc import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from app.protocols import Logger, UoW
+from app.protocols import CacheRepoRegistry, Logger, UoW
 from domain.chat import Chat, ChatId, ChatProfile, ChatSchedule, ManagementActor, Weekday
 from domain.kernel.vo import AwareDatetime
 
@@ -10,17 +9,19 @@ from ..services import ChatCommandService
 
 
 class ChatCommandsUseCase:
-    """Фасад доменных команд chat-агрегата в рамках одной транзакции UoW."""
+    """Domain chat commands in a single UoW scope."""
 
     def __init__(
         self,
         *,
         uow: UoW,
         chat_commands: ChatCommandService,
+        cache_registry: CacheRepoRegistry,
         logger: Logger,
     ) -> None:
         self._uow = uow
         self._chat_commands = chat_commands
+        self._cache_registry = cache_registry
         self._logger = logger.bind(module=self.__class__.__name__)
 
     def _log_scenario_start(self, *, action: str, chat_id: ChatId) -> None:
@@ -30,6 +31,24 @@ class ChatCommandsUseCase:
             chat_id=str(chat_id.value),
         )
 
+    async def _run_mutating(
+        self,
+        *,
+        action: str,
+        chat_id: ChatId,
+        runner: Callable[[], Awaitable[Chat]],
+    ) -> Chat:
+        self._log_scenario_start(action=action, chat_id=chat_id)
+        async with self._uow:
+            chat = await runner()
+        await self._cache_registry.chat.set(chat)
+        self._logger.debug(
+            "Chat cache snapshot refreshed",
+            action=action,
+            tg_id=chat.profile.telegram_id,
+        )
+        return chat
+
     async def change_profile(
         self,
         *,
@@ -38,15 +57,17 @@ class ChatCommandsUseCase:
         new_profile: ChatProfile,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="change_profile", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.change_profile(
+        return await self._run_mutating(
+            action="change_profile",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.change_profile(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 new_profile=new_profile,
                 at=at,
-            )
+            ),
+        )
 
     async def change_schedule_day(
         self,
@@ -56,15 +77,17 @@ class ChatCommandsUseCase:
         new_weekday: Weekday,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="change_schedule_day", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.change_schedule_day(
+        return await self._run_mutating(
+            action="change_schedule_day",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.change_schedule_day(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 new_weekday=new_weekday,
                 at=at,
-            )
+            ),
+        )
 
     async def change_schedule_timezone(
         self,
@@ -74,15 +97,17 @@ class ChatCommandsUseCase:
         timezone: ZoneInfo,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="change_schedule_timezone", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.change_schedule_timezone(
+        return await self._run_mutating(
+            action="change_schedule_timezone",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.change_schedule_timezone(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 timezone=timezone,
                 at=at,
-            )
+            ),
+        )
 
     async def add_schedule(
         self,
@@ -92,15 +117,17 @@ class ChatCommandsUseCase:
         schedule: ChatSchedule,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="add_schedule", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.add_schedule(
+        return await self._run_mutating(
+            action="add_schedule",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.add_schedule(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 schedule=schedule,
                 at=at,
-            )
+            ),
+        )
 
     async def remove_schedule(
         self,
@@ -110,15 +137,17 @@ class ChatCommandsUseCase:
         schedule: ChatSchedule,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="remove_schedule", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.remove_schedule(
+        return await self._run_mutating(
+            action="remove_schedule",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.remove_schedule(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 schedule=schedule,
                 at=at,
-            )
+            ),
+        )
 
     async def clear_schedules(
         self,
@@ -127,14 +156,16 @@ class ChatCommandsUseCase:
         actor: ManagementActor,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="clear_schedules", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.clear_schedules(
+        return await self._run_mutating(
+            action="clear_schedules",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.clear_schedules(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 at=at,
-            )
+            ),
+        )
 
     async def activate(
         self,
@@ -143,14 +174,16 @@ class ChatCommandsUseCase:
         actor: ManagementActor,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="activate", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.activate(
+        return await self._run_mutating(
+            action="activate",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.activate(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 at=at,
-            )
+            ),
+        )
 
     async def deactivate(
         self,
@@ -159,11 +192,13 @@ class ChatCommandsUseCase:
         actor: ManagementActor,
         at: AwareDatetime,
     ) -> Chat:
-        self._log_scenario_start(action="deactivate", chat_id=chat_id)
-        async with self._uow:
-            return await self._chat_commands.deactivate(
+        return await self._run_mutating(
+            action="deactivate",
+            chat_id=chat_id,
+            runner=lambda: self._chat_commands.deactivate(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
                 at=at,
-            )
+            ),
+        )
