@@ -10,7 +10,7 @@ from domain.catalog import Model
 from domain.kernel.vo import AwareDatetime
 
 from ..filters import InsufficientCommandArgs, RequireCommandArgs
-from ..messages import commands as cmd_msg, profile as profile_msg
+from ..messages import commands as cmd_msg, user as user_msg
 from .utils import run_message_handler
 
 user_router = Router(name="user")
@@ -19,7 +19,7 @@ user_router = Router(name="user")
 @user_router.message(Command("me"))
 async def cmd_me(message: Message, user: UserContext) -> None:
     """Show caller role, subscription, model, and ban status from registration context."""
-    await message.answer(text=profile_msg.format_me(user))
+    await message.answer(text=user_msg.format_me(user))
 
 
 @user_router.message(Command("set_model"), InsufficientCommandArgs())
@@ -38,7 +38,7 @@ async def cmd_set_model(
     """Set image generation model for the caller."""
 
     async def _action() -> None:
-        updated = await scope.model_selection_uc.select_model(
+        updated = await scope.user_commands_uc.select_model(
             user_id=user.id,
             model=Model.parse(command_args[0]),
             at=AwareDatetime.now_utc(),

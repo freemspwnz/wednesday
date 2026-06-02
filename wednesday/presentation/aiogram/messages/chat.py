@@ -27,8 +27,10 @@ MEMBER_LEFT = [
 ]
 
 SCHEDULE_USAGE = (
-    "Команды расписания:\n"
+    "Команды чата:\n"
     "/schedule — показать расписание\n"
+    "/activate — включить рассылку\n"
+    "/deactivate — приостановить рассылку\n"
     "/schedule_add ЧЧ:ММ — добавить время\n"
     "/schedule_remove ЧЧ:ММ — удалить время\n"
     "/schedule_clear — очистить все слоты\n"

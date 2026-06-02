@@ -1,9 +1,13 @@
 """User-facing /me profile message templates."""
 
+from zoneinfo import ZoneInfo
+
 from app.dto import UserContext
 from domain.catalog import SubscriptionTier
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserRole
+
+_DISPLAY_TZ = ZoneInfo("Europe/Moscow")
 
 _ROLE_LABELS: dict[UserRole, str] = {
     UserRole.USER: "Пользователь",
@@ -59,4 +63,5 @@ def _status_line(user: UserContext) -> str:
 
 
 def _format_dt(dt: AwareDatetime) -> str:
-    return str(dt)
+    local = dt.value.astimezone(_DISPLAY_TZ)
+    return f"{local:%d.%m.%Y}, {local:%H:%M} ({_DISPLAY_TZ.key})"

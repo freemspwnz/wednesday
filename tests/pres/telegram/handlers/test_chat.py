@@ -236,6 +236,89 @@ async def test_cmd_schedule_add_denied_by_domain_policy(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_cmd_activate_calls_uc(
+    chat_context: object,
+    mock_scope: MagicMock,
+    mock_logger: MagicMock,
+) -> None:
+    from dom.chat.factories import mk_chat
+
+    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    mock_scope.chat_commands_uc.activate = AsyncMock(return_value=updated)
+    message = make_message(text="/activate", chat_id=-1001)
+    bot = AsyncMock()
+
+    with (
+        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
+        patch(
+            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            new_callable=AsyncMock,
+            return_value=_member_actor(chat_context),
+        ),
+    ):
+        await h.cmd_activate(message, chat_context, bot, mock_scope, mock_logger)
+
+    mock_scope.chat_commands_uc.activate.assert_awaited_once()
+    answer.assert_awaited_once()
+    assert "активна" in _answer_text(answer)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cmd_deactivate_calls_uc(
+    chat_context: object,
+    mock_scope: MagicMock,
+    mock_logger: MagicMock,
+) -> None:
+    from dom.chat.factories import mk_chat, owner
+
+    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    updated.deactivate(actor=owner(chat_id=updated.id), at=updated.updated_at)
+    mock_scope.chat_commands_uc.deactivate = AsyncMock(return_value=updated)
+    message = make_message(text="/deactivate", chat_id=-1001)
+    bot = AsyncMock()
+
+    with (
+        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
+        patch(
+            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            new_callable=AsyncMock,
+            return_value=_member_actor(chat_context),
+        ),
+    ):
+        await h.cmd_deactivate(message, chat_context, bot, mock_scope, mock_logger)
+
+    mock_scope.chat_commands_uc.deactivate.assert_awaited_once()
+    answer.assert_awaited_once()
+    assert "приостановлена" in _answer_text(answer)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cmd_activate_denied_by_domain_policy(
+    chat_context: object,
+    mock_scope: MagicMock,
+    mock_logger: MagicMock,
+) -> None:
+    mock_scope.chat_commands_uc.activate = AsyncMock(side_effect=AccessDeniedError("not_enough_rights"))
+    message = make_message(text="/activate", chat_id=-1001)
+    bot = AsyncMock()
+
+    with (
+        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
+        patch(
+            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            new_callable=AsyncMock,
+            return_value=_member_actor(chat_context, role=ChatMemberRole.MEMBER),
+        ),
+    ):
+        await h.cmd_activate(message, chat_context, bot, mock_scope, mock_logger)
+
+    answer.assert_awaited_once_with(exc_msg.INSUFFICIENT_PERMISSIONS)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_cmd_schedule_remove_calls_uc(
     chat_context: object,
     mock_scope: MagicMock,

@@ -8,14 +8,14 @@ from dom.user.factories import mk_user, subscription_premium
 from domain.catalog import Model, Series, Vendor
 from domain.user import UserRole
 from domain.user.vo import UserSettings
-from presentation.aiogram.messages import profile as profile_msg
+from presentation.aiogram.messages import user as user_msg
 
 from ..factories import dt, mk_user_context
 
 
 @pytest.mark.unit
 def test_format_me_active_user() -> None:
-    text = profile_msg.format_me(mk_user_context())
+    text = user_msg.format_me(mk_user_context())
     assert "Роль: Пользователь" in text
     assert "Подписка: Бесплатная" in text
     assert "Лимит в день: 3" in text
@@ -34,7 +34,7 @@ def test_format_me_shows_selected_model() -> None:
             model=Model.parse("gigachat-2-pro"),
         ),
     )
-    text = profile_msg.format_me(mk_user_context(user=user))
+    text = user_msg.format_me(mk_user_context(user=user))
     assert "Модель: gigachat-2-pro" in text
 
 
@@ -42,9 +42,9 @@ def test_format_me_shows_selected_model() -> None:
 def test_format_me_banned_with_until() -> None:
     entity = mk_user()
     entity.ban(actor=UserRole.OWNER, until=dt(18), at=dt(17))
-    text = profile_msg.format_me(mk_user_context(user=entity))
+    text = user_msg.format_me(mk_user_context(user=entity))
     assert "Статус: Заблокирован до" in text
-    assert str(dt(18)) in text
+    assert "22.05.2026, 21:00 (Europe/Moscow)" in text
 
 
 @pytest.mark.unit
@@ -52,7 +52,7 @@ def test_format_me_banned_without_until() -> None:
     ctx = mk_user_context()
     ctx.is_banned = True
     ctx.banned_until = None
-    text = profile_msg.format_me(ctx)
+    text = user_msg.format_me(ctx)
     assert "Статус: Заблокирован" in text
     assert "до" not in text.split("Статус:")[1]
 
@@ -68,7 +68,7 @@ def test_format_me_premium_with_expiry() -> None:
         new_subscription=subscription_premium(dt(10), expires_at=dt(12)),
         at=dt(11),
     )
-    text = profile_msg.format_me(mk_user_context(user=entity))
+    text = user_msg.format_me(mk_user_context(user=entity))
     assert "Роль: Администратор" in text
     assert "Подписка: Премиум" in text
-    assert str(dt(12)) in text
+    assert "22.05.2026, 15:00 (Europe/Moscow)" in text

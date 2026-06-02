@@ -30,7 +30,7 @@ async def cb_image_vote(
     """Record a vote for a catalog image."""
 
     async def _action() -> None:
-        await scope.image_vote_uc.vote(
+        await scope.image_commands_uc.vote(
             image_id=ImageId(UUID(callback_data.image_id)),
             voter_id=user.id.value,
             value=callback_data.value,
@@ -51,7 +51,7 @@ async def cmd_random(
     """Send a random unseen catalog image for the current chat."""
 
     async def _action() -> None:
-        card = await scope.image_random_uc.pick_for_chat(
+        card = await scope.image_commands_uc.pick_for_chat(
             chat_id=chat.id.value,
             at=AwareDatetime.now_utc(),
         )

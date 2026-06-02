@@ -1,6 +1,6 @@
 """Argument parsers for in-chat commands."""
 
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from domain.chat import ChatSchedule, Weekday
 
@@ -55,18 +55,18 @@ def parse_weekday(raw: str) -> Weekday:
     key = raw.strip().lower()
     weekday = _WEEKDAY_BY_KEY.get(key)
     if weekday is None:
-        msg = "Укажите день недели (mon…sun или понедельник…воскресенье)"
+        msg = "Укажите день недели (mon…sun или пн…вс)"
         raise ValueError(msg)
     return weekday
 
 
 def parse_timezone(raw: str) -> ZoneInfo:
     name = raw.strip()
+    msg = "Укажите таймзону IANA, например Europe/Moscow"
     if not name:
-        msg = "Укажите таймзону IANA, например Europe/Moscow"
         raise ValueError(msg)
     try:
         return ZoneInfo(name)
-    except Exception as exc:
-        msg = "Укажите корректную таймзону IANA, например Europe/Moscow"
-        raise ValueError(msg) from exc
+    except ZoneInfoNotFoundError:
+        pass
+    raise ValueError(msg)

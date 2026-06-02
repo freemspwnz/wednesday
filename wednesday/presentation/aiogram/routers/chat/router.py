@@ -113,6 +113,50 @@ async def cmd_schedule(
     await run_message_handler(message, logger, _action)
 
 
+@chat_router.message(Command("activate"), GroupChatFilter())
+async def cmd_activate(
+    message: Message,
+    chat: ChatContext,
+    bot: Bot,
+    scope: RequestScope,
+    logger: Logger,
+) -> None:
+    """Enable broadcast for this chat (chat admins via domain policy)."""
+
+    async def _action() -> None:
+        actor = await resolve_chat_member(bot, message, chat)
+        updated = await scope.chat_commands_uc.activate(
+            chat_id=chat.id,
+            actor=actor,
+            at=AwareDatetime.now_utc(),
+        )
+        await message.answer(chat_msg.format_schedule_chat(updated))
+
+    await run_message_handler(message, logger, _action)
+
+
+@chat_router.message(Command("deactivate"), GroupChatFilter())
+async def cmd_deactivate(
+    message: Message,
+    chat: ChatContext,
+    bot: Bot,
+    scope: RequestScope,
+    logger: Logger,
+) -> None:
+    """Pause broadcast for this chat (chat admins via domain policy)."""
+
+    async def _action() -> None:
+        actor = await resolve_chat_member(bot, message, chat)
+        updated = await scope.chat_commands_uc.deactivate(
+            chat_id=chat.id,
+            actor=actor,
+            at=AwareDatetime.now_utc(),
+        )
+        await message.answer(chat_msg.format_schedule_chat(updated))
+
+    await run_message_handler(message, logger, _action)
+
+
 @chat_router.message(Command("schedule_add"), GroupChatFilter(), InsufficientCommandArgs())
 async def cmd_schedule_add_usage(message: Message) -> None:
     await message.answer(chat_msg.SCHEDULE_ADD_USAGE)

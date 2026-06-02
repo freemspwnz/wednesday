@@ -51,7 +51,7 @@ async def test_random_empty_catalog(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    mock_scope.image_random_uc.pick_for_chat = AsyncMock(return_value=None)
+    mock_scope.image_commands_uc.pick_for_chat = AsyncMock(return_value=None)
     message = make_message(text="/random")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
@@ -68,7 +68,7 @@ async def test_random_image_without_file_id(
     mock_logger: MagicMock,
 ) -> None:
     card = ImageCard.from_domain(mk_image(image_id=3, score=1, created_at=dt(10)))
-    mock_scope.image_random_uc.pick_for_chat = AsyncMock(return_value=card)
+    mock_scope.image_commands_uc.pick_for_chat = AsyncMock(return_value=card)
     message = make_message(text="/random")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
@@ -87,7 +87,7 @@ async def test_random_sends_photo_with_keyboard(
     image = mk_image(image_id=7, score=2, created_at=dt(10))
     image.attach_file_id(file_id=TelegramFileId.parse("AgACAgIAAxkB"), at=dt(11))
     card = ImageCard.from_domain(image)
-    mock_scope.image_random_uc.pick_for_chat = AsyncMock(return_value=card)
+    mock_scope.image_commands_uc.pick_for_chat = AsyncMock(return_value=card)
     message = make_message(text="/random")
 
     with (
@@ -116,14 +116,14 @@ async def test_cb_image_vote_success(
     mock_logger: MagicMock,
 ) -> None:
     image = mk_image(image_id=9, score=1, created_at=dt(10))
-    mock_scope.image_vote_uc.vote = AsyncMock(return_value=image)
+    mock_scope.image_commands_uc.vote = AsyncMock(return_value=image)
     payload = ImageVoteData(image_id=str(UUID(int=9)), value=1)
     callback = make_callback_query(data=payload.pack())
 
     with patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer:
         await cb_image_vote(callback, payload, voter_context, mock_scope, mock_logger)
 
-    mock_scope.image_vote_uc.vote.assert_awaited_once()
+    mock_scope.image_commands_uc.vote.assert_awaited_once()
     answer.assert_awaited_once()
 
 
@@ -134,7 +134,7 @@ async def test_cb_image_vote_image_not_found(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    mock_scope.image_vote_uc.vote = AsyncMock(side_effect=ImageNotFoundError(str(UUID(int=404))))
+    mock_scope.image_commands_uc.vote = AsyncMock(side_effect=ImageNotFoundError(str(UUID(int=404))))
     payload = ImageVoteData(image_id=str(UUID(int=404)), value=-1)
     callback = make_callback_query(data=payload.pack())
 
