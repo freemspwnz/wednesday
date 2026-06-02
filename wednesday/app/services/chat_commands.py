@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from zoneinfo import ZoneInfo
 
 from app.exceptions import ChatNotFoundError
@@ -9,7 +7,7 @@ from domain.kernel.vo import AwareDatetime
 
 
 class ChatCommandService:
-    """Загрузка агрегата Chat, доменная команда и save (транзакцию закрывает UoW)."""
+    """Load chat aggregate, domain command and save."""
 
     def __init__(self, *, logger: Logger) -> None:
         self._logger = logger.bind(module=self.__class__.__name__)

@@ -1,15 +1,15 @@
-"""Ошибки экспорта и HTTP-сервера метрик (observe)."""
+"""Metrics export and HTTP server errors."""
 
 from ..base import AppError
 
 
 class MetricsError(AppError):
-    """Базовая ошибка инфраструктурного слоя метрик."""
+    """Base metrics infrastructure error."""
 
 
 class MetricsExportError(MetricsError):
-    """Не удалось сформировать exposition (generate_latest)."""
+    """Failed to generate exposition (generate_latest)."""
 
 
 class MetricsHttpExporterError(MetricsError):
-    """Не удалось запустить встроенный HTTP-экспортёр метрик (bind / listen)."""
+    """Failed to start built-in HTTP metrics exporter (bind / listen)."""

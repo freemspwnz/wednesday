@@ -1,4 +1,4 @@
-"""Протоколы Unit of Work для управления транзакциями."""
+"""Unit of Work protocols for managing database transactions."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from domain.user.protocols import UsageRepo, ViolationRepo
 
 @runtime_checkable
 class UoW(Protocol):
-    """Протокол для Unit of Work управления транзакциями БД."""
+    """Protocol for Unit of Work managing database transactions."""
 
     async def __aenter__(self) -> UoW:
-        """Вход в контекстный менеджер. Начинает транзакцию."""
+        """Enter context manager. Begins transaction."""
         ...
 
     async def __aexit__(
@@ -25,7 +25,7 @@ class UoW(Protocol):
         exc_value: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        """Выход из контекстного менеджера. Коммитит или откатывает транзакцию."""
+        """Exit context manager. Commits or rolls back transaction."""
         ...
 
     @property
@@ -52,13 +52,13 @@ class UoW(Protocol):
 
 @runtime_checkable
 class UoWFactory(Protocol):
-    """Протокол для фабрики создания экземпляров Unit of Work."""
+    """Protocol for factory creating UoW instances."""
 
     def __call__(self) -> UoW:
-        """Создает новый экземпляр Unit of Work.
+        """Create new UoW instance.
 
         Returns:
-            Новый экземпляр UoW для использования в транзакции.
+            New UoW instance for use in transaction.
         """
         ...
 

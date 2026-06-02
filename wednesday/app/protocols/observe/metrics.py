@@ -4,7 +4,7 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class MetricsCollector(Protocol):
-    """Протокол для сбора метрик."""
+    """Protocol for metrics collection."""
 
     def increment(
         self,
@@ -35,6 +35,8 @@ class MetricsCollector(Protocol):
 
 @runtime_checkable
 class RetryMetrics(Protocol):
+    """Protocol for retry metrics collection."""
+
     def before_retry(self) -> None: ...
     def after_retry(
         self,
@@ -58,6 +60,8 @@ class RetryMetrics(Protocol):
 
 @runtime_checkable
 class CBMetrics(Protocol):
+    """Protocol for circuit breaker metrics collection."""
+
     def before_call(self) -> None: ...
     def after_call(
         self,
@@ -73,6 +77,8 @@ class CBMetrics(Protocol):
 
 
 class CacheOperation:
+    """Cache operation result."""
+
     __slots__ = ("hit",)
 
     def __init__(self) -> None:
@@ -81,12 +87,16 @@ class CacheOperation:
 
 @runtime_checkable
 class CacheMetrics(Protocol):
+    """Protocol for cache metrics collection."""
+
     def track(self, operation: str) -> AbstractAsyncContextManager[CacheOperation]: ...
     def set_queue_size(self, queue_name: str, count: int) -> None: ...
 
 
 @runtime_checkable
 class DBMetrics(Protocol):
+    """Protocol for database metrics collection."""
+
     def on_before_cursor_execute(self, *, context: object, statement: str) -> None: ...
 
     def on_after_cursor_execute(self, *, context: object, statement: str) -> None: ...
@@ -102,6 +112,8 @@ class DBMetrics(Protocol):
 
 @runtime_checkable
 class RLMetrics(Protocol):
+    """Protocol for rate limiter metrics collection."""
+
     def before_call(self) -> None: ...
     def on_call(
         self,
@@ -120,7 +132,7 @@ class RLMetrics(Protocol):
 
 @runtime_checkable
 class MetricsRegistry(Protocol):
-    """Протокол для регистрации метрик."""
+    """Protocol for metrics registration."""
 
     @property
     def retry_metrics(self) -> RetryMetrics: ...

@@ -1,4 +1,4 @@
-"""Модуль ошибок application-слоя."""
+"""Application layer errors."""
 
 from .application import ChatNotFoundError, UserNotFoundError
 from .base import AppError, UnexpectedAppError

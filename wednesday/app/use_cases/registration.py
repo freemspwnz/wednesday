@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from app.dto import ChatContext, UserContext
 from app.protocols import CacheRepoRegistry, Logger, UoW
 from domain.chat import ChatProfile
@@ -10,10 +8,10 @@ from ..services import RegistrationService
 
 class RegistrationUseCase:
     """
-    Оркестратор регистрации контекста update:
-    1) пробуем взять user/chat из кэша
-    2) если miss -> идем в БД через registration services
-    3) после БД кладем DTO в кэш
+    Orchestrator for registration of update context:
+    1) try to get user/chat from cache
+    2) if miss -> go to DB through registration service
+    3) after DB, put DTO in cache
     """
 
     def __init__(

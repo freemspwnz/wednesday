@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from uuid import NAMESPACE_DNS, UUID, uuid5
 from zoneinfo import ZoneInfo
 

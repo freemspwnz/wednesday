@@ -1,6 +1,4 @@
-"""Ошибки доступа к кэшу (application), на которые мапятся сбои Redis-адаптера."""
-
-from __future__ import annotations
+"""Cache access errors, mapped to Redis adapter failures."""
 
 from ..base import AppError, UnexpectedAppError
 

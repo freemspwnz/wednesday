@@ -92,6 +92,8 @@ services:
       - .env
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./catalog:/app/catalog:ro
     networks:
       - wednesday
     expose:

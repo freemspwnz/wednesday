@@ -1,7 +1,5 @@
 """Application-layer errors not belonging to the domain."""
 
-from __future__ import annotations
-
 from domain.chat import ChatId
 from domain.user import UserId
 

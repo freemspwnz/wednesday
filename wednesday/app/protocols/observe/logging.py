@@ -5,106 +5,106 @@ from typing import Any, Protocol, runtime_checkable
 
 @runtime_checkable
 class Logger(Protocol):
-    """Протокол для системы логирования."""
+    """Protocol for logging system."""
 
     def trace(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне TRACE.
+        """Log a message at TRACE level.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def debug(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне DEBUG.
+        """Log a message at DEBUG level.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def info(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне INFO.
+        """Log a message at INFO level.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def success(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне SUCCESS.
+        """Log a message at SUCCESS level.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def warning(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне WARNING.
+        """Log a message at WARNING level.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне ERROR.
+        """Log a message at ERROR level.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def critical(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне ERROR с обязательным включением traceback.
+        """Log a message at ERROR level with mandatory traceback inclusion.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def exception(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на уровне EXCEPTION.
+        """Log a message at EXCEPTION level.
 
         Args:
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def log(self, level: str, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        """Логирует сообщение на указанном уровне.
+        """Log a message at the specified level.
 
         Args:
-            level: Уровень логирования.
-            message: Сообщение для логирования (может содержать {} для форматирования).
-            *args: Аргументы для форматирования сообщения.
-            **kwargs: Дополнительный контекст для логирования.
+            level: Logging level.
+            message: Log message (may contain {} placeholders).
+            *args: Format arguments for the message.
+            **kwargs: Extra logging context.
         """
         ...
 
     def bind(self, **kwargs: Any) -> Logger:  # noqa: ANN401
-        """Создает новый экземпляр логгера с привязанным контекстом.
+        """Create a new logger instance with bound context.
 
         Args:
-            **kwargs: Контекстные данные для привязки ко всем последующим логам.
+            **kwargs: Contextual data for binding to all subsequent logs.
 
         Returns:
-            Новый экземпляр Logger с обновленным контекстом.
+            New Logger instance with updated context.
         """
         ...

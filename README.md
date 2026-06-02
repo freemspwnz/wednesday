@@ -36,9 +36,30 @@ make run
 
 В `docker-compose.yml` сервисы Postgres/Redis по умолчанию закомментированы — нужны внешние инстансы в сети `wednesday` или раскомментируйте сервисы в compose. Миграции выполняются в `docker-entrypoint.sh` перед `main.py`.
 
+Каталоги моделей/подписок не запекаются в образ и должны монтироваться в контейнер read-only:
+
+- `./catalog:/app/catalog:ro`
+
+Также задайте явные пути к YAML-каталогам (иначе будут использованы относительные дефолты):
+
+- `YAML__MODELS_PATH=/app/catalog/models.yaml`
+- `YAML__SUBSCRIPTIONS_PATH=/app/catalog/subscriptions.yaml`
+
 ```bash
 make build      # образ wednesday:local
 docker compose up -d --build
+```
+
+После изменения `volumes`/`environment` в compose выполните пересоздание контейнера, например:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+Изменение файлов `catalog/*.yaml` не требует rebuild образа — достаточно перезапустить сервис:
+
+```bash
+docker compose restart wednesday
 ```
 
 ---
@@ -54,6 +75,7 @@ wednesday/
 └── presentation/aiogram/   # Bot, dispatcher, routers, middlewares
 
 alembic/                    # Миграции PostgreSQL (схема wednesday_schema)
+catalog/                    # Каталоги подписок и доступных моделей
 tests/                      # Тесты
 ```
 
@@ -90,6 +112,9 @@ METRICS__ENABLED=false
 ```
 
 Для бота rate limit и retry — из `TELEGRAM__RATE_LIMIT__*` и `TELEGRAM__RETRY__*`, не из корневых `RATE_LIMIT__` / `RETRY__`. В `ENV=PROD` валидатор требует в том числе `METRICS__ENABLED=true` и `TELEGRAM__RATE_LIMIT__STORAGE=redis`.
+
+Для Docker/Compose рекомендуется всегда задавать `YAML__MODELS_PATH` и
+`YAML__SUBSCRIPTIONS_PATH` абсолютными путями внутри контейнера.
 
 Полный перечень переменных: `.env.example`.
 
