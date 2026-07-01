@@ -5,15 +5,66 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from domain.catalog import Model
-from domain.image import ActiveStatus, HiddenStatus, Image, ImageId, ImageMeta, ImagePrompts, TelegramFileId
-from domain.image.protocols import ImageRepo, ImageVoteRepo
-from domain.image.vo.states import HiddenReason
+from domain.image import (
+    ActiveState,
+    HiddenReason,
+    HiddenState,
+    Image,
+    ImageId,
+    ImageMeta,
+    ImagePrompts,
+    NormalizedPrompt,
+    PromptSource,
+    TelegramFileId,
+    TextGenError,
+)
+from domain.image.protocols import (
+    ImageGenerator,
+    ImageRepo,
+    PromptCatalog,
+    PromptComponents,
+    TextGenerator,
+    VoteRepo,
+)
 from domain.image.vote import Vote
 from domain.kernel.vo import AwareDatetime
 
 
 def dt(hour: int) -> AwareDatetime:
     return AwareDatetime(datetime(2026, 1, 1, hour, 0, tzinfo=UTC))
+
+
+def mk_file_id(value: str = "AgACAgIAAxkBAAI") -> TelegramFileId:
+    return TelegramFileId.parse(value)
+
+
+def mk_meta(*, author_id: int = 1, model: str = "gigachat-2-lite") -> ImageMeta:
+    return ImageMeta(author_id=UUID(int=author_id), model=Model.parse(model))
+
+
+def mk_prompts(
+    *,
+    primary: str = "frog meme",
+    source: PromptSource = PromptSource.USER,
+    enriched: str | None = "enriched frog",
+) -> ImagePrompts:
+    return ImagePrompts(
+        primary=NormalizedPrompt.parse(primary),
+        source=source,
+        enriched=NormalizedPrompt.parse(enriched) if enriched is not None else None,
+    )
+
+
+def mk_components() -> PromptComponents:
+    return PromptComponents(
+        heroes=("Wednesday frog",),
+        colors=("green",),
+        styles=("meme",),
+        professions=("coder",),
+        actions=("coding",),
+        places=("swamp",),
+        portraits=("portrait",),
+    )
 
 
 def mk_image(  # noqa: PLR0913
@@ -23,37 +74,39 @@ def mk_image(  # noqa: PLR0913
     author_id: int = 1,
     created_at: AwareDatetime | None = None,
     score: int | None = None,
-    user_prompt: str | None = None,
-    enriched_prompt: str | None = "enriched frog",
+    file_id: TelegramFileId | None = None,
+    prompts: ImagePrompts | None = None,
+    state: HiddenState | ActiveState | None = None,
 ) -> Image:
     current = created_at or dt(12)
-    prompts = ImagePrompts.parse(user=user_prompt, enriched=enriched_prompt) if user_prompt or enriched_prompt else None
-    meta = ImageMeta.create(author_id=UUID(int=author_id), model=Model.parse(model))
+    resolved_file_id = file_id or mk_file_id()
+    resolved_prompts = prompts or mk_prompts()
+    meta = mk_meta(author_id=author_id, model=model)
     image_id_vo = ImageId(UUID(int=image_id))
 
     if score is None:
         return Image.register(
             id=image_id_vo,
             meta=meta,
+            file_id=resolved_file_id,
+            prompts=resolved_prompts,
             created_at=current,
-            prompts=prompts,
         )
 
-    status = ActiveStatus() if score > 0 else HiddenStatus(reason=HiddenReason.VOTES)
+    resolved_state = state or (ActiveState() if score > 0 else HiddenState(reason=HiddenReason.SCORE))
     return Image.restore(
         id=image_id_vo,
         meta=meta,
         created_at=current,
         score=score,
-        status=status,
-        prompts=prompts,
+        state=resolved_state,
+        file_id=resolved_file_id,
+        prompts=resolved_prompts,
     )
 
 
 @dataclass
 class FakeImageRepo(ImageRepo):
-    """In-memory ImageRepo for domain tests."""
-
     images: dict[ImageId, Image] = field(default_factory=dict)
     save_calls: int = 0
 
@@ -76,12 +129,7 @@ class FakeImageRepo(ImageRepo):
                 return image
         return None
 
-    async def get_random_unseen_for_chat(
-        self,
-        chat_id: UUID,
-        *,
-        min_score: int,
-    ) -> Image | None:
+    async def get_random_unseen_for_chat(self, chat_id: UUID, *, min_score: int) -> Image | None:
         _ = chat_id
         _ = min_score
         return None
@@ -95,9 +143,7 @@ class FakeImageRepo(ImageRepo):
 
 
 @dataclass
-class FakeImageVoteRepo(ImageVoteRepo):
-    """In-memory ImageVoteRepo for domain tests."""
-
+class FakeImageVoteRepo(VoteRepo):
     votes: dict[tuple[ImageId, UUID], Vote] = field(default_factory=dict)
 
     async def get(self, image_id: ImageId, voter_id: UUID) -> Vote | None:
@@ -109,3 +155,75 @@ class FakeImageVoteRepo(ImageVoteRepo):
     async def list_for_image(self, image_id: ImageId) -> list[Vote]:
         image_id = ImageId.ensure(image_id)
         return [vote for (stored_id, _), vote in self.votes.items() if stored_id == image_id]
+
+    async def reset(self, image_id: ImageId) -> None:
+        image_id = ImageId.ensure(image_id)
+        self.votes = {key: vote for key, vote in self.votes.items() if key[0] != image_id}
+
+
+class FakePromptCatalog(PromptCatalog):
+    def __init__(
+        self,
+        *,
+        components_data: PromptComponents | None = None,
+        enrichment_system: str = "enrich-system",
+        generation_system: str = "gen-system",
+        base_system: str = "base-system",
+    ) -> None:
+        self.components_data = components_data or mk_components()
+        self.enrichment_system = enrichment_system
+        self.generation_system = generation_system
+        self.base_system = base_system
+
+    async def enrichment_prompt(self) -> str:
+        return self.enrichment_system
+
+    async def generation_prompt(self) -> str:
+        return self.generation_system
+
+    async def base_prompt(self) -> str:
+        return self.base_system
+
+    async def components(self) -> PromptComponents:
+        return self.components_data
+
+
+@dataclass
+class FakeTextGenerator(TextGenerator):
+    response: str = "llm prompt"
+    fail: bool = False
+
+    async def generate(
+        self,
+        model: str,
+        user_prompt: str,
+        system_prompt: str | None = None,
+        temperature: float = 0.7,
+    ) -> str:
+        _ = model
+        _ = user_prompt
+        _ = system_prompt
+        _ = temperature
+        if self.fail:
+            raise TextGenError("text generator unavailable")
+        return self.response
+
+
+@dataclass
+class FakeImageGenerator(ImageGenerator):
+    content: bytes = b"png-bytes"
+
+    async def generate(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        width: int = 1024,
+        height: int = 1024,
+    ) -> bytes:
+        _ = model
+        _ = system_prompt
+        _ = user_prompt
+        _ = width
+        _ = height
+        return self.content

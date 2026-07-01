@@ -1,17 +1,11 @@
 from .base import ImageEvent
-from .lifecycle import (
-    ImageAdminHidden,
-    ImageAdminRestored,
-    ImageFileAttached,
-    ImageRegistered,
-    ImageScoreRecalculated,
-)
+from .lifecycle import ImageRegistered, ImageScoreRecalculated
+from .management import ImageHidden, ImageShown
 
 __all__ = [
-    "ImageAdminHidden",
-    "ImageAdminRestored",
     "ImageEvent",
-    "ImageFileAttached",
+    "ImageHidden",
     "ImageRegistered",
     "ImageScoreRecalculated",
+    "ImageShown",
 ]

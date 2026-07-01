@@ -3,11 +3,13 @@ from __future__ import annotations
 from uuid import UUID
 
 from domain.kernel.vo import AwareDatetime
+from domain.user import UserRole
 
 from ..exceptions import ImageNotFoundError, ValidationError
 from ..image import Image
-from ..protocols import ImageRepo, ImageVoteRepo
-from ..vo import ImageId
+from ..policies import ImageScorePolicy
+from ..protocols import ImageRepo, VoteRepo
+from ..vo import ActiveState, HiddenReason, HiddenState, ImageId
 from ..vote import Vote
 
 
@@ -21,7 +23,7 @@ class ImageVoteService:
         voter_id: UUID,
         value: int,
         image_repo: ImageRepo,
-        vote_repo: ImageVoteRepo,
+        vote_repo: VoteRepo,
         at: AwareDatetime,
     ) -> Image:
         image_id = ImageId.ensure(image_id)
@@ -43,5 +45,17 @@ class ImageVoteService:
 
         votes = await vote_repo.list_for_image(image_id)
         image.recalculate_score([vote.value for vote in votes], at=at)
+        ImageVoteService._apply_score_visibility(image, at=at)
         await image_repo.save(image)
         return image
+
+    @staticmethod
+    def _apply_score_visibility(image: Image, *, at: AwareDatetime) -> None:
+        if isinstance(image.state, HiddenState) and image.state.reason == HiddenReason.ADMIN:
+            return
+
+        if ImageScorePolicy.is_selectable(image.score):
+            if isinstance(image.state, HiddenState):
+                image.show(actor=UserRole.SYSTEM, at=at)
+        elif image.score <= 0 and isinstance(image.state, ActiveState):
+            image.hide(actor=UserRole.SYSTEM, reason=HiddenReason.SCORE, at=at)

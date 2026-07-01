@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from .base import ImageStatus
+from .base import ImageState
 
 
 @dataclass(frozen=True)
-class ActiveStatus(ImageStatus):
+class ActiveState(ImageState):
     """Image is visible for /random and generate fallback."""

@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 
-from .base import ImageStatus
+from ..base import ImageState
 from .reason import HiddenReason
 
 
 @dataclass(frozen=True)
-class HiddenStatus(ImageStatus):
+class HiddenState(ImageState):
     reason: HiddenReason
 
     def __post_init__(self) -> None:

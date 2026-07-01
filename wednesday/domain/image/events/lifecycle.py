@@ -3,29 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..exceptions import ValidationError
-from ..vo import ImageMeta, ImagePrompts, TelegramFileId
+from ..vo import ImageMeta, ImagePrompts
 from .base import ImageEvent
 
 
 @dataclass(frozen=True)
 class ImageRegistered(ImageEvent):
     meta: ImageMeta
-    prompts: ImagePrompts | None = None
+    prompts: ImagePrompts
 
     def __post_init__(self) -> None:
         super().__post_init__()
         ImageMeta.ensure(self.meta)
-        if self.prompts is not None:
-            ImagePrompts.ensure(self.prompts)
-
-
-@dataclass(frozen=True)
-class ImageFileAttached(ImageEvent):
-    file_id: TelegramFileId
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        TelegramFileId.ensure(self.file_id)
+        ImagePrompts.ensure(self.prompts)
 
 
 @dataclass(frozen=True)
@@ -39,15 +29,3 @@ class ImageScoreRecalculated(ImageEvent):
             raise ValidationError("old_score must be an int")
         if not isinstance(self.new_score, int):
             raise ValidationError("new_score must be an int")
-
-
-@dataclass(frozen=True)
-class ImageAdminHidden(ImageEvent):
-    def __post_init__(self) -> None:
-        super().__post_init__()
-
-
-@dataclass(frozen=True)
-class ImageAdminRestored(ImageEvent):
-    def __post_init__(self) -> None:
-        super().__post_init__()

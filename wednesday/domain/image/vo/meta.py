@@ -21,10 +21,6 @@ class ImageMeta:
         Model.ensure(self.model)
 
     @classmethod
-    def create(cls, *, author_id: UUID, model: Model) -> Self:
-        return cls(author_id=author_id, model=Model.ensure(model))
-
-    @classmethod
     def ensure(cls, meta: Self) -> Self:
         if not isinstance(meta, ImageMeta):
             raise ValidationError("meta must be an ImageMeta")

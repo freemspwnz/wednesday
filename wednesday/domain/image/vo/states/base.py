@@ -3,11 +3,11 @@ from typing import Self
 from ...exceptions import ValidationError
 
 
-class ImageStatus:
-    """Base class for catalog image visibility status."""
+class ImageState:
+    """Base class for catalog image visibility state."""
 
     @classmethod
-    def ensure(cls, status: Self) -> Self:
-        if not isinstance(status, ImageStatus):
-            raise ValidationError("status must be an ImageStatus")
-        return status
+    def ensure(cls, state: Self) -> Self:
+        if not isinstance(state, ImageState):
+            raise ValidationError("state must be an ImageState")
+        return state

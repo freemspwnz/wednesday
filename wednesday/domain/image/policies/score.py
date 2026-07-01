@@ -1,5 +1,7 @@
 from collections.abc import Sequence
 
+from domain.user import UserRole
+
 from ..exceptions import ValidationError
 
 
@@ -15,6 +17,16 @@ class ImageScorePolicy:
             if value not in cls._VOTE_VALUES:
                 raise ValidationError("vote value must be -1 or 1")
         return cls.BASE + sum(vote_values)
+
+    @classmethod
+    def on_show(cls, actor: UserRole, current_score: int) -> int:
+        match actor:
+            case UserRole.SYSTEM:
+                return current_score
+            case UserRole.OWNER:
+                return cls.BASE
+            case _:
+                raise ValidationError("unknown actor")
 
     @classmethod
     def is_hidden(cls, score: int) -> bool:

@@ -1,7 +1,9 @@
 from .base import ImagePrompts
-from .normalized_prompt import NormalizedPrompt
+from .normalized import NormalizedPrompt
+from .source import PromptSource
 
 __all__ = [
     "ImagePrompts",
     "NormalizedPrompt",
+    "PromptSource",
 ]

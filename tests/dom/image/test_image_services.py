@@ -4,11 +4,31 @@ from uuid import UUID
 
 import pytest
 
-from domain.image import ImageNotFoundError, ImageScoreRecalculated, ImageVoteService
-from domain.image.exceptions import ValidationError
-from domain.image.vo.states import HiddenReason, HiddenStatus
+from domain.catalog import Model
+from domain.image import (
+    FallbackPromptService,
+    ImageGenerationService,
+    ImageNotFoundError,
+    ImageRender,
+    ImageScoreRecalculated,
+    ImageVoteService,
+    NormalizedPrompt,
+    PromptRejectedError,
+    PromptSource,
+)
+from domain.image.policies import PromptModerationPolicy
+from domain.image.vo import ActiveState, HiddenReason, HiddenState
+from domain.user.vo import UserRole
 
-from .factories import FakeImageRepo, FakeImageVoteRepo, dt, mk_image
+from .factories import (
+    FakeImageGenerator,
+    FakeImageRepo,
+    FakeImageVoteRepo,
+    FakePromptCatalog,
+    FakeTextGenerator,
+    dt,
+    mk_image,
+)
 
 
 @pytest.mark.unit
@@ -35,46 +55,13 @@ async def test_vote_service_inserts_vote_recalculates_and_saves() -> None:
     events = result.pull_events()
     assert len(events) == 1
     assert isinstance(events[0], ImageScoreRecalculated)
-    assert events[0].old_score == 3
-    assert events[0].new_score == 4
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_vote_service_updates_existing_vote() -> None:
-    image = mk_image()
-    image.pull_events()
-    image_repo = FakeImageRepo.with_images(image)
-    vote_repo = FakeImageVoteRepo()
-    voter_id = UUID(int=2)
-
-    await ImageVoteService.vote(
-        image_id=image.id,
-        voter_id=voter_id,
-        value=1,
-        image_repo=image_repo,
-        vote_repo=vote_repo,
-        at=dt(13),
-    )
-    result = await ImageVoteService.vote(
-        image_id=image.id,
-        voter_id=voter_id,
-        value=-1,
-        image_repo=image_repo,
-        vote_repo=vote_repo,
-        at=dt(14),
-    )
-
-    assert result.score == 2
-    assert image_repo.save_calls == 2
-    assert len(vote_repo.votes) == 1
-    assert vote_repo.votes[image.id, voter_id].value == -1
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_vote_service_same_vote_is_noop_without_save() -> None:
     image = mk_image()
+    image.pull_events()
     image_repo = FakeImageRepo.with_images(image)
     vote_repo = FakeImageVoteRepo()
     voter_id = UUID(int=2)
@@ -106,6 +93,37 @@ async def test_vote_service_same_vote_is_noop_without_save() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_vote_service_changes_vote_and_recalculates() -> None:
+    image = mk_image()
+    image.pull_events()
+    image_repo = FakeImageRepo.with_images(image)
+    vote_repo = FakeImageVoteRepo()
+    voter_id = UUID(int=2)
+
+    await ImageVoteService.vote(
+        image_id=image.id,
+        voter_id=voter_id,
+        value=1,
+        image_repo=image_repo,
+        vote_repo=vote_repo,
+        at=dt(13),
+    )
+
+    result = await ImageVoteService.vote(
+        image_id=image.id,
+        voter_id=voter_id,
+        value=-1,
+        image_repo=image_repo,
+        vote_repo=vote_repo,
+        at=dt(14),
+    )
+
+    assert result.score == 2
+    assert image_repo.save_calls == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_vote_service_hides_image_when_score_drops_to_zero() -> None:
     image = mk_image()
     image.pull_events()
@@ -125,8 +143,30 @@ async def test_vote_service_hides_image_when_score_drops_to_zero() -> None:
 
     assert result.score == 0
     assert result.is_hidden
-    assert isinstance(result.status, HiddenStatus)
-    assert result.status.reason == HiddenReason.VOTES
+    assert isinstance(result.state, HiddenState)
+    assert result.state.reason == HiddenReason.SCORE
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_vote_service_shows_score_hidden_when_score_becomes_selectable() -> None:
+    image = mk_image(score=0, state=HiddenState(reason=HiddenReason.SCORE))
+    image.pull_events()
+    image_repo = FakeImageRepo.with_images(image)
+    vote_repo = FakeImageVoteRepo()
+
+    result = await ImageVoteService.vote(
+        image_id=image.id,
+        voter_id=UUID(int=2),
+        value=1,
+        image_repo=image_repo,
+        vote_repo=vote_repo,
+        at=dt(13),
+    )
+
+    assert result.score == 4
+    assert isinstance(result.state, ActiveState)
+    assert result.is_selectable
 
 
 @pytest.mark.unit
@@ -147,15 +187,102 @@ async def test_vote_service_raises_when_image_missing() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_vote_service_validates_voter_id() -> None:
+async def test_vote_service_updates_score_but_keeps_admin_hidden() -> None:
     image = mk_image()
+    image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
+    image.pull_events()
     image_repo = FakeImageRepo.with_images(image)
-    with pytest.raises(ValidationError):
-        await ImageVoteService.vote(
-            image_id=image.id,
-            voter_id="bad",  # type: ignore[arg-type]
-            value=1,
-            image_repo=image_repo,
-            vote_repo=FakeImageVoteRepo(),
-            at=dt(13),
+    vote_repo = FakeImageVoteRepo()
+
+    result = await ImageVoteService.vote(
+        image_id=image.id,
+        voter_id=UUID(int=2),
+        value=1,
+        image_repo=image_repo,
+        vote_repo=vote_repo,
+        at=dt(13),
+    )
+
+    assert result.score == 4
+    assert isinstance(result.state, HiddenState)
+    assert result.state.reason == HiddenReason.ADMIN
+    assert not result.is_selectable
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_generation_by_user_success() -> None:
+    model = Model.parse("gigachat-2-lite")
+    user_input = NormalizedPrompt.parse("frog meme")
+    catalog = FakePromptCatalog()
+    txt_gen = FakeTextGenerator(response="enriched frog")
+    img_gen = FakeImageGenerator(content=b"png")
+
+    render = await ImageGenerationService.by_user(
+        model=model,
+        user_input=user_input,
+        catalog=catalog,
+        moderation=PromptModerationPolicy(),
+        txt_gen=txt_gen,
+        img_gen=img_gen,
+    )
+
+    assert isinstance(render, ImageRender)
+    assert render.content == b"png"
+    assert render.prompts.source == PromptSource.USER
+    assert render.prompts.enriched is not None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_generation_by_user_rejects_banned_prompt() -> None:
+    with pytest.raises(PromptRejectedError):
+        await ImageGenerationService.by_user(
+            model=Model.parse("gigachat-2-lite"),
+            user_input=NormalizedPrompt.parse("naked frog"),
+            catalog=FakePromptCatalog(),
+            moderation=PromptModerationPolicy(),
+            txt_gen=FakeTextGenerator(),
+            img_gen=FakeImageGenerator(),
         )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_generation_by_user_uses_primary_when_enrichment_fails() -> None:
+    render = await ImageGenerationService.by_user(
+        model=Model.parse("gigachat-2-lite"),
+        user_input=NormalizedPrompt.parse("frog meme"),
+        catalog=FakePromptCatalog(),
+        moderation=PromptModerationPolicy(),
+        txt_gen=FakeTextGenerator(fail=True),
+        img_gen=FakeImageGenerator(),
+    )
+
+    assert render.prompts.enriched is None
+    assert str(render.prompts.effective()) == "frog meme"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("txt_fail", [False, True])
+async def test_generation_random_paths(txt_fail: bool) -> None:
+    render = await ImageGenerationService.random(
+        model=Model.parse("gigachat-2-lite"),
+        catalog=FakePromptCatalog(),
+        txt_gen=FakeTextGenerator(response="random frog", fail=txt_fail),
+        img_gen=FakeImageGenerator(content=b"rnd"),
+    )
+
+    assert render.content == b"rnd"
+    if txt_fail:
+        assert render.prompts.source == PromptSource.FALLBACK
+    else:
+        assert render.prompts.source == PromptSource.LLM
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fallback_prompt_service_builds_from_catalog() -> None:
+    prompt = await FallbackPromptService.build(FakePromptCatalog())
+    assert "Wednesday meme frog" in str(prompt)

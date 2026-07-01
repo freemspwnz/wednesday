@@ -1,12 +1,12 @@
 from enum import StrEnum
 from typing import Self
 
-from ...exceptions import ValidationError
+from ....exceptions import ValidationError
 
 
 class HiddenReason(StrEnum):
     ADMIN = "admin"
-    VOTES = "votes"
+    SCORE = "score"
 
     @classmethod
     def ensure(cls, reason: Self) -> Self:

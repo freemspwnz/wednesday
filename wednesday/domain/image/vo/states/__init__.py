@@ -1,11 +1,10 @@
-from .active import ActiveStatus
-from .base import ImageStatus
-from .hidden import HiddenStatus
-from .reason import HiddenReason
+from .active import ActiveState
+from .base import ImageState
+from .hidden import HiddenReason, HiddenState
 
 __all__ = [
-    "ActiveStatus",
+    "ActiveState",
     "HiddenReason",
-    "HiddenStatus",
-    "ImageStatus",
+    "HiddenState",
+    "ImageState",
 ]
