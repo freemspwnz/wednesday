@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -16,6 +14,7 @@ def _project_catalog_config() -> YamlConfig:
     return YamlConfig(
         models_path=root / "catalog" / "models.yaml",
         subscriptions_path=root / "catalog" / "subscriptions.yaml",
+        prompts_path=root / "catalog" / "prompts.yaml",
     )
 
 

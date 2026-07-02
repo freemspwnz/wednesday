@@ -15,3 +15,4 @@ class YamlConfig(BaseModel):
 
     models_path: Path = Field(default=Path("catalog/models.yaml"))
     subscriptions_path: Path = Field(default=Path("catalog/subscriptions.yaml"))
+    prompts_path: Path = Field(default=Path("catalog/prompts.yaml"))

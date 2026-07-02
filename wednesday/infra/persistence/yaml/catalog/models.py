@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 from domain.catalog import Model, ModelCatalog, ModelDescriptor, Series, SubscriptionTier, Vendor

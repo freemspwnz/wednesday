@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from functools import cached_property
 from pathlib import Path
 
@@ -15,9 +13,10 @@ from domain.catalog import (
     SubscriptionTier,
     Vendor,
 )
+from domain.image.protocols import PromptCatalog, PromptComponents
 from infra.config import YamlConfig
 
-from .catalog import YamlModelCatalog, YamlSubscriptionCatalog
+from .catalog import YamlModelCatalog, YamlPromptCatalog, YamlSubscriptionCatalog
 from .loader import (
     load_yaml_mapping,
     require_bool,
@@ -44,6 +43,11 @@ class YamlCatalogFactory:
     def subscription_catalog(self) -> SubscriptionCatalog:
         self._logger.debug("Building subscription catalog...", path=self._config.subscriptions_path)
         return self._build_subscription_catalog(self._config.subscriptions_path)
+
+    @cached_property
+    def prompt_catalog(self) -> PromptCatalog:
+        self._logger.debug("Building prompt catalog...", path=self._config.prompts_path)
+        return self._build_prompt_catalog(self._config.prompts_path)
 
     @staticmethod
     def _build_model_catalog(path: Path) -> YamlModelCatalog:
@@ -164,3 +168,82 @@ class YamlCatalogFactory:
             )
 
         return YamlSubscriptionCatalog(_plans=plans)
+
+    @staticmethod
+    def _build_prompt_catalog(path: Path) -> YamlPromptCatalog:
+        source = path
+        data = load_yaml_mapping(source)
+
+        system_prompts = require_mapping(
+            data.get("system_prompts"),
+            field="system_prompts",
+            path=source,
+        )
+        enrichment_prompt = require_str(
+            system_prompts.get("enrichment"),
+            field="system_prompts.enrichment",
+            path=source,
+        )
+        generation_prompt = require_str(
+            system_prompts.get("generation"),
+            field="system_prompts.generation",
+            path=source,
+        )
+        base_prompt = require_str(
+            system_prompts.get("base"),
+            field="system_prompts.base",
+            path=source,
+        )
+
+        components_node = require_mapping(data.get("components"), field="components", path=source)
+        components = PromptComponents(
+            heroes=_require_non_empty_str_list(
+                components_node.get("heroes"),
+                field="components.heroes",
+                path=source,
+            ),
+            colors=_require_non_empty_str_list(
+                components_node.get("colors"),
+                field="components.colors",
+                path=source,
+            ),
+            styles=_require_non_empty_str_list(
+                components_node.get("styles"),
+                field="components.styles",
+                path=source,
+            ),
+            professions=_require_non_empty_str_list(
+                components_node.get("professions"),
+                field="components.professions",
+                path=source,
+            ),
+            actions=_require_non_empty_str_list(
+                components_node.get("actions"),
+                field="components.actions",
+                path=source,
+            ),
+            places=_require_non_empty_str_list(
+                components_node.get("places"),
+                field="components.places",
+                path=source,
+            ),
+            portraits=_require_non_empty_str_list(
+                components_node.get("portraits"),
+                field="components.portraits",
+                path=source,
+            ),
+        )
+
+        return YamlPromptCatalog(
+            _enrichment_prompt=enrichment_prompt,
+            _generation_prompt=generation_prompt,
+            _base_prompt=base_prompt,
+            _components=components,
+        )
+
+
+def _require_non_empty_str_list(value: object, *, field: str, path: Path) -> tuple[str, ...]:
+    items = require_list(value, field=field, path=path)
+    if not items:
+        raise CatalogFormatError(f"{field} must be a non-empty list in {path}", source=path, field=field)
+    return tuple(require_str(item, field=f"{field}[]", path=path) for item in items)
