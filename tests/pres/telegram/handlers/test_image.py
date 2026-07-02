@@ -62,30 +62,17 @@ async def test_random_empty_catalog(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_random_image_without_file_id(
-    chat_context: ChatContext,
-    mock_scope: MagicMock,
-    mock_logger: MagicMock,
-) -> None:
-    card = ImageCard.from_domain(mk_image(image_id=3, score=1, created_at=dt(10)))
-    mock_scope.image_commands_uc.pick_for_chat = AsyncMock(return_value=card)
-    message = make_message(text="/random")
-
-    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
-        await cmd_random(message, chat_context, mock_scope, mock_logger)
-
-    answer.assert_awaited_once_with(cmd_msg.IMAGE_UNAVAILABLE)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
 async def test_random_sends_photo_with_keyboard(
     chat_context: ChatContext,
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    image = mk_image(image_id=7, score=2, created_at=dt(10))
-    image.attach_file_id(file_id=TelegramFileId.parse("AgACAgIAAxkB"), at=dt(11))
+    image = mk_image(
+        image_id=7,
+        score=2,
+        created_at=dt(10),
+        file_id=TelegramFileId.parse("AgACAgIAAxkB"),
+    )
     card = ImageCard.from_domain(image)
     mock_scope.image_commands_uc.pick_for_chat = AsyncMock(return_value=card)
     message = make_message(text="/random")

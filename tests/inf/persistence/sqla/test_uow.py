@@ -5,9 +5,9 @@ import pytest
 from infra.persistence.sqlalchemy.repos import (
     SQLAChatRepo,
     SQLAImageRepo,
-    SQLAImageSeenRepo,
-    SQLAImageVoteRepo,
     SQLAUserRepo,
+    SQLAViewRepo,
+    SQLAVoteRepo,
 )
 from infra.persistence.sqlalchemy.uow import SQLAUoW
 
@@ -24,13 +24,13 @@ async def test_uow_commits_on_success_and_caches_repositories() -> None:
         users_repo = active.users
         chats_repo = active.chats
         images_repo = active.images
-        seen_repo = active.seen
+        views_repo = active.views
         votes_repo = active.votes
         assert isinstance(users_repo, SQLAUserRepo)
         assert isinstance(chats_repo, SQLAChatRepo)
         assert isinstance(images_repo, SQLAImageRepo)
-        assert isinstance(seen_repo, SQLAImageSeenRepo)
-        assert isinstance(votes_repo, SQLAImageVoteRepo)
+        assert isinstance(views_repo, SQLAViewRepo)
+        assert isinstance(votes_repo, SQLAVoteRepo)
         assert active.users is users_repo
         assert active.images is images_repo
 

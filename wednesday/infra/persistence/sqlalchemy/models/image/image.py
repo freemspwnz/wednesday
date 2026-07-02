@@ -13,18 +13,22 @@ from ..base import Base
 
 
 class ImageORM(Base):
-    """Aggregate root: meta, score, status, prompts, Telegram file id."""
+    """Aggregate root: meta, score, visibility state, prompts, Telegram file id."""
 
     __tablename__ = "images"
     __table_args__ = (
-        CheckConstraint("status IN ('active', 'hidden')", name="ck_images_status"),
+        CheckConstraint("state IN ('active', 'hidden')", name="ck_images_state"),
         CheckConstraint(
-            "hidden_reason IS NULL OR hidden_reason IN ('admin', 'votes')",
+            "hidden_reason IS NULL OR hidden_reason IN ('admin', 'score')",
             name="ck_images_hidden_reason",
         ),
         CheckConstraint(
-            "(status = 'active' AND hidden_reason IS NULL) OR (status = 'hidden' AND hidden_reason IS NOT NULL)",
-            name="ck_images_status_reason_coherence",
+            "(state = 'active' AND hidden_reason IS NULL) OR (state = 'hidden' AND hidden_reason IS NOT NULL)",
+            name="ck_images_state_reason_coherence",
+        ),
+        CheckConstraint(
+            "prompt_source IN ('user', 'llm', 'fallback')",
+            name="ck_images_prompt_source",
         ),
     )
 
@@ -32,15 +36,17 @@ class ImageORM(Base):
     author_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     score: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
     hidden_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    user_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    primary_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     enriched_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    telegram_file_id: Mapped[str | None] = mapped_column(String(256), nullable=True, unique=True)
+    prompt_source: Mapped[str] = mapped_column(String(16), nullable=False)
+    telegram_file_id: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
 
     def __repr__(self) -> str:
         return (
             f"ImageORM(id={self.id!r}, author_id={self.author_id!r}, model={self.model!r}, "
-            f"score={self.score!r}, status={self.status!r}, hidden_reason={self.hidden_reason!r})"
+            f"score={self.score!r}, state={self.state!r}, hidden_reason={self.hidden_reason!r}, "
+            f"prompt_source={self.prompt_source!r})"
         )

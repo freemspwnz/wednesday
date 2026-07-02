@@ -8,7 +8,7 @@ from domain.image import (
     ImageScoreRecalculated,
     ImageShown,
 )
-from domain.image.events.base import ImageEvent
+from domain.image.events import ImageEvent
 from domain.image.exceptions import ValidationError
 from domain.user.vo import UserRole
 
@@ -83,8 +83,10 @@ def test_image_management_commands_emit_events(method: str, event_type: type) ->
 
     events = image.pull_events()
     assert len(events) == 1
-    assert isinstance(events[0], event_type)
-    assert events[0].actor == UserRole.OWNER
+    event = events[0]
+    assert isinstance(event, event_type)
+    assert isinstance(event, ImageHidden | ImageShown)
+    assert event.actor == UserRole.OWNER
 
 
 @pytest.mark.unit

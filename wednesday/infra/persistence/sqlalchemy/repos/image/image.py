@@ -15,19 +15,21 @@ from app.exceptions import (
 )
 from domain.catalog import Model
 from domain.image import (
-    ActiveStatus,
-    HiddenStatus,
+    ActiveState,
+    HiddenState,
     Image,
     ImageId,
     ImageMeta,
     ImagePrompts,
     ImageRepo,
+    NormalizedPrompt,
+    PromptSource,
     TelegramFileId,
 )
 from domain.image.vo.states import HiddenReason
 from domain.kernel.vo import AwareDatetime
 
-from ...models import ImageORM, ImageSeenORM
+from ...models import ImageORM, ViewORM
 
 
 class SQLAImageRepo(ImageRepo):
@@ -63,8 +65,8 @@ class SQLAImageRepo(ImageRepo):
 
     async def save(self, image: Image) -> None:
         try:
-            status, hidden_reason = _status_to_orm(image)
-            user_prompt, enriched_prompt = _prompts_to_orm(image.prompts)
+            state_value, hidden_reason = _state_to_orm(image)
+            primary_prompt, enriched_prompt, prompt_source = _prompts_to_orm(image.prompts)
             await self._session.execute(
                 insert(ImageORM)
                 .values(
@@ -72,12 +74,13 @@ class SQLAImageRepo(ImageRepo):
                     author_id=image.meta.author_id,
                     model=str(image.meta.model),
                     score=image.score,
-                    status=status,
+                    state=state_value,
                     hidden_reason=hidden_reason,
                     created_at=image.created_at.value,
-                    user_prompt=user_prompt,
+                    primary_prompt=primary_prompt,
                     enriched_prompt=enriched_prompt,
-                    telegram_file_id=str(image.file_id) if image.file_id is not None else None,
+                    prompt_source=prompt_source,
+                    telegram_file_id=str(image.file_id),
                 )
                 .on_conflict_do_update(
                     index_elements=[ImageORM.id],
@@ -85,11 +88,12 @@ class SQLAImageRepo(ImageRepo):
                         "author_id": image.meta.author_id,
                         "model": str(image.meta.model),
                         "score": image.score,
-                        "status": status,
+                        "state": state_value,
                         "hidden_reason": hidden_reason,
-                        "user_prompt": user_prompt,
+                        "primary_prompt": primary_prompt,
                         "enriched_prompt": enriched_prompt,
-                        "telegram_file_id": str(image.file_id) if image.file_id is not None else None,
+                        "prompt_source": prompt_source,
+                        "telegram_file_id": str(image.file_id),
                     },
                 )
             )
@@ -157,8 +161,8 @@ class SQLAImageRepo(ImageRepo):
             seen_exists = (
                 select(1)
                 .where(
-                    ImageSeenORM.chat_id == chat_id,
-                    ImageSeenORM.image_id == ImageORM.id,
+                    ViewORM.chat_id == chat_id,
+                    ViewORM.image_id == ImageORM.id,
                 )
                 .exists()
             )
@@ -166,7 +170,7 @@ class SQLAImageRepo(ImageRepo):
                 select(ImageORM)
                 .where(
                     ImageORM.score > min_score - 1,
-                    ImageORM.status == "active",
+                    ImageORM.state == "active",
                     ~seen_exists,
                 )
                 .order_by(func.random())
@@ -193,47 +197,53 @@ class SQLAImageRepo(ImageRepo):
             raise UnexpectedDBError("Unexpected error while picking random unseen image.") from exc
 
 
-def _status_to_orm(image: Image) -> tuple[str, str | None]:
-    if isinstance(image.status, ActiveStatus):
+def _state_to_orm(image: Image) -> tuple[str, str | None]:
+    if isinstance(image.state, ActiveState):
         return "active", None
-    if isinstance(image.status, HiddenStatus):
-        return "hidden", image.status.reason.value
-    raise ValueError(f"Unknown image status: {image.status!r}")
+    if isinstance(image.state, HiddenState):
+        return "hidden", image.state.reason.value
+    raise ValueError(f"Unknown image state: {image.state!r}")
 
 
-def _status_from_orm(*, status: str, hidden_reason: str | None) -> ActiveStatus | HiddenStatus:
-    if status == "active":
-        return ActiveStatus()
-    if status == "hidden" and hidden_reason is not None:
-        return HiddenStatus(reason=HiddenReason(hidden_reason))
-    raise ValueError(f"Inconsistent image status in ORM: status={status!r}, hidden_reason={hidden_reason!r}")
+def _state_from_orm(*, state: str, hidden_reason: str | None) -> ActiveState | HiddenState:
+    if state == "active":
+        return ActiveState()
+    if state == "hidden" and hidden_reason is not None:
+        return HiddenState(reason=HiddenReason(hidden_reason))
+    raise ValueError(f"Inconsistent image state in ORM: state={state!r}, hidden_reason={hidden_reason!r}")
 
 
-def _prompts_to_orm(prompts: ImagePrompts | None) -> tuple[str | None, str | None]:
-    if prompts is None:
-        return None, None
-    return (
-        str(prompts.user) if prompts.user is not None else None,
-        str(prompts.enriched) if prompts.enriched is not None else None,
+def _prompts_to_orm(prompts: ImagePrompts) -> tuple[str, str | None, str]:
+    enriched = str(prompts.enriched) if prompts.enriched is not None else None
+    return str(prompts.primary), enriched, prompts.source.value
+
+
+def _prompts_from_orm(
+    *,
+    primary_prompt: str,
+    enriched_prompt: str | None,
+    prompt_source: str,
+) -> ImagePrompts:
+    return ImagePrompts(
+        primary=NormalizedPrompt.parse(primary_prompt),
+        source=PromptSource(prompt_source),
+        enriched=NormalizedPrompt.parse(enriched_prompt) if enriched_prompt is not None else None,
     )
 
 
-def _prompts_from_orm(*, user_prompt: str | None, enriched_prompt: str | None) -> ImagePrompts | None:
-    if user_prompt is None and enriched_prompt is None:
-        return None
-    return ImagePrompts.parse(user=user_prompt, enriched=enriched_prompt)
-
-
 def _image_from_orm(orm: ImageORM) -> Image:
-    meta = ImageMeta.create(author_id=orm.author_id, model=Model.parse(orm.model))
-    prompts = _prompts_from_orm(user_prompt=orm.user_prompt, enriched_prompt=orm.enriched_prompt)
-    file_id = TelegramFileId.parse(orm.telegram_file_id) if orm.telegram_file_id is not None else None
+    meta = ImageMeta(author_id=orm.author_id, model=Model.parse(orm.model))
+    prompts = _prompts_from_orm(
+        primary_prompt=orm.primary_prompt,
+        enriched_prompt=orm.enriched_prompt,
+        prompt_source=orm.prompt_source,
+    )
     return Image.restore(
         id=ImageId(orm.id),
         meta=meta,
         created_at=AwareDatetime.from_datetime(orm.created_at),
         score=orm.score,
-        status=_status_from_orm(status=orm.status, hidden_reason=orm.hidden_reason),
+        state=_state_from_orm(state=orm.state, hidden_reason=orm.hidden_reason),
         prompts=prompts,
-        file_id=file_id,
+        file_id=TelegramFileId.parse(orm.telegram_file_id),
     )

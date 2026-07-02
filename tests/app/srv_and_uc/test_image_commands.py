@@ -26,36 +26,36 @@ def dt(hour: int) -> AwareDatetime:
 @pytest.mark.asyncio
 async def test_service_returns_none_when_catalog_empty() -> None:
     images = AsyncMock()
-    seen = AsyncMock()
+    views = AsyncMock()
     images.get_random_unseen_for_chat.return_value = None
     srv = ImageCommandService(logger=mk_logger())
     chat_id = UUID(int=99)
 
     result = await srv.pick_for_chat(
         images=images,
-        seen=seen,
+        views=views,
         chat_id=chat_id,
         at=dt(10),
     )
 
     assert result is None
     images.get_random_unseen_for_chat.assert_awaited_once_with(chat_id, min_score=1)
-    seen.mark_seen.assert_not_awaited()
+    views.mark_shown.assert_not_awaited()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_service_marks_seen_and_returns_card() -> None:
+async def test_service_marks_shown_and_returns_card() -> None:
     image = mk_image(image_id=3, score=2, created_at=dt(9))
     images = AsyncMock()
-    seen = AsyncMock()
+    views = AsyncMock()
     images.get_random_unseen_for_chat.return_value = image
     srv = ImageCommandService(logger=mk_logger())
     chat_id = UUID(int=100)
 
     result = await srv.pick_for_chat(
         images=images,
-        seen=seen,
+        views=views,
         chat_id=chat_id,
         at=dt(10),
     )
@@ -63,7 +63,7 @@ async def test_service_marks_seen_and_returns_card() -> None:
     assert isinstance(result, ImageCard)
     assert result.id == image.id
     assert result.score == 2
-    seen.mark_seen.assert_awaited_once_with(chat_id, image.id, at=dt(10))
+    views.mark_shown.assert_awaited_once_with(chat_id, image.id, at=dt(10))
 
 
 @pytest.mark.unit
@@ -85,7 +85,7 @@ async def test_uc_pick_for_chat_runs_in_uow() -> None:
     assert uow.enter_count == uow.exit_count == 1
     service.pick_for_chat.assert_awaited_once_with(
         images=images,
-        seen=uow.seen,
+        views=uow.views,
         chat_id=chat_id,
         at=dt(11),
     )

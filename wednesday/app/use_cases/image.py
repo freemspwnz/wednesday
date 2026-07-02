@@ -32,7 +32,7 @@ class ImageCommandsUseCase:
         async with self._uow:
             return await self._image_commands.pick_for_chat(
                 images=self._uow.images,
-                seen=self._uow.seen,
+                views=self._uow.views,
                 chat_id=chat_id,
                 at=at,
             )

@@ -12,7 +12,7 @@ from dom.user.factories import dt, mk_user
 
 from app.dto import ChatContext, UserContext
 from domain.chat import Chat, ChatId, ChatProfile, ChatRepo, ChatScheduleSet, ChatType, Weekday
-from domain.image import ImageRepo, ImageSeenRepo, ImageVoteRepo
+from domain.image import ImageRepo, ViewRepo, VoteRepo
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserRepo, UserRole, ViolationRepo
 from domain.user.protocols import UsageRepo
@@ -41,15 +41,15 @@ class FakeUoW:
         usage: UsageRepo | AsyncMock | None = None,
         violations: ViolationRepo | AsyncMock | None = None,
         images: ImageRepo | AsyncMock | None = None,
-        seen: ImageSeenRepo | AsyncMock | None = None,
-        votes: ImageVoteRepo | AsyncMock | None = None,
+        views: ViewRepo | AsyncMock | None = None,
+        votes: VoteRepo | AsyncMock | None = None,
     ) -> None:
         self.users = users if users is not None else AsyncMock()
         self.chats = chats if chats is not None else AsyncMock()
         self.usage = usage if usage is not None else AsyncMock()
         self.violations = violations if violations is not None else AsyncMock()
         self.images = images if images is not None else AsyncMock()
-        self.seen = seen if seen is not None else AsyncMock()
+        self.views = views if views is not None else AsyncMock()
         self.votes = votes if votes is not None else AsyncMock()
         self.enter_count = 0
         self.exit_count = 0

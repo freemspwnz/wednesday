@@ -8,7 +8,7 @@ from .chat import (
     ChatScheduleSlotORM,
     ChatStateORM,
 )
-from .image import ImageORM, ImageSeenORM, ImageVoteORM
+from .image import ImageORM, ViewORM, VoteORM
 from .user import (
     UserORM,
     UserProfileORM,
@@ -28,8 +28,6 @@ __all__ = [
     "ChatScheduleSlotORM",
     "ChatStateORM",
     "ImageORM",
-    "ImageSeenORM",
-    "ImageVoteORM",
     "UserORM",
     "UserProfileORM",
     "UserRoleORM",
@@ -38,4 +36,6 @@ __all__ = [
     "UserSubscriptionORM",
     "UserUsageORM",
     "UserViolationORM",
+    "ViewORM",
+    "VoteORM",
 ]

@@ -1,9 +1,9 @@
 from .image import ImageORM
-from .seen import ImageSeenORM
-from .vote import ImageVoteORM
+from .view import ViewORM
+from .vote import VoteORM
 
 __all__ = [
     "ImageORM",
-    "ImageSeenORM",
-    "ImageVoteORM",
+    "ViewORM",
+    "VoteORM",
 ]

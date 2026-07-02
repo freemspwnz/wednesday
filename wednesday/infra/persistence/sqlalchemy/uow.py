@@ -10,21 +10,15 @@ from app.protocols import UoW
 from .repos import (
     SQLAChatRepo,
     SQLAImageRepo,
-    SQLAImageSeenRepo,
-    SQLAImageVoteRepo,
     SQLAUsageRepo,
     SQLAUserRepo,
+    SQLAViewRepo,
     SQLAViolationRepo,
+    SQLAVoteRepo,
 )
 
 RepoInstance = (
-    SQLAChatRepo
-    | SQLAImageRepo
-    | SQLAImageSeenRepo
-    | SQLAImageVoteRepo
-    | SQLAUsageRepo
-    | SQLAUserRepo
-    | SQLAViolationRepo
+    SQLAChatRepo | SQLAImageRepo | SQLAViewRepo | SQLAVoteRepo | SQLAUsageRepo | SQLAUserRepo | SQLAViolationRepo
 )
 
 REPO_REGISTRY: dict[str, type[RepoInstance]] = {
@@ -33,8 +27,8 @@ REPO_REGISTRY: dict[str, type[RepoInstance]] = {
     "usage": SQLAUsageRepo,
     "violations": SQLAViolationRepo,
     "images": SQLAImageRepo,
-    "seen": SQLAImageSeenRepo,
-    "votes": SQLAImageVoteRepo,
+    "views": SQLAViewRepo,
+    "votes": SQLAVoteRepo,
 }
 
 
@@ -104,11 +98,11 @@ class SQLAUoW(UoW):
         return self._get_repo("images")
 
     @property
-    def seen(self) -> SQLAImageSeenRepo:
-        return self._get_repo("seen")
+    def views(self) -> SQLAViewRepo:
+        return self._get_repo("views")
 
     @property
-    def votes(self) -> SQLAImageVoteRepo:
+    def votes(self) -> SQLAVoteRepo:
         return self._get_repo("votes")
 
     @overload
@@ -127,10 +121,10 @@ class SQLAUoW(UoW):
     def _get_repo(self, name: Literal["images"]) -> SQLAImageRepo: ...
 
     @overload
-    def _get_repo(self, name: Literal["seen"]) -> SQLAImageSeenRepo: ...
+    def _get_repo(self, name: Literal["views"]) -> SQLAViewRepo: ...
 
     @overload
-    def _get_repo(self, name: Literal["votes"]) -> SQLAImageVoteRepo: ...
+    def _get_repo(self, name: Literal["votes"]) -> SQLAVoteRepo: ...
 
     @overload
     def _get_repo(self, name: str) -> RepoInstance: ...

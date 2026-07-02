@@ -1,9 +1,9 @@
 from .image import SQLAImageRepo
-from .seen import SQLAImageSeenRepo
-from .vote import SQLAImageVoteRepo
+from .view import SQLAViewRepo
+from .vote import SQLAVoteRepo
 
 __all__ = [
     "SQLAImageRepo",
-    "SQLAImageSeenRepo",
-    "SQLAImageVoteRepo",
+    "SQLAViewRepo",
+    "SQLAVoteRepo",
 ]

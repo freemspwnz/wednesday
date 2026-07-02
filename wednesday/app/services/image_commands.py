@@ -2,7 +2,7 @@ from uuid import UUID
 
 from app.dto import ImageCard
 from app.protocols import Logger
-from domain.image import Image, ImageId, ImageRepo, ImageSeenRepo, ImageVoteRepo, ImageVoteService
+from domain.image import Image, ImageId, ImageRepo, ImageVoteService, ViewRepo, VoteRepo
 from domain.kernel.vo import AwareDatetime
 
 _MIN_SCORE = 1
@@ -18,7 +18,7 @@ class ImageCommandService:
         self,
         *,
         images: ImageRepo,
-        seen: ImageSeenRepo,
+        views: ViewRepo,
         chat_id: UUID,
         at: AwareDatetime,
     ) -> ImageCard | None:
@@ -27,7 +27,7 @@ class ImageCommandService:
             self._logger.debug("No unseen images for chat", chat_id=str(chat_id))
             return None
 
-        await seen.mark_seen(chat_id, image.id, at=at)
+        await views.mark_shown(chat_id, image.id, at=at)
         self._logger.debug(
             "Random image picked for chat",
             chat_id=str(chat_id),
@@ -42,7 +42,7 @@ class ImageCommandService:
         voter_id: UUID,
         value: int,
         image_repo: ImageRepo,
-        vote_repo: ImageVoteRepo,
+        vote_repo: VoteRepo,
         at: AwareDatetime,
     ) -> Image:
         image = await ImageVoteService.vote(

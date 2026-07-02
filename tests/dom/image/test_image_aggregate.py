@@ -199,6 +199,7 @@ def test_image_validate_allows_admin_hidden_with_positive_score() -> None:
         prompts=mk_image().prompts,
     )
     assert image.score == 6
+    assert isinstance(image.state, HiddenState)
     assert image.state.reason == HiddenReason.ADMIN
 
 

@@ -10,12 +10,14 @@ import pytest
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from infra.persistence.sqlalchemy.models import Base
+from infra.persistence.sqlalchemy.models.image import ImageORM
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VERSIONS_DIR = REPO_ROOT / "alembic" / "versions"
 INITIAL_REVISION = VERSIONS_DIR / "8593d284af18_initial.py"
 IMAGE_REVISION = VERSIONS_DIR / "fb548c333d1f_add_user_settings_image_tables.py"
-LATEST_HEAD = "fb548c333d1f"
+ALIGN_IMAGES_REVISION = VERSIONS_DIR / "ea4c99f0601f_align_images_schema_with_domain_image.py"
+LATEST_HEAD = "ea4c99f0601f"
 
 INITIAL_TABLES = {
     "chats",
@@ -39,7 +41,11 @@ NEW_TABLES = {
     "user_violations",
 }
 
-EXPECTED_TABLES = INITIAL_TABLES | NEW_TABLES
+TABLE_RENAMES = {
+    "image_seen": "image_view",
+}
+
+EXPECTED_TABLES = (INITIAL_TABLES | NEW_TABLES - {"image_seen"}) | {"image_view"}
 
 
 def _tables_created_in(path: Path) -> set[str]:
@@ -53,6 +59,17 @@ def _tables_created_in(path: Path) -> set[str]:
         if isinstance(func, ast.Attribute) and func.attr == "create_table" and isinstance(func.value, ast.Name):
             if func.value.id == "op" and node.args:
                 created.add(ast.literal_eval(node.args[0]))
+    return created
+
+
+def _tables_after_migrations() -> set[str]:
+    created: set[str] = set()
+    for path in sorted(VERSIONS_DIR.glob("*.py")):
+        created |= _tables_created_in(path)
+    for old_name, new_name in TABLE_RENAMES.items():
+        if old_name in created:
+            created.remove(old_name)
+            created.add(new_name)
     return created
 
 
@@ -72,10 +89,7 @@ def test_orm_tables_match_expected() -> None:
 
 @pytest.mark.unit
 def test_migrations_create_all_orm_tables() -> None:
-    created: set[str] = set()
-    for path in sorted(VERSIONS_DIR.glob("*.py")):
-        created |= _tables_created_in(path)
-    assert created == EXPECTED_TABLES
+    assert _tables_after_migrations() == EXPECTED_TABLES
 
 
 @pytest.mark.unit
@@ -94,3 +108,32 @@ def test_image_migration_backfills_user_settings() -> None:
     assert "INSERT INTO" in source
     assert "user_settings" in source
     assert "gigachat-2-lite" in source
+
+
+@pytest.mark.unit
+def test_align_images_migration_deletes_incomplete_rows_before_not_null() -> None:
+    source = ALIGN_IMAGES_REVISION.read_text(encoding="utf-8")
+    file_id_delete = source.index("WHERE telegram_file_id IS NULL")
+    file_id_not_null = source.index('"telegram_file_id"', file_id_delete)
+    primary_delete = source.index("WHERE primary_prompt IS NULL")
+    primary_not_null = source.index('"primary_prompt"', primary_delete)
+    assert file_id_delete < file_id_not_null
+    assert primary_delete < primary_not_null
+    assert source.count("DELETE FROM") >= 2
+
+
+@pytest.mark.unit
+def test_align_images_migration_enforces_required_catalog_fields() -> None:
+    source = ALIGN_IMAGES_REVISION.read_text(encoding="utf-8")
+    assert "telegram_file_id IS NULL" in source
+    assert "primary_prompt IS NULL" in source
+    assert "nullable=False" in source
+
+
+@pytest.mark.unit
+def test_image_orm_required_columns_match_domain() -> None:
+    table = ImageORM.__table__
+    assert table.c.telegram_file_id.nullable is False
+    assert table.c.primary_prompt.nullable is False
+    assert table.c.prompt_source.nullable is False
+    assert table.c.enriched_prompt.nullable is True

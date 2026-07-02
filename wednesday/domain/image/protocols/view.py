@@ -11,7 +11,7 @@ class ViewRepo(Protocol):
         """Whether chat already viewed this image."""
         ...
 
-    async def mark_seen(
+    async def mark_shown(
         self,
         chat_id: UUID,
         image_id: ImageId,

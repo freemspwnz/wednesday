@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ..base import Base
 
 
-class ImageVoteORM(Base):
+class VoteORM(Base):
     """User vote on an image (-1 or +1)."""
 
     __tablename__ = "image_votes"
@@ -24,4 +24,4 @@ class ImageVoteORM(Base):
     value: Mapped[int] = mapped_column(Integer, nullable=False)
 
     def __repr__(self) -> str:
-        return f"ImageVoteORM(image_id={self.image_id!r}, voter_id={self.voter_id!r}, value={self.value!r})"
+        return f"VoteORM(image_id={self.image_id!r}, voter_id={self.voter_id!r}, value={self.value!r})"

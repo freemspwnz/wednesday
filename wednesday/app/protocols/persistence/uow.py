@@ -6,7 +6,7 @@ from types import TracebackType
 from typing import Protocol, runtime_checkable
 
 from domain.chat import ChatRepo
-from domain.image import ImageRepo, ImageSeenRepo, ImageVoteRepo
+from domain.image import ImageRepo, ViewRepo, VoteRepo
 from domain.user import UserRepo
 from domain.user.protocols import UsageRepo, ViolationRepo
 
@@ -44,10 +44,10 @@ class UoW(Protocol):
     def images(self) -> ImageRepo: ...
 
     @property
-    def seen(self) -> ImageSeenRepo: ...
+    def views(self) -> ViewRepo: ...
 
     @property
-    def votes(self) -> ImageVoteRepo: ...
+    def votes(self) -> VoteRepo: ...
 
 
 @runtime_checkable

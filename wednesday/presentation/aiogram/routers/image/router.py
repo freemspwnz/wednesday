@@ -58,12 +58,9 @@ async def cmd_random(
         if card is None:
             await message.answer(cmd_msg.RANDOM_CATALOG_EMPTY)
             return
-        if card.file_id is None:
-            await message.answer(cmd_msg.IMAGE_UNAVAILABLE)
-            return
 
         await message.answer_photo(
-            photo=card.file_id,
+            photo=str(card.file_id),
             reply_markup=build_vote_kb(image_id=card.id),
         )
 
