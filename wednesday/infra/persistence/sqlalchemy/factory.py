@@ -66,25 +66,6 @@ class SQLAUoWFactory(UoWFactory):
 
     @staticmethod
     def _attach_engine_metrics(engine: Engine, metrics: DBMetrics) -> None:
-        def before_cursor_execute(  # noqa: PLR0913, PLR0917
-            conn: object,
-            cursor: object,
-            statement: str,
-            parameters: object,
-            context: object,
-            executemany: bool,
-        ) -> None:
-            metrics.on_before_cursor_execute(context=context, statement=statement)
-
-        def after_cursor_execute(  # noqa: PLR0913, PLR0917
-            conn: object,
-            cursor: object,
-            statement: str,
-            parameters: object,
-            context: object,
-            executemany: bool,
-        ) -> None:
-            metrics.on_after_cursor_execute(context=context, statement=statement)
 
         def handle_error(exception_context: ExceptionContext) -> None:
             metrics.on_cursor_error(
@@ -93,6 +74,6 @@ class SQLAUoWFactory(UoWFactory):
                 context=getattr(exception_context, "execution_context", None),
             )
 
-        event.listen(engine, "before_cursor_execute", before_cursor_execute)
-        event.listen(engine, "after_cursor_execute", after_cursor_execute)
+        event.listen(engine, "before_cursor_execute", metrics.on_before_cursor_execute)
+        event.listen(engine, "after_cursor_execute", metrics.on_after_cursor_execute)
         event.listen(engine, "handle_error", handle_error)

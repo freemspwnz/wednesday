@@ -18,10 +18,26 @@ class SQLAMetrics(DBMetrics):
         self._collector = collector
         self._start_times: weakref.WeakKeyDictionary[Any, float] = weakref.WeakKeyDictionary()
 
-    def on_before_cursor_execute(self, *, context: object, statement: str) -> None:
+    def on_before_cursor_execute(  # noqa: PLR0913, PLR0917
+            self,
+            conn: object,
+            cursor: object,
+            statement: str,
+            parameters: object,
+            context: object,
+            executemany: bool,
+        ) -> None:
         self._start_times[context] = time.perf_counter()
 
-    def on_after_cursor_execute(self, *, context: object, statement: str) -> None:
+    def on_after_cursor_execute(  # noqa: PLR0913, PLR0917
+            self,
+            conn: object,
+            cursor: object,
+            statement: str,
+            parameters: object,
+            context: object,
+            executemany: bool,
+        ) -> None:
         start = self._start_times.pop(context, None)
         if start is None:
             return

@@ -97,9 +97,25 @@ class CacheMetrics(Protocol):
 class DBMetrics(Protocol):
     """Protocol for database metrics collection."""
 
-    def on_before_cursor_execute(self, *, context: object, statement: str) -> None: ...
+    def on_before_cursor_execute(  # noqa: PLR0913, PLR0917
+            self,
+            conn: object,
+            cursor: object,
+            statement: str,
+            parameters: object,
+            context: object,
+            executemany: bool,
+        ) -> None: ...
 
-    def on_after_cursor_execute(self, *, context: object, statement: str) -> None: ...
+    def on_after_cursor_execute(  # noqa: PLR0913, PLR0917
+            self,
+            conn: object,
+            cursor: object,
+            statement: str,
+            parameters: object,
+            context: object,
+            executemany: bool,
+        ) -> None: ...
 
     def on_cursor_error(
         self,

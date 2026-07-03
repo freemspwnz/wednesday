@@ -14,6 +14,14 @@ class _Ctx:
     """Stand-in for SQLAlchemy execution context (must be weakref-able)."""
 
 
+def _before(m: SQLAMetrics, ctx: _Ctx, statement: str = "SELECT 1") -> None:
+    m.on_before_cursor_execute(None, None, statement, None, ctx, False)
+
+
+def _after(m: SQLAMetrics, ctx: _Ctx, statement: str = "SELECT 1") -> None:
+    m.on_after_cursor_execute(None, None, statement, None, ctx, False)
+
+
 @pytest.mark.unit
 class TestSQLAMetricsExtractCommand:
     def test_empty(self) -> None:
@@ -33,7 +41,7 @@ class TestSQLAMetricsCursorHooks:
         m = SQLAMetrics(collector=coll)
         ctx = _Ctx()
 
-        m.on_after_cursor_execute(context=ctx, statement="SELECT 1")
+        _after(m, ctx)
 
         coll.observe.assert_not_called()
         coll.increment.assert_not_called()
@@ -43,8 +51,8 @@ class TestSQLAMetricsCursorHooks:
         m = SQLAMetrics(collector=coll)
         ctx = _Ctx()
 
-        m.on_before_cursor_execute(context=ctx, statement="SELECT 1")
-        m.on_after_cursor_execute(context=ctx, statement="select 1")
+        _before(m, ctx)
+        _after(m, ctx, statement="select 1")
 
         coll.observe.assert_called_once()
         assert coll.observe.call_args.kwargs["name"] == "sqlalchemy_query_duration_seconds"
@@ -75,9 +83,9 @@ class TestSQLAMetricsCursorHooks:
         m = SQLAMetrics(collector=coll)
         ctx = _Ctx()
 
-        m.on_before_cursor_execute(context=ctx, statement="SELECT 1")
+        _before(m, ctx)
         m.on_cursor_error(statement="SELECT 1", error_type="OperationalError", context=ctx)
-        m.on_after_cursor_execute(context=ctx, statement="SELECT 1")
+        _after(m, ctx)
 
         coll.increment.assert_called_once()
         coll.observe.assert_not_called()
