@@ -36,7 +36,7 @@ class PersistenceContainer:
     def uow_factory(self) -> UoWFactory:
         return SQLAUoWFactory(
             config=self._config.postgres,
-            metrics=self._observe.metrics_registry.db_metrics,
+            metrics=self._observe.metrics.db,
             logger=self._observe.logger,
         )
 
@@ -67,7 +67,7 @@ class PersistenceContainer:
     def _cache_client(self) -> CacheClient:
         return RedisClient(
             redis=self.redis,
-            metrics=self._observe.metrics_registry.cache_metrics,
+            metrics=self._observe.metrics.cache,
             logger=self._observe.logger,
         )
 

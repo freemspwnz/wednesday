@@ -10,7 +10,7 @@ _PREFIX = "redis"
 
 
 class RedisMetrics(CacheMetrics):
-    """Адаптер метрик для Redis-кэша."""
+    """Metrics adapter for Redis cache."""
 
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector

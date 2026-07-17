@@ -1,4 +1,4 @@
-"""Общие утилиты для prometheus-адаптеров."""
+"""Shared helpers for prometheus adapters."""
 
 import time
 from contextvars import ContextVar
@@ -29,7 +29,7 @@ class TimerContext:
         self._var.set(time.monotonic())
 
     def elapsed(self) -> float:
-        """Секунды с момента `start()` или 0.0, если не вызывался."""
+        """Seconds since `start()`, or 0.0 if `start()` was never called."""
         started = self._var.get()
         if started is None:
             return 0.0

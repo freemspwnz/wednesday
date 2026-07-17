@@ -1,11 +1,8 @@
-"""Точка входа в приложение.
+"""Main application entrypoint.
 
-Создаёт Config и экземпляр Container,
-запускает aiogram бота и prometheus http (wsgi) сервер.
-
+Creates Config and Container instance,
+starts aiogram bot and prometheus http server.
 """
-
-from __future__ import annotations
 
 import asyncio
 
@@ -23,7 +20,7 @@ async def main() -> None:
     # 2. DI
     container = Container(config=config)
     logger = container.observe.logger.bind(module=__name__)
-    metrics = container.observe.collector
+    metrics = container.observe.metrics
 
     # 3. Delivery
     logger.debug("Building aiogram bot...")

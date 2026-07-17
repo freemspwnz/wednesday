@@ -1,6 +1,4 @@
-"""Тесты SQLAMetrics."""
-
-from __future__ import annotations
+"""SQLAMetrics tests."""
 
 from unittest.mock import MagicMock
 

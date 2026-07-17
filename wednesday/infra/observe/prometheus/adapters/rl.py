@@ -6,7 +6,7 @@ from ._common import TimerContext
 
 
 class LimitsMetrics(RLMetrics):
-    """Адаптер метрик для limits."""
+    """Metrics adapter for the limits rate limiter."""
 
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector

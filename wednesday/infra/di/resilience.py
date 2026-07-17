@@ -17,7 +17,7 @@ from .persistence import PersistenceContainer
 
 
 class ResilienceContainer:
-    """Контейнер для создания resilience-слоя."""
+    """Container for creating resilience layer."""
 
     def __init__(
         self,
@@ -43,7 +43,7 @@ class ResilienceContainer:
         return Tenacity(
             config=config,
             predicate=predicate,
-            metrics=self._observe.metrics_registry.retry_metrics,
+            metrics=self._observe.metrics.retry,
             logger=self._observe.logger,
         )
 
@@ -62,7 +62,7 @@ class ResilienceContainer:
             version=self._config.version,
             redis=self._persistence.redis,
             exclude=exclude,
-            metrics=self._observe.metrics_registry.cb_metrics,
+            metrics=self._observe.metrics.cb,
             logger=self._observe.logger,
         )
 
@@ -80,6 +80,6 @@ class ResilienceContainer:
             version=self._config.version,
             redis_dsn=self._config.redis.dsn,
             redis_pool=self._persistence.redis.connection_pool,
-            metrics=self._observe.metrics_registry.rl_metrics,
+            metrics=self._observe.metrics.rl,
             logger=self._observe.logger,
         )

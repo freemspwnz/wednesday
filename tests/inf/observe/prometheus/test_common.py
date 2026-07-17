@@ -1,6 +1,4 @@
-"""Тесты TimerContext (adapters._common)."""
-
-from __future__ import annotations
+"""TimerContext tests (adapters._common)."""
 
 import asyncio
 

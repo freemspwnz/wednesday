@@ -1,7 +1,5 @@
 """SQLAlchemy query metrics adapter (timing + Prometheus; no sqlalchemy import)."""
 
-from __future__ import annotations
-
 import re
 import time
 import weakref
@@ -19,25 +17,25 @@ class SQLAMetrics(DBMetrics):
         self._start_times: weakref.WeakKeyDictionary[Any, float] = weakref.WeakKeyDictionary()
 
     def on_before_cursor_execute(  # noqa: PLR0913, PLR0917
-            self,
-            conn: object,
-            cursor: object,
-            statement: str,
-            parameters: object,
-            context: object,
-            executemany: bool,
-        ) -> None:
+        self,
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
         self._start_times[context] = time.perf_counter()
 
     def on_after_cursor_execute(  # noqa: PLR0913, PLR0917
-            self,
-            conn: object,
-            cursor: object,
-            statement: str,
-            parameters: object,
-            context: object,
-            executemany: bool,
-        ) -> None:
+        self,
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
         start = self._start_times.pop(context, None)
         if start is None:
             return

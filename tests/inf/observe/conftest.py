@@ -1,6 +1,4 @@
-"""Фикстуры для ``tests/infra/observe/`` (prometheus и др.)."""
-
-from __future__ import annotations
+"""Fixtures for ``tests/inf/observe/`` (prometheus and related)."""
 
 from unittest.mock import MagicMock
 

@@ -1,6 +1,4 @@
-"""Тесты AsyncbreakerMetrics."""
-
-from __future__ import annotations
+"""AsyncbreakerMetrics tests."""
 
 from unittest.mock import MagicMock
 

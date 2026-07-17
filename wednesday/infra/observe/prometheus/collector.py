@@ -1,4 +1,4 @@
-"""Prometheus-реализация MetricsCollector + HTTP-экспортёр."""
+"""Prometheus implementation of MetricsCollector."""
 
 from collections.abc import Mapping
 from typing import TypeVar
@@ -10,10 +10,9 @@ from prometheus_client import (
     Histogram,
     Info,
     generate_latest,
-    start_http_server,
 )
 
-from app.exceptions import MetricsExportError, MetricsHttpExporterError
+from app.exceptions import MetricsExportError
 from app.protocols import Logger, MetricsCollector
 from infra.config import MetricsConfig
 
@@ -22,7 +21,7 @@ _M = TypeVar("_M", Counter, Gauge, Histogram)
 
 
 class PrometheusCollector(MetricsCollector):
-    """Pull-модель сбора метрик через prometheus_client."""
+    """Pull-modeled metrics collector on prometheus_client library."""
 
     def __init__(
         self,
@@ -38,8 +37,8 @@ class PrometheusCollector(MetricsCollector):
         self._counters: dict[str, Counter] = {}
         self._histograms: dict[str, Histogram] = {}
         self._gauges: dict[str, Gauge] = {}
-        self._logger = logger.bind(module=self.__class__.__name__)
         self._register_build_info(env=env, version=version)
+        self._logger = logger.bind(module=self.__class__.__name__)
 
     def increment(self, *, name: str, labels: dict[str, str]) -> None:
         counter = self._get_or_create(self._counters, name, labels, Counter)
@@ -68,25 +67,6 @@ class PrometheusCollector(MetricsCollector):
         except Exception as e:
             self._logger.exception("Prometheus export failed")
             raise MetricsExportError("Prometheus export failed") from e
-
-    def serve(self) -> None:
-        if not self._config.enabled:
-            self._logger.info("Prometheus HTTP exporter disabled by config")
-            return
-        try:
-            start_http_server(
-                addr=self._config.host,
-                port=self._config.port,
-                registry=self._registry,
-            )
-        except Exception as e:
-            self._logger.exception(
-                "Prometheus HTTP exporter failed to start",
-                host=self._config.host,
-                port=self._config.port,
-            )
-            raise MetricsHttpExporterError("Prometheus HTTP exporter failed to start") from e
-        self._logger.info(f"Prometheus HTTP exporter started on {self._config.host}:{self._config.port}")
 
     def _get_or_create(
         self,

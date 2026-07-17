@@ -30,7 +30,6 @@ class MetricsCollector(Protocol):
     ) -> None: ...
 
     def export(self) -> bytes: ...
-    def serve(self) -> None: ...
 
 
 @runtime_checkable
@@ -98,24 +97,24 @@ class DBMetrics(Protocol):
     """Protocol for database metrics collection."""
 
     def on_before_cursor_execute(  # noqa: PLR0913, PLR0917
-            self,
-            conn: object,
-            cursor: object,
-            statement: str,
-            parameters: object,
-            context: object,
-            executemany: bool,
-        ) -> None: ...
+        self,
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None: ...
 
     def on_after_cursor_execute(  # noqa: PLR0913, PLR0917
-            self,
-            conn: object,
-            cursor: object,
-            statement: str,
-            parameters: object,
-            context: object,
-            executemany: bool,
-        ) -> None: ...
+        self,
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None: ...
 
     def on_cursor_error(
         self,
@@ -147,20 +146,36 @@ class RLMetrics(Protocol):
 
 
 @runtime_checkable
+class HttpMetrics(Protocol):
+    """Protocol for HTTP metrics collection."""
+
+    def on_request(self, *, method: str, url: str) -> None: ...
+
+    def on_response(self, *, method: str, url: str, status_code: int) -> None: ...
+
+    def on_error(self, *, method: str, url: str, exc: BaseException) -> None: ...
+
+
+@runtime_checkable
 class MetricsRegistry(Protocol):
     """Protocol for metrics registration."""
 
     @property
-    def retry_metrics(self) -> RetryMetrics: ...
+    def retry(self) -> RetryMetrics: ...
 
     @property
-    def cb_metrics(self) -> CBMetrics: ...
+    def cb(self) -> CBMetrics: ...
 
     @property
-    def rl_metrics(self) -> RLMetrics: ...
+    def rl(self) -> RLMetrics: ...
 
     @property
-    def cache_metrics(self) -> CacheMetrics: ...
+    def cache(self) -> CacheMetrics: ...
 
     @property
-    def db_metrics(self) -> DBMetrics: ...
+    def db(self) -> DBMetrics: ...
+
+    @property
+    def http(self) -> HttpMetrics: ...
+
+    def serve(self) -> None: ...

@@ -15,7 +15,7 @@ _STATE_VALUES: dict[str, float] = {
 
 
 class AsyncbreakerMetrics(CBMetrics):
-    """Адаптер метрик для asyncbreaker."""
+    """Metrics adapter for asyncbreaker."""
 
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector

@@ -6,7 +6,7 @@ from ._common import TimerContext
 
 
 class TenacityMetrics(RetryMetrics):
-    """Адаптер метрик для tenacity."""
+    """Metrics adapter for tenacity."""
 
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector

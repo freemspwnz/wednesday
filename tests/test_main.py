@@ -1,4 +1,4 @@
-"""Тесты точки входа wednesday/main.py."""
+"""Main entry point tests."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ def main_mocks() -> dict[str, MagicMock | AsyncMock]:
 
     container = MagicMock()
     container.observe.logger.bind.return_value = MagicMock()
-    container.observe.collector = MagicMock()
-    container.observe.collector.serve = MagicMock()
+    container.observe.metrics = MagicMock()
+    container.observe.metrics.serve = MagicMock()
     container.shutdown = AsyncMock()
     container.get_scope = MagicMock()
     container.resilience.rate_limiter.return_value = MagicMock()
@@ -63,7 +63,7 @@ async def test_main_closes_bot_and_shuts_down_container(main_mocks: dict[str, Ma
 async def test_main_fails_when_prometheus_exporter_unavailable_and_shuts_down(
     main_mocks: dict[str, MagicMock | AsyncMock],
 ) -> None:
-    main_mocks["container"].observe.collector.serve.side_effect = MetricsHttpExporterError("down")
+    main_mocks["container"].observe.metrics.serve.side_effect = MetricsHttpExporterError("down")
 
     with (
         patch("main.Config", return_value=main_mocks["config"]),

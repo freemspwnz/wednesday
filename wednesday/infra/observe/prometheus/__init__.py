@@ -2,6 +2,7 @@
 
 from .adapters import (
     AsyncbreakerMetrics,
+    HttpxMetrics,
     LimitsMetrics,
     RedisMetrics,
     SQLAMetrics,
@@ -12,6 +13,7 @@ from .registry import PrometheusRegistry
 
 __all__ = [
     "AsyncbreakerMetrics",
+    "HttpxMetrics",
     "LimitsMetrics",
     "PrometheusCollector",
     "PrometheusRegistry",

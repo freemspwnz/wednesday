@@ -1,6 +1,4 @@
-"""Тесты RedisMetrics."""
-
-from __future__ import annotations
+"""RedisMetrics tests."""
 
 from unittest.mock import MagicMock
 

@@ -1,13 +1,11 @@
-"""Тесты PrometheusCollector."""
-
-from __future__ import annotations
+"""PrometheusCollector tests."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 from prometheus_client import CollectorRegistry
 
-from app.exceptions import MetricsExportError, MetricsHttpExporterError
+from app.exceptions import MetricsExportError
 from infra.config import MetricsConfig
 from infra.observe.prometheus.collector import PrometheusCollector
 
@@ -29,7 +27,7 @@ class TestPrometheusCollector:
         self,
         collector: PrometheusCollector,
     ) -> None:
-        """Counter и Histogram с одним basename конфликтуют в registry — имена разводим."""
+        """Counter and Histogram with the same basename collide in the registry — use distinct names."""
         collector.increment(name="dup_counter", labels={"k": "v"})
         collector.observe(name="dup_histogram", value=1.0, labels={"k": "v"})
         raw = collector.export()
@@ -52,83 +50,6 @@ class TestPrometheusCollector:
     def test_export_contains_build_info(self, collector: PrometheusCollector) -> None:
         data = collector.export().decode()
         assert "build" in data.lower() or "wednesday" in data
-
-    def test_serve_disabled_logs_info(
-        self,
-        metrics_config: MetricsConfig,
-        registry: CollectorRegistry,
-        mock_logger: MagicMock,
-    ) -> None:
-        c = PrometheusCollector(
-            config=metrics_config.model_copy(update={"enabled": False}),
-            env="X",
-            version="1",
-            registry=registry,
-            logger=mock_logger,
-        )
-        c.serve()
-        mock_logger.info.assert_called()
-        assert "disabled" in str(mock_logger.info.call_args).lower()
-
-    def test_serve_enabled_starts_server(
-        self,
-        registry: CollectorRegistry,
-        mock_logger: MagicMock,
-    ) -> None:
-        cfg = MetricsConfig(enabled=True, host="127.0.0.1", port=9123)
-        c = PrometheusCollector(
-            config=cfg,
-            env="X",
-            version="1",
-            registry=registry,
-            logger=mock_logger,
-        )
-        with patch("infra.observe.prometheus.collector.start_http_server") as srv:
-            c.serve()
-        srv.assert_called_once()
-        mock_logger.info.assert_called()
-
-    def test_serve_bind_failure_logs_exception(
-        self,
-        registry: CollectorRegistry,
-        mock_logger: MagicMock,
-    ) -> None:
-        cfg = MetricsConfig(enabled=True, host="127.0.0.1", port=9124)
-        c = PrometheusCollector(
-            config=cfg,
-            env="X",
-            version="1",
-            registry=registry,
-            logger=mock_logger,
-        )
-        with patch(
-            "infra.observe.prometheus.collector.start_http_server",
-            side_effect=OSError("bind failed"),
-        ):
-            with pytest.raises(MetricsHttpExporterError):
-                c.serve()
-        mock_logger.exception.assert_called()
-
-    def test_serve_non_os_error_logs_exception(
-        self,
-        registry: CollectorRegistry,
-        mock_logger: MagicMock,
-    ) -> None:
-        cfg = MetricsConfig(enabled=True, host="127.0.0.1", port=9125)
-        c = PrometheusCollector(
-            config=cfg,
-            env="X",
-            version="1",
-            registry=registry,
-            logger=mock_logger,
-        )
-        with patch(
-            "infra.observe.prometheus.collector.start_http_server",
-            side_effect=RuntimeError("unexpected"),
-        ):
-            with pytest.raises(MetricsHttpExporterError):
-                c.serve()
-        mock_logger.exception.assert_called()
 
     def test_export_failure_returns_fallback(
         self,
