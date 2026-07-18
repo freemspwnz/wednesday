@@ -8,8 +8,8 @@ from domain.user import User, UserId, UserProfile, UserRepo, UserRole, UserSubsc
 class UserCommandService:
     """Load user aggregate, domain command and save."""
 
-    def __init__(self, *, subscription_catalog: SubscriptionCatalog, logger: Logger) -> None:
-        self._subscription_catalog = subscription_catalog
+    def __init__(self, *, subscriptions: SubscriptionCatalog, logger: Logger) -> None:
+        self._subscriptions = subscriptions
         self._logger = logger.bind(module=self.__class__.__name__)
 
     @staticmethod
@@ -139,7 +139,7 @@ class UserCommandService:
         at: AwareDatetime,
     ) -> User:
         user = await self._load_user_or_raise(repo, user_id)
-        fallback = await self._subscription_catalog.default_plan()
+        fallback = await self._subscriptions.default_plan()
         user.expire_subscription_if_due(fallback=fallback, at=at)
         await repo.save(user)
         self._logger.debug(

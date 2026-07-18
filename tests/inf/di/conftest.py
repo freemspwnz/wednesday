@@ -1,6 +1,4 @@
-"""Фикстуры для тестов infra.di."""
-
-from __future__ import annotations
+"""Fixtures for infra.di tests."""
 
 from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -46,7 +44,6 @@ def persistence_container(
 
     with (
         patch("infra.di.persistence.build_redis", return_value=mock_redis),
-        patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
         patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
         patch("infra.di.persistence.close_redis", new_callable=AsyncMock),
     ):
@@ -62,7 +59,6 @@ def container(di_config: Config) -> Iterator[Container]:
 
     with (
         patch("infra.di.persistence.build_redis", return_value=mock_redis),
-        patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
         patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
         patch("infra.di.persistence.close_redis", new_callable=AsyncMock),
     ):

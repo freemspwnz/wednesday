@@ -1,14 +1,12 @@
-"""Тесты select_model в UserCommandsUseCase."""
-
-from __future__ import annotations
+"""Tests for select_model in UserCommandsUseCase."""
 
 from datetime import UTC, datetime
 
 import pytest
 from dom.user.factories import FakeModelCatalog, FakeSubscriptionCatalog, FakeUserRepo, mk_user, subscription_premium
 
-from app.services.user_commands import UserCommandService
-from app.use_cases.user_commands import UserCommandsUseCase
+from app.services.user import UserCommandService
+from app.use_cases.user import UserCommandsUseCase
 from domain.catalog import Model
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserRole
@@ -34,13 +32,13 @@ async def test_uc_select_model_persists_and_refreshes_cache() -> None:
     cache = FakeCacheRegistry()
     uc = UserCommandsUseCase(
         uow=FakeUoW(users=user_repo),
-        user_commands=UserCommandService(
-            subscription_catalog=FakeSubscriptionCatalog(),
+        service=UserCommandService(
+            subscriptions=FakeSubscriptionCatalog(),
             logger=mk_logger(),
         ),
-        cache_registry=cache,
-        model_catalog=FakeModelCatalog(),
-        subscription_catalog=FakeSubscriptionCatalog(),
+        cache=cache.users,
+        models=FakeModelCatalog(),
+        subscriptions=FakeSubscriptionCatalog(),
         logger=mk_logger(),
     )
 
@@ -52,7 +50,7 @@ async def test_uc_select_model_persists_and_refreshes_cache() -> None:
 
     assert got.settings.model == Model.parse("gigachat-2-pro")
     assert user_repo.users[user.id].settings.model == Model.parse("gigachat-2-pro")
-    cache.user.set.assert_awaited_once_with(got)
+    cache.users.set.assert_awaited_once_with(got)
 
 
 @pytest.mark.unit
@@ -61,15 +59,16 @@ async def test_uc_select_model_closes_uow() -> None:
     user = mk_user(user_id=6, now=dt(10))
     user_repo = FakeUserRepo.with_users(user)
     uow = FakeUoW(users=user_repo)
+    cache = FakeCacheRegistry()
     uc = UserCommandsUseCase(
         uow=uow,
-        user_commands=UserCommandService(
-            subscription_catalog=FakeSubscriptionCatalog(),
+        service=UserCommandService(
+            subscriptions=FakeSubscriptionCatalog(),
             logger=mk_logger(),
         ),
-        cache_registry=FakeCacheRegistry(),
-        model_catalog=FakeModelCatalog(),
-        subscription_catalog=FakeSubscriptionCatalog(),
+        cache=cache.users,
+        models=FakeModelCatalog(),
+        subscriptions=FakeSubscriptionCatalog(),
         logger=mk_logger(),
     )
 

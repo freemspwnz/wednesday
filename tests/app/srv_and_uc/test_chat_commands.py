@@ -1,6 +1,4 @@
-"""Тесты ChatCommandService и ChatCommandsUseCase."""
-
-from __future__ import annotations
+"""Tests for ChatCommandService and ChatCommandsUseCase."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
@@ -10,8 +8,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.exceptions import ChatNotFoundError
-from app.services.chat_commands import ChatCommandService
-from app.use_cases.chat_commands import ChatCommandsUseCase
+from app.services.chat import ChatCommandService
+from app.use_cases.chat import ChatCommandsUseCase
 from domain.chat import (
     AccessDeniedError,
     ActiveState,
@@ -90,8 +88,8 @@ def _make_uc(*, repo: AsyncMock) -> tuple[ChatCommandsUseCase, FakeUoW, FakeCach
     cache = FakeCacheRegistry()
     uc = ChatCommandsUseCase(
         uow=uow,
-        chat_commands=ChatCommandService(logger=log),
-        cache_registry=cache,
+        service=ChatCommandService(logger=log),
+        cache=cache.chats,
         logger=log,
     )
     return uc, uow, cache
@@ -117,7 +115,7 @@ async def test_uc_change_profile_happy_path_persists_and_closes_uow() -> None:
     repo.get_by_id.assert_awaited_once_with(chat.id)
     repo.save.assert_awaited_once_with(chat)
     assert uow.enter_count == uow.exit_count == 1
-    cache.chat.set.assert_awaited_once_with(got)
+    cache.chats.set.assert_awaited_once_with(got)
 
 
 @pytest.mark.unit
@@ -215,7 +213,7 @@ async def test_uc_deactivate_and_activate_happy_path() -> None:
 
     assert isinstance(chat.state, ActiveState)
     assert repo.save.await_count == 2
-    assert cache.chat.set.await_count == 2
+    assert cache.chats.set.await_count == 2
 
 
 @pytest.mark.unit

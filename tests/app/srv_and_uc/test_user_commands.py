@@ -1,6 +1,4 @@
-"""Тесты UserCommandService и UserCommandsUseCase."""
-
-from __future__ import annotations
+"""Tests for UserCommandService and UserCommandsUseCase."""
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
@@ -16,8 +14,8 @@ from dom.user.factories import (
 )
 
 from app.exceptions import UserNotFoundError
-from app.services.user_commands import UserCommandService
-from app.use_cases.user_commands import UserCommandsUseCase
+from app.services.user import UserCommandService
+from app.use_cases.user import UserCommandsUseCase
 from domain.catalog import SubscriptionPlan, SubscriptionTier
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import (
@@ -52,9 +50,9 @@ def mk_user(*, user_id: int = 1, role: UserRole = UserRole.USER, now: AwareDatet
     )
 
 
-def _user_commands_service() -> UserCommandService:
+def _user_commands_srv() -> UserCommandService:
     return UserCommandService(
-        subscription_catalog=FakeSubscriptionCatalog(),
+        subscriptions=FakeSubscriptionCatalog(),
         logger=mk_logger(),
     )
 
@@ -65,7 +63,7 @@ async def test_service_change_role_persists_via_repo() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10))
     repo.get_by_id.return_value = user
-    srv = _user_commands_service()
+    srv = _user_commands_srv()
 
     await srv.change_role(
         repo=repo,
@@ -88,10 +86,10 @@ def _make_uc(
     cache = cache_registry or FakeCacheRegistry()
     uc = UserCommandsUseCase(
         uow=uow,
-        user_commands=_user_commands_service(),
-        cache_registry=cache,
-        model_catalog=FakeModelCatalog(),
-        subscription_catalog=FakeSubscriptionCatalog(),
+        service=_user_commands_srv(),
+        cache=cache.users,
+        models=FakeModelCatalog(),
+        subscriptions=FakeSubscriptionCatalog(),
         logger=log,
     )
     return uc, uow, cache
@@ -110,7 +108,7 @@ async def test_uc_change_role_happy_path_persists_and_closes_uow() -> None:
     assert got.role == UserRole.ADMIN
     repo.get_by_id.assert_awaited_once_with(user.id)
     repo.save.assert_awaited_once_with(user)
-    cache.user.set.assert_awaited_once_with(got)
+    cache.users.set.assert_awaited_once_with(got)
     assert uow.enter_count == uow.exit_count == 1
 
 
@@ -127,7 +125,7 @@ async def test_uc_user_not_found_does_not_save() -> None:
 
     assert ei.value.user_id == uid
     repo.save.assert_not_awaited()
-    cache.user.set.assert_not_awaited()
+    cache.users.set.assert_not_awaited()
     assert uow.enter_count == uow.exit_count == 1
 
 
@@ -143,7 +141,7 @@ async def test_uc_management_access_denied_propagates_and_skips_save() -> None:
         await uc.change_role(user_id=user.id, actor=UserRole.USER, new_role=UserRole.ADMIN, at=dt(11))
 
     repo.save.assert_not_awaited()
-    cache.user.set.assert_not_awaited()
+    cache.users.set.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -252,7 +250,7 @@ async def test_uc_mark_seen_stale_write_propagates() -> None:
 
     with pytest.raises(StaleWriteError):
         await uc.mark_seen(user_id=user.id, at=dt(9))
-    cache.user.set.assert_not_awaited()
+    cache.users.set.assert_not_awaited()
     repo.save.assert_not_awaited()
 
 
@@ -266,7 +264,7 @@ async def test_uc_unban_active_propagates_invalid_transition() -> None:
 
     with pytest.raises(InvalidStateTransitionError):
         await uc.unban(user_id=user.id, actor=UserRole.OWNER, at=dt(11))
-    cache.user.set.assert_not_awaited()
+    cache.users.set.assert_not_awaited()
     repo.save.assert_not_awaited()
 
 
@@ -285,7 +283,7 @@ async def test_uc_change_role_refreshes_user_cache_snapshot() -> None:
         at=dt(11),
     )
 
-    cache.user.set.assert_awaited_once_with(got)
+    cache.users.set.assert_awaited_once_with(got)
     assert got.profile.telegram_id == user.profile.telegram_id
     assert got.role == UserRole.ADMIN
 
@@ -300,7 +298,7 @@ async def test_uc_ban_refreshes_user_cache_snapshot() -> None:
 
     got = await uc.ban(user_id=user.id, actor=UserRole.OWNER, until=dt(20), at=dt(12))
 
-    cache.user.set.assert_awaited_once_with(got)
+    cache.users.set.assert_awaited_once_with(got)
     assert got.state.is_banned_at(dt(15))
 
 
@@ -315,4 +313,4 @@ async def test_uc_unban_after_ban_refreshes_cache_twice() -> None:
     await uc.ban(user_id=user.id, actor=UserRole.OWNER, until=dt(20), at=dt(12))
     await uc.unban(user_id=user.id, actor=UserRole.OWNER, at=dt(13))
 
-    assert cache.user.set.await_count == 2
+    assert cache.users.set.await_count == 2

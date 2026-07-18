@@ -1,7 +1,8 @@
 from collections.abc import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from app.protocols import CacheRepoRegistry, Logger, UoW
+from app.dto import ChatContext
+from app.protocols import CacheRepo, Logger, UoW
 from domain.chat import Chat, ChatId, ChatProfile, ChatSchedule, ManagementActor, Weekday
 from domain.kernel.vo import AwareDatetime
 
@@ -15,13 +16,13 @@ class ChatCommandsUseCase:
         self,
         *,
         uow: UoW,
-        chat_commands: ChatCommandService,
-        cache_registry: CacheRepoRegistry,
+        service: ChatCommandService,
+        cache: CacheRepo[ChatContext, Chat],
         logger: Logger,
     ) -> None:
         self._uow = uow
-        self._chat_commands = chat_commands
-        self._cache_registry = cache_registry
+        self._service = service
+        self._cache = cache
         self._logger = logger.bind(module=self.__class__.__name__)
 
     def _log_scenario_start(self, *, action: str, chat_id: ChatId) -> None:
@@ -41,7 +42,7 @@ class ChatCommandsUseCase:
         self._log_scenario_start(action=action, chat_id=chat_id)
         async with self._uow:
             chat = await runner()
-        await self._cache_registry.chat.set(chat)
+        await self._cache.set(chat)
         self._logger.debug(
             "Chat cache snapshot refreshed",
             action=action,
@@ -60,7 +61,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="change_profile",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.change_profile(
+            runner=lambda: self._service.change_profile(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
@@ -80,7 +81,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="change_schedule_day",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.change_schedule_day(
+            runner=lambda: self._service.change_schedule_day(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
@@ -100,7 +101,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="change_schedule_timezone",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.change_schedule_timezone(
+            runner=lambda: self._service.change_schedule_timezone(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
@@ -120,7 +121,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="add_schedule",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.add_schedule(
+            runner=lambda: self._service.add_schedule(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
@@ -140,7 +141,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="remove_schedule",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.remove_schedule(
+            runner=lambda: self._service.remove_schedule(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
@@ -159,7 +160,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="clear_schedules",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.clear_schedules(
+            runner=lambda: self._service.clear_schedules(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
@@ -177,7 +178,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="activate",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.activate(
+            runner=lambda: self._service.activate(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,
@@ -195,7 +196,7 @@ class ChatCommandsUseCase:
         return await self._run_mutating(
             action="deactivate",
             chat_id=chat_id,
-            runner=lambda: self._chat_commands.deactivate(
+            runner=lambda: self._service.deactivate(
                 repo=self._uow.chats,
                 chat_id=chat_id,
                 actor=actor,

@@ -59,7 +59,7 @@ async def cmd_list_models(
 
     async def _action() -> None:
         tier = user.subscription_tier
-        descriptors = await scope.model_catalog.list_active()
+        descriptors = await scope.models.list_active()
         models = sorted(str(d.model) for d in descriptors if d.min_tier <= tier)
         await message.answer(cmd_msg.format_list_models(models))
 

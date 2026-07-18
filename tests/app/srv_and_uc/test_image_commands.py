@@ -1,6 +1,4 @@
-"""Тесты ImageCommandService и ImageCommandsUseCase."""
-
-from __future__ import annotations
+"""Tests for ImageCommandService and ImageCommandsUseCase."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
@@ -10,7 +8,7 @@ import pytest
 from dom.image.factories import FakeImageRepo, FakeImageVoteRepo, mk_image
 
 from app.dto import ImageCard
-from app.services.image_commands import ImageCommandService
+from app.services.image import ImageCommandService
 from app.use_cases.image import ImageCommandsUseCase
 from domain.image import ImageId, ImageNotFoundError
 from domain.kernel.vo import AwareDatetime
@@ -75,7 +73,7 @@ async def test_uc_pick_for_chat_runs_in_uow() -> None:
     uow = FakeUoW(images=images)
     service = AsyncMock()
     service.pick_for_chat.return_value = ImageCard.from_domain(image)
-    uc = ImageCommandsUseCase(uow=uow, image_commands=service, logger=mk_logger())
+    uc = ImageCommandsUseCase(uow=uow, service=service, logger=mk_logger())
     chat_id = UUID(int=101)
 
     got = await uc.pick_for_chat(chat_id=chat_id, at=dt(11))
@@ -100,7 +98,7 @@ async def test_uc_vote_persists_score_in_uow() -> None:
     uow = FakeUoW(images=image_repo, votes=vote_repo)
     uc = ImageCommandsUseCase(
         uow=uow,
-        image_commands=ImageCommandService(logger=mk_logger()),
+        service=ImageCommandService(logger=mk_logger()),
         logger=mk_logger(),
     )
     voter_id = UUID(int=501)
@@ -124,7 +122,7 @@ async def test_uc_vote_propagates_image_not_found() -> None:
     vote_repo = FakeImageVoteRepo()
     uc = ImageCommandsUseCase(
         uow=FakeUoW(images=image_repo, votes=vote_repo),
-        image_commands=ImageCommandService(logger=mk_logger()),
+        service=ImageCommandService(logger=mk_logger()),
         logger=mk_logger(),
     )
 

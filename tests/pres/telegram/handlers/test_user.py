@@ -1,7 +1,5 @@
 """Tests for user router handlers."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -105,7 +103,7 @@ async def test_set_model_tier_denied(user_context: UserContext, mock_scope: Magi
 async def test_list_models_filters_by_tier(
     user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock
 ) -> None:
-    mock_scope.model_catalog.list_active = AsyncMock(
+    mock_scope.models.list_active = AsyncMock(
         return_value=[descriptor_lite(), descriptor_pro()],
     )
     message = make_message(text="/list_models")
@@ -121,7 +119,7 @@ async def test_list_models_filters_by_tier(
 async def test_list_models_empty_for_tier(
     user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock
 ) -> None:
-    mock_scope.model_catalog.list_active = AsyncMock(return_value=[descriptor_pro()])
+    mock_scope.models.list_active = AsyncMock(return_value=[descriptor_pro()])
     message = make_message(text="/list_models")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:

@@ -9,6 +9,7 @@ from app.use_cases import (
     UserCommandsUseCase,
 )
 from domain.catalog import ModelCatalog, SubscriptionCatalog
+from domain.image import PromptCatalog
 from infra.persistence.yaml import YamlCatalogFactory
 
 
@@ -17,13 +18,13 @@ class ScopeContainer(RequestScope):
         self,
         *,
         uow_factory: UoWFactory,
-        cache_registry: CacheRepoRegistry,
-        catalog_factory: YamlCatalogFactory,
+        cache: CacheRepoRegistry,
+        catalog: YamlCatalogFactory,
         logger: Logger,
     ) -> None:
         self._uow_factory = uow_factory
-        self._cache_registry = cache_registry
-        self._catalog_factory = catalog_factory
+        self._cache = cache
+        self._catalog = catalog
         self._logger = logger
 
     @cached_property
@@ -31,19 +32,23 @@ class ScopeContainer(RequestScope):
         return self._logger
 
     @cached_property
-    def model_catalog(self) -> ModelCatalog:
-        return self._catalog_factory.model_catalog
+    def models(self) -> ModelCatalog:
+        return self._catalog.models
 
     @cached_property
-    def subscription_catalog(self) -> SubscriptionCatalog:
-        return self._catalog_factory.subscription_catalog
+    def subscriptions(self) -> SubscriptionCatalog:
+        return self._catalog.subscriptions
+
+    @cached_property
+    def prompts(self) -> PromptCatalog:
+        return self._catalog.prompts
 
     @cached_property
     def registration_uc(self) -> RegistrationUseCase:
         return RegistrationUseCase(
             uow=self._uow_factory(),
-            reg_service=self._registration_service,
-            cache_registry=self._cache_registry,
+            service=self._registration_srv,
+            cache=self._cache,
             logger=self._logger,
         )
 
@@ -51,10 +56,10 @@ class ScopeContainer(RequestScope):
     def user_commands_uc(self) -> UserCommandsUseCase:
         return UserCommandsUseCase(
             uow=self._uow_factory(),
-            user_commands=self._user_commands_service,
-            cache_registry=self._cache_registry,
-            model_catalog=self.model_catalog,
-            subscription_catalog=self.subscription_catalog,
+            service=self._user_commands_srv,
+            cache=self._cache.users,
+            models=self.models,
+            subscriptions=self.subscriptions,
             logger=self._logger,
         )
 
@@ -62,8 +67,8 @@ class ScopeContainer(RequestScope):
     def chat_commands_uc(self) -> ChatCommandsUseCase:
         return ChatCommandsUseCase(
             uow=self._uow_factory(),
-            chat_commands=self._chat_commands_service,
-            cache_registry=self._cache_registry,
+            service=self._chat_commands_srv,
+            cache=self._cache.chats,
             logger=self._logger,
         )
 
@@ -71,33 +76,33 @@ class ScopeContainer(RequestScope):
     def image_commands_uc(self) -> ImageCommandsUseCase:
         return ImageCommandsUseCase(
             uow=self._uow_factory(),
-            image_commands=self._image_commands_service,
+            service=self._image_commands_srv,
             logger=self._logger,
         )
 
     @cached_property
-    def _registration_service(self) -> RegistrationService:
+    def _registration_srv(self) -> RegistrationService:
         return RegistrationService(
-            model_catalog=self.model_catalog,
-            subscription_catalog=self.subscription_catalog,
+            models=self.models,
+            subscriptions=self.subscriptions,
             logger=self._logger,
         )
 
     @cached_property
-    def _user_commands_service(self) -> UserCommandService:
+    def _user_commands_srv(self) -> UserCommandService:
         return UserCommandService(
-            subscription_catalog=self.subscription_catalog,
+            subscriptions=self.subscriptions,
             logger=self._logger,
         )
 
     @cached_property
-    def _chat_commands_service(self) -> ChatCommandService:
+    def _chat_commands_srv(self) -> ChatCommandService:
         return ChatCommandService(
             logger=self._logger,
         )
 
     @cached_property
-    def _image_commands_service(self) -> ImageCommandService:
+    def _image_commands_srv(self) -> ImageCommandService:
         return ImageCommandService(
             logger=self._logger,
         )

@@ -1,6 +1,7 @@
 from collections.abc import Awaitable, Callable
 
-from app.protocols import CacheRepoRegistry, Logger, UoW
+from app.dto import UserContext
+from app.protocols import CacheRepo, Logger, UoW
 from domain.catalog import Model, ModelCatalog, SubscriptionCatalog
 from domain.kernel.vo import AwareDatetime
 from domain.user import ModelSelectionService, User, UserId, UserProfile, UserRole, UserSubscription
@@ -15,17 +16,17 @@ class UserCommandsUseCase:
         self,
         *,
         uow: UoW,
-        user_commands: UserCommandService,
-        cache_registry: CacheRepoRegistry,
-        model_catalog: ModelCatalog,
-        subscription_catalog: SubscriptionCatalog,
+        service: UserCommandService,
+        cache: CacheRepo[UserContext, User],
+        models: ModelCatalog,
+        subscriptions: SubscriptionCatalog,
         logger: Logger,
     ) -> None:
         self._uow = uow
-        self._user_commands = user_commands
-        self._cache_registry = cache_registry
-        self._model_catalog = model_catalog
-        self._subscription_catalog = subscription_catalog
+        self._service = service
+        self._cache = cache
+        self._models = models
+        self._subscriptions = subscriptions
         self._logger = logger.bind(module=self.__class__.__name__)
 
     def _log_scenario_start(self, *, action: str, user_id: UserId) -> None:
@@ -45,7 +46,7 @@ class UserCommandsUseCase:
         self._log_scenario_start(action=action, user_id=user_id)
         async with self._uow:
             user = await runner()
-        await self._cache_registry.user.set(user)
+        await self._cache.set(user)
         self._logger.debug(
             "User cache snapshot refreshed",
             action=action,
@@ -64,7 +65,7 @@ class UserCommandsUseCase:
         return await self._run_mutating(
             action="change_role",
             user_id=user_id,
-            runner=lambda: self._user_commands.change_role(
+            runner=lambda: self._service.change_role(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
@@ -84,7 +85,7 @@ class UserCommandsUseCase:
         return await self._run_mutating(
             action="change_profile",
             user_id=user_id,
-            runner=lambda: self._user_commands.change_profile(
+            runner=lambda: self._service.change_profile(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
@@ -104,7 +105,7 @@ class UserCommandsUseCase:
         return await self._run_mutating(
             action="change_subscription",
             user_id=user_id,
-            runner=lambda: self._user_commands.change_subscription(
+            runner=lambda: self._service.change_subscription(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
@@ -127,8 +128,8 @@ class UserCommandsUseCase:
                 user_id=user_id,
                 model=model,
                 user_repo=self._uow.users,
-                model_catalog=self._model_catalog,
-                sub_catalog=self._subscription_catalog,
+                models=self._models,
+                subs=self._subscriptions,
                 at=at,
             ),
         )
@@ -144,7 +145,7 @@ class UserCommandsUseCase:
         return await self._run_mutating(
             action="ban",
             user_id=user_id,
-            runner=lambda: self._user_commands.ban(
+            runner=lambda: self._service.ban(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
@@ -163,7 +164,7 @@ class UserCommandsUseCase:
         return await self._run_mutating(
             action="unban",
             user_id=user_id,
-            runner=lambda: self._user_commands.unban(
+            runner=lambda: self._service.unban(
                 repo=self._uow.users,
                 user_id=user_id,
                 actor=actor,
@@ -175,7 +176,7 @@ class UserCommandsUseCase:
         return await self._run_mutating(
             action="expire_ban_if_due",
             user_id=user_id,
-            runner=lambda: self._user_commands.expire_ban_if_due(
+            runner=lambda: self._service.expire_ban_if_due(
                 repo=self._uow.users,
                 user_id=user_id,
                 at=at,
@@ -186,7 +187,7 @@ class UserCommandsUseCase:
         return await self._run_mutating(
             action="expire_subscription_if_due",
             user_id=user_id,
-            runner=lambda: self._user_commands.expire_subscription_if_due(
+            runner=lambda: self._service.expire_subscription_if_due(
                 repo=self._uow.users,
                 user_id=user_id,
                 at=at,
@@ -196,7 +197,7 @@ class UserCommandsUseCase:
     async def mark_seen(self, *, user_id: UserId, at: AwareDatetime) -> User:
         self._log_scenario_start(action="mark_seen", user_id=user_id)
         async with self._uow:
-            return await self._user_commands.mark_seen(
+            return await self._service.mark_seen(
                 repo=self._uow.users,
                 user_id=user_id,
                 at=at,

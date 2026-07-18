@@ -1,6 +1,4 @@
-"""Общие фабрики и фейки для app-layer тестов."""
-
-from __future__ import annotations
+"""Shared factories and fakes for app-layer tests."""
 
 from types import TracebackType
 from typing import Self
@@ -26,12 +24,12 @@ def mk_logger() -> Mock:
 
 class FakeCacheRegistry:
     def __init__(self) -> None:
-        self.user = AsyncMock()
-        self.chat = AsyncMock()
+        self.users = AsyncMock()
+        self.chats = AsyncMock()
 
 
 class FakeUoW:
-    """Минимальный UoW для unit-тестов use case: все репозитории — переданные или AsyncMock."""
+    """Minimal UoW for use-case unit tests: repositories are injected or AsyncMock."""
 
     def __init__(  # noqa: PLR0913
         self,

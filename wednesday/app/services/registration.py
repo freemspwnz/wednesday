@@ -14,12 +14,12 @@ class RegistrationService:
     def __init__(
         self,
         *,
-        model_catalog: ModelCatalog,
-        subscription_catalog: SubscriptionCatalog,
+        models: ModelCatalog,
+        subscriptions: SubscriptionCatalog,
         logger: Logger,
     ) -> None:
-        self._model_catalog = model_catalog
-        self._subscription_catalog = subscription_catalog
+        self._models = models
+        self._subscriptions = subscriptions
         self._logger = logger.bind(module=self.__class__.__name__)
 
     async def get_or_create_user(
@@ -41,8 +41,8 @@ class RegistrationService:
             return entity
 
         now = AwareDatetime.now_utc()
-        default_plan = await self._subscription_catalog.default_plan()
-        default_descriptor = await self._model_catalog.default_for_tier(default_plan.tier)
+        default_plan = await self._subscriptions.default_plan()
+        default_descriptor = await self._models.default_for_tier(default_plan.tier)
         entity = User.register(
             id=user_id,
             profile=profile,

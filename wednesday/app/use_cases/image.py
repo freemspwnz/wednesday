@@ -15,11 +15,11 @@ class ImageCommandsUseCase:
         self,
         *,
         uow: UoW,
-        image_commands: ImageCommandService,
+        service: ImageCommandService,
         logger: Logger,
     ) -> None:
         self._uow = uow
-        self._image_commands = image_commands
+        self._service = service
         self._logger = logger.bind(module=self.__class__.__name__)
 
     async def pick_for_chat(
@@ -30,7 +30,7 @@ class ImageCommandsUseCase:
     ) -> ImageCard | None:
         self._logger.debug("Image random scenario started", chat_id=str(chat_id))
         async with self._uow:
-            return await self._image_commands.pick_for_chat(
+            return await self._service.pick_for_chat(
                 images=self._uow.images,
                 views=self._uow.views,
                 chat_id=chat_id,
@@ -52,7 +52,7 @@ class ImageCommandsUseCase:
             value=value,
         )
         async with self._uow:
-            return await self._image_commands.vote(
+            return await self._service.vote(
                 image_id=image_id,
                 voter_id=voter_id,
                 value=value,

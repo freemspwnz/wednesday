@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from domain.catalog import Model
@@ -27,8 +25,8 @@ async def test_model_selection_service_resolves_from_registry() -> None:
         user_id=user.id,
         model=Model.parse("gigachat-2-pro"),
         user_repo=user_repo,
-        model_catalog=model_catalog,
-        sub_catalog=sub_catalog,
+        models=model_catalog,
+        subs=sub_catalog,
         at=dt(11),
     )
 
@@ -50,8 +48,8 @@ async def test_model_selection_service_raises_when_model_missing() -> None:
             user_id=user.id,
             model=Model.parse("unknown-model"),
             user_repo=user_repo,
-            model_catalog=model_catalog,
-            sub_catalog=sub_catalog,
+            models=model_catalog,
+            subs=sub_catalog,
             at=dt(11),
         )
     assert "unknown-model" in exc_info.value.model
@@ -70,8 +68,8 @@ async def test_model_selection_service_denies_premium_model_for_free_user() -> N
             user_id=user.id,
             model=Model.parse("gigachat-2-pro"),
             user_repo=user_repo,
-            model_catalog=model_catalog,
-            sub_catalog=sub_catalog,
+            models=model_catalog,
+            subs=sub_catalog,
             at=dt(11),
         )
 
@@ -85,8 +83,8 @@ async def test_model_selection_service_raises_when_user_missing() -> None:
             user_id=user.id,
             model=Model.parse("gigachat-2-lite"),
             user_repo=FakeUserRepo(),
-            model_catalog=FakeModelCatalog(),
-            sub_catalog=FakeSubscriptionCatalog(),
+            models=FakeModelCatalog(),
+            subs=FakeSubscriptionCatalog(),
             at=dt(11),
         )
 
@@ -100,7 +98,7 @@ async def test_model_selection_service_validates_user_repo() -> None:
             user_id=user.id,
             model=Model.parse("gigachat-2-lite"),
             user_repo="bad",  # type: ignore[arg-type]
-            model_catalog=FakeModelCatalog(),
-            sub_catalog=FakeSubscriptionCatalog(),
+            models=FakeModelCatalog(),
+            subs=FakeSubscriptionCatalog(),
             at=dt(11),
         )

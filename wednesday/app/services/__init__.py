@@ -1,9 +1,9 @@
 """Application services"""
 
-from .chat_commands import ChatCommandService
-from .image_commands import ImageCommandService
+from .chat import ChatCommandService
+from .image import ImageCommandService
 from .registration import RegistrationService
-from .user_commands import UserCommandService
+from .user import UserCommandService
 
 __all__ = [
     "ChatCommandService",

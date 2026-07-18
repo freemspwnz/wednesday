@@ -1,7 +1,5 @@
 """Shared fixtures for presentation telegram tests."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -41,7 +39,7 @@ def mock_scope(mock_logger: MagicMock) -> MagicMock:
     scope.registration_uc = AsyncMock()
     scope.user_commands_uc = AsyncMock()
     scope.chat_commands_uc = AsyncMock()
-    scope.model_catalog = AsyncMock()
+    scope.models = AsyncMock()
     scope.image_commands_uc = AsyncMock()
     return scope
 

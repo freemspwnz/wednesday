@@ -1,6 +1,4 @@
-"""Тесты PersistenceContainer (DI)."""
-
-from __future__ import annotations
+"""Tests for PersistenceContainer (DI)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,11 +12,11 @@ from infra.persistence.redis.registry import RedisRepoRegistry
 
 @pytest.mark.unit
 class TestPersistenceContainer:
-    def test_cache_repo_registry_uses_wednesday_key_prefix(
+    def test_cache_uses_wednesday_key_prefix(
         self,
         persistence_container: PersistenceContainer,
     ) -> None:
-        registry = persistence_container.cache_repo_registry
+        registry = persistence_container.cache
         assert isinstance(registry, RedisRepoRegistry)
         assert registry._key_prefix == "wednesday:STAGE:1.2.3:ctx"
 
@@ -39,7 +37,6 @@ class TestPersistenceContainer:
         mock_uow_factory.aclose = AsyncMock()
         with (
             patch("infra.di.persistence.build_redis", return_value=mock_redis),
-            patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
             patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
             patch("infra.di.persistence.close_redis", new_callable=AsyncMock) as close_redis,
         ):
@@ -60,7 +57,6 @@ class TestPersistenceContainer:
         mock_uow_factory.aclose = AsyncMock()
         with (
             patch("infra.di.persistence.build_redis", return_value=MagicMock()),
-            patch("infra.di.persistence.RedisClient", return_value=MagicMock()),
             patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
             patch("infra.di.persistence.close_redis", new_callable=AsyncMock),
         ):

@@ -1,7 +1,7 @@
-from .chat_commands import ChatCommandsUseCase
+from .chat import ChatCommandsUseCase
 from .image import ImageCommandsUseCase
 from .registration import RegistrationUseCase
-from .user_commands import UserCommandsUseCase
+from .user import UserCommandsUseCase
 
 __all__ = [
     "ChatCommandsUseCase",

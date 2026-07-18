@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Protocol
 
 from domain.catalog import ModelCatalog, SubscriptionCatalog
+from domain.image import PromptCatalog
 
 from .observe import Logger
 
@@ -24,13 +23,13 @@ class RequestScope(Protocol):
     def logger(self) -> Logger: ...
 
     @property
-    def registration_uc(self) -> RegistrationUseCase: ...
+    def models(self) -> ModelCatalog: ...
 
     @property
-    def model_catalog(self) -> ModelCatalog: ...
+    def subscriptions(self) -> SubscriptionCatalog: ...
 
     @property
-    def subscription_catalog(self) -> SubscriptionCatalog: ...
+    def prompts(self) -> PromptCatalog: ...
 
     @property
     def user_commands_uc(self) -> UserCommandsUseCase: ...
@@ -40,6 +39,9 @@ class RequestScope(Protocol):
 
     @property
     def image_commands_uc(self) -> ImageCommandsUseCase: ...
+
+    @property
+    def registration_uc(self) -> RegistrationUseCase: ...
 
 
 ScopeFactory = Callable[[], AbstractAsyncContextManager[RequestScope]]

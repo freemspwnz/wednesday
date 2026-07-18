@@ -1,6 +1,4 @@
-"""Тесты RegistrationService и RegistrationUseCase."""
-
-from __future__ import annotations
+"""Tests for RegistrationService and RegistrationUseCase."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
@@ -30,8 +28,8 @@ def _profile(*, tg_id: int = 999, first_name: str = "A") -> UserProfile:
 
 def _mk_service() -> RegistrationService:
     return RegistrationService(
-        model_catalog=FakeModelCatalog(),
-        subscription_catalog=FakeSubscriptionCatalog(),
+        models=FakeModelCatalog(),
+        subscriptions=FakeSubscriptionCatalog(),
         logger=mk_logger(),
     )
 
@@ -139,16 +137,16 @@ async def test_uc_reg_user_returns_cached_value_without_uow() -> None:
     cache = FakeCacheRegistry()
     uow = AsyncMock()
     service = AsyncMock()
-    uc = RegistrationUseCase(uow=uow, reg_service=service, cache_registry=cache, logger=logger)
+    uc = RegistrationUseCase(uow=uow, service=service, cache=cache, logger=logger)
 
     profile = _profile(tg_id=42)
     cached = mk_user_context(user_id=42)
-    cache.user.get_by_id.return_value = cached
+    cache.users.get_by_id.return_value = cached
 
     got = await uc.reg_user(profile=profile)
 
     assert got is cached
-    cache.user.get_by_id.assert_awaited_once_with(42)
+    cache.users.get_by_id.assert_awaited_once_with(42)
     assert not service.get_or_create_user.await_args_list
 
 
@@ -161,13 +159,13 @@ async def test_uc_reg_chat_loads_via_service_and_caches() -> None:
 
     uc = RegistrationUseCase(
         uow=FakeUoW(),
-        reg_service=service,
-        cache_registry=cache,
+        service=service,
+        cache=cache,
         logger=logger,
     )
 
     profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
-    cache.chat.get_by_id.return_value = None
+    cache.chats.get_by_id.return_value = None
     domain_chat = Chat.register(
         id=ChatId(UUID(int=7)),
         profile=ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T"),
@@ -180,7 +178,7 @@ async def test_uc_reg_chat_loads_via_service_and_caches() -> None:
 
     assert isinstance(got, ChatContext)
     assert got.tg_id == -100
-    cache.chat.set.assert_awaited_once_with(domain_chat)
+    cache.chats.set.assert_awaited_once_with(domain_chat)
     service.get_or_create_chat.assert_awaited()
 
 
@@ -191,16 +189,16 @@ async def test_uc_reg_chat_returns_cached_value_without_uow() -> None:
     cache = FakeCacheRegistry()
     uow = AsyncMock()
     service = AsyncMock()
-    uc = RegistrationUseCase(uow=uow, reg_service=service, cache_registry=cache, logger=logger)
+    uc = RegistrationUseCase(uow=uow, service=service, cache=cache, logger=logger)
 
     profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
     cached = mk_chat_context(tg_id=-100, chat_type=ChatType.GROUP)
-    cache.chat.get_by_id.return_value = cached
+    cache.chats.get_by_id.return_value = cached
 
     got = await uc.reg_chat(profile=profile)
 
     assert got is cached
-    cache.chat.get_by_id.assert_awaited_once_with(-100)
+    cache.chats.get_by_id.assert_awaited_once_with(-100)
     assert not service.get_or_create_chat.await_args_list
 
 
@@ -213,11 +211,11 @@ async def test_uc_find_user_by_tg_id_returns_none_without_create() -> None:
 
     uc = RegistrationUseCase(
         uow=FakeUoW(),
-        reg_service=service,
-        cache_registry=cache,
+        service=service,
+        cache=cache,
         logger=logger,
     )
-    cache.user.get_by_id.return_value = None
+    cache.users.get_by_id.return_value = None
     service.get_user_if_exists.return_value = None
 
     got = await uc.find_user_by_tg_id(tg_id=404)
@@ -225,7 +223,7 @@ async def test_uc_find_user_by_tg_id_returns_none_without_create() -> None:
     assert got is None
     service.get_user_if_exists.assert_awaited_once()
     service.get_or_create_user.assert_not_awaited()
-    cache.user.set.assert_not_awaited()
+    cache.users.set.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -237,11 +235,11 @@ async def test_uc_find_chat_by_tg_id_loads_from_db_without_create() -> None:
 
     uc = RegistrationUseCase(
         uow=FakeUoW(),
-        reg_service=service,
-        cache_registry=cache,
+        service=service,
+        cache=cache,
         logger=logger,
     )
-    cache.chat.get_by_id.return_value = None
+    cache.chats.get_by_id.return_value = None
     domain_chat = Chat.register(
         id=ChatId(UUID(int=8)),
         profile=ChatProfile(type=ChatType.GROUP, telegram_id=-200, title="G"),
@@ -256,4 +254,4 @@ async def test_uc_find_chat_by_tg_id_loads_from_db_without_create() -> None:
     assert got.tg_id == -200
     service.get_chat_if_exists.assert_awaited_once()
     service.get_or_create_chat.assert_not_awaited()
-    cache.chat.set.assert_awaited_once_with(domain_chat)
+    cache.chats.set.assert_awaited_once_with(domain_chat)

@@ -15,11 +15,11 @@ from infra.persistence.yaml import YamlCatalogFactory
 
 from .observe import ObserveContainer
 
-_PERSISTENCE_SHUTDOWN_TIMEOUT = 7.0
-
 
 class PersistenceContainer:
-    """Контейнер для создания persistence-слоя."""
+    """Container for creating persistence layer."""
+
+    _SHUTDOWN_TIMEOUT = 7.0
 
     def __init__(
         self,
@@ -67,7 +67,7 @@ class PersistenceContainer:
         self._logger.info("Shutting down persistence container...")
 
         try:
-            async with asyncio.timeout(_PERSISTENCE_SHUTDOWN_TIMEOUT):
+            async with asyncio.timeout(self._SHUTDOWN_TIMEOUT):
                 tasks = []
 
                 if self.__dict__.get("uow_factory") is not None:

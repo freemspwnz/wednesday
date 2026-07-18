@@ -10,15 +10,15 @@ from .persistence import PersistenceContainer
 from .resilience import ResilienceContainer
 from .scope import ScopeContainer
 
-_SHUTDOWN_TIMEOUT = 10.0
-
 
 class Container:
-    """Composition Root всего приложения.
+    """Composition Root of the application.
 
-    Управляет жизненным циклом: init() — создание ресурсов,
-    shutdown() — освобождение ресурсов.
+    Manages the lifecycle: init() — creation of resources,
+    shutdown() — release of resources.
     """
+
+    _SHUTDOWN_TIMEOUT = 10.0
 
     def __init__(
         self,
@@ -53,8 +53,8 @@ class Container:
     async def get_scope(self) -> AsyncIterator["ScopeContainer"]:
         scope = ScopeContainer(
             uow_factory=self.persistence.uow_factory,
-            cache_registry=self.persistence.cache_repo_registry,
-            catalog_factory=self.persistence.catalog_factory,
+            cache=self.persistence.cache,
+            catalog=self.persistence.catalog,
             logger=self.observe.logger,
         )
         yield scope
@@ -63,7 +63,7 @@ class Container:
         self._logger.info("Shutting down containers...")
 
         try:
-            async with asyncio.timeout(_SHUTDOWN_TIMEOUT):
+            async with asyncio.timeout(self._SHUTDOWN_TIMEOUT):
                 tasks = []
                 if self.__dict__.get("persistence") is not None:
                     tasks.append(self.persistence.shutdown())
