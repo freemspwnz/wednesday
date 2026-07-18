@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from sqlalchemy import exists, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError

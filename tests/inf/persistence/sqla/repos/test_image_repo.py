@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""SQLA image/view/vote repository tests."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock

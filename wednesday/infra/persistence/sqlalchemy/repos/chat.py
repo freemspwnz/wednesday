@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, exists, select, tuple_

@@ -1,3 +1,5 @@
+"""SQLAChatRepo tests."""
+
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID

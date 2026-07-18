@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import uuid
 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, String, text

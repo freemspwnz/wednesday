@@ -1,3 +1,5 @@
+"""SQLAlchemy exception mapping tests."""
+
 import pytest
 
 from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError

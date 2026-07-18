@@ -1,7 +1,5 @@
 """1:1 — timezone and weekday from domain ChatScheduleSet."""
 
-from __future__ import annotations
-
 import uuid
 
 from sqlalchemy import CheckConstraint, ForeignKey, SmallInteger, String

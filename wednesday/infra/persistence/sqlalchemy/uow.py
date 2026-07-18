@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from types import TracebackType
-from typing import Literal, overload
+from typing import Literal, Self, overload
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -33,12 +31,12 @@ REPO_REGISTRY: dict[str, type[RepoInstance]] = {
 
 
 class SQLAUoW(UoW):
-    """Unit of Work above SQLAlchemy AsyncSession.
+    """Unit of Work over a SQLAlchemy ``AsyncSession``.
 
     On context exit:
-    - while no errors occured - commit()
-    - on error - rollback()
-    - always close session
+    - commit when no error occurred
+    - rollback on error
+    - always close the session
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -46,7 +44,7 @@ class SQLAUoW(UoW):
         self.session: AsyncSession | None = None
         self._repos: dict[str, RepoInstance] = {}
 
-    async def __aenter__(self) -> SQLAUoW:
+    async def __aenter__(self) -> Self:
         self.session = self._session_factory()
         await self.session.begin()
         return self

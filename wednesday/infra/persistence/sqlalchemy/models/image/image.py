@@ -1,7 +1,5 @@
 """ORM: Image catalog aggregate."""
 
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
 

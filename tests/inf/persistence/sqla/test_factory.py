@@ -1,3 +1,5 @@
+"""SQLAUoWFactory tests."""
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, Mock

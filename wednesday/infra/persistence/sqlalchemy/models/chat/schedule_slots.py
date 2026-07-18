@@ -1,7 +1,5 @@
 """1:N — ChatSchedule slots (hour, minute); timezone/weekday in chat_schedule_settings."""
 
-from __future__ import annotations
-
 import uuid
 
 from sqlalchemy import CheckConstraint, ForeignKey, Integer, SmallInteger, UniqueConstraint

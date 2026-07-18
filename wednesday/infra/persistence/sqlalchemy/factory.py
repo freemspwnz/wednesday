@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 from functools import cached_property
 
@@ -21,7 +19,7 @@ _SQLA_CLOSE_TIMEOUT = 5.0
 
 
 class SQLAUoWFactory(UoWFactory):
-    """Factory of SQLAUoW"""
+    """Creates ``SQLAUoW`` instances backed by a shared async engine."""
 
     def __init__(self, *, config: PostgresConfig, metrics: DBMetrics, logger: Logger) -> None:
         self._config = config
@@ -66,7 +64,6 @@ class SQLAUoWFactory(UoWFactory):
 
     @staticmethod
     def _attach_engine_metrics(engine: Engine, metrics: DBMetrics) -> None:
-
         def handle_error(exception_context: ExceptionContext) -> None:
             metrics.on_cursor_error(
                 statement=exception_context.statement or "",
