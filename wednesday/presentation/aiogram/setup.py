@@ -31,7 +31,7 @@ POLLING_ALLOWED_UPDATES: list[str] = [
 
 def setup_bot(
     bot: Bot,
-    rate_limiter: RateLimiter,
+    limiter: RateLimiter,
     retrier: Retrier,
     logger: Logger,
 ) -> None:
@@ -49,7 +49,7 @@ def setup_bot(
 
     bot.session.middleware(
         RateLimitRequestMW(
-            rate_limiter=rate_limiter,
+            limiter=limiter,
             logger=logger,
         )
     )
@@ -58,7 +58,7 @@ def setup_bot(
 def setup_dp(
     dp: Dispatcher,
     scope_factory: ScopeFactory,
-    rate_limiter: RateLimiter,
+    limiter: RateLimiter,
     admin_id: int,
     logger: Logger,
 ) -> None:
@@ -82,7 +82,7 @@ def setup_dp(
 
     dp.update.middleware(di_mw)
     dp.update.middleware(RegistrationMiddleware(logger=logger))
-    dp.update.middleware(ThrottlingMiddleware(rate_limiter=rate_limiter, logger=logger))
+    dp.update.middleware(ThrottlingMiddleware(limiter=limiter, logger=logger))
 
     @dp.startup()
     async def dp_startup(bot: Bot) -> None:

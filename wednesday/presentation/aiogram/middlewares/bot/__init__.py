@@ -1,5 +1,5 @@
-from .rate_limit import RateLimitRequestMW
-from .retry import RetryRequestMW
+from .limiter import RateLimitRequestMW
+from .retrier import RetryRequestMW
 
 __all__ = [
     "RateLimitRequestMW",

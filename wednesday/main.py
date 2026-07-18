@@ -25,7 +25,7 @@ async def main() -> None:
     # 3. Delivery
     logger.debug("Building aiogram bot...")
 
-    rl = container.resilience.limiter(
+    limiter = container.resilience.limiter(
         config=config.telegram.limiter,
     )
     retrier = container.resilience.retrier(
@@ -36,7 +36,7 @@ async def main() -> None:
     bot = Bot(token=config.telegram.token.get_secret_value())
     setup_bot(
         bot=bot,
-        rate_limiter=rl,
+        limiter=limiter,
         retrier=retrier,
         logger=container.observe.logger,
     )
@@ -47,7 +47,7 @@ async def main() -> None:
     setup_dp(
         dp=dp,
         scope_factory=container.get_scope,
-        rate_limiter=rl,
+        limiter=limiter,
         admin_id=config.telegram.admin_id,
         logger=container.observe.logger,
     )

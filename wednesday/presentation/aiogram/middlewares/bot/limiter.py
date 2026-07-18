@@ -21,11 +21,11 @@ class RateLimitRequestMW(BaseRequestMiddleware):
     def __init__(
         self,
         *,
-        rate_limiter: RateLimiter,
+        limiter: RateLimiter,
         logger: Logger,
     ) -> None:
-        self._limiter = rate_limiter
-        self._limits = rate_limiter.limits
+        self._limiter = limiter
+        self._limits = limiter.limits
         self._logger = logger.bind(module=self.__class__.__name__)
 
     async def __call__(

@@ -20,7 +20,7 @@ def mock_logger() -> MagicMock:
 
 
 @pytest.fixture
-def mock_rate_limiter() -> MagicMock:
+def mock_limiter() -> MagicMock:
     limiter = MagicMock()
     limiter.limits = {
         "global": MagicMock(),

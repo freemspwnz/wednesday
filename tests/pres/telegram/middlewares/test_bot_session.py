@@ -1,7 +1,5 @@
 """Tests for bot session middleware (retry / rate limit)."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -10,31 +8,31 @@ from aiogram.methods import SendMessage
 from aiogram.methods.base import Response
 
 from app.exceptions import AppError, LimitStorageError, MaxAttemptsExhaustedError, RetryError, TooManyRequests
-from presentation.aiogram.middlewares.bot.rate_limit import RateLimitRequestMW
-from presentation.aiogram.middlewares.bot.retry import RetryRequestMW
+from presentation.aiogram.middlewares.bot.limiter import RateLimitRequestMW
+from presentation.aiogram.middlewares.bot.retrier import RetryRequestMW
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_rate_limit_passes_request(mock_rate_limiter: MagicMock, mock_logger: MagicMock) -> None:
-    middleware = RateLimitRequestMW(rate_limiter=mock_rate_limiter, logger=mock_logger)
+async def test_rate_limit_passes_request(mock_limiter: MagicMock, mock_logger: MagicMock) -> None:
+    middleware = RateLimitRequestMW(limiter=mock_limiter, logger=mock_logger)
     make_request = AsyncMock(return_value=Response(ok=True, result=True))
     method = SendMessage(chat_id=42, text="hi")
 
     await middleware(make_request, AsyncMock(spec=Bot), method)
 
     make_request.assert_awaited_once()
-    assert mock_rate_limiter.call.await_count == 2
+    assert mock_limiter.call.await_count == 2
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_rate_limit_raises_on_too_many_requests(
-    mock_rate_limiter: MagicMock,
+    mock_limiter: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    mock_rate_limiter.call.side_effect = TooManyRequests(retry_after=1, reset_at=0.0, limit="global")
-    middleware = RateLimitRequestMW(rate_limiter=mock_rate_limiter, logger=mock_logger)
+    mock_limiter.call.side_effect = TooManyRequests(retry_after=1, reset_at=0.0, limit="global")
+    middleware = RateLimitRequestMW(limiter=mock_limiter, logger=mock_logger)
 
     with pytest.raises(TooManyRequests):
         await middleware(AsyncMock(), AsyncMock(spec=Bot), SendMessage(chat_id=1, text="x"))
@@ -43,11 +41,11 @@ async def test_rate_limit_raises_on_too_many_requests(
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_rate_limit_fail_open_on_storage_error(
-    mock_rate_limiter: MagicMock,
+    mock_limiter: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    mock_rate_limiter.call.side_effect = LimitStorageError("down")
-    middleware = RateLimitRequestMW(rate_limiter=mock_rate_limiter, logger=mock_logger)
+    mock_limiter.call.side_effect = LimitStorageError("down")
+    middleware = RateLimitRequestMW(limiter=mock_limiter, logger=mock_logger)
     make_request = AsyncMock(return_value=Response(ok=True, result=True))
 
     await middleware(make_request, AsyncMock(spec=Bot), SendMessage(chat_id=1, text="x"))
@@ -57,13 +55,13 @@ async def test_rate_limit_fail_open_on_storage_error(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_rate_limit_group_chat_key(mock_rate_limiter: MagicMock, mock_logger: MagicMock) -> None:
-    middleware = RateLimitRequestMW(rate_limiter=mock_rate_limiter, logger=mock_logger)
+async def test_rate_limit_group_chat_key(mock_limiter: MagicMock, mock_logger: MagicMock) -> None:
+    middleware = RateLimitRequestMW(limiter=mock_limiter, logger=mock_logger)
     make_request = AsyncMock(return_value=Response(ok=True, result=True))
 
     await middleware(make_request, AsyncMock(spec=Bot), SendMessage(chat_id=-1001, text="hi"))
 
-    assert mock_rate_limiter.call.await_count == 2
+    assert mock_limiter.call.await_count == 2
 
 
 @pytest.mark.unit

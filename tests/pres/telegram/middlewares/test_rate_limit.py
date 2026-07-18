@@ -1,10 +1,8 @@
 """Tests for RateLimitRequestMW key helpers."""
 
-from __future__ import annotations
-
 import pytest
 
-from presentation.aiogram.middlewares.bot.rate_limit import RateLimitRequestMW
+from presentation.aiogram.middlewares.bot.limiter import RateLimitRequestMW
 
 
 @pytest.mark.unit

@@ -1,7 +1,5 @@
 """Tests for presentation setup helpers."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,13 +28,13 @@ def test_build_root_router_includes_routers(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.unit
-def test_setup_bot_registers_session_middleware(mock_logger: MagicMock, mock_rate_limiter: MagicMock) -> None:
+def test_setup_bot_registers_session_middleware(mock_logger: MagicMock, mock_limiter: MagicMock) -> None:
     bot = MagicMock(spec=Bot)
     bot.session = MagicMock()
     bot.session.middleware = MagicMock()
     retrier = MagicMock()
 
-    setup_bot(bot=bot, rate_limiter=mock_rate_limiter, retrier=retrier, logger=mock_logger)
+    setup_bot(bot=bot, limiter=mock_limiter, retrier=retrier, logger=mock_logger)
 
     assert bot.session.middleware.call_count == 2
 
@@ -52,7 +50,7 @@ def test_setup_routers_attaches_admin_access_filter(mock_logger: MagicMock) -> N
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_setup_dp_registers_handlers_and_middleware(mock_logger: MagicMock, mock_rate_limiter: MagicMock) -> None:
+async def test_setup_dp_registers_handlers_and_middleware(mock_logger: MagicMock, mock_limiter: MagicMock) -> None:
     dp = Dispatcher()
     scope_factory = MagicMock()
 
@@ -60,7 +58,7 @@ async def test_setup_dp_registers_handlers_and_middleware(mock_logger: MagicMock
         setup_dp(
             dp=dp,
             scope_factory=scope_factory,
-            rate_limiter=mock_rate_limiter,
+            limiter=mock_limiter,
             admin_id=1,
             logger=mock_logger,
         )
@@ -78,7 +76,7 @@ async def test_dp_startup_handles_telegram_errors(mock_logger: MagicMock) -> Non
     bot.send_message = AsyncMock(side_effect=TelegramAPIError(method=MagicMock(), message="fail"))
 
     with patch.object(setup_mod, "build_root_router", return_value=Router(name="root")):
-        setup_dp(dp=dp, scope_factory=MagicMock(), rate_limiter=MagicMock(), admin_id=1, logger=mock_logger)
+        setup_dp(dp=dp, scope_factory=MagicMock(), limiter=MagicMock(), admin_id=1, logger=mock_logger)
 
     for handler in dp.startup.handlers:
         await handler.callback(bot)
