@@ -1,6 +1,4 @@
-"""Тесты RedisChatRepo без реального Redis."""
-
-from __future__ import annotations
+"""RedisChatRepo tests without a real Redis."""
 
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch

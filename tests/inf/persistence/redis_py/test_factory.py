@@ -1,6 +1,4 @@
-"""Тесты фабрики Redis (build / close)."""
-
-from __future__ import annotations
+"""Redis factory tests (build / close)."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch

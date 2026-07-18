@@ -1,7 +1,5 @@
 """Async Redis client implementing the application cache protocol."""
 
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import NoReturn, TypeVar
@@ -73,7 +71,7 @@ class RedisClient(CacheClient):
             self._map_redis_error(operation, e)
 
     def _map_redis_error(self, operation: str, exc: redis_exc.RedisError) -> NoReturn:
-        """Логирует сбой Redis и поднимает соответствующее исключение application-слоя."""
+        """Logs a Redis failure and raises the corresponding application-layer exception."""
         if isinstance(exc, redis_exc.TimeoutError):
             self._log.warning(
                 "Redis operation timed out",

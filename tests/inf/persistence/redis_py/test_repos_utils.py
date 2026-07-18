@@ -1,6 +1,4 @@
-"""Тесты утилит Redis-репозиториев."""
-
-from __future__ import annotations
+"""Redis repository helper tests."""
 
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock

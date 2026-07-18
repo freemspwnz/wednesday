@@ -3,10 +3,9 @@ from functools import cached_property
 
 from redis.asyncio import Redis
 
-from app.protocols import CacheClient, CacheRepoRegistry, UoWFactory
+from app.protocols import CacheRepoRegistry, UoWFactory
 from infra.config import Config
 from infra.persistence.redis import (
-    RedisClient,
     RedisRepoRegistry,
     build_redis,
     close_redis,
@@ -41,12 +40,13 @@ class PersistenceContainer:
         )
 
     @cached_property
-    def cache_repo_registry(self) -> CacheRepoRegistry:
-        cache_prefix = f"wednesday:{self._config.env}:{self._config.version}:ctx"
+    def cache(self) -> CacheRepoRegistry:
+        prefix = f"wednesday:{self._config.env}:{self._config.version}:ctx"
         return RedisRepoRegistry(
-            client=self._cache_client,
+            redis=self.redis,
+            key_prefix=prefix,
+            metrics=self._observe.metrics.cache,
             logger=self._observe.logger,
-            key_prefix=cache_prefix,
         )
 
     @cached_property
@@ -60,14 +60,6 @@ class PersistenceContainer:
     def catalog_factory(self) -> YamlCatalogFactory:
         return YamlCatalogFactory(
             config=self._config.yaml,
-            logger=self._observe.logger,
-        )
-
-    @cached_property
-    def _cache_client(self) -> CacheClient:
-        return RedisClient(
-            redis=self.redis,
-            metrics=self._observe.metrics.cache,
             logger=self._observe.logger,
         )
 

@@ -1,7 +1,5 @@
 """Shared helpers for Redis cache repositories."""
 
-from __future__ import annotations
-
 from datetime import timedelta
 
 from app.protocols import CacheClient, Logger

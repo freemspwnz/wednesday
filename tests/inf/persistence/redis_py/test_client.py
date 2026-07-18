@@ -1,6 +1,4 @@
-"""Тесты RedisClient: маппинг ошибок redis-py → app.exceptions."""
-
-from __future__ import annotations
+"""RedisClient tests: redis-py errors mapped to app.exceptions."""
 
 from unittest.mock import AsyncMock, MagicMock
 

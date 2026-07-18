@@ -1,6 +1,4 @@
-"""Общие билдеры снимков для unit-тестов Redis persistence (не собираются pytest как тесты)."""
-
-from __future__ import annotations
+"""Shared snapshot builders for Redis persistence unit tests (not collected by pytest)."""
 
 from datetime import UTC, datetime
 from uuid import uuid4

@@ -1,6 +1,4 @@
-"""Тесты Pydantic-снимков Redis (JSON ↔ DTO)."""
-
-from __future__ import annotations
+"""Redis Pydantic snapshot tests (JSON ↔ DTO)."""
 
 from datetime import UTC, datetime
 from uuid import UUID
