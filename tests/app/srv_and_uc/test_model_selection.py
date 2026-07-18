@@ -3,13 +3,19 @@
 from datetime import UTC, datetime
 
 import pytest
-from dom.user.factories import FakeModelCatalog, FakeSubscriptionCatalog, FakeUserRepo, mk_user, subscription_premium
 
 from app.services.user import UserCommandService
 from app.use_cases.user import UserCommandsUseCase
 from domain.catalog import Model
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserRole
+from tests.dom.user.factories import (
+    FakeModelCatalog,
+    FakeSubscriptionCatalog,
+    FakeUserRepo,
+    mk_user,
+    subscription_premium,
+)
 
 from ..factories import FakeCacheRegistry, FakeUoW, mk_logger
 

@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import httpx
+import httpx2
 import pytest
 
 from infra.observe.prometheus.adapters.http import HttpxMetrics
@@ -46,7 +46,7 @@ class TestHttpxMetrics:
         m.on_error(
             method="get",
             url="https://api.example.com/x",
-            exc=httpx.ReadTimeout("timed out"),
+            exc=httpx2.ReadTimeout("timed out"),
         )
         labels = coll.increment.call_args.kwargs["labels"]
         assert labels["outcome"] == "timeout"
@@ -59,7 +59,7 @@ class TestHttpxMetrics:
         m.on_error(
             method="get",
             url="https://api.example.com/x",
-            exc=httpx.ConnectError("down"),
+            exc=httpx2.ConnectError("down"),
         )
         labels = coll.increment.call_args.kwargs["labels"]
         assert labels["outcome"] == "connection_error"

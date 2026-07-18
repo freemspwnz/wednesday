@@ -189,7 +189,7 @@ async def test_cmd_schedule_add_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from dom.chat.factories import mk_chat
+    from tests.dom.chat.factories import mk_chat
 
     updated = mk_chat(chat_id=10, telegram_id=-1001)
     mock_scope.chat_commands_uc.add_schedule = AsyncMock(return_value=updated)
@@ -241,7 +241,7 @@ async def test_cmd_activate_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from dom.chat.factories import mk_chat
+    from tests.dom.chat.factories import mk_chat
 
     updated = mk_chat(chat_id=10, telegram_id=-1001)
     mock_scope.chat_commands_uc.activate = AsyncMock(return_value=updated)
@@ -270,7 +270,7 @@ async def test_cmd_deactivate_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from dom.chat.factories import mk_chat, owner
+    from tests.dom.chat.factories import mk_chat, owner
 
     updated = mk_chat(chat_id=10, telegram_id=-1001)
     updated.deactivate(actor=owner(chat_id=updated.id), at=updated.updated_at)
@@ -324,7 +324,7 @@ async def test_cmd_schedule_remove_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from dom.chat.factories import mk_chat
+    from tests.dom.chat.factories import mk_chat
 
     updated = mk_chat(chat_id=10, telegram_id=-1001)
     mock_scope.chat_commands_uc.remove_schedule = AsyncMock(return_value=updated)
@@ -352,7 +352,7 @@ async def test_cmd_schedule_clear_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from dom.chat.factories import mk_chat
+    from tests.dom.chat.factories import mk_chat
 
     updated = mk_chat(chat_id=10, telegram_id=-1001)
     mock_scope.chat_commands_uc.clear_schedules = AsyncMock(return_value=updated)
@@ -380,7 +380,7 @@ async def test_cmd_schedule_day_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from dom.chat.factories import mk_chat
+    from tests.dom.chat.factories import mk_chat
 
     updated = mk_chat(chat_id=10, telegram_id=-1001)
     mock_scope.chat_commands_uc.change_schedule_day = AsyncMock(return_value=updated)
@@ -411,7 +411,7 @@ async def test_cmd_schedule_tz_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from dom.chat.factories import mk_chat
+    from tests.dom.chat.factories import mk_chat
 
     updated = mk_chat(chat_id=10, telegram_id=-1001)
     mock_scope.chat_commands_uc.change_schedule_timezone = AsyncMock(return_value=updated)

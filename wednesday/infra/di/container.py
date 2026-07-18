@@ -5,6 +5,7 @@ from functools import cached_property
 
 from infra.config import Config
 
+from .network import NetworkContainer
 from .observe import ObserveContainer
 from .persistence import PersistenceContainer
 from .resilience import ResilienceContainer
@@ -49,6 +50,14 @@ class Container:
             persistence=self.persistence,
         )
 
+    @cached_property
+    def network(self) -> NetworkContainer:
+        return NetworkContainer(
+            config=self._config,
+            resilience=self.resilience,
+            observe=self.observe,
+        )
+
     @asynccontextmanager
     async def get_scope(self) -> AsyncIterator["ScopeContainer"]:
         scope = ScopeContainer(
@@ -67,6 +76,8 @@ class Container:
                 tasks = []
                 if self.__dict__.get("persistence") is not None:
                     tasks.append(self.persistence.shutdown())
+                if self.__dict__.get("network") is not None:
+                    tasks.append(self.network.shutdown())
 
                 if tasks:
                     results = await asyncio.gather(*tasks, return_exceptions=True)

@@ -3,6 +3,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .integrations import GigaChatConfig
 from .observe import LoggingConfig, MetricsConfig
 from .persistence import PostgresConfig, RedisConfig, YamlConfig
 from .presentation import TelegramConfig
@@ -21,6 +22,7 @@ class Config(BaseSettings):
     version: str = Field(default="7.2.0", alias="VERSION")
 
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    gigachat: GigaChatConfig = Field(default_factory=GigaChatConfig)
 
     postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
@@ -52,6 +54,12 @@ class Config(BaseSettings):
             errors.append("TELEGRAM__ADMIN_ID must be set in PROD")
         if self.telegram.limiter.storage != "redis":
             errors.append("TELEGRAM__LIMITER__STORAGE must be redis in PROD")
+        if self.gigachat.breaker.storage != "redis":
+            errors.append("GIGACHAT__BREAKER__STORAGE must be redis in PROD")
+        if self.gigachat.limiter.storage != "redis":
+            errors.append("GIGACHAT__LIMITER__STORAGE must be redis in PROD")
+        if self.gigachat.auth_key.get_secret_value() == "default":
+            errors.append("GIGACHAT__AUTH_KEY must be set in PROD")
 
         if errors:
             raise ValueError("\n".join(errors))

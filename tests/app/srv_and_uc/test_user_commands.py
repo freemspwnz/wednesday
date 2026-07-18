@@ -5,13 +5,6 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
-from dom.user.factories import (
-    FakeModelCatalog,
-    FakeSubscriptionCatalog,
-    default_settings,
-    subscription_free,
-    subscription_premium,
-)
 
 from app.exceptions import UserNotFoundError
 from app.services.user import UserCommandService
@@ -30,6 +23,13 @@ from domain.user import (
     UserSubscriptionExpired,
 )
 from domain.user.exceptions import InvalidStateTransitionError
+from tests.dom.user.factories import (
+    FakeModelCatalog,
+    FakeSubscriptionCatalog,
+    default_settings,
+    subscription_free,
+    subscription_premium,
+)
 
 from ..factories import FakeCacheRegistry, FakeUoW, mk_logger
 

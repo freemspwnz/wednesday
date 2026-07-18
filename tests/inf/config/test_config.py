@@ -3,11 +3,12 @@
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from infra.config import Config
+from infra.config import Config, GigaChatConfig
 from infra.config.observe import LoggingConfig, MetricsConfig
 from infra.config.persistence.postgres import PostgresConfig
 from infra.config.persistence.redis import RedisConfig
 from infra.config.presentation import TelegramConfig
+from infra.config.resilience.asyncbreaker import CircuitBreakerConfig
 from infra.config.resilience.limits import RateLimitConfig
 
 
@@ -21,6 +22,8 @@ class TestConfigDefaults:
         assert cfg.version == "7.2.0"
         assert cfg.telegram.limiter.storage == "redis"
         assert cfg.telegram.retrier.name == "telegram"
+        assert cfg.gigachat.limiter.storage == "redis"
+        assert cfg.gigachat.breaker.storage == "redis"
         assert cfg.logging.serialize is False
         assert cfg.metrics.enabled is False
 
@@ -52,6 +55,7 @@ class TestConfigProdValidation:
         assert prod_config.logging.serialize is True
         assert prod_config.metrics.enabled is True
         assert prod_config.telegram.limiter.storage == "redis"
+        assert prod_config.gigachat.limiter.storage == "redis"
 
     @pytest.mark.parametrize(
         ("kwargs", "fragment"),
@@ -70,6 +74,28 @@ class TestConfigProdValidation:
                     ),
                 },
                 "TELEGRAM__LIMITER__STORAGE",
+            ),
+            (
+                {
+                    "gigachat": GigaChatConfig(
+                        auth_key=SecretStr("prod-gigachat-auth-key"),
+                        limiter=RateLimitConfig(storage="memory", name="gigachat"),
+                    ),
+                },
+                "GIGACHAT__LIMITER__STORAGE",
+            ),
+            (
+                {
+                    "gigachat": GigaChatConfig(
+                        auth_key=SecretStr("prod-gigachat-auth-key"),
+                        breaker=CircuitBreakerConfig(storage="memory", name="gigachat"),
+                    ),
+                },
+                "GIGACHAT__BREAKER__STORAGE",
+            ),
+            (
+                {"gigachat": GigaChatConfig(auth_key=SecretStr("default"))},
+                "GIGACHAT__AUTH_KEY",
             ),
         ],
     )

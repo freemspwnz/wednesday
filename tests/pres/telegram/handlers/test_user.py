@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiogram.types import Message
-from dom.user.factories import descriptor_lite, descriptor_pro, dt, mk_user
 
 from app.dto import UserContext
 from domain.user.exceptions import ModelNotFoundError, ModelSelectionError
 from presentation.aiogram.messages import commands as cmd_msg, exceptions as exc_msg, user as user_msg
 from presentation.aiogram.routers import user as handlers
+from tests.dom.user.factories import descriptor_lite, descriptor_pro, dt, mk_user
 
 from ..factories import make_message, mk_user_context
 

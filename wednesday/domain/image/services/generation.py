@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from domain.catalog import Model
 
 from ..exceptions import TextGenError, ValidationError
@@ -35,10 +33,10 @@ class ImageGenerationService:
         enriched: NormalizedPrompt | None = None
         enrichment_system = await catalog.enrichment_prompt()
         try:
-            enriched_raw = await txt_gen.generate(
+            enriched_raw = await txt_gen.generate_text(
                 model=str(model),
-                user_prompt=str(user_input),
                 system_prompt=enrichment_system,
+                user_prompt=str(user_input),
             )
             enriched = NormalizedPrompt.parse(enriched_raw)
         except (TextGenError, ValidationError):
@@ -52,7 +50,7 @@ class ImageGenerationService:
 
         generation_system = await catalog.generation_prompt()
 
-        content = await img_gen.generate(
+        content = await img_gen.generate_image(
             model=str(model),
             system_prompt=generation_system,
             user_prompt=str(prompts.effective()),
@@ -79,10 +77,10 @@ class ImageGenerationService:
 
         try:
             prompt = NormalizedPrompt.parse(
-                await txt_gen.generate(
+                await txt_gen.generate_text(
                     model=str(model),
-                    user_prompt="",
                     system_prompt=base_system,
+                    user_prompt="",
                 )
             )
         except (TextGenError, ValidationError):
@@ -92,7 +90,7 @@ class ImageGenerationService:
         prompts = ImagePrompts(primary=prompt, source=source)
         generation_system = await catalog.generation_prompt()
 
-        content = await img_gen.generate(
+        content = await img_gen.generate_image(
             model=str(model),
             system_prompt=generation_system,
             user_prompt=str(prompts.effective()),

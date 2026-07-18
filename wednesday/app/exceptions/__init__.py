@@ -2,6 +2,15 @@
 
 from .application import ChatNotFoundError, UserNotFoundError
 from .base import AppError, UnexpectedAppError
+from .network import (
+    HttpAuthError,
+    HttpError,
+    HttpRequestError,
+    HttpResponseError,
+    HttpTimeoutError,
+    HttpTransportError,
+    UnexpectedHttpError,
+)
 from .observe import LoggingError, LogMessageFormatError, MetricsError, MetricsExportError, MetricsHttpExporterError
 from .persistence import (
     AggregateMappingError,
@@ -52,6 +61,12 @@ __all__ = [
     "CircuitStorageError",
     "DBError",
     "DataIntegrityError",
+    "HttpAuthError",
+    "HttpError",
+    "HttpRequestError",
+    "HttpResponseError",
+    "HttpTimeoutError",
+    "HttpTransportError",
     "LimitError",
     "LimitStorageError",
     "LogMessageFormatError",
@@ -68,6 +83,7 @@ __all__ = [
     "UnexpectedCatalogError",
     "UnexpectedCircuitError",
     "UnexpectedDBError",
+    "UnexpectedHttpError",
     "UnexpectedLimitError",
     "UnexpectedRetryError",
     "UserNotFoundError",

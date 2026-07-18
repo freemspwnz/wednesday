@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import pytest
-from dom.user.factories import mk_user, subscription_premium
 
 from domain.catalog import Model, Series, Vendor
 from domain.user import UserRole
 from domain.user.vo import UserSettings
 from presentation.aiogram.messages import user as user_msg
+from tests.dom.user.factories import mk_user, subscription_premium
 
 from ..factories import dt, mk_user_context
 

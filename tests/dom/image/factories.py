@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Self
 from uuid import UUID
 
 from domain.catalog import Model
@@ -135,7 +134,7 @@ class FakeImageRepo(ImageRepo):
         return None
 
     @classmethod
-    def with_images(cls, *images: Image) -> FakeImageRepo:
+    def with_images(cls, *images: Image) -> Self:
         repo = cls()
         for image in images:
             repo.images[image.id] = image
@@ -193,17 +192,15 @@ class FakeTextGenerator(TextGenerator):
     response: str = "llm prompt"
     fail: bool = False
 
-    async def generate(
+    async def generate_text(
         self,
         model: str,
+        system_prompt: str,
         user_prompt: str,
-        system_prompt: str | None = None,
-        temperature: float = 0.7,
     ) -> str:
         _ = model
-        _ = user_prompt
         _ = system_prompt
-        _ = temperature
+        _ = user_prompt
         if self.fail:
             raise TextGenError("text generator unavailable")
         return self.response
@@ -213,17 +210,13 @@ class FakeTextGenerator(TextGenerator):
 class FakeImageGenerator(ImageGenerator):
     content: bytes = b"png-bytes"
 
-    async def generate(
+    async def generate_image(
         self,
         model: str,
         system_prompt: str,
         user_prompt: str,
-        width: int = 1024,
-        height: int = 1024,
     ) -> bytes:
         _ = model
         _ = system_prompt
         _ = user_prompt
-        _ = width
-        _ = height
         return self.content

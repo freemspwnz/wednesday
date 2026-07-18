@@ -6,7 +6,6 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
-from dom.user.factories import FakeModelCatalog, FakeSubscriptionCatalog, default_settings, subscription_free
 
 from app.dto import ChatContext
 from app.services.registration import RegistrationService
@@ -14,6 +13,7 @@ from app.use_cases.registration import RegistrationUseCase
 from domain.chat import Chat, ChatId, ChatProfile, ChatScheduleSet, ChatType, Weekday
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
+from tests.dom.user.factories import FakeModelCatalog, FakeSubscriptionCatalog, default_settings, subscription_free
 
 from ..factories import FakeCacheRegistry, FakeUoW, mk_chat_context, mk_logger, mk_user_context
 

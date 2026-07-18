@@ -23,6 +23,6 @@ class LoggingConfig(BaseModel):
     to_file: bool = Field(default=False, description="Enable file logging")
     file_path: Path = Field(default=Path("data/logs/wednesday.log"), description="Path to the log file")
     noisy_libs: list[str] = Field(
-        default=["aiogram", "httpx", "sqlalchemy", "prometheus_client"],
+        default=["aiogram", "httpx2", "sqlalchemy", "prometheus_client"],
         description="Libraries that generate a lot of logs",
     )

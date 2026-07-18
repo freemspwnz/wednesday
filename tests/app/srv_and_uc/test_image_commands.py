@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
-from dom.image.factories import FakeImageRepo, FakeImageVoteRepo, mk_image
 
 from app.dto import ImageCard
 from app.services.image import ImageCommandService
 from app.use_cases.image import ImageCommandsUseCase
 from domain.image import ImageId, ImageNotFoundError
 from domain.kernel.vo import AwareDatetime
+from tests.dom.image.factories import FakeImageRepo, FakeImageVoteRepo, mk_image
 
 from ..factories import FakeUoW, mk_logger
 

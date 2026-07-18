@@ -7,13 +7,13 @@ from uuid import UUID
 
 import pytest
 from aiogram.types import CallbackQuery, Message
-from dom.image.factories import dt, mk_image
 
 from app.dto import ChatContext, ImageCard, UserContext
 from domain.image import ImageId, ImageNotFoundError, TelegramFileId
 from presentation.aiogram.messages import commands as cmd_msg, exceptions as exc_msg
 from presentation.aiogram.routers.image import ImageVoteData, build_vote_kb
 from presentation.aiogram.routers.image.router import cb_image_vote, cmd_generate, cmd_random
+from tests.dom.image.factories import dt, mk_image
 
 from ..factories import make_callback_query, make_message, mk_user_context
 

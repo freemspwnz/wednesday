@@ -8,6 +8,7 @@ from .events import (
 from .exceptions import (
     AccessDeniedError,
     ImageError,
+    ImageGenError,
     ImageNotFoundError,
     PromptRejectedError,
     TextGenError,
@@ -59,6 +60,7 @@ __all__ = [
     "Image",
     "ImageError",
     "ImageEvent",
+    "ImageGenError",
     "ImageGenerationService",
     "ImageGenerator",
     "ImageHidden",

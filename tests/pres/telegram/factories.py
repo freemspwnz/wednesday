@@ -8,12 +8,12 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from aiogram.types import CallbackQuery, Chat as TgChat, Message, User as TgUser
-from dom.user.factories import mk_user
 
 from app.dto import ChatContext, UserContext
 from domain.chat import Chat, ChatId, ChatProfile, ChatScheduleSet, ChatType, Weekday
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserRole
+from tests.dom.user.factories import mk_user
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 

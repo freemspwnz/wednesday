@@ -3,8 +3,6 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
-from dom.catalog.plans import PREMIUM_PLAN
-from dom.image.factories import mk_image
 
 from app.dto import ChatContext, ImageCard, UserContext
 from domain.catalog import Model, Series, SubscriptionTier, Vendor
@@ -13,6 +11,8 @@ from domain.image import TelegramFileId
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
 from domain.user.vo import UserSettings, UserSubscription
+from tests.dom.catalog.plans import PREMIUM_PLAN
+from tests.dom.image.factories import mk_image
 
 
 def _dt(hour: int) -> AwareDatetime:

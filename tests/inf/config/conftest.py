@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from infra.config import Config
+from infra.config import Config, GigaChatConfig
 from infra.config.observe import LoggingConfig, MetricsConfig
 from infra.config.persistence.postgres import PostgresConfig
 from infra.config.persistence.redis import RedisConfig
@@ -21,6 +21,9 @@ def prod_config_kwargs() -> dict[str, object]:
         "telegram": TelegramConfig(
             token=SecretStr("prod-telegram-token"),
             admin_id=1,
+        ),
+        "gigachat": GigaChatConfig(
+            auth_key=SecretStr("prod-gigachat-auth-key"),
         ),
     }
 

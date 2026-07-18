@@ -24,6 +24,7 @@ class ObserveContainer:
             self._config.postgres.password.get_secret_value(),
             self._config.redis.password.get_secret_value(),
             self._config.telegram.token.get_secret_value(),
+            self._config.gigachat.auth_key.get_secret_value(),
         ]
 
         setup_logging(

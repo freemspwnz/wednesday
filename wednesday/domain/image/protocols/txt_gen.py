@@ -7,12 +7,11 @@ from ..exceptions import ValidationError
 class TextGenerator(Protocol):
     """Text generator protocol."""
 
-    async def generate(
+    async def generate_text(
         self,
         model: str,
+        system_prompt: str,
         user_prompt: str,
-        system_prompt: str | None = None,
-        temperature: float = 0.7,
     ) -> str: ...
 
     @classmethod

@@ -6,14 +6,13 @@ from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from dom.user.factories import dt, mk_user
-
 from app.dto import ChatContext, UserContext
 from domain.chat import Chat, ChatId, ChatProfile, ChatRepo, ChatScheduleSet, ChatType, Weekday
 from domain.image import ImageRepo, ViewRepo, VoteRepo
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserRepo, UserRole, ViolationRepo
 from domain.user.protocols import UsageRepo
+from tests.dom.user.factories import dt, mk_user
 
 
 def mk_logger() -> Mock:

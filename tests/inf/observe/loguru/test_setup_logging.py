@@ -69,10 +69,10 @@ class TestSetupLoggingCore:
 
     def test_noisy_libs_get_warning_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "stdout", StringIO())
-        cfg = _minimal_config(noisy_libs=["httpx", "sqlalchemy"])
+        cfg = _minimal_config(noisy_libs=["httpx2", "sqlalchemy"])
         setup_logging(cfg, env="DEV", version="0", secrets=[])
 
-        assert logging.getLogger("httpx").level == logging.WARNING
+        assert logging.getLogger("httpx2").level == logging.WARNING
         assert logging.getLogger("sqlalchemy").level == logging.WARNING
 
     def test_idempotent_second_call(self, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -7,13 +7,11 @@ from ..exceptions import ValidationError
 class ImageGenerator(Protocol):
     """Image generator protocol."""
 
-    async def generate(
+    async def generate_image(
         self,
         model: str,
         system_prompt: str,
         user_prompt: str,
-        width: int = 1024,
-        height: int = 1024,
     ) -> bytes: ...
 
     @classmethod
