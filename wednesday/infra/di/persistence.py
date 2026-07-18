@@ -57,7 +57,7 @@ class PersistenceContainer:
         )
 
     @cached_property
-    def catalog_factory(self) -> YamlCatalogFactory:
+    def catalog(self) -> YamlCatalogFactory:
         return YamlCatalogFactory(
             config=self._config.yaml,
             logger=self._observe.logger,

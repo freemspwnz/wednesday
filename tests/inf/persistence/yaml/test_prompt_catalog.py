@@ -1,3 +1,5 @@
+"""YamlCatalogFactory tests for the prompt catalog."""
+
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -27,7 +29,7 @@ def _catalog_factory(config: YamlConfig | None = None) -> YamlCatalogFactory:
 @pytest.mark.unit
 @pytest.mark.infra
 def test_yaml_prompt_catalog_loads_project_file() -> None:
-    catalog = _catalog_factory().prompt_catalog
+    catalog = _catalog_factory().prompts
     assert PromptCatalog.ensure(catalog) is catalog
 
 
@@ -35,7 +37,7 @@ def test_yaml_prompt_catalog_loads_project_file() -> None:
 @pytest.mark.infra
 @pytest.mark.asyncio
 async def test_yaml_prompt_catalog_exposes_system_prompts_and_components() -> None:
-    catalog = _catalog_factory().prompt_catalog
+    catalog = _catalog_factory().prompts
 
     enrichment = await catalog.enrichment_prompt()
     generation = await catalog.generation_prompt()

@@ -1,3 +1,5 @@
+"""YamlCatalogFactory tests for model and subscription catalogs."""
+
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -27,7 +29,7 @@ def _catalog_factory(config: YamlConfig | None = None) -> YamlCatalogFactory:
 @pytest.mark.unit
 @pytest.mark.infra
 def test_yaml_model_catalog_loads_project_file() -> None:
-    catalog = _catalog_factory().model_catalog
+    catalog = _catalog_factory().models
     assert ModelCatalog.ensure(catalog) is catalog
 
 
@@ -35,7 +37,7 @@ def test_yaml_model_catalog_loads_project_file() -> None:
 @pytest.mark.infra
 @pytest.mark.asyncio
 async def test_yaml_model_catalog_exposes_active_sber_models() -> None:
-    catalog = _catalog_factory().model_catalog
+    catalog = _catalog_factory().models
 
     assert await catalog.exists(Model.parse("gigachat-2-lite"))
     alice = await catalog.get_by_model(Model.parse("alicegpt-lite"))
@@ -65,7 +67,7 @@ async def test_yaml_model_catalog_exposes_active_sber_models() -> None:
 @pytest.mark.unit
 @pytest.mark.infra
 def test_yaml_subscription_catalog_loads_project_file() -> None:
-    catalog = _catalog_factory().subscription_catalog
+    catalog = _catalog_factory().subscriptions
     assert SubscriptionCatalog.ensure(catalog) is catalog
 
 
@@ -73,7 +75,7 @@ def test_yaml_subscription_catalog_loads_project_file() -> None:
 @pytest.mark.infra
 @pytest.mark.asyncio
 async def test_yaml_subscription_catalog_matches_yaml_limits() -> None:
-    catalog = _catalog_factory().subscription_catalog
+    catalog = _catalog_factory().subscriptions
 
     free = await catalog.get_by_tier(SubscriptionTier.FREE)
     premium = await catalog.get_by_tier(SubscriptionTier.PREMIUM)

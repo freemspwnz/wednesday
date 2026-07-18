@@ -54,3 +54,11 @@ def require_int(value: object, *, field: str, path: Path) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         raise CatalogFormatError(f"{field} must be an int in {path}", source=path, field=field)
     return value
+
+
+def require_non_empty_str_list(value: object, *, field: str, path: Path) -> tuple[str, ...]:
+    """Require a non-empty list of non-empty strings; return them as a tuple."""
+    items = require_list(value, field=field, path=path)
+    if not items:
+        raise CatalogFormatError(f"{field} must be a non-empty list in {path}", source=path, field=field)
+    return tuple(require_str(item, field=f"{field}[]", path=path) for item in items)

@@ -16,13 +16,14 @@ from domain.catalog import (
 from domain.image.protocols import PromptCatalog, PromptComponents
 from infra.config import YamlConfig
 
-from .catalog import YamlModelCatalog, YamlPromptCatalog, YamlSubscriptionCatalog
+from .catalogs import YamlModelCatalog, YamlPromptCatalog, YamlSubscriptionCatalog
 from .loader import (
     load_yaml_mapping,
     require_bool,
     require_int,
     require_list,
     require_mapping,
+    require_non_empty_str_list,
     require_str,
 )
 
@@ -35,17 +36,17 @@ class YamlCatalogFactory:
         self._logger = logger.bind(module=self.__class__.__name__)
 
     @cached_property
-    def model_catalog(self) -> ModelCatalog:
+    def models(self) -> ModelCatalog:
         self._logger.debug("Building model catalog...", path=self._config.models_path)
         return self._build_model_catalog(self._config.models_path)
 
     @cached_property
-    def subscription_catalog(self) -> SubscriptionCatalog:
+    def subscriptions(self) -> SubscriptionCatalog:
         self._logger.debug("Building subscription catalog...", path=self._config.subscriptions_path)
         return self._build_subscription_catalog(self._config.subscriptions_path)
 
     @cached_property
-    def prompt_catalog(self) -> PromptCatalog:
+    def prompts(self) -> PromptCatalog:
         self._logger.debug("Building prompt catalog...", path=self._config.prompts_path)
         return self._build_prompt_catalog(self._config.prompts_path)
 
@@ -197,37 +198,37 @@ class YamlCatalogFactory:
 
         components_node = require_mapping(data.get("components"), field="components", path=source)
         components = PromptComponents(
-            heroes=_require_non_empty_str_list(
+            heroes=require_non_empty_str_list(
                 components_node.get("heroes"),
                 field="components.heroes",
                 path=source,
             ),
-            colors=_require_non_empty_str_list(
+            colors=require_non_empty_str_list(
                 components_node.get("colors"),
                 field="components.colors",
                 path=source,
             ),
-            styles=_require_non_empty_str_list(
+            styles=require_non_empty_str_list(
                 components_node.get("styles"),
                 field="components.styles",
                 path=source,
             ),
-            professions=_require_non_empty_str_list(
+            professions=require_non_empty_str_list(
                 components_node.get("professions"),
                 field="components.professions",
                 path=source,
             ),
-            actions=_require_non_empty_str_list(
+            actions=require_non_empty_str_list(
                 components_node.get("actions"),
                 field="components.actions",
                 path=source,
             ),
-            places=_require_non_empty_str_list(
+            places=require_non_empty_str_list(
                 components_node.get("places"),
                 field="components.places",
                 path=source,
             ),
-            portraits=_require_non_empty_str_list(
+            portraits=require_non_empty_str_list(
                 components_node.get("portraits"),
                 field="components.portraits",
                 path=source,
@@ -240,10 +241,3 @@ class YamlCatalogFactory:
             _base_prompt=base_prompt,
             _components=components,
         )
-
-
-def _require_non_empty_str_list(value: object, *, field: str, path: Path) -> tuple[str, ...]:
-    items = require_list(value, field=field, path=path)
-    if not items:
-        raise CatalogFormatError(f"{field} must be a non-empty list in {path}", source=path, field=field)
-    return tuple(require_str(item, field=f"{field}[]", path=path) for item in items)
