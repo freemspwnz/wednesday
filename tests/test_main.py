@@ -1,7 +1,5 @@
 """Main entry point tests."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,8 +13,8 @@ def main_mocks() -> dict[str, MagicMock | AsyncMock]:
     config = MagicMock()
     config.telegram.token.get_secret_value.return_value = "test-token"
     config.telegram.admin_id = 1
-    config.telegram.rate_limit = MagicMock()
-    config.telegram.retry = MagicMock()
+    config.telegram.limiter = MagicMock()
+    config.telegram.retrier = MagicMock()
 
     container = MagicMock()
     container.observe.logger.bind.return_value = MagicMock()
@@ -24,8 +22,8 @@ def main_mocks() -> dict[str, MagicMock | AsyncMock]:
     container.observe.metrics.serve = MagicMock()
     container.shutdown = AsyncMock()
     container.get_scope = MagicMock()
-    container.resilience.rate_limiter.return_value = MagicMock()
-    container.resilience.retry.return_value = MagicMock()
+    container.resilience.limiter.return_value = MagicMock()
+    container.resilience.retrier.return_value = MagicMock()
 
     bot = MagicMock()
     bot.session.close = AsyncMock()

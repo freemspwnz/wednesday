@@ -14,8 +14,8 @@ class TelegramConfig(BaseModel):
     token: SecretStr = Field(default=SecretStr("token"), description="Telegram bot token")
     admin_id: int = Field(default=0, description="Telegram admin ID")
 
-    retry: RetryConfig = Field(
-        default_factory=lambda: RetryConfig(
+    retrier: RetryConfig = Field(
+        default=RetryConfig(
             name="telegram",
             attempts=3,
             reraise=True,
@@ -26,8 +26,8 @@ class TelegramConfig(BaseModel):
         )
     )
 
-    rate_limit: RateLimitConfig = Field(
-        default_factory=lambda: RateLimitConfig(
+    limiter: RateLimitConfig = Field(
+        default=RateLimitConfig(
             name="telegram",
             storage="redis",
             strategy="sliding-window-counter",

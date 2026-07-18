@@ -1,6 +1,4 @@
-"""Тесты корневой модели Config и PROD-валидации."""
-
-from __future__ import annotations
+"""Tests for the root Config model and PROD validation."""
 
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -10,7 +8,6 @@ from infra.config.observe import LoggingConfig, MetricsConfig
 from infra.config.persistence.postgres import PostgresConfig
 from infra.config.persistence.redis import RedisConfig
 from infra.config.presentation import TelegramConfig
-from infra.config.resilience.asyncbreaker import CircuitBreakerConfig
 from infra.config.resilience.limits import RateLimitConfig
 
 
@@ -22,8 +19,8 @@ class TestConfigDefaults:
 
         assert cfg.env == "DEV"
         assert cfg.version == "7.2.0"
-        assert cfg.rate_limit.storage == "memory"
-        assert cfg.circuit_breaker.storage == "memory"
+        assert cfg.telegram.limiter.storage == "redis"
+        assert cfg.telegram.retrier.name == "telegram"
         assert cfg.logging.serialize is False
         assert cfg.metrics.enabled is False
 
@@ -54,7 +51,7 @@ class TestConfigProdValidation:
         assert prod_config.env.upper() == "PROD"
         assert prod_config.logging.serialize is True
         assert prod_config.metrics.enabled is True
-        assert prod_config.rate_limit.storage == "redis"
+        assert prod_config.telegram.limiter.storage == "redis"
 
     @pytest.mark.parametrize(
         ("kwargs", "fragment"),
@@ -64,17 +61,15 @@ class TestConfigProdValidation:
             ({"postgres": PostgresConfig(password=SecretStr("postgres"), echo=False)}, "POSTGRES__PASSWORD"),
             ({"postgres": PostgresConfig(password=SecretStr("x"), echo=True)}, "POSTGRES__ECHO"),
             ({"redis": RedisConfig(password=SecretStr("redis"))}, "REDIS__PASSWORD"),
-            ({"rate_limit": RateLimitConfig(storage="memory")}, "RATE_LIMIT__STORAGE"),
-            ({"circuit_breaker": CircuitBreakerConfig(storage="memory")}, "CIRCUIT_BREAKER__STORAGE"),
             (
                 {
                     "telegram": TelegramConfig(
                         token=SecretStr("prod-telegram-token"),
                         admin_id=1,
-                        rate_limit=RateLimitConfig(storage="memory", name="telegram"),
+                        limiter=RateLimitConfig(storage="memory", name="telegram"),
                     ),
                 },
-                "TELEGRAM__RATE_LIMIT__STORAGE",
+                "TELEGRAM__LIMITER__STORAGE",
             ),
         ],
     )
@@ -95,7 +90,6 @@ class TestConfigProdValidation:
             ENV="DEV",
             postgres=PostgresConfig(password=SecretStr("postgres")),
             redis=RedisConfig(password=SecretStr("redis")),
-            rate_limit=RateLimitConfig(storage="memory"),
             metrics=MetricsConfig(enabled=False),
         )
         assert cfg.postgres.password.get_secret_value() == "postgres"

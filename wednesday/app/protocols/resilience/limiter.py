@@ -1,7 +1,8 @@
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import Protocol, TypeVar, runtime_checkable
 
 L = TypeVar("L")
+T = TypeVar("T")
 
 
 @runtime_checkable
@@ -15,7 +16,7 @@ class RateLimiter[L](Protocol):
 
     def __call__(
         self, limit: L, *args: str, cost: int = 1
-    ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
+    ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
         """Rate limiter decorator."""
         ...
 

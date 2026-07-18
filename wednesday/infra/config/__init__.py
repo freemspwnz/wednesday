@@ -1,6 +1,4 @@
-"""
-Модуль конфигурации приложения на основе Pydantic BaseSettings.
-"""
+"""Application configuration module based on Pydantic Settings."""
 
 from .config import Config
 from .observe import LoggingConfig, MetricsConfig

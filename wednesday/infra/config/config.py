@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,7 +6,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from .observe import LoggingConfig, MetricsConfig
 from .persistence import PostgresConfig, RedisConfig, YamlConfig
 from .presentation import TelegramConfig
-from .resilience import CircuitBreakerConfig, RateLimitConfig, RetryConfig
 
 
 class Config(BaseSettings):
@@ -27,15 +26,11 @@ class Config(BaseSettings):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     yaml: YamlConfig = Field(default_factory=YamlConfig)
 
-    retry: RetryConfig = Field(default_factory=RetryConfig)
-    rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
-    circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
-
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
 
     @model_validator(mode="after")
-    def validate_prod_env(self) -> Config:
+    def validate_prod_env(self) -> Self:
         if self.env.upper() != "PROD":
             return self
 
@@ -51,16 +46,12 @@ class Config(BaseSettings):
             errors.append("POSTGRES__PASSWORD must be set in PROD")
         if self.redis.password.get_secret_value() == "redis":
             errors.append("REDIS__PASSWORD must be set in PROD")
-        if self.rate_limit.storage != "redis":
-            errors.append("RATE_LIMIT__STORAGE must be redis in PROD")
-        if self.circuit_breaker.storage != "redis":
-            errors.append("CIRCUIT_BREAKER__STORAGE must be redis in PROD")
         if self.telegram.token.get_secret_value() == "token":
             errors.append("TELEGRAM__TOKEN must be set in PROD")
         if self.telegram.admin_id == 0:
             errors.append("TELEGRAM__ADMIN_ID must be set in PROD")
-        if self.telegram.rate_limit.storage != "redis":
-            errors.append("TELEGRAM__RATE_LIMIT__STORAGE must be redis in PROD")
+        if self.telegram.limiter.storage != "redis":
+            errors.append("TELEGRAM__LIMITER__STORAGE must be redis in PROD")
 
         if errors:
             raise ValueError("\n".join(errors))

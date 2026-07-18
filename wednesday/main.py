@@ -25,11 +25,11 @@ async def main() -> None:
     # 3. Delivery
     logger.debug("Building aiogram bot...")
 
-    rl = container.resilience.rate_limiter(
-        config=config.telegram.rate_limit,
+    rl = container.resilience.limiter(
+        config=config.telegram.limiter,
     )
-    retrier = container.resilience.retry(
-        config=config.telegram.retry,
+    retrier = container.resilience.retrier(
+        config=config.telegram.retrier,
         predicate=is_telegram_retryable,
     )
 

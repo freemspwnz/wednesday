@@ -1,4 +1,3 @@
-from builtins import BaseException
 from collections.abc import Callable, Iterable
 
 from app.protocols import CircuitBreaker, RateLimiter, Retrier
@@ -31,15 +30,12 @@ class ResilienceContainer:
         self._persistence = persistence
         self._logger = self._observe.logger.bind(module=self.__class__.__name__)
 
-    def retry(
+    def retrier(
         self,
         *,
-        config: RetryConfig | None = None,
+        config: RetryConfig,
         predicate: Callable[[BaseException], bool] = is_retryable,
     ) -> Retrier:
-        if config is None:
-            config = self._config.retry
-
         return Tenacity(
             config=config,
             predicate=predicate,
@@ -47,15 +43,12 @@ class ResilienceContainer:
             logger=self._observe.logger,
         )
 
-    def circuit_breaker(
+    def breaker(
         self,
         *,
-        config: CircuitBreakerConfig | None = None,
+        config: CircuitBreakerConfig,
         exclude: Iterable[type[BaseException]] = (),
     ) -> CircuitBreaker:
-        if config is None:
-            config = self._config.circuit_breaker
-
         return cb_factory(
             config=config,
             env=self._config.env,
@@ -66,14 +59,11 @@ class ResilienceContainer:
             logger=self._observe.logger,
         )
 
-    def rate_limiter(
+    def limiter(
         self,
         *,
-        config: RateLimitConfig | None = None,
+        config: RateLimitConfig,
     ) -> RateLimiter:
-        if config is None:
-            config = self._config.rate_limit
-
         return rl_factory(
             config=config,
             env=self._config.env,
