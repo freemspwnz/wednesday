@@ -64,6 +64,7 @@ class Container:
             uow_factory=self.persistence.uow_factory,
             cache=self.persistence.cache,
             catalog=self.persistence.catalog,
+            providers=self.network.providers,
             logger=self.observe.logger,
         )
         yield scope

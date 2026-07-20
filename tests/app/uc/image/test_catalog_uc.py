@@ -1,4 +1,4 @@
-"""Tests for ImageCommandsUseCase."""
+"""Tests for ImageCatalogUseCase."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
@@ -7,12 +7,12 @@ from uuid import UUID
 import pytest
 
 from app.dto import ImageCard
-from app.use_cases.image import ImageCommandsUseCase
-from domain.image import ImageId, ImageNotFoundError, ImageScorePolicy
+from app.use_cases.image import ImageCatalogUseCase
+from domain.image import ImageScorePolicy
 from domain.kernel.vo import AwareDatetime
-from tests.dom.image.factories import FakeImageRepo, FakeImageVoteRepo, mk_image
+from tests.dom.image.factories import mk_image
 
-from ..factories import FakeUoW, mk_logger
+from ...factories import FakeUoW, mk_logger
 
 
 def dt(hour: int) -> AwareDatetime:
@@ -26,7 +26,7 @@ async def test_uc_pick_for_chat_returns_none_when_catalog_empty() -> None:
     views = AsyncMock()
     images.get_random_unseen_for_chat.return_value = None
     uow = FakeUoW(images=images, views=views)
-    uc = ImageCommandsUseCase(uow=uow, logger=mk_logger())
+    uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = UUID(int=99)
 
     result = await uc.pick_for_chat(chat_id=chat_id, at=dt(10))
@@ -48,7 +48,7 @@ async def test_uc_pick_for_chat_marks_shown_and_returns_card() -> None:
     views = AsyncMock()
     images.get_random_unseen_for_chat.return_value = image
     uow = FakeUoW(images=images, views=views)
-    uc = ImageCommandsUseCase(uow=uow, logger=mk_logger())
+    uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = UUID(int=100)
 
     result = await uc.pick_for_chat(chat_id=chat_id, at=dt(10))
@@ -65,11 +65,11 @@ async def test_uc_pick_for_chat_marks_shown_and_returns_card() -> None:
 async def test_uc_pick_for_chat_runs_in_uow() -> None:
     image = mk_image(image_id=4, score=1, created_at=dt(9))
     uow = FakeUoW()
-    uc = ImageCommandsUseCase(uow=uow, logger=mk_logger())
+    uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = UUID(int=101)
 
     with patch(
-        "app.use_cases.image.ImageCatalogService.pick_for_chat",
+        "app.use_cases.image.catalog.ImageCatalogService.pick_for_chat",
         new=AsyncMock(return_value=image),
     ) as pick:
         got = await uc.pick_for_chat(chat_id=chat_id, at=dt(11))
@@ -83,42 +83,3 @@ async def test_uc_pick_for_chat_runs_in_uow() -> None:
         view_repo=uow.views,
         at=dt(11),
     )
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_uc_vote_persists_score_in_uow() -> None:
-    image = mk_image(image_id=11, score=1, created_at=dt(10))
-    image_repo = FakeImageRepo.with_images(image)
-    vote_repo = FakeImageVoteRepo()
-    uow = FakeUoW(images=image_repo, votes=vote_repo)
-    uc = ImageCommandsUseCase(uow=uow, logger=mk_logger())
-    voter_id = UUID(int=501)
-
-    got = await uc.vote(
-        image_id=image.id,
-        voter_id=voter_id,
-        value=1,
-        at=dt(11),
-    )
-    assert got.score == 4
-    assert uow.enter_count == uow.exit_count == 1
-    assert vote_repo.votes[image.id, voter_id].value == 1
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_uc_vote_propagates_image_not_found() -> None:
-    image_repo = FakeImageRepo()
-    vote_repo = FakeImageVoteRepo()
-    uc = ImageCommandsUseCase(
-        uow=FakeUoW(images=image_repo, votes=vote_repo),
-        logger=mk_logger(),
-    )
-    with pytest.raises(ImageNotFoundError):
-        await uc.vote(
-            image_id=ImageId(UUID(int=404)),
-            voter_id=UUID(int=502),
-            value=-1,
-            at=dt(11),
-        )

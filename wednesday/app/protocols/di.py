@@ -11,7 +11,10 @@ if TYPE_CHECKING:
     from app.use_cases import (
         ChatManagementUseCase,
         ChatScheduleUseCase,
-        ImageCommandsUseCase,
+        ImageCatalogUseCase,
+        ImageGenerationUseCase,
+        ImageManagementUseCase,
+        ImageVoteUseCase,
         UserGenerationUseCase,
         UserLifecycleUseCase,
         UserManagementUseCase,
@@ -53,7 +56,16 @@ class RequestScope(Protocol):
     def chat_schedule_uc(self) -> ChatScheduleUseCase: ...
 
     @property
-    def image_commands_uc(self) -> ImageCommandsUseCase: ...
+    def image_catalog_uc(self) -> ImageCatalogUseCase: ...
+
+    @property
+    def image_vote_uc(self) -> ImageVoteUseCase: ...
+
+    @property
+    def image_management_uc(self) -> ImageManagementUseCase: ...
+
+    @property
+    def image_generation_uc(self) -> ImageGenerationUseCase: ...
 
 
 ScopeFactory = Callable[[], AbstractAsyncContextManager[RequestScope]]
