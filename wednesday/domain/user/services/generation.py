@@ -56,12 +56,16 @@ class UserGenerationService:
         return user
 
     @staticmethod
-    async def assert_generation_allowed(
+    async def assert_allowed(
         user: User,
         repo: UsageRepo,
         catalog: SubscriptionCatalog,
         at: AwareDatetime,
     ) -> None:
+        """Check ban/limits without consuming a generation slot.
+
+        Intended flow: moderate prompt → assert_allowed → generate → record_usage.
+        """
         user = User.ensure(user)
         repo = UsageRepo.ensure(repo)
         catalog = SubscriptionCatalog.ensure(catalog)
@@ -83,11 +87,25 @@ class UserGenerationService:
 
         match decision:
             case LimitAllowed():
-                await repo.record_usage(user.id, at)
+                return
             case LimitDenied(violation=v):
                 UserGenerationService._raise_limit_violation(v)
             case _:
                 raise ValidationError("unknown limit decision")
+
+    @staticmethod
+    async def record_usage(
+        *,
+        user: User,
+        repo: UsageRepo,
+        at: AwareDatetime,
+    ) -> None:
+        """Consume one generation slot after a successful render/send."""
+        user = User.ensure(user)
+        repo = UsageRepo.ensure(repo)
+        at = AwareDatetime.ensure(at)
+
+        await repo.record_usage(user.id, at)
 
     @staticmethod
     def _raise_limit_violation(violation: DailyLimitViolation | CooldownViolation) -> None:

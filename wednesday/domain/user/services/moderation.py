@@ -72,6 +72,11 @@ class UserModerationService:
         violation_repo: ViolationRepo,
         at: AwareDatetime,
     ) -> User:
+        """Record a moderation strike, then ban if thresholds are met.
+
+        Always persists the violation first so strikes accumulate; ban is applied
+        only when BanDurationPolicy assigns one against the updated stats.
+        """
         user_id = UserId.ensure(user_id)
         at = AwareDatetime.ensure(at)
         if not isinstance(user_repo, UserRepo):
@@ -83,6 +88,7 @@ class UserModerationService:
         if user is None:
             raise UserNotFoundError(str(user_id))
 
+        await violation_repo.record_violation(user_id, at)
         stats = await violation_repo.get_violation_stats(user_id)
 
         decision = BanDurationPolicy.evaluate(
@@ -94,7 +100,6 @@ class UserModerationService:
             case NoBan():
                 return user
             case BanAssigned(banned_until=until):
-                await violation_repo.record_violation(user_id, at)
                 user.ban(actor=UserRole.SYSTEM, until=until, at=at)
                 await user_repo.save(user)
                 return user

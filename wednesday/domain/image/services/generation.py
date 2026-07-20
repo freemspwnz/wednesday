@@ -9,7 +9,12 @@ from .fallback import FallbackPromptService
 
 
 class ImageGenerationService:
-    """Orchestrate prompt preparation and image rendering."""
+    """Orchestrate prompt preparation and image rendering.
+
+    Callers that charge user quota should moderate first (Image.moderate /
+    by_user raises PromptRejectedError) before UserGenerationService.record_usage,
+    so a rejected prompt does not consume a generation slot.
+    """
 
     @classmethod
     async def by_user(  # noqa: PLR0913
@@ -28,6 +33,7 @@ class ImageGenerationService:
         txt_gen = TextGenerator.ensure(txt_gen)
         img_gen = ImageGenerator.ensure(img_gen)
 
+        # Defense in depth: also safe to call Image.moderate earlier in the UC.
         Image.moderate(user_input=user_input, moderation=moderation)
 
         enriched: NormalizedPrompt | None = None

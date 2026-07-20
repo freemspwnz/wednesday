@@ -21,19 +21,22 @@ from ..factories import FREE_PLAN, FakeSubscriptionCatalog, FakeUsageRepo, dt, m
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_assert_allowed_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     user = mk_user(now=dt(10))
+    usage = FakeUsageRepo(stats=UsageStats(last_usage=dt(1), daily_usage=0))
 
-    await UserGenerationService.assert_generation_allowed(
+    await UserGenerationService.assert_allowed(
         user=user,
-        repo=FakeUsageRepo(stats=UsageStats(last_usage=dt(1), daily_usage=0)),
+        repo=usage,
         catalog=FakeSubscriptionCatalog(),
         at=dt(12),
     )
+    assert usage.stats.daily_usage == 0
+    assert usage.stats.last_usage == dt(1)
 
     user.ban(actor=UserRole.OWNER, until=dt(20), at=dt(11))
     with pytest.raises(UserBannedError):
-        await UserGenerationService.assert_generation_allowed(
+        await UserGenerationService.assert_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
             catalog=FakeSubscriptionCatalog(),
@@ -42,7 +45,7 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
     user.unban(actor=UserRole.OWNER, at=dt(12))
 
     with pytest.raises(LimitViolationError):
-        await UserGenerationService.assert_generation_allowed(
+        await UserGenerationService.assert_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=100)),
             catalog=FakeSubscriptionCatalog(),
@@ -50,7 +53,7 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
         )
 
     with pytest.raises(CooldownViolationError):
-        await UserGenerationService.assert_generation_allowed(
+        await UserGenerationService.assert_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=dt(12), daily_usage=0)),
             catalog=FakeSubscriptionCatalog(),
@@ -62,7 +65,7 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
         lambda **_: cast(Any, object()),
     )
     with pytest.raises(ValidationError):
-        await UserGenerationService.assert_generation_allowed(
+        await UserGenerationService.assert_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
             catalog=FakeSubscriptionCatalog(),
@@ -72,12 +75,24 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_generation_access_uses_effective_state_without_mutation() -> None:
+async def test_record_usage_consumes_slot() -> None:
+    user = mk_user(now=dt(10))
+    usage = FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0))
+
+    await UserGenerationService.record_usage(user=user, repo=usage, at=dt(12))
+
+    assert usage.stats.daily_usage == 1
+    assert usage.stats.last_usage == dt(12)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_assert_allowed_uses_effective_state_without_mutation() -> None:
     user = mk_user(now=dt(10))
     user.ban(actor=UserRole.OWNER, until=dt(11), at=dt(10))
     user.pull_events()
 
-    await UserGenerationService.assert_generation_allowed(
+    await UserGenerationService.assert_allowed(
         user=user,
         repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
         catalog=FakeSubscriptionCatalog(),
@@ -90,7 +105,7 @@ async def test_generation_access_uses_effective_state_without_mutation() -> None
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_generation_access_uses_effective_subscription_without_mutation() -> None:
+async def test_assert_allowed_uses_effective_subscription_without_mutation() -> None:
     user = mk_user(now=dt(10))
     expired_premium = UserSubscription(
         plan=plan_premium(),
@@ -101,7 +116,7 @@ async def test_generation_access_uses_effective_subscription_without_mutation() 
     user.pull_events()
 
     with pytest.raises(LimitViolationError):
-        await UserGenerationService.assert_generation_allowed(
+        await UserGenerationService.assert_allowed(
             user=user,
             repo=FakeUsageRepo(
                 stats=UsageStats(
