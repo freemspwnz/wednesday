@@ -34,7 +34,13 @@ from .policies import (
     ShowImage,
 )
 from .protocols import ImageGenerator, ImageRepo, PromptCatalog, TextGenerator, ViewRepo, VoteRepo
-from .services import FallbackPromptService, ImageGenerationService, ImageManagementService, ImageVoteService
+from .services import (
+    FallbackPromptService,
+    ImageCatalogService,
+    ImageGenerationService,
+    ImageManagementService,
+    ImageVoteService,
+)
 from .vo import (
     ActiveState,
     HiddenReason,
@@ -58,6 +64,7 @@ __all__ = [
     "HiddenState",
     "HideImage",
     "Image",
+    "ImageCatalogService",
     "ImageError",
     "ImageEvent",
     "ImageGenError",

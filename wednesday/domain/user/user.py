@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
+from typing import Self
 
 from domain.catalog import ModelDescriptor, SubscriptionPlan
 
@@ -74,7 +73,7 @@ class User:
         subscription: UserSubscription,
         settings: UserSettings,
         at: AwareDatetime,
-    ) -> User:
+    ) -> Self:
         return cls(
             _id=id,
             _profile=profile,
@@ -100,7 +99,7 @@ class User:
         created_at: AwareDatetime,
         updated_at: AwareDatetime,
         last_seen_at: AwareDatetime,
-    ) -> User:
+    ) -> Self:
         return cls(
             _id=id,
             _profile=profile,
@@ -114,7 +113,7 @@ class User:
         )
 
     @classmethod
-    def ensure(cls, user: User) -> User:
+    def ensure(cls, user: Self) -> Self:
         if not isinstance(user, User):
             raise ValidationError("user must be a User")
         return user

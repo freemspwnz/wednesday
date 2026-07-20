@@ -1,8 +1,13 @@
-from __future__ import annotations
+from domain.catalog import Model, ModelCatalog, SubscriptionCatalog
 
-from domain.catalog import SubscriptionCatalog
-
-from ..exceptions import CooldownViolationError, LimitViolationError, UserBannedError, ValidationError
+from ..exceptions import (
+    CooldownViolationError,
+    LimitViolationError,
+    ModelNotFoundError,
+    UserBannedError,
+    UserNotFoundError,
+    ValidationError,
+)
 from ..policies import (
     CooldownViolation,
     DailyLimitViolation,
@@ -10,13 +15,45 @@ from ..policies import (
     LimitDenied,
     LimitPolicy,
 )
-from ..protocols import UsageRepo
+from ..protocols import UsageRepo, UserRepo
 from ..user import User
-from ..vo import AwareDatetime
+from ..vo import AwareDatetime, UserId
 
 
-class GenerationAccessService:
-    """Проверки перед генерацией: бан, статистика, лимиты по эффективной подписке."""
+class UserGenerationService:
+    """User generation settings and pre-generation access checks."""
+
+    @staticmethod
+    async def select_model(  # noqa: PLR0913
+        *,
+        id: UserId,
+        model: Model,
+        repo: UserRepo,
+        models: ModelCatalog,
+        subs: SubscriptionCatalog,
+        at: AwareDatetime,
+    ) -> User:
+        id = UserId.ensure(id)
+        model = Model.ensure(model)
+        at = AwareDatetime.ensure(at)
+        if not isinstance(repo, UserRepo):
+            raise ValidationError("user_repo must implement UserRepo")
+        models = ModelCatalog.ensure(models)
+        subs = SubscriptionCatalog.ensure(subs)
+
+        user = await repo.get_by_id(id)
+        if user is None:
+            raise UserNotFoundError(str(id))
+
+        descriptor = await models.get_by_model(model)
+        if descriptor is None:
+            raise ModelNotFoundError(str(model))
+
+        fallback = await subs.default_plan()
+
+        user.change_settings(fallback=fallback, descriptor=descriptor, at=at)
+        await repo.save(user)
+        return user
 
     @staticmethod
     async def assert_generation_allowed(
@@ -48,7 +85,7 @@ class GenerationAccessService:
             case LimitAllowed():
                 await repo.record_usage(user.id, at)
             case LimitDenied(violation=v):
-                GenerationAccessService._raise_limit_violation(v)
+                UserGenerationService._raise_limit_violation(v)
             case _:
                 raise ValidationError("unknown limit decision")
 

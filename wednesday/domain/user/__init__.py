@@ -37,7 +37,12 @@ from .policies import (
     ViolationStats,
 )
 from .protocols import UsageRepo, UserRepo, ViolationRepo
-from .services import GenerationAccessService, ModelSelectionService, UserModerationService
+from .services import (
+    UserGenerationService,
+    UserLifecycleService,
+    UserManagementService,
+    UserModerationService,
+)
 from .user import User
 from .vo import (
     ActiveState,
@@ -60,7 +65,6 @@ __all__ = [
     "ChangeRole",
     "ChangeSubscription",
     "CooldownViolationError",
-    "GenerationAccessService",
     "InvalidStateTransitionError",
     "LimitPolicy",
     "LimitViolationError",
@@ -68,7 +72,6 @@ __all__ = [
     "ManagementContext",
     "ModelNotFoundError",
     "ModelSelectionError",
-    "ModelSelectionService",
     "StaleWriteError",
     "Unban",
     "UsageRepo",
@@ -79,7 +82,10 @@ __all__ = [
     "UserBannedError",
     "UserError",
     "UserEvent",
+    "UserGenerationService",
     "UserId",
+    "UserLifecycleService",
+    "UserManagementService",
     "UserModerationService",
     "UserNotBannedError",
     "UserNotFoundError",

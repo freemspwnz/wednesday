@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from enum import StrEnum
+from typing import Self
 
 from ....exceptions import ValidationError
 
@@ -12,7 +11,7 @@ class ChatMemberRole(StrEnum):
     RESTRICTED = "restricted"
 
     @classmethod
-    def ensure(cls, role: ChatMemberRole) -> ChatMemberRole:
+    def ensure(cls, role: Self) -> Self:
         if not isinstance(role, cls):
             raise ValidationError("role must be a ChatMemberRole")
         return role

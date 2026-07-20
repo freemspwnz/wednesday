@@ -19,9 +19,12 @@ def is_chat(chat_id: int | str) -> bool:
 
 def is_request_scope(scope: object) -> TypeGuard[RequestScope]:
     return (
-        hasattr(scope, "registration_uc")
-        and hasattr(scope, "user_commands_uc")
-        and hasattr(scope, "chat_commands_uc")
+        hasattr(scope, "user_lifecycle_uc")
+        and hasattr(scope, "user_management_uc")
+        and hasattr(scope, "user_moderation_uc")
+        and hasattr(scope, "user_generation_uc")
+        and hasattr(scope, "chat_management_uc")
+        and hasattr(scope, "chat_schedule_uc")
         and hasattr(scope, "logger")
     )
 

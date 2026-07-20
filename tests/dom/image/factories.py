@@ -23,6 +23,7 @@ from domain.image.protocols import (
     PromptCatalog,
     PromptComponents,
     TextGenerator,
+    ViewRepo,
     VoteRepo,
 )
 from domain.image.vote import Vote
@@ -130,8 +131,12 @@ class FakeImageRepo(ImageRepo):
 
     async def get_random_unseen_for_chat(self, chat_id: UUID, *, min_score: int) -> Image | None:
         _ = chat_id
-        _ = min_score
-        return None
+        candidates = [
+            image
+            for image in self.images.values()
+            if image.score > min_score - 1 and isinstance(image.state, ActiveState)
+        ]
+        return candidates[0] if candidates else None
 
     @classmethod
     def with_images(cls, *images: Image) -> Self:
@@ -139,6 +144,18 @@ class FakeImageRepo(ImageRepo):
         for image in images:
             repo.images[image.id] = image
         return repo
+
+
+@dataclass
+class FakeViewRepo(ViewRepo):
+    shown: set[tuple[UUID, ImageId]] = field(default_factory=set)
+
+    async def was_shown(self, chat_id: UUID, image_id: ImageId) -> bool:
+        return (chat_id, ImageId.ensure(image_id)) in self.shown
+
+    async def mark_shown(self, chat_id: UUID, image_id: ImageId, at: AwareDatetime) -> None:
+        _ = at
+        self.shown.add((chat_id, ImageId.ensure(image_id)))
 
 
 @dataclass

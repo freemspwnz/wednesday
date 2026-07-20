@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from enum import IntEnum
+from typing import Self
 
 from ...exceptions import ValidationError
 
@@ -15,7 +14,7 @@ class Weekday(IntEnum):
     SUNDAY = 7
 
     @classmethod
-    def ensure(cls, weekday: Weekday) -> Weekday:
+    def ensure(cls, weekday: Self) -> Self:
         if not isinstance(weekday, cls):
             raise ValidationError("weekday must be a Weekday")
         return weekday

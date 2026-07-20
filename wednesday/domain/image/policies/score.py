@@ -9,6 +9,8 @@ class ImageScorePolicy:
     """Catalog image score: base 3 plus vote sum; hidden at or below zero."""
 
     BASE: int = 3
+    # Repo filter uses score > min_score - 1; keep aligned with is_selectable (score > 0).
+    CATALOG_MIN_SCORE: int = 1
     _VOTE_VALUES = frozenset({-1, 1})
 
     @classmethod

@@ -7,9 +7,13 @@ from uuid import UUID
 
 import pytest
 
-from app.exceptions import AppError, ChatNotFoundError, LimitStorageError, UserNotFoundError
+from app.exceptions import AppError, LimitStorageError
 from domain.chat import ChatId
-from domain.chat.exceptions import AccessDeniedError as ChatAccessDeniedError, ScheduleLimitExceededError
+from domain.chat.exceptions import (
+    AccessDeniedError as ChatAccessDeniedError,
+    ChatNotFoundError,
+    ScheduleLimitExceededError,
+)
 from domain.image.exceptions import ImageNotFoundError
 from domain.kernel.exceptions import (
     DomainError,
@@ -25,7 +29,7 @@ from domain.user.exceptions import (
     ModelNotFoundError,
     ModelSelectionError,
     UserBannedError,
-    UserNotFoundError as DomainUserNotFoundError,
+    UserNotFoundError,
 )
 from presentation.aiogram.messages.exceptions import (
     IMAGE_NOT_FOUND,
@@ -36,9 +40,8 @@ from presentation.aiogram.messages.exceptions import (
 
 def _cases() -> list[tuple[Callable[[], BaseException], str | None]]:
     return [
-        (lambda: UserNotFoundError(UserId(UUID(int=1))), "Пользователь не найден."),
-        (lambda: DomainUserNotFoundError("u-1"), "Пользователь не найден."),
-        (lambda: ChatNotFoundError(ChatId(value=UUID(int=2))), "Чат не найден."),
+        (lambda: UserNotFoundError(str(UserId(UUID(int=1)))), "Пользователь не найден."),
+        (lambda: ChatNotFoundError(str(ChatId(value=UUID(int=2)))), "Чат не найден."),
         (lambda: LimitStorageError("x"), "Сервис временно перегружен. Попробуйте позже."),
         (lambda: UserBannedError("banned"), "Доступ ограничен."),
         (lambda: UserAccessDeniedError("no"), "Недостаточно прав для этой операции."),

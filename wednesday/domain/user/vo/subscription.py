@@ -9,9 +9,11 @@ from ..exceptions import ValidationError
 
 @dataclass(frozen=True)
 class UserSubscription:
+    """Value Object: user subscription."""
+
     plan: SubscriptionPlan
     started_at: AwareDatetime
-    expires_at: AwareDatetime | None  # None = infinite subscription (free)
+    expires_at: AwareDatetime | None = None  # None = infinite subscription (free)
 
     def __post_init__(self) -> None:
         SubscriptionPlan.ensure(self.plan)

@@ -97,8 +97,8 @@ async def test_message_chain_injects_scope_registers_and_throttles(
 ) -> None:
     reg_user = mk_user_context()
     reg_chat = mk_chat_context(tg_id=1)
-    mock_scope.registration_uc.reg_user.return_value = reg_user
-    mock_scope.registration_uc.reg_chat.return_value = reg_chat
+    mock_scope.user_lifecycle_uc.register.return_value = reg_user
+    mock_scope.chat_management_uc.register.return_value = reg_chat
     mock_scope.logger = mock_logger
 
     dp = Dispatcher()
@@ -115,8 +115,8 @@ async def test_message_chain_injects_scope_registers_and_throttles(
     assert captured["logger"] is mock_logger
     assert captured["user"] == reg_user
     assert captured["chat"] == reg_chat
-    mock_scope.registration_uc.reg_user.assert_awaited_once()
-    mock_scope.registration_uc.reg_chat.assert_awaited_once()
+    mock_scope.user_lifecycle_uc.register.assert_awaited_once()
+    mock_scope.chat_management_uc.register.assert_awaited_once()
     assert mock_limiter.call.await_count == 2
 
 
@@ -141,8 +141,8 @@ async def test_bot_left_skips_registration_in_chain(
     assert captured["scope"] is mock_scope
     assert captured["user"] is None
     assert captured["chat"] is None
-    mock_scope.registration_uc.reg_user.assert_not_awaited()
-    mock_scope.registration_uc.reg_chat.assert_not_awaited()
+    mock_scope.user_lifecycle_uc.register.assert_not_awaited()
+    mock_scope.chat_management_uc.register.assert_not_awaited()
     mock_limiter.call.assert_not_awaited()
 
 
@@ -154,8 +154,8 @@ async def test_throttling_drops_update_before_handler(
     mock_limiter: MagicMock,
 ) -> None:
     reg_chat = mk_chat_context(tg_id=1)
-    mock_scope.registration_uc.reg_user.return_value = mk_user_context()
-    mock_scope.registration_uc.reg_chat.return_value = reg_chat
+    mock_scope.user_lifecycle_uc.register.return_value = mk_user_context()
+    mock_scope.chat_management_uc.register.return_value = reg_chat
     mock_scope.logger = mock_logger
     mock_limiter.call.side_effect = [
         None,

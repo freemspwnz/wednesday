@@ -77,13 +77,13 @@ async def cmd_mod(
     """Promote user to admin (domain management policy)."""
 
     async def _action() -> None:
-        target = await scope.registration_uc.find_user_by_tg_id(
+        target = await scope.user_lifecycle_uc.find_by_tg_id(
             tg_id=parse_telegram_id(command_args[0]),
         )
         if target is None:
             await message.answer(exc_msg.USER_NOT_FOUND)
             return
-        await scope.user_commands_uc.change_role(
+        await scope.user_management_uc.change_role(
             user_id=target.id,
             actor=user.role,
             new_role=UserRole.ADMIN,
@@ -110,13 +110,13 @@ async def cmd_unmod(
     """Revoke admin role (domain management policy)."""
 
     async def _action() -> None:
-        target = await scope.registration_uc.find_user_by_tg_id(
+        target = await scope.user_lifecycle_uc.find_by_tg_id(
             tg_id=parse_telegram_id(command_args[0]),
         )
         if target is None:
             await message.answer(exc_msg.USER_NOT_FOUND)
             return
-        await scope.user_commands_uc.change_role(
+        await scope.user_management_uc.change_role(
             user_id=target.id,
             actor=user.role,
             new_role=UserRole.USER,
@@ -151,13 +151,13 @@ async def cmd_ban(
     async def _action() -> None:
         tg_user_id = parse_telegram_id(command_args[0])
         days = parse_positive_int(command_args[1])
-        target = await scope.registration_uc.find_user_by_tg_id(tg_id=tg_user_id)
+        target = await scope.user_lifecycle_uc.find_by_tg_id(tg_id=tg_user_id)
         if target is None:
             await message.answer(exc_msg.USER_NOT_FOUND)
             return
         now = AwareDatetime.now_utc()
         until = now + timedelta(days=days)
-        await scope.user_commands_uc.ban(
+        await scope.user_moderation_uc.ban(
             user_id=target.id,
             actor=user.role,
             until=until,
@@ -184,13 +184,13 @@ async def cmd_unban(
     """Unban user."""
 
     async def _action() -> None:
-        target = await scope.registration_uc.find_user_by_tg_id(
+        target = await scope.user_lifecycle_uc.find_by_tg_id(
             tg_id=parse_telegram_id(command_args[0]),
         )
         if target is None:
             await message.answer(exc_msg.USER_NOT_FOUND)
             return
-        await scope.user_commands_uc.unban(
+        await scope.user_moderation_uc.unban(
             user_id=target.id,
             actor=user.role,
             at=AwareDatetime.now_utc(),

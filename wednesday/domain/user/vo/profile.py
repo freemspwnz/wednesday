@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 
 from ...kernel.vo import NonEmptyStr
 from ..exceptions import ValidationError
@@ -32,7 +31,7 @@ class UserProfile:
         return NonEmptyStr(" ".join(parts))
 
     @classmethod
-    def ensure(cls, profile: UserProfile) -> UserProfile:
+    def ensure(cls, profile: Self) -> Self:
         if not isinstance(profile, UserProfile):
             raise ValidationError("profile must be a UserProfile")
         return profile

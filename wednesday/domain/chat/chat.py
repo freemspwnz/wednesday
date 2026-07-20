@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
+from typing import Self
 from zoneinfo import ZoneInfo
 
 from .events import (
@@ -60,7 +59,7 @@ class Chat:
         profile: ChatProfile,
         schedules: ChatScheduleSet,
         at: AwareDatetime,
-    ) -> Chat:
+    ) -> Self:
         return cls(
             _id=id,
             _profile=profile,
@@ -80,7 +79,7 @@ class Chat:
         schedules: ChatScheduleSet,
         created_at: AwareDatetime,
         updated_at: AwareDatetime,
-    ) -> Chat:
+    ) -> Self:
         return cls(
             _id=id,
             _profile=profile,
@@ -92,7 +91,7 @@ class Chat:
         )
 
     @classmethod
-    def ensure(cls, chat: Chat) -> Chat:
+    def ensure(cls, chat: Self) -> Self:
         if not isinstance(chat, Chat):
             raise ValidationError("chat must be a Chat")
         return chat

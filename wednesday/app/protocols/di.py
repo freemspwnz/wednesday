@@ -9,10 +9,13 @@ from .observe import Logger
 
 if TYPE_CHECKING:
     from app.use_cases import (
-        ChatCommandsUseCase,
+        ChatManagementUseCase,
+        ChatScheduleUseCase,
         ImageCommandsUseCase,
-        RegistrationUseCase,
-        UserCommandsUseCase,
+        UserGenerationUseCase,
+        UserLifecycleUseCase,
+        UserManagementUseCase,
+        UserModerationUseCase,
     )
 
 
@@ -32,16 +35,25 @@ class RequestScope(Protocol):
     def prompts(self) -> PromptCatalog: ...
 
     @property
-    def user_commands_uc(self) -> UserCommandsUseCase: ...
+    def user_lifecycle_uc(self) -> UserLifecycleUseCase: ...
 
     @property
-    def chat_commands_uc(self) -> ChatCommandsUseCase: ...
+    def user_management_uc(self) -> UserManagementUseCase: ...
+
+    @property
+    def user_moderation_uc(self) -> UserModerationUseCase: ...
+
+    @property
+    def user_generation_uc(self) -> UserGenerationUseCase: ...
+
+    @property
+    def chat_management_uc(self) -> ChatManagementUseCase: ...
+
+    @property
+    def chat_schedule_uc(self) -> ChatScheduleUseCase: ...
 
     @property
     def image_commands_uc(self) -> ImageCommandsUseCase: ...
-
-    @property
-    def registration_uc(self) -> RegistrationUseCase: ...
 
 
 ScopeFactory = Callable[[], AbstractAsyncContextManager[RequestScope]]

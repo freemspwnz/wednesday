@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 
 from ....exceptions import ValidationError
 
@@ -22,7 +21,7 @@ class ChatMemberId:
         return str(self.value)
 
     @classmethod
-    def ensure(cls, member_id: ChatMemberId) -> ChatMemberId:
+    def ensure(cls, member_id: Self) -> Self:
         if not isinstance(member_id, cls):
             raise ValidationError("member_id must be a ChatMemberId")
         return member_id

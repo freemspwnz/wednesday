@@ -39,10 +39,10 @@ async def on_my_chat_member(
     log.info("My chat member event", status=status)
 
     if status in CHAT_MEMBER_LEFT_STATUSES:
-        chat = await scope.registration_uc.find_chat_by_tg_id(tg_id=event.chat.id)
+        chat = await scope.chat_management_uc.find_by_tg_id(tg_id=event.chat.id)
         if chat is not None:
             try:
-                await scope.chat_commands_uc.deactivate(
+                await scope.chat_management_uc.deactivate(
                     chat_id=chat.id,
                     actor=System(),
                     at=AwareDatetime.now_utc(),
@@ -125,7 +125,7 @@ async def cmd_activate(
 
     async def _action() -> None:
         actor = await resolve_chat_member(bot, message, chat)
-        updated = await scope.chat_commands_uc.activate(
+        updated = await scope.chat_management_uc.activate(
             chat_id=chat.id,
             actor=actor,
             at=AwareDatetime.now_utc(),
@@ -147,7 +147,7 @@ async def cmd_deactivate(
 
     async def _action() -> None:
         actor = await resolve_chat_member(bot, message, chat)
-        updated = await scope.chat_commands_uc.deactivate(
+        updated = await scope.chat_management_uc.deactivate(
             chat_id=chat.id,
             actor=actor,
             at=AwareDatetime.now_utc(),
@@ -176,7 +176,7 @@ async def cmd_schedule_add(  # noqa: PLR0913, PLR0917
     async def _action() -> None:
         actor = await resolve_chat_member(bot, message, chat)
         slot = parse_schedule_time(command_args[0])
-        updated = await scope.chat_commands_uc.add_schedule(
+        updated = await scope.chat_schedule_uc.add_schedule(
             chat_id=chat.id,
             actor=actor,
             schedule=slot,
@@ -206,7 +206,7 @@ async def cmd_schedule_remove(  # noqa: PLR0913, PLR0917
     async def _action() -> None:
         actor = await resolve_chat_member(bot, message, chat)
         slot = parse_schedule_time(command_args[0])
-        updated = await scope.chat_commands_uc.remove_schedule(
+        updated = await scope.chat_schedule_uc.remove_schedule(
             chat_id=chat.id,
             actor=actor,
             schedule=slot,
@@ -229,7 +229,7 @@ async def cmd_schedule_clear(
 
     async def _action() -> None:
         actor = await resolve_chat_member(bot, message, chat)
-        updated = await scope.chat_commands_uc.clear_schedules(
+        updated = await scope.chat_schedule_uc.clear_schedules(
             chat_id=chat.id,
             actor=actor,
             at=AwareDatetime.now_utc(),
@@ -258,7 +258,7 @@ async def cmd_schedule_day(  # noqa: PLR0913, PLR0917
     async def _action() -> None:
         actor = await resolve_chat_member(bot, message, chat)
         weekday = parse_weekday(command_args[0])
-        updated = await scope.chat_commands_uc.change_schedule_day(
+        updated = await scope.chat_schedule_uc.change_schedule_day(
             chat_id=chat.id,
             actor=actor,
             new_weekday=weekday,
@@ -288,7 +288,7 @@ async def cmd_schedule_tz(  # noqa: PLR0913, PLR0917
     async def _action() -> None:
         actor = await resolve_chat_member(bot, message, chat)
         timezone = parse_timezone(command_args[0])
-        updated = await scope.chat_commands_uc.change_schedule_timezone(
+        updated = await scope.chat_schedule_uc.change_schedule_timezone(
             chat_id=chat.id,
             actor=actor,
             timezone=timezone,

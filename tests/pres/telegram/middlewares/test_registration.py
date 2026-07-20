@@ -124,8 +124,8 @@ def _bot_left_event(*, joined: bool = False) -> ChatMemberUpdated:
 async def test_call_registers_user_and_chat(mock_scope: MagicMock, mock_logger: MagicMock) -> None:
     reg_user = mk_user_context()
     reg_chat = mk_chat_context(tg_id=1, chat_type=ChatType.PRIVATE)
-    mock_scope.registration_uc.reg_user.return_value = reg_user
-    mock_scope.registration_uc.reg_chat.return_value = reg_chat
+    mock_scope.user_lifecycle_uc.register.return_value = reg_user
+    mock_scope.chat_management_uc.register.return_value = reg_chat
 
     middleware = RegistrationMiddleware(logger=mock_logger)
     handler = AsyncMock()
@@ -142,8 +142,8 @@ async def test_call_registers_user_and_chat(mock_scope: MagicMock, mock_logger: 
     assert data["user"] == reg_user
     assert data["chat"] == reg_chat
     handler.assert_awaited_once()
-    mock_scope.registration_uc.reg_user.assert_awaited_once()
-    call_kwargs = mock_scope.registration_uc.reg_user.await_args.kwargs
+    mock_scope.user_lifecycle_uc.register.assert_awaited_once()
+    call_kwargs = mock_scope.user_lifecycle_uc.register.await_args.kwargs
     assert call_kwargs["profile"].telegram_id == 1
 
 
@@ -158,7 +158,8 @@ async def test_call_skips_on_bot_left(mock_scope: MagicMock, mock_logger: MagicM
 
     assert data["user"] is None
     assert data["chat"] is None
-    mock_scope.registration_uc.reg_user.assert_not_awaited()
+    mock_scope.user_lifecycle_uc.register.assert_not_awaited()
+    mock_scope.chat_management_uc.register.assert_not_awaited()
 
 
 @pytest.mark.unit

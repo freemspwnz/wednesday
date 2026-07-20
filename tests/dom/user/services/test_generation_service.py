@@ -7,9 +7,9 @@ import pytest
 from domain.user import (
     BannedState,
     CooldownViolationError,
-    GenerationAccessService,
     LimitViolationError,
     UserBannedError,
+    UserGenerationService,
     UserRole,
 )
 from domain.user.exceptions import ValidationError
@@ -24,7 +24,7 @@ from ..factories import FREE_PLAN, FakeSubscriptionCatalog, FakeUsageRepo, dt, m
 async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     user = mk_user(now=dt(10))
 
-    await GenerationAccessService.assert_generation_allowed(
+    await UserGenerationService.assert_generation_allowed(
         user=user,
         repo=FakeUsageRepo(stats=UsageStats(last_usage=dt(1), daily_usage=0)),
         catalog=FakeSubscriptionCatalog(),
@@ -33,7 +33,7 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
 
     user.ban(actor=UserRole.OWNER, until=dt(20), at=dt(11))
     with pytest.raises(UserBannedError):
-        await GenerationAccessService.assert_generation_allowed(
+        await UserGenerationService.assert_generation_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
             catalog=FakeSubscriptionCatalog(),
@@ -42,7 +42,7 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
     user.unban(actor=UserRole.OWNER, at=dt(12))
 
     with pytest.raises(LimitViolationError):
-        await GenerationAccessService.assert_generation_allowed(
+        await UserGenerationService.assert_generation_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=100)),
             catalog=FakeSubscriptionCatalog(),
@@ -50,7 +50,7 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
         )
 
     with pytest.raises(CooldownViolationError):
-        await GenerationAccessService.assert_generation_allowed(
+        await UserGenerationService.assert_generation_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=dt(12), daily_usage=0)),
             catalog=FakeSubscriptionCatalog(),
@@ -62,7 +62,7 @@ async def test_generation_access_service_paths(monkeypatch: pytest.MonkeyPatch) 
         lambda **_: cast(Any, object()),
     )
     with pytest.raises(ValidationError):
-        await GenerationAccessService.assert_generation_allowed(
+        await UserGenerationService.assert_generation_allowed(
             user=user,
             repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
             catalog=FakeSubscriptionCatalog(),
@@ -77,7 +77,7 @@ async def test_generation_access_uses_effective_state_without_mutation() -> None
     user.ban(actor=UserRole.OWNER, until=dt(11), at=dt(10))
     user.pull_events()
 
-    await GenerationAccessService.assert_generation_allowed(
+    await UserGenerationService.assert_generation_allowed(
         user=user,
         repo=FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0)),
         catalog=FakeSubscriptionCatalog(),
@@ -101,7 +101,7 @@ async def test_generation_access_uses_effective_subscription_without_mutation() 
     user.pull_events()
 
     with pytest.raises(LimitViolationError):
-        await GenerationAccessService.assert_generation_allowed(
+        await UserGenerationService.assert_generation_allowed(
             user=user,
             repo=FakeUsageRepo(
                 stats=UsageStats(

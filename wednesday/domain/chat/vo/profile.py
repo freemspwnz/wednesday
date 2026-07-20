@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Self
 
 from ..exceptions import ValidationError
 from .type import ChatType
@@ -38,7 +36,7 @@ class ChatProfile:
             raise ValidationError("Chat username too long")
 
     @classmethod
-    def ensure(cls, profile: ChatProfile) -> ChatProfile:
+    def ensure(cls, profile: Self) -> Self:
         if not isinstance(profile, cls):
             raise ValidationError("profile must be a ChatProfile")
         return profile

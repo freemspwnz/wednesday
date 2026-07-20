@@ -11,6 +11,14 @@ class ChatError(DomainError):
     """Errors from the chat bounded context."""
 
 
+class ChatNotFoundError(ChatError):
+    """Chat aggregate not found."""
+
+    def __init__(self, chat_id: str) -> None:
+        self.chat_id = chat_id
+        super().__init__(f"chat not found: {chat_id}")
+
+
 class ScheduleLimitExceededError(ChatError):
     """Exceeded the maximum number of schedules."""
 
@@ -21,6 +29,7 @@ class ScheduleLimitExceededError(ChatError):
 __all__ = [
     "AccessDeniedError",
     "ChatError",
+    "ChatNotFoundError",
     "InvalidStateTransitionError",
     "ScheduleLimitExceededError",
     "StaleWriteError",

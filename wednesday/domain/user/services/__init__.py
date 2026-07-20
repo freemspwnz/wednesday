@@ -1,9 +1,11 @@
-from .generation import GenerationAccessService
-from .model_selection import ModelSelectionService
+from .generation import UserGenerationService
+from .lifecycle import UserLifecycleService
+from .management import UserManagementService
 from .moderation import UserModerationService
 
 __all__ = [
-    "GenerationAccessService",
-    "ModelSelectionService",
+    "UserGenerationService",
+    "UserLifecycleService",
+    "UserManagementService",
     "UserModerationService",
 ]

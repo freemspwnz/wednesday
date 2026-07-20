@@ -1,12 +1,14 @@
 from functools import cached_property
 
 from app.protocols import CacheRepoRegistry, Logger, RequestScope, UoWFactory
-from app.services import ChatCommandService, ImageCommandService, RegistrationService, UserCommandService
 from app.use_cases import (
-    ChatCommandsUseCase,
+    ChatManagementUseCase,
+    ChatScheduleUseCase,
     ImageCommandsUseCase,
-    RegistrationUseCase,
-    UserCommandsUseCase,
+    UserGenerationUseCase,
+    UserLifecycleUseCase,
+    UserManagementUseCase,
+    UserModerationUseCase,
 )
 from domain.catalog import ModelCatalog, SubscriptionCatalog
 from domain.image import PromptCatalog
@@ -44,19 +46,9 @@ class ScopeContainer(RequestScope):
         return self._catalog.prompts
 
     @cached_property
-    def registration_uc(self) -> RegistrationUseCase:
-        return RegistrationUseCase(
+    def user_lifecycle_uc(self) -> UserLifecycleUseCase:
+        return UserLifecycleUseCase(
             uow=self._uow_factory(),
-            service=self._registration_srv,
-            cache=self._cache,
-            logger=self._logger,
-        )
-
-    @cached_property
-    def user_commands_uc(self) -> UserCommandsUseCase:
-        return UserCommandsUseCase(
-            uow=self._uow_factory(),
-            service=self._user_commands_srv,
             cache=self._cache.users,
             models=self.models,
             subscriptions=self.subscriptions,
@@ -64,10 +56,43 @@ class ScopeContainer(RequestScope):
         )
 
     @cached_property
-    def chat_commands_uc(self) -> ChatCommandsUseCase:
-        return ChatCommandsUseCase(
+    def user_management_uc(self) -> UserManagementUseCase:
+        return UserManagementUseCase(
             uow=self._uow_factory(),
-            service=self._chat_commands_srv,
+            cache=self._cache.users,
+            logger=self._logger,
+        )
+
+    @cached_property
+    def user_moderation_uc(self) -> UserModerationUseCase:
+        return UserModerationUseCase(
+            uow=self._uow_factory(),
+            cache=self._cache.users,
+            logger=self._logger,
+        )
+
+    @cached_property
+    def user_generation_uc(self) -> UserGenerationUseCase:
+        return UserGenerationUseCase(
+            uow=self._uow_factory(),
+            cache=self._cache.users,
+            models=self.models,
+            subscriptions=self.subscriptions,
+            logger=self._logger,
+        )
+
+    @cached_property
+    def chat_management_uc(self) -> ChatManagementUseCase:
+        return ChatManagementUseCase(
+            uow=self._uow_factory(),
+            cache=self._cache.chats,
+            logger=self._logger,
+        )
+
+    @cached_property
+    def chat_schedule_uc(self) -> ChatScheduleUseCase:
+        return ChatScheduleUseCase(
+            uow=self._uow_factory(),
             cache=self._cache.chats,
             logger=self._logger,
         )
@@ -76,33 +101,5 @@ class ScopeContainer(RequestScope):
     def image_commands_uc(self) -> ImageCommandsUseCase:
         return ImageCommandsUseCase(
             uow=self._uow_factory(),
-            service=self._image_commands_srv,
-            logger=self._logger,
-        )
-
-    @cached_property
-    def _registration_srv(self) -> RegistrationService:
-        return RegistrationService(
-            models=self.models,
-            subscriptions=self.subscriptions,
-            logger=self._logger,
-        )
-
-    @cached_property
-    def _user_commands_srv(self) -> UserCommandService:
-        return UserCommandService(
-            subscriptions=self.subscriptions,
-            logger=self._logger,
-        )
-
-    @cached_property
-    def _chat_commands_srv(self) -> ChatCommandService:
-        return ChatCommandService(
-            logger=self._logger,
-        )
-
-    @cached_property
-    def _image_commands_srv(self) -> ImageCommandService:
-        return ImageCommandService(
             logger=self._logger,
         )

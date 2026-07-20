@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from enum import IntEnum
+from typing import Self
 
 from ..exceptions import ValidationError
 
@@ -12,7 +11,7 @@ class UserRole(IntEnum):
     USER = 0
 
     @classmethod
-    def ensure(cls, role: UserRole) -> UserRole:
+    def ensure(cls, role: Self) -> Self:
         if not isinstance(role, UserRole):
             raise ValidationError("role must be a UserRole")
         return role

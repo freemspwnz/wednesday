@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 
 from ..exceptions import ValidationError
 from ..vo import AwareDatetime, ChatId
@@ -16,7 +15,7 @@ class ChatEvent:
         AwareDatetime.ensure(self.occurred_at)
 
     @classmethod
-    def ensure(cls, event: ChatEvent) -> ChatEvent:
+    def ensure(cls, event: Self) -> Self:
         if not isinstance(event, cls):
             raise ValidationError("event must be a ChatEvent")
         return event

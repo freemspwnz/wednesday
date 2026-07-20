@@ -33,12 +33,12 @@ class TestContainer:
 
     @pytest.mark.asyncio
     async def test_get_scope_yields_scope_container(self, container: Container) -> None:
-        with patch("infra.di.scope.RegistrationUseCase") as registration_uc_cls:
-            registration_uc_cls.return_value = MagicMock()
+        with patch("infra.di.scope.UserManagementUseCase") as user_management_uc_cls:
+            user_management_uc_cls.return_value = MagicMock()
             async with container.get_scope() as scope:
                 assert isinstance(scope, ScopeContainer)
                 assert scope.logger is container.observe.logger
-                assert scope.registration_uc is registration_uc_cls.return_value
+                assert scope.user_management_uc is user_management_uc_cls.return_value
 
     @pytest.mark.asyncio
     async def test_shutdown_without_touching_persistence(self, di_config: Config) -> None:

@@ -2,8 +2,12 @@
 
 from builtins import BaseException
 
-from app.exceptions import AppError, ChatNotFoundError, LimitStorageError, UserNotFoundError
-from domain.chat.exceptions import AccessDeniedError as ChatAccessDeniedError, ScheduleLimitExceededError
+from app.exceptions import AppError, LimitStorageError
+from domain.chat.exceptions import (
+    AccessDeniedError as ChatAccessDeniedError,
+    ChatNotFoundError,
+    ScheduleLimitExceededError,
+)
 from domain.image.exceptions import ImageNotFoundError
 from domain.kernel.exceptions import (
     DomainError,
@@ -18,7 +22,7 @@ from domain.user.exceptions import (
     ModelNotFoundError,
     ModelSelectionError,
     UserBannedError,
-    UserNotFoundError as DomainUserNotFoundError,
+    UserNotFoundError,
 )
 
 SERVER_ERROR = "⚠️ Произошла ошибка на сервере. Мы уже в курсе и чиним!"
@@ -55,7 +59,7 @@ _MODEL_SELECTION_MESSAGES: dict[str, str] = {
 
 def user_message_for_exception(exc: BaseException) -> str | None:
     """User-facing text; None means use a generic fallback message."""
-    if isinstance(exc, UserNotFoundError | DomainUserNotFoundError):
+    if isinstance(exc, UserNotFoundError):
         return USER_NOT_FOUND
     if isinstance(exc, ChatNotFoundError):
         return CHAT_NOT_FOUND

@@ -35,10 +35,10 @@ async def test_simple_replies(handler: object, expected: str) -> None:
 async def test_ban_success(mock_scope: MagicMock, mock_logger: MagicMock, admin_user: UserContext) -> None:
     target = mk_user_context(user_id=2)
     target.tg_id = 42
-    mock_scope.registration_uc.find_user_by_tg_id.return_value = target
+    mock_scope.user_lifecycle_uc.find_by_tg_id.return_value = target
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
         await h.cmd_ban(make_message(), ["42", "7"], mock_logger, mock_scope, admin_user)
-    mock_scope.user_commands_uc.ban.assert_awaited_once()
+    mock_scope.user_moderation_uc.ban.assert_awaited_once()
     answer.assert_awaited_once_with(admin_msg.USER_BANNED.format(tg_id=42, days=7))
 
 
@@ -51,8 +51,8 @@ async def test_mod_denied_by_domain_policy(
 ) -> None:
     target = mk_user_context(user_id=2)
     target.tg_id = 42
-    mock_scope.registration_uc.find_user_by_tg_id.return_value = target
-    mock_scope.user_commands_uc.change_role.side_effect = AccessDeniedError("access_denied")
+    mock_scope.user_lifecycle_uc.find_by_tg_id.return_value = target
+    mock_scope.user_management_uc.change_role.side_effect = AccessDeniedError("access_denied")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
         await h.cmd_mod(make_message(user_id=2), ["42"], mock_logger, mock_scope, admin_user)

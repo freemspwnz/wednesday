@@ -1,6 +1,5 @@
 """Application layer errors."""
 
-from .application import ChatNotFoundError, UserNotFoundError
 from .base import AppError, UnexpectedAppError
 from .network import (
     HttpAuthError,
@@ -55,7 +54,6 @@ __all__ = [
     "CatalogFormatError",
     "CatalogNotFoundError",
     "CatalogParseError",
-    "ChatNotFoundError",
     "CircuitError",
     "CircuitOpenError",
     "CircuitStorageError",
@@ -86,6 +84,5 @@ __all__ = [
     "UnexpectedHttpError",
     "UnexpectedLimitError",
     "UnexpectedRetryError",
-    "UserNotFoundError",
     "unwrap_exception",
 ]

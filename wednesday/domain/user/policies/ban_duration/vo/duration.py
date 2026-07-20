@@ -9,6 +9,8 @@ from ....vo import AwareDatetime
 
 @dataclass(frozen=True, order=True)
 class BanDuration:
+    """Value Object: ban duration."""
+
     value: timedelta
 
     def __add__(self, other: AwareDatetime | BanDuration) -> AwareDatetime | BanDuration:

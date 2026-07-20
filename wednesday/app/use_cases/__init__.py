@@ -1,11 +1,18 @@
-from .chat import ChatCommandsUseCase
+from .chat import ChatManagementUseCase, ChatScheduleUseCase
 from .image import ImageCommandsUseCase
-from .registration import RegistrationUseCase
-from .user import UserCommandsUseCase
+from .user import (
+    UserGenerationUseCase,
+    UserLifecycleUseCase,
+    UserManagementUseCase,
+    UserModerationUseCase,
+)
 
 __all__ = [
-    "ChatCommandsUseCase",
+    "ChatManagementUseCase",
+    "ChatScheduleUseCase",
     "ImageCommandsUseCase",
-    "RegistrationUseCase",
-    "UserCommandsUseCase",
+    "UserGenerationUseCase",
+    "UserLifecycleUseCase",
+    "UserManagementUseCase",
+    "UserModerationUseCase",
 ]

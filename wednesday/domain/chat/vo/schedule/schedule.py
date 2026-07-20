@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 
 from ...exceptions import ValidationError
 
@@ -10,7 +9,7 @@ MAX_MINUTE = 59
 
 @dataclass(frozen=True, slots=True)
 class ChatSchedule:
-    """Value Object: расписание отправки сообщений в чат."""
+    """Value Object: message delivery schedule for a chat."""
 
     hour: int
     minute: int
@@ -22,7 +21,7 @@ class ChatSchedule:
             raise ValidationError(f"Minute must be 0-59, got {self.minute}")
 
     @classmethod
-    def ensure(cls, schedule: ChatSchedule) -> ChatSchedule:
+    def ensure(cls, schedule: Self) -> Self:
         if not isinstance(schedule, cls):
             raise ValidationError("schedule must be a ChatSchedule")
         return schedule

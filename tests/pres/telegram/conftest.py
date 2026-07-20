@@ -36,9 +36,12 @@ def mock_limiter() -> MagicMock:
 def mock_scope(mock_logger: MagicMock) -> MagicMock:
     scope = MagicMock()
     scope.logger = mock_logger
-    scope.registration_uc = AsyncMock()
-    scope.user_commands_uc = AsyncMock()
-    scope.chat_commands_uc = AsyncMock()
+    scope.user_lifecycle_uc = AsyncMock()
+    scope.user_management_uc = AsyncMock()
+    scope.user_moderation_uc = AsyncMock()
+    scope.user_generation_uc = AsyncMock()
+    scope.chat_management_uc = AsyncMock()
+    scope.chat_schedule_uc = AsyncMock()
     scope.models = AsyncMock()
     scope.image_commands_uc = AsyncMock()
     return scope

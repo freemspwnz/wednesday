@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
+from typing import Self
 
 from ....kernel.vo import AwareDatetime
 from ...exceptions import ValidationError
@@ -11,16 +10,16 @@ class UserState(ABC):
     def is_banned_at(self, now: AwareDatetime) -> bool: ...
 
     @abstractmethod
-    def ban_until(self, until: AwareDatetime, now: AwareDatetime) -> UserState: ...
+    def ban_until(self, until: AwareDatetime, now: AwareDatetime) -> "UserState": ...
 
     @abstractmethod
-    def unban(self) -> UserState: ...
+    def unban(self) -> "UserState": ...
 
     @abstractmethod
-    def effective_at(self, now: AwareDatetime) -> UserState: ...
+    def effective_at(self, now: AwareDatetime) -> "UserState": ...
 
     @classmethod
-    def ensure(cls, state: UserState) -> UserState:
+    def ensure(cls, state: Self) -> Self:
         if not isinstance(state, cls):
             raise ValidationError("state must be a UserState")
         return state

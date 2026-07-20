@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 
 from ....exceptions import ValidationError
 from ....vo import ChatId, ManagementActor
@@ -22,7 +21,7 @@ class ManagementContext:
         ChatId.ensure(self.chat_id)
 
     @classmethod
-    def ensure(cls, ctx: ManagementContext) -> ManagementContext:
+    def ensure(cls, ctx: Self) -> Self:
         if not isinstance(ctx, cls):
             raise ValidationError("ctx must be a ManagementContext")
         return ctx

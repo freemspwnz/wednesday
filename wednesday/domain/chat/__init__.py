@@ -13,6 +13,7 @@ from .events import (
 from .exceptions import (
     AccessDeniedError,
     ChatError,
+    ChatNotFoundError,
     InvalidStateTransitionError,
     ScheduleLimitExceededError,
     StaleWriteError,
@@ -25,6 +26,7 @@ from .policies import (
     ManagementDenied,
 )
 from .protocols import ChatRepo
+from .services import ChatManagementService, ChatScheduleService
 from .vo import (
     ActiveState,
     ChatId,
@@ -51,9 +53,11 @@ __all__ = [
     "ChatError",
     "ChatEvent",
     "ChatId",
+    "ChatManagementService",
     "ChatMember",
     "ChatMemberId",
     "ChatMemberRole",
+    "ChatNotFoundError",
     "ChatProfile",
     "ChatProfileChanged",
     "ChatRepo",
@@ -62,6 +66,7 @@ __all__ = [
     "ChatScheduleCleared",
     "ChatScheduleDayChanged",
     "ChatScheduleRemoved",
+    "ChatScheduleService",
     "ChatScheduleSet",
     "ChatScheduleTimezoneChanged",
     "ChatState",

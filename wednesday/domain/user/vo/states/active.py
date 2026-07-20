@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from ....kernel.vo import AwareDatetime
@@ -22,7 +20,7 @@ class ActiveState(UserState):
         return BannedState(until=until)
 
     @staticmethod
-    def unban() -> ActiveState:
+    def unban() -> "ActiveState":
         raise InvalidStateTransitionError("cannot unban active state")
 
     def effective_at(self, now: AwareDatetime) -> UserState:

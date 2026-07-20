@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 from uuid import UUID, uuid4
 
 from ..exceptions import ValidationError
@@ -18,11 +17,11 @@ class UserId:
         return str(self.value)
 
     @classmethod
-    def new(cls) -> UserId:
+    def new(cls) -> Self:
         return cls(value=uuid4())
 
     @classmethod
-    def ensure(cls, user_id: UserId) -> UserId:
+    def ensure(cls, user_id: Self) -> Self:
         if not isinstance(user_id, UserId):
             raise ValidationError("user_id must be a UserId")
         return user_id

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from ..exceptions import UserNotFoundError, ValidationError
 from ..policies import (
     BanAssigned,
@@ -9,9 +7,63 @@ from ..policies import (
 from ..protocols import UserRepo, ViolationRepo
 from ..user import User
 from ..vo import AwareDatetime, UserId, UserRole
+from .utils import load_or_raise
 
 
 class UserModerationService:
+    """Load user aggregate, apply moderation command, and save."""
+
+    @staticmethod
+    async def ban(
+        *,
+        id: UserId,
+        actor: UserRole,
+        until: AwareDatetime,
+        repo: UserRepo,
+        at: AwareDatetime,
+    ) -> User:
+        id = UserId.ensure(id)
+        actor = UserRole.ensure(actor)
+        until = AwareDatetime.ensure(until)
+        at = AwareDatetime.ensure(at)
+
+        user = await load_or_raise(repo=repo, id=id)
+        user.ban(actor=actor, until=until, at=at)
+        await repo.save(user)
+        return user
+
+    @staticmethod
+    async def unban(
+        *,
+        id: UserId,
+        actor: UserRole,
+        repo: UserRepo,
+        at: AwareDatetime,
+    ) -> User:
+        id = UserId.ensure(id)
+        actor = UserRole.ensure(actor)
+        at = AwareDatetime.ensure(at)
+
+        user = await load_or_raise(repo=repo, id=id)
+        user.unban(actor=actor, at=at)
+        await repo.save(user)
+        return user
+
+    @staticmethod
+    async def expire_ban_if_due(
+        *,
+        id: UserId,
+        repo: UserRepo,
+        at: AwareDatetime,
+    ) -> User:
+        id = UserId.ensure(id)
+        at = AwareDatetime.ensure(at)
+
+        user = await load_or_raise(repo=repo, id=id)
+        user.expire_ban_if_due(at=at)
+        await repo.save(user)
+        return user
+
     @staticmethod
     async def assign_ban(
         *,

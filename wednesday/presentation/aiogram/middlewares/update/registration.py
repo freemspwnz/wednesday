@@ -17,7 +17,7 @@ class RegistrationMiddleware(BaseMiddleware):
     """Eager registration on all handled updates including chat_member.
 
     Skips only when the bot is left/kicked from a chat (my_chat_member).
-    DTO fields such as is_active are not applied to existing aggregates on reg_user/reg_chat.
+    DTO fields such as is_active are not applied to existing aggregates on register.
     """
 
     def __init__(
@@ -47,12 +47,12 @@ class RegistrationMiddleware(BaseMiddleware):
         tg_chat = self._extract_chat(event)
 
         if tg_user is not None:
-            user = await request_scope.registration_uc.reg_user(
+            user = await request_scope.user_lifecycle_uc.register(
                 profile=self._to_user_profile(tg_user),
             )
 
         if tg_chat is not None:
-            chat = await request_scope.registration_uc.reg_chat(
+            chat = await request_scope.chat_management_uc.register(
                 profile=self._to_chat_profile(tg_chat),
             )
 
@@ -63,7 +63,7 @@ class RegistrationMiddleware(BaseMiddleware):
 
     @staticmethod
     def _should_skip_registration(event: TelegramObject) -> bool:
-        """Bot left/kicked from chat: handler uses find_chat only, no get_or_create."""
+        """Bot left/kicked from chat: handler uses find_by_tg_id only, no get_or_create."""
         if not isinstance(event, ChatMemberUpdated):
             return False
         member = event.new_chat_member

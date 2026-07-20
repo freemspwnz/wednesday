@@ -38,7 +38,7 @@ async def cmd_set_model(
     """Set image generation model for the caller."""
 
     async def _action() -> None:
-        updated = await scope.user_commands_uc.select_model(
+        updated = await scope.user_generation_uc.select_model(
             user_id=user.id,
             model=Model.parse(command_args[0]),
             at=AwareDatetime.now_utc(),

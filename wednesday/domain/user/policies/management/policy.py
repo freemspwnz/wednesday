@@ -49,7 +49,7 @@ class ManagementAccessPolicy:
 
         match ctx.action:
             case ChangeRole(old_role=old_role, new_role=new_role):
-                # sanity: context должен совпадать с action
+                # sanity: context must match action
                 if old_role != ctx.target_role:
                     return cls.deny(ManagementAccessCode.ACCESS_DENIED)
 

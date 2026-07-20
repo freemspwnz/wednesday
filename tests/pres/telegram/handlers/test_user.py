@@ -42,7 +42,7 @@ async def test_set_model_usage() -> None:
 @pytest.mark.asyncio
 async def test_set_model_success(user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock) -> None:
     updated = mk_user(user_id=1, now=dt(10))
-    mock_scope.user_commands_uc.select_model = AsyncMock(return_value=updated)
+    mock_scope.user_generation_uc.select_model = AsyncMock(return_value=updated)
     message = make_message(text="/set_model gigachat-2-lite")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
@@ -54,14 +54,14 @@ async def test_set_model_success(user_context: UserContext, mock_scope: MagicMoc
             mock_logger,
         )
 
-    mock_scope.user_commands_uc.select_model.assert_awaited_once()
+    mock_scope.user_generation_uc.select_model.assert_awaited_once()
     answer.assert_awaited_once_with(cmd_msg.format_set_model_success("gigachat-2-lite"))
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_set_model_not_found(user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock) -> None:
-    mock_scope.user_commands_uc.select_model = AsyncMock(
+    mock_scope.user_generation_uc.select_model = AsyncMock(
         side_effect=ModelNotFoundError("missing-model"),
     )
     message = make_message(text="/set_model missing-model")
@@ -81,7 +81,7 @@ async def test_set_model_not_found(user_context: UserContext, mock_scope: MagicM
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_set_model_tier_denied(user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock) -> None:
-    mock_scope.user_commands_uc.select_model = AsyncMock(
+    mock_scope.user_generation_uc.select_model = AsyncMock(
         side_effect=ModelSelectionError("tier_too_low"),
     )
     message = make_message(text="/set_model gigachat-2-pro")

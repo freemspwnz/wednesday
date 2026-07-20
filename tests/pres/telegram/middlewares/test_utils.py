@@ -24,9 +24,12 @@ def test_is_chat(chat_id: int | str, expected: bool) -> None:
 
 def _valid_scope() -> MagicMock:
     scope = MagicMock()
-    scope.registration_uc = MagicMock()
-    scope.user_commands_uc = MagicMock()
-    scope.chat_commands_uc = MagicMock()
+    scope.user_lifecycle_uc = MagicMock()
+    scope.user_management_uc = MagicMock()
+    scope.user_moderation_uc = MagicMock()
+    scope.user_generation_uc = MagicMock()
+    scope.chat_management_uc = MagicMock()
+    scope.chat_schedule_uc = MagicMock()
     scope.logger = MagicMock()
     return scope
 
