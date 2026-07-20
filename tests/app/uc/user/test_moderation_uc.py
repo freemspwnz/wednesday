@@ -4,8 +4,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from domain.user import ActiveState, UserRole
+from domain.user import ActiveState, UserBanned, UserRole
 from domain.user.exceptions import InvalidStateTransitionError
+from domain.user.policies import ViolationStats
+from tests.dom.user.factories import FakeUserRepo, FakeViolationRepo
 
 from .helpers import dt, make_moderation_uc, mk_user
 
@@ -66,3 +68,35 @@ async def test_uc_unban_after_ban_refreshes_cache_twice() -> None:
     await uc.unban(user_id=user.id, actor=UserRole.OWNER, at=dt(13))
 
     assert cache.users.set.await_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_assign_ban_records_strike_without_ban_under_threshold() -> None:
+    user = mk_user(now=dt(10))
+    user_repo = FakeUserRepo.with_users(user)
+    violations = FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0))
+    uc, uow, cache = make_moderation_uc(repo=user_repo, violations=violations)
+
+    got = await uc.assign_ban(user_id=user.id, at=dt(12))
+
+    assert isinstance(got.state, ActiveState)
+    assert violations.stats.total == 1
+    assert uow.enter_count == uow.exit_count == 1
+    cache.users.set.assert_awaited_once_with(got)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_assign_ban_bans_when_threshold_reached() -> None:
+    user = mk_user(now=dt(10))
+    user_repo = FakeUserRepo.with_users(user)
+    violations = FakeViolationRepo(stats=ViolationStats(hour=1, today=1, week=1, total=1))
+    uc, _, cache = make_moderation_uc(repo=user_repo, violations=violations)
+
+    got = await uc.assign_ban(user_id=user.id, at=dt(12))
+
+    assert isinstance(got.pull_events()[0], UserBanned)
+    assert got.state.is_banned_at(dt(12))
+    assert violations.stats.total == 2
+    cache.users.set.assert_awaited_once_with(got)

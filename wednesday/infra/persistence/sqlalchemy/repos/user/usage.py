@@ -14,7 +14,7 @@ class SQLAUsageRepo(UsageRepo):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_usage_stats(self, user_id: UserId) -> UsageStats:
+    async def get_stats(self, user_id: UserId) -> UsageStats:
         try:
             stmt = select(UserUsageORM).where(UserUsageORM.user_id == user_id.value)
             result = await self._session.execute(stmt)
@@ -30,14 +30,14 @@ class SQLAUsageRepo(UsageRepo):
         except SQLAlchemyError as exc:
             raise RepositoryError(
                 "SQLAlchemy failed to load usage stats.",
-                operation="get_usage_stats",
+                operation="get_stats",
                 entity="user_usage",
                 entity_id=user_id.value,
             ) from exc
         except Exception as exc:
             raise UnexpectedDBError("Unexpected error while loading usage stats.") from exc
 
-    async def record_usage(self, user_id: UserId, at: AwareDatetime) -> None:
+    async def record(self, user_id: UserId, at: AwareDatetime) -> None:
         at = AwareDatetime.ensure(at)
         usage_on = at.value.date()
         try:
@@ -72,14 +72,14 @@ class SQLAUsageRepo(UsageRepo):
         except IntegrityError as exc:
             raise DataIntegrityError(
                 "Usage record violated database constraints.",
-                operation="record_usage",
+                operation="record",
                 entity="user_usage",
                 entity_id=user_id.value,
             ) from exc
         except SQLAlchemyError as exc:
             raise RepositoryError(
                 "SQLAlchemy failed to record usage.",
-                operation="record_usage",
+                operation="record",
                 entity="user_usage",
                 entity_id=user_id.value,
             ) from exc

@@ -5,15 +5,18 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 from app.use_cases.user import (
+    UserGenerationUseCase,
     UserLifecycleUseCase,
     UserManagementUseCase,
     UserModerationUseCase,
 )
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
+from domain.user.protocols import UsageRepo, ViolationRepo
 from tests.dom.user.factories import (
     FakeModelCatalog,
     FakeSubscriptionCatalog,
+    FakeUsageRepo,
     default_settings,
     subscription_free,
 )
@@ -77,15 +80,35 @@ def make_management_uc(
 
 def make_moderation_uc(
     *,
-    repo: AsyncMock,
+    repo: AsyncMock | object,
+    violations: ViolationRepo | AsyncMock | None = None,
     cache_registry: FakeCacheRegistry | None = None,
 ) -> tuple[UserModerationUseCase, FakeUoW, FakeCacheRegistry]:
     log = mk_logger()
-    uow = FakeUoW(users=repo)
+    uow = FakeUoW(users=repo, violations=violations)  # type: ignore[arg-type]
     cache = cache_registry or FakeCacheRegistry()
     uc = UserModerationUseCase(
         uow=uow,
         cache=cache.users,
+        logger=log,
+    )
+    return uc, uow, cache
+
+
+def make_generation_uc(
+    *,
+    repo: AsyncMock | object,
+    usage: UsageRepo | AsyncMock | None = None,
+    cache_registry: FakeCacheRegistry | None = None,
+) -> tuple[UserGenerationUseCase, FakeUoW, FakeCacheRegistry]:
+    log = mk_logger()
+    uow = FakeUoW(users=repo, usage=usage or FakeUsageRepo())  # type: ignore[arg-type]
+    cache = cache_registry or FakeCacheRegistry()
+    uc = UserGenerationUseCase(
+        uow=uow,
+        cache=cache.users,
+        models=FakeModelCatalog(),
+        subscriptions=FakeSubscriptionCatalog(),
         logger=log,
     )
     return uc, uow, cache

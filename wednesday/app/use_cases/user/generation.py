@@ -42,3 +42,25 @@ class UserGenerationUseCase(UserBaseUseCase):
                 at=at,
             ),
         )
+
+    async def assert_allowed(self, *, user_id: UserId, at: AwareDatetime) -> None:
+        """Check ban/limits without consuming a generation slot."""
+        self._log_scenario_start(action="assert_allowed", user_id=user_id)
+        async with self._uow:
+            await UserGenerationService.assert_allowed(
+                id=user_id,
+                repo=self._uow.users,
+                usage=self._uow.usage,
+                catalog=self._subscriptions,
+                at=at,
+            )
+
+    async def record_usage(self, *, user_id: UserId, at: AwareDatetime) -> None:
+        """Consume one generation slot after a successful render/send."""
+        self._log_scenario_start(action="record_usage", user_id=user_id)
+        async with self._uow:
+            await UserGenerationService.record_usage(
+                id=user_id,
+                usage=self._uow.usage,
+                at=at,
+            )

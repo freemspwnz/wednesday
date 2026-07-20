@@ -18,6 +18,7 @@ from ..policies import (
 from ..protocols import UsageRepo, UserRepo
 from ..user import User
 from ..vo import AwareDatetime, UserId
+from .utils import load_or_raise
 
 
 class UserGenerationService:
@@ -57,8 +58,10 @@ class UserGenerationService:
 
     @staticmethod
     async def assert_allowed(
-        user: User,
-        repo: UsageRepo,
+        *,
+        id: UserId,
+        repo: UserRepo,
+        usage: UsageRepo,
         catalog: SubscriptionCatalog,
         at: AwareDatetime,
     ) -> None:
@@ -66,12 +69,15 @@ class UserGenerationService:
 
         Intended flow: moderate prompt → assert_allowed → generate → record_usage.
         """
-        user = User.ensure(user)
-        repo = UsageRepo.ensure(repo)
-        catalog = SubscriptionCatalog.ensure(catalog)
+        id = UserId.ensure(id)
         at = AwareDatetime.ensure(at)
+        if not isinstance(repo, UserRepo):
+            raise ValidationError("user_repo must implement UserRepo")
+        usage = UsageRepo.ensure(usage)
+        catalog = SubscriptionCatalog.ensure(catalog)
 
-        stats = await repo.get_usage_stats(user.id)
+        user = await load_or_raise(repo=repo, id=id)
+        stats = await usage.get_stats(id)
         default_plan = await catalog.default_plan()
 
         subscription = user.subscription.effective_at(default_plan, at)
@@ -96,16 +102,16 @@ class UserGenerationService:
     @staticmethod
     async def record_usage(
         *,
-        user: User,
-        repo: UsageRepo,
+        id: UserId,
+        usage: UsageRepo,
         at: AwareDatetime,
     ) -> None:
         """Consume one generation slot after a successful render/send."""
-        user = User.ensure(user)
-        repo = UsageRepo.ensure(repo)
+        id = UserId.ensure(id)
+        usage = UsageRepo.ensure(usage)
         at = AwareDatetime.ensure(at)
 
-        await repo.record_usage(user.id, at)
+        await usage.record(id, at)
 
     @staticmethod
     def _raise_limit_violation(violation: DailyLimitViolation | CooldownViolation) -> None:

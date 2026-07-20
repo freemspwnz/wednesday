@@ -192,11 +192,11 @@ class FakeUsageRepo(UsageRepo):
         default_factory=lambda: UsageStats(last_usage=None, daily_usage=0),
     )
 
-    async def get_usage_stats(self, user_id: UserId) -> UsageStats:
+    async def get_stats(self, user_id: UserId) -> UsageStats:
         _ = UserId.ensure(user_id)
         return self.stats
 
-    async def record_usage(self, user_id: UserId, at: AwareDatetime) -> None:
+    async def record(self, user_id: UserId, at: AwareDatetime) -> None:
         _ = UserId.ensure(user_id)
         _ = AwareDatetime.ensure(at)
         self.stats = UsageStats(last_usage=at, daily_usage=self.stats.daily_usage + 1)

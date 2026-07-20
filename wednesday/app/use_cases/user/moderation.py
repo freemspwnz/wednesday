@@ -55,3 +55,16 @@ class UserModerationUseCase(UserBaseUseCase):
                 at=at,
             ),
         )
+
+    async def assign_ban(self, *, user_id: UserId, at: AwareDatetime) -> User:
+        """Record a moderation strike and ban when BanDurationPolicy assigns one."""
+        return await self._run_mutating(
+            action="assign_ban",
+            user_id=user_id,
+            runner=lambda: UserModerationService.assign_ban(
+                user_id=user_id,
+                user_repo=self._uow.users,
+                violation_repo=self._uow.violations,
+                at=at,
+            ),
+        )

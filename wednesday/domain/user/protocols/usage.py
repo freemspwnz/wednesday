@@ -9,14 +9,14 @@ from ..vo import AwareDatetime, UserId
 class UsageRepo(Protocol):
     """Usage repository protocol."""
 
-    async def get_usage_stats(
+    async def get_stats(
         self,
         user_id: UserId,
     ) -> UsageStats:
         """Get usage stats by user ID."""
         ...
 
-    async def record_usage(
+    async def record(
         self,
         user_id: UserId,
         at: AwareDatetime,
