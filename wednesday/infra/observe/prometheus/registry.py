@@ -44,7 +44,7 @@ class PrometheusRegistry(MetricsRegistry):
         self._env = env
         self._version = version
         self._registry = CollectorRegistry()
-        self._logger = logger
+        self._logger = logger.bind(module=self.__class__.__name__)
 
     @cached_property
     def retry(self) -> RetryMetrics:

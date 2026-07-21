@@ -35,7 +35,7 @@ class Tenacity(Retrier):
         self._predicate = predicate
         self._config = config
         self._metrics = metrics
-        self._logger = logger.bind(module=self.__class__.__name__, service=config.name)
+        self._logger = logger.bind(module=self.__class__.__name__)
 
     def __call__(
         self,

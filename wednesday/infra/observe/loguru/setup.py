@@ -52,9 +52,9 @@ def setup_logging(
     logger.configure(
         patcher=patch_record,
         extra={
-            "service": "wednesday",
+            "app": "wednesday",
             "env": env,
-            "version": version,
+            "ver": version,
         },
     )
 

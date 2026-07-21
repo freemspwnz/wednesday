@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.exceptions import LogMessageFormatError
 from app.protocols import Logger
+from infra.config import LoggingConfig
 from infra.observe.loguru.logger import LoguruLogger, get_logger
 
 
@@ -21,20 +22,43 @@ def mock_core() -> tuple[MagicMock, MagicMock, MagicMock]:
     return core, opt, bound
 
 
+@pytest.fixture
+def logging_config() -> LoggingConfig:
+    return LoggingConfig.model_validate(
+        {
+            "level": "DEBUG",
+            "serialize": False,
+            "to_file": False,
+        },
+    )
+
+
 @pytest.mark.unit
 class TestGetLogger:
-    def test_without_name_sets_unknown_module(self) -> None:
-        lg = get_logger()
+    def test_calls_setup_logging_and_returns_logger_with_unknown_module(
+        self,
+        logging_config: LoggingConfig,
+    ) -> None:
+        with patch("infra.observe.loguru.logger.setup_logging") as setup:
+            lg = get_logger(
+                config=logging_config,
+                env="TEST",
+                version="1.0.0",
+                secrets=["secret"],
+            )
+
+        setup.assert_called_once_with(logging_config, "TEST", "1.0.0", ["secret"])
         assert isinstance(lg, LoguruLogger)
         assert lg._bound_context["module"] == "unknown"
 
-    def test_with_name_sets_module(self) -> None:
-        lg = get_logger("my_service")
-        assert isinstance(lg, LoguruLogger)
-        assert lg._bound_context["module"] == "my_service"
-
-    def test_return_satisfies_logger_protocol(self) -> None:
-        lg = get_logger("p")
+    def test_return_satisfies_logger_protocol(self, logging_config: LoggingConfig) -> None:
+        with patch("infra.observe.loguru.logger.setup_logging"):
+            lg = get_logger(
+                config=logging_config,
+                env="t",
+                version="0",
+                secrets=[],
+            )
         assert isinstance(lg, Logger)
 
 
@@ -86,8 +110,8 @@ class TestLoguruLoggerFormatting:
 
 
 @pytest.mark.unit
-class TestLoguruLoggerStructuredAndException:
-    def test_structured_fields_passed_to_bind(
+class TestLoguruLoggerExtraAndException:
+    def test_extra_fields_passed_to_bind(
         self,
         mock_core: tuple[MagicMock, MagicMock, MagicMock],
     ) -> None:
@@ -96,6 +120,7 @@ class TestLoguruLoggerStructuredAndException:
         lg.info("m", user_id=1, chat_id=2, generation_id="g", other="extra")
 
         bind_kw = opt.bind.call_args.kwargs
+        assert bind_kw["module"] == "unknown"
         assert bind_kw["user_id"] == 1
         assert bind_kw["chat_id"] == 2
         assert bind_kw["generation_id"] == "g"

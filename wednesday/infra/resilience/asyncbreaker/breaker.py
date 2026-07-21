@@ -18,7 +18,7 @@ class Asyncbreaker(CircuitBreaker):
         logger: Logger,
     ) -> None:
         self._breaker = breaker
-        self._logger = logger.bind(module=self.__class__.__name__, service=breaker.name)
+        self._logger = logger.bind(module=self.__class__.__name__)
 
     def __call__(
         self,

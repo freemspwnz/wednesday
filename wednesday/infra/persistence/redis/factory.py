@@ -17,14 +17,15 @@ def build_redis(
     config: RedisConfig,
     logger: Logger,
 ) -> Redis:
-    logger.debug("Building Redis...")
+    log = logger.bind(module=build_redis.__name__)
+    log.debug("Building Redis...")
     redis = Redis.from_url(
         url=config.dsn,
         decode_responses=config.decode_responses,
         max_connections=config.max_connections,
         socket_timeout=config.socket_timeout,
     )
-    logger.debug("Redis built")
+    log.debug("Redis built")
     return redis
 
 
@@ -33,13 +34,14 @@ async def close_redis(
     redis: Redis,
     logger: Logger,
 ) -> None:
+    log = logger.bind(module=close_redis.__name__)
     try:
         async with asyncio.timeout(_REDIS_CLOSE_TIMEOUT):
             await redis.aclose()
-        logger.info("Redis connection pool closed successfully.")
+        log.info("Redis connection pool closed successfully.")
     except TimeoutError:
-        logger.warning("Redis connection pool close timed out. Forced exit.")
+        log.warning("Redis connection pool close timed out. Forced exit.")
     except (RedisConnectionError, RedisTimeoutError):
-        logger.warning("Redis connection is already closed or lost.")
+        log.warning("Redis connection is already closed or lost.")
     except Exception:
-        logger.warning("Non-critical error while closing Redis", exc_info=True)
+        log.warning("Non-critical error while closing Redis", exc_info=True)

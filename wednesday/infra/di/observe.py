@@ -2,10 +2,8 @@ from functools import cached_property
 
 from app.protocols import Logger, MetricsRegistry
 from infra.config import Config
-from infra.observe.loguru import get_logger, setup_logging
-from infra.observe.prometheus import (
-    PrometheusRegistry,
-)
+from infra.observe.loguru import get_logger
+from infra.observe.prometheus import PrometheusRegistry
 
 
 class ObserveContainer:
@@ -27,14 +25,12 @@ class ObserveContainer:
             self._config.gigachat.auth_key.get_secret_value(),
         ]
 
-        setup_logging(
+        return get_logger(
             config=self._config.logging,
             env=self._config.env,
             version=self._config.version,
             secrets=secrets,
         )
-
-        return get_logger()
 
     @cached_property
     def metrics(self) -> MetricsRegistry:

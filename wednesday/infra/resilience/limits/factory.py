@@ -28,7 +28,8 @@ def rl_factory(  # noqa: PLR0913, PLR0917
     logger: Logger,
 ) -> RateLimiter:
     """Setup rate limiter factory."""
-    logger.debug("Building rate limiter...")
+    log = logger.bind(module=rl_factory.__name__)
+    log.debug("Building rate limiter...")
     limits = _limits(config.name, config.limits)
     storage = _storage(config.storage, env, version, redis_dsn, redis_pool)
     limiter = _limiter(storage, config.strategy)
@@ -36,7 +37,7 @@ def rl_factory(  # noqa: PLR0913, PLR0917
     rl = Limits(
         limiter=limiter,
         metrics=metrics,
-        logger=logger,
+        logger=log,
     )
     rl.limits = limits
     return rl

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
 class Logger(Protocol):
     """Protocol for logging system."""
 
-    def trace(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def trace(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at TRACE level.
 
         Args:
@@ -17,7 +17,7 @@ class Logger(Protocol):
         """
         ...
 
-    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def debug(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at DEBUG level.
 
         Args:
@@ -27,7 +27,7 @@ class Logger(Protocol):
         """
         ...
 
-    def info(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def info(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at INFO level.
 
         Args:
@@ -37,7 +37,7 @@ class Logger(Protocol):
         """
         ...
 
-    def success(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def success(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at SUCCESS level.
 
         Args:
@@ -47,7 +47,7 @@ class Logger(Protocol):
         """
         ...
 
-    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def warning(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at WARNING level.
 
         Args:
@@ -57,7 +57,7 @@ class Logger(Protocol):
         """
         ...
 
-    def error(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def error(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at ERROR level.
 
         Args:
@@ -67,7 +67,7 @@ class Logger(Protocol):
         """
         ...
 
-    def critical(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def critical(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at ERROR level with mandatory traceback inclusion.
 
         Args:
@@ -77,7 +77,7 @@ class Logger(Protocol):
         """
         ...
 
-    def exception(self, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def exception(self, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at EXCEPTION level.
 
         Args:
@@ -87,7 +87,7 @@ class Logger(Protocol):
         """
         ...
 
-    def log(self, level: str, message: str, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+    def log(self, level: str, message: str, *args: object, **kwargs: object) -> None:
         """Log a message at the specified level.
 
         Args:
@@ -98,7 +98,7 @@ class Logger(Protocol):
         """
         ...
 
-    def bind(self, **kwargs: Any) -> Logger:  # noqa: ANN401
+    def bind(self, **kwargs: object) -> Logger:
         """Create a new logger instance with bound context.
 
         Args:

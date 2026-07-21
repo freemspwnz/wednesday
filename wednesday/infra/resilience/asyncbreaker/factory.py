@@ -25,10 +25,11 @@ def cb_factory(  # noqa: PLR0913, PLR0917
     metrics: CBMetrics,
     logger: Logger,
 ) -> CircuitBreaker:
-    logger.debug("Building circuit breaker...")
+    log = logger.bind(module=cb_factory.__name__)
+    log.debug("Building circuit breaker...")
     listeners = [
         MetricsListener(metrics),
-        LoggingListener(logger),
+        LoggingListener(log),
     ]
     storage = _storage(
         storage=config.storage,
@@ -45,7 +46,7 @@ def cb_factory(  # noqa: PLR0913, PLR0917
     )
     return Asyncbreaker(
         breaker=breaker,
-        logger=logger,
+        logger=log,
     )
 
 

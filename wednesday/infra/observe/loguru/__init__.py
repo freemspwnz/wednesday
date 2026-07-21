@@ -1,4 +1,4 @@
-"""Пакет логирования."""
+"""Logging package."""
 
 from .logger import LoguruLogger, get_logger
 from .setup import setup_logging

@@ -63,7 +63,11 @@ class Limits(RateLimiter[RateLimitItem]):
         *identifiers: str,
         cost: int = 1,
     ) -> None:
-        self._logger.debug(f"Rate limiter {limit.namespace} call request")
+        self._logger.debug(
+            "Rate limiter call request",
+            name=limit.namespace,
+            limit=str(limit),
+        )
         await self._run_op(self._limiter.hit, limit, *identifiers, cost=cost)
 
     async def test(
@@ -72,7 +76,11 @@ class Limits(RateLimiter[RateLimitItem]):
         *identifiers: str,
         cost: int = 1,
     ) -> None:
-        self._logger.debug(f"Rate limiter {limit.namespace} test call request")
+        self._logger.debug(
+            "Rate limiter test call request",
+            name=limit.namespace,
+            limit=str(limit),
+        )
         await self._run_op(self._limiter.test, limit, *identifiers, cost=cost)
 
     async def get_window_stats(
@@ -80,7 +88,11 @@ class Limits(RateLimiter[RateLimitItem]):
         limit: RateLimitItem,
         *identifiers: str,
     ) -> WindowStats:
-        self._logger.debug(f"Rate limit {limit.namespace} window stats request")
+        self._logger.debug(
+            "Rate limit window stats request",
+            name=limit.namespace,
+            limit=str(limit),
+        )
         self._metrics.before_call()
 
         try:
@@ -90,7 +102,7 @@ class Limits(RateLimiter[RateLimitItem]):
             self._logger.warning(
                 "Rate limiter storage error",
                 operation="get_window_stats",
-                limiter=limit.namespace,
+                name=limit.namespace,
             )
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
@@ -98,10 +110,10 @@ class Limits(RateLimiter[RateLimitItem]):
             self._logger.exception(
                 "Rate limiter get_window_stats failed",
                 operation="get_window_stats",
-                limiter=limit.namespace,
+                name=limit.namespace,
             )
             raise UnexpectedLimitError(
-                f"Unexpected error while getting window stats for rate limiter {limit.namespace}"
+                f"Unexpected error while getting window stats for rate limiter {limit.namespace}",
             ) from e
 
         self._metrics.on_get_stats(
@@ -117,7 +129,11 @@ class Limits(RateLimiter[RateLimitItem]):
         limit: RateLimitItem,
         *identifiers: str,
     ) -> None:
-        self._logger.debug(f"Rate limiter {limit.namespace} reset request")
+        self._logger.debug(
+            "Rate limiter reset request",
+            name=limit.namespace,
+            limit=str(limit),
+        )
         self._metrics.before_call()
 
         try:
@@ -127,7 +143,7 @@ class Limits(RateLimiter[RateLimitItem]):
             self._logger.warning(
                 "Rate limiter storage error",
                 operation="reset",
-                limiter=limit.namespace,
+                name=limit.namespace,
             )
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
@@ -135,7 +151,7 @@ class Limits(RateLimiter[RateLimitItem]):
             self._logger.exception(
                 "Rate limiter reset failed",
                 operation="reset",
-                limiter=limit.namespace,
+                name=limit.namespace,
             )
             raise UnexpectedLimitError(f"Unexpected error while resetting rate limiter {limit.namespace}") from e
 
@@ -158,7 +174,7 @@ class Limits(RateLimiter[RateLimitItem]):
             self._logger.warning(
                 "Rate limiter storage error",
                 operation=op.__name__,
-                limiter=limit.namespace,
+                name=limit.namespace,
             )
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
@@ -166,7 +182,7 @@ class Limits(RateLimiter[RateLimitItem]):
             self._logger.exception(
                 "Rate limiter unexpected error",
                 operation=op.__name__,
-                limiter=limit.namespace,
+                name=limit.namespace,
             )
             raise UnexpectedLimitError(f"Unexpected error while calling rate limiter {limit.namespace}") from e
 

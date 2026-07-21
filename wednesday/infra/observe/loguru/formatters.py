@@ -2,7 +2,7 @@ import logging
 
 from loguru import logger
 
-# Глобальные переменные для маскировки
+# Global variables used for masking
 _MASKED_VALUE = "****"
 _SENSITIVE_KEYWORDS: set[str] = {
     "token",
@@ -24,7 +24,7 @@ _SENSITIVE_KEYWORDS: set[str] = {
 
 
 def scrub(obj: str | dict | list | tuple | set, secrets: list[str] | None = None) -> str | dict | list | tuple | set:
-    """Рекурсивно очищает данные и маскирует известные секреты."""
+    """Recursively scrub data and mask known secrets."""
     if isinstance(obj, str):
         if secrets:
             for s in secrets:
@@ -45,17 +45,17 @@ def scrub(obj: str | dict | list | tuple | set, secrets: list[str] | None = None
 
 
 class LoguruHandler(logging.Handler):
-    """Адаптер для использования Loguru в стандартном logging."""
+    """Adapter that bridges stdlib logging to Loguru."""
 
     def emit(self, record: logging.LogRecord) -> None:  # noqa: PLR6301
-        # Получаем уровень из loguru, если он там есть
+        # Resolve Loguru level when available
         level: str | int
         try:
             level = logger.level(record.levelname).name
         except ValueError:
             level = record.levelno
 
-        # Находим кадр стека, откуда пришло сообщение
+        # Find the stack frame that originated the log record
         frame, depth = logging.currentframe(), 2
         if frame is not None:
             while frame.f_code.co_filename == logging.__file__:
@@ -65,5 +65,5 @@ class LoguruHandler(logging.Handler):
                 frame = parent
                 depth += 1
 
-        # Передаем в loguru с сохранением оригинального имени логгера библиотеки
+        # Forward to Loguru while preserving the library logger name
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage(), logger_name=record.name)
