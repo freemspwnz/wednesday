@@ -1,6 +1,4 @@
-"""Тесты LoguruLogger и get_logger (infra.observe.loguru.logger)."""
-
-from __future__ import annotations
+"""Tests for LoguruLogger and get_logger (infra.observe.loguru.logger)."""
 
 from unittest.mock import MagicMock, patch
 

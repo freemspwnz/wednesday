@@ -1,6 +1,4 @@
-"""Тесты scrub и LoguruHandler (infra.observe.loguru.formatters)."""
-
-from __future__ import annotations
+"""Tests for scrub and LoguruHandler (infra.observe.loguru.formatters)."""
 
 import logging
 from io import StringIO
@@ -88,7 +86,7 @@ class TestLoguruHandler:
         assert "ValueError" in text or "boom" in text
 
     def test_emit_unknown_levelname_falls_back_to_levelno(self, capture_sink: StringIO) -> None:
-        """Ветка except ValueError: level = record.levelno."""
+        """ValueError branch: level = record.levelno."""
         custom = 35
         logging.addLevelName(custom, "CUSTOM_LEVEL_FOR_HANDLER_TEST")
 
@@ -126,7 +124,7 @@ class TestLoguruHandler:
 
 @pytest.mark.unit
 def test_emit_skips_logging_internal_frames(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Покрытие цикла while frame.f_code.co_filename == logging.__file__."""
+    """Cover the while frame.f_code.co_filename == logging.__file__ loop."""
     buf = StringIO()
     logger.remove()
     logger.add(buf, format="{message}", level="DEBUG", colorize=False)

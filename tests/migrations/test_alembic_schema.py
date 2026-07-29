@@ -1,6 +1,4 @@
-"""Тесты Alembic: ревизии и соответствие ORM."""
-
-from __future__ import annotations
+"""Alembic tests: revisions and ORM schema alignment."""
 
 import ast
 from pathlib import Path

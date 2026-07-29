@@ -1,6 +1,4 @@
-"""Тесты backoff и get_retry_after."""
-
-from __future__ import annotations
+"""Tests for backoff and get_retry_after."""
 
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime

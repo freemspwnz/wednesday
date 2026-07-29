@@ -1,6 +1,4 @@
-"""Общие фикстуры для всего дерева ``tests/infra/``."""
-
-from __future__ import annotations
+"""Shared fixtures for the ``tests/infra/`` tree."""
 
 from collections.abc import Iterator
 from unittest.mock import MagicMock
@@ -11,7 +9,7 @@ from loguru import logger
 
 @pytest.fixture(autouse=True)
 def isolate_loguru() -> Iterator[None]:
-    """Сбрасывает handlers loguru между тестами (observe, di и др.)."""
+    """Reset loguru handlers between tests (observe, di, etc.)."""
     logger.remove()
     yield
     logger.remove()

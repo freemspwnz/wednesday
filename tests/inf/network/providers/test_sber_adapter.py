@@ -6,7 +6,7 @@ import httpx2
 import pytest
 
 from app.exceptions import HttpTransportError
-from domain.image import ImageGenError, TextGenError
+from domain.image import GenerationError
 from infra.network.httpx.providers.sber.adapter import SberClient
 
 
@@ -34,7 +34,7 @@ class TestSberClient:
         client = MagicMock()
         client.post = AsyncMock(side_effect=HttpTransportError("down", method="POST", url="https://x"))
         sber = SberClient(client=client, auth=MagicMock(), timeouts=_timeouts(), logger=mock_logger)
-        with pytest.raises(TextGenError):
+        with pytest.raises(GenerationError):
             await sber.generate_text("m", "s", "u")
 
     @pytest.mark.asyncio
@@ -61,7 +61,7 @@ class TestSberClient:
         response.json.return_value = {"choices": [{"message": {"content": "no image here"}}]}
         client.post = AsyncMock(return_value=response)
         sber = SberClient(client=client, auth=MagicMock(), timeouts=_timeouts(), logger=mock_logger)
-        with pytest.raises(ImageGenError, match="Image id not found"):
+        with pytest.raises(GenerationError, match="Image id not found"):
             await sber.generate_image("m", "s", "u")
 
     @pytest.mark.asyncio

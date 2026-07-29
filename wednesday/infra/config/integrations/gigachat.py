@@ -1,6 +1,7 @@
 from datetime import timedelta
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from ..network import HttpConfig, HttpTimeoutConfig
 from ..resilience import CircuitBreakerConfig, RateLimitConfig, RetryConfig
@@ -15,14 +16,16 @@ class GigaChatConfig(BaseModel):
     )
 
     auth_url: str = Field(
-        default="https://ngw.devices.sberbank.ru:9443/api/v2/oauth", description="Authentication URL for GigaChat API"
+        default="https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
+        description="Authentication URL for GigaChat API",
     )
     auth_key: SecretStr = Field(default=SecretStr("default"), description="Authentication key for GigaChat API")
     scope: str = Field(default="GIGACHAT_API_PERS", description="Scope for GigaChat API")
+    cert: str = Field(default="", description="Certificate path for GigaChat API")
 
     http: HttpConfig = Field(
         default=HttpConfig(
-            base_url="https://gigachat.devices.sberbank.ru/api/v1/",
+            base_url="https://api.giga.chat/v1/",
             timeouts={
                 "base": HttpTimeoutConfig(
                     timeout=30,
@@ -60,7 +63,7 @@ class GigaChatConfig(BaseModel):
             verify=True,
             http2=True,
             follow_redirects=True,
-        )
+        ),
     )
 
     retrier: RetryConfig = Field(
@@ -72,7 +75,7 @@ class GigaChatConfig(BaseModel):
             max=60.0,
             exp_base=2.0,
             jitter=1,
-        )
+        ),
     )
 
     limiter: RateLimitConfig = Field(
@@ -81,9 +84,9 @@ class GigaChatConfig(BaseModel):
             storage="redis",
             strategy="sliding-window-counter",
             limits={
-                "base": "1/second",
+                "base": "2/second",
             },
-        )
+        ),
     )
 
     breaker: CircuitBreakerConfig = Field(
@@ -92,5 +95,15 @@ class GigaChatConfig(BaseModel):
             threshold=6,
             cooldown=timedelta(seconds=60),
             storage="redis",
-        )
+        ),
     )
+
+    @model_validator(mode="after")
+    def apply_cert_to_http_verify(self) -> Self:
+        if not self.cert.strip():
+            return self
+        http = HttpConfig.model_validate({
+            **self.http.model_dump(),
+            "verify": self.cert.strip(),
+        })
+        return self.model_copy(update={"http": http})

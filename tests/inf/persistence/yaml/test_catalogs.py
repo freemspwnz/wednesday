@@ -39,22 +39,22 @@ def test_yaml_model_catalog_loads_project_file() -> None:
 async def test_yaml_model_catalog_exposes_active_sber_models() -> None:
     catalog = _catalog_factory().models
 
-    assert await catalog.exists(Model.parse("gigachat-2-lite"))
+    assert await catalog.exists(Model.parse("gigachat-2"))
     alice = await catalog.get_by_model(Model.parse("alicegpt-lite"))
     assert alice is not None
     assert not alice.active
 
     active = await catalog.list_active()
     active_codes = {str(item.model) for item in active}
-    assert "gigachat-2-lite" in active_codes
+    assert "gigachat-2" in active_codes
     assert "alicegpt-lite" not in active_codes
 
-    lite = await catalog.get_by_model(Model.parse("gigachat-2-lite"))
+    lite = await catalog.get_by_model(Model.parse("gigachat-2"))
     assert lite is not None
-    assert lite.display_name == "GigaChat 2 Lite"
+    assert lite.display_name == "GigaChat 2"
 
     default_free = await catalog.default_for_tier(SubscriptionTier.FREE)
-    assert default_free.model == Model.parse("gigachat-2-lite")
+    assert default_free.model == Model.parse("gigachat-2")
 
     default_premium = await catalog.default_for_tier(SubscriptionTier.PREMIUM)
     assert default_premium.model == Model.parse("gigachat-2-pro")

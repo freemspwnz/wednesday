@@ -23,13 +23,13 @@ class ScopeContainer(RequestScope):
     def __init__(
         self,
         *,
-        uow_factory: UoWFactory,
+        uow: UoWFactory,
         cache: CacheRepoRegistry,
         catalog: YamlCatalogFactory,
         providers: ProvidersRegistry,
         logger: Logger,
     ) -> None:
-        self._uow_factory = uow_factory
+        self._uow = uow
         self._cache = cache
         self._catalog = catalog
         self._providers = providers
@@ -54,73 +54,73 @@ class ScopeContainer(RequestScope):
     @cached_property
     def user_lifecycle_uc(self) -> UserLifecycleUseCase:
         return UserLifecycleUseCase(
-            uow=self._uow_factory(),
-            cache=self._cache.users,
             models=self.models,
             subscriptions=self.subscriptions,
+            cache=self._cache.users,
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def user_management_uc(self) -> UserManagementUseCase:
         return UserManagementUseCase(
-            uow=self._uow_factory(),
             cache=self._cache.users,
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def user_moderation_uc(self) -> UserModerationUseCase:
         return UserModerationUseCase(
-            uow=self._uow_factory(),
             cache=self._cache.users,
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def user_generation_uc(self) -> UserGenerationUseCase:
         return UserGenerationUseCase(
-            uow=self._uow_factory(),
-            cache=self._cache.users,
             models=self.models,
             subscriptions=self.subscriptions,
+            cache=self._cache.users,
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def chat_management_uc(self) -> ChatManagementUseCase:
         return ChatManagementUseCase(
-            uow=self._uow_factory(),
             cache=self._cache.chats,
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def chat_schedule_uc(self) -> ChatScheduleUseCase:
         return ChatScheduleUseCase(
-            uow=self._uow_factory(),
             cache=self._cache.chats,
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def image_catalog_uc(self) -> ImageCatalogUseCase:
         return ImageCatalogUseCase(
-            uow=self._uow_factory(),
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def image_vote_uc(self) -> ImageVoteUseCase:
         return ImageVoteUseCase(
-            uow=self._uow_factory(),
+            uow=self._uow(),
             logger=self._logger,
         )
 
     @cached_property
     def image_management_uc(self) -> ImageManagementUseCase:
         return ImageManagementUseCase(
-            uow=self._uow_factory(),
+            uow=self._uow(),
             logger=self._logger,
         )
 
@@ -128,10 +128,9 @@ class ScopeContainer(RequestScope):
     def image_generation_uc(self) -> ImageGenerationUseCase:
         sber = self._providers.sber
         return ImageGenerationUseCase(
-            uow=self._uow_factory(),
+            gen=sber,
             prompts=self.prompts,
-            txt_gen=sber,
-            img_gen=sber,
-            moderation=PromptModerationPolicy(),
+            policy=PromptModerationPolicy(),
+            uow=self._uow(),
             logger=self._logger,
         )

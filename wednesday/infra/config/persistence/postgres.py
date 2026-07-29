@@ -39,5 +39,5 @@ class PostgresConfig(BaseModel):
                 host=self.host,
                 port=self.port,
                 path=f"{self.db_name}",
-            )
+            ),
         )

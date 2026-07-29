@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Self
 
 from loguru import logger
 
@@ -46,9 +46,9 @@ class LoguruLogger(Logger):
     def log(self, level: str, message: str, *args: object, **kwargs: object) -> None:
         self._log(level, message, *args, **kwargs)
 
-    def bind(self, **kwargs: object) -> Logger:
+    def bind(self, **kwargs: object) -> Self:
         """Create a new logger instance with bound context."""
-        return LoguruLogger(
+        return self.__class__(
             self._core,
             bound_context={**self._bound_context, **kwargs},
         )

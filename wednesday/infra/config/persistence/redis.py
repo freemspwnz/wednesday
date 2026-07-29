@@ -1,8 +1,7 @@
 """Redis connection settings loaded from environment (nested ``REDIS__*``)."""
 
-from __future__ import annotations
-
 from functools import cached_property
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, RedisDsn, SecretStr, computed_field, model_validator
 
@@ -38,11 +37,11 @@ class RedisConfig(BaseModel):
                 host=self.host,
                 port=self.port,
                 path=f"{self.db}",
-            )
+            ),
         )
 
     @model_validator(mode="after")
-    def validate_dsn_components(self) -> RedisConfig:
+    def validate_dsn_components(self) -> Self:
         """Reject unusable combinations when building DSN from discrete fields."""
         if self.url is not None:
             return self

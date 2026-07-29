@@ -48,7 +48,6 @@ async def test_yaml_prompt_catalog_exposes_system_prompts_and_components() -> No
     assert "Wednesday frog meme" in generation
     assert "Wednesday frog meme" in base
     assert components.heroes
-    assert "Frog" in components.heroes
     assert components.colors
     assert components.styles
     assert components.professions

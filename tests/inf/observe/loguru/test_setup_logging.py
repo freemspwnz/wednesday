@@ -1,6 +1,4 @@
-"""Тесты setup_logging и хуков (infra.observe.loguru.setup)."""
-
-from __future__ import annotations
+"""Tests for setup_logging and hooks (infra.observe.loguru.setup)."""
 
 import asyncio
 import logging
@@ -82,7 +80,7 @@ class TestSetupLoggingCore:
         setup_logging(cfg, env="DEV", version="0", secrets=[])
         setup_logging(cfg, env="DEV", version="0", secrets=[])
 
-        # не должно падать; один поток сообщений о конфигурации (по одному на вызов)
+        # must not raise; one configuration message stream (one per call)
         assert buf.getvalue().count("Logging configured") == 2
 
 

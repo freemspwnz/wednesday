@@ -5,7 +5,8 @@ Revises: fb548c333d1f
 Create Date: 2026-07-02 12:03:54.487989
 
 Align images table with domain/image BC:
-- hidden_reason: votes -> score
+- hidden_reason: votes -> rating
+- score -> likes / dislikes (drop score)
 - prompt_source column (user | llm | fallback)
 - delete rows with NULL telegram_file_id / primary_prompt
 - telegram_file_id NOT NULL
@@ -31,17 +32,18 @@ SCHEMA = "wednesday_schema"
 
 
 def upgrade() -> None:
+    op.drop_constraint("ck_images_status_reason_coherence", "images", schema=SCHEMA, type_="check")
+    op.drop_constraint("ck_images_status", "images", schema=SCHEMA, type_="check")
+    op.drop_constraint("ck_images_hidden_reason", "images", schema=SCHEMA, type_="check")
+
     op.execute(
         f"""
         UPDATE {SCHEMA}.images
-        SET hidden_reason = 'score'
+        SET hidden_reason = 'rating'
         WHERE hidden_reason = 'votes'
         """
     )
 
-    op.drop_constraint("ck_images_status_reason_coherence", "images", schema=SCHEMA, type_="check")
-    op.drop_constraint("ck_images_status", "images", schema=SCHEMA, type_="check")
-    op.drop_constraint("ck_images_hidden_reason", "images", schema=SCHEMA, type_="check")
     op.alter_column("images", "status", new_column_name="state", schema=SCHEMA)
     op.create_check_constraint(
         "ck_images_state",
@@ -52,7 +54,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_images_hidden_reason",
         "images",
-        "hidden_reason IS NULL OR hidden_reason IN ('admin', 'score')",
+        "hidden_reason IS NULL OR hidden_reason IN ('admin', 'rating')",
         schema=SCHEMA,
     )
     op.create_check_constraint(
@@ -110,8 +112,67 @@ def upgrade() -> None:
     op.rename_table("image_seen", "image_view", schema=SCHEMA)
     op.alter_column("image_view", "seen_at", new_column_name="shown_at", schema=SCHEMA)
 
+    op.add_column(
+        "images",
+        sa.Column("likes", sa.Integer(), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "images",
+        sa.Column("dislikes", sa.Integer(), nullable=True),
+        schema=SCHEMA,
+    )
+    # Reconstruct ImageRating: likes = BASE(3) + upvotes, dislikes = downvotes.
+    op.execute(
+        f"""
+        UPDATE {SCHEMA}.images AS i
+        SET likes = 3 + COALESCE((
+                SELECT COUNT(*)::integer
+                FROM {SCHEMA}.image_votes AS v
+                WHERE v.image_id = i.id AND v.value = 1
+            ), 0),
+            dislikes = COALESCE((
+                SELECT COUNT(*)::integer
+                FROM {SCHEMA}.image_votes AS v
+                WHERE v.image_id = i.id AND v.value = -1
+            ), 0)
+        """
+    )
+    op.alter_column("images", "likes", nullable=False, schema=SCHEMA)
+    op.alter_column("images", "dislikes", nullable=False, schema=SCHEMA)
+    op.create_check_constraint(
+        "ck_images_likes_nonneg",
+        "images",
+        "likes >= 0",
+        schema=SCHEMA,
+    )
+    op.create_check_constraint(
+        "ck_images_dislikes_nonneg",
+        "images",
+        "dislikes >= 0",
+        schema=SCHEMA,
+    )
+    op.drop_column("images", "score", schema=SCHEMA)
+
 
 def downgrade() -> None:
+    op.add_column(
+        "images",
+        sa.Column("score", sa.Integer(), nullable=True),
+        schema=SCHEMA,
+    )
+    op.execute(
+        f"""
+        UPDATE {SCHEMA}.images
+        SET score = likes - dislikes
+        """
+    )
+    op.alter_column("images", "score", nullable=False, schema=SCHEMA)
+    op.drop_constraint("ck_images_likes_nonneg", "images", schema=SCHEMA, type_="check")
+    op.drop_constraint("ck_images_dislikes_nonneg", "images", schema=SCHEMA, type_="check")
+    op.drop_column("images", "likes", schema=SCHEMA)
+    op.drop_column("images", "dislikes", schema=SCHEMA)
+
     op.alter_column("image_view", "shown_at", new_column_name="seen_at", schema=SCHEMA)
     op.rename_table("image_view", "image_seen", schema=SCHEMA)
 
@@ -138,6 +199,15 @@ def downgrade() -> None:
     op.drop_constraint("ck_images_state_reason_coherence", "images", schema=SCHEMA, type_="check")
     op.drop_constraint("ck_images_hidden_reason", "images", schema=SCHEMA, type_="check")
     op.drop_constraint("ck_images_state", "images", schema=SCHEMA, type_="check")
+
+    op.execute(
+        f"""
+        UPDATE {SCHEMA}.images
+        SET hidden_reason = 'votes'
+        WHERE hidden_reason = 'rating'
+        """
+    )
+
     op.alter_column("images", "state", new_column_name="status", schema=SCHEMA)
     op.create_check_constraint(
         "ck_images_status",
@@ -156,12 +226,4 @@ def downgrade() -> None:
         "images",
         "(status = 'active' AND hidden_reason IS NULL) OR (status = 'hidden' AND hidden_reason IS NOT NULL)",
         schema=SCHEMA,
-    )
-
-    op.execute(
-        f"""
-        UPDATE {SCHEMA}.images
-        SET hidden_reason = 'votes'
-        WHERE hidden_reason = 'score'
-        """
     )

@@ -1,6 +1,4 @@
-"""Тесты factory и парсинга limits."""
-
-from __future__ import annotations
+"""Tests for the limits factory and parsing."""
 
 from unittest.mock import MagicMock
 

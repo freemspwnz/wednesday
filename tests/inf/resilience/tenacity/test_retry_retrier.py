@@ -1,6 +1,4 @@
-"""Тесты Tenacity."""
-
-from __future__ import annotations
+"""Tests for Tenacity."""
 
 from unittest.mock import MagicMock
 

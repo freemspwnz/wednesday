@@ -1,6 +1,4 @@
-"""Тесты listeners и ``CircuitState`` для asyncbreaker-среза."""
-
-from __future__ import annotations
+"""Tests for listeners and ``CircuitState`` in the asyncbreaker slice."""
 
 from unittest.mock import MagicMock
 
@@ -86,6 +84,7 @@ class TestLoggingListener:
     @pytest.mark.asyncio
     async def test_before_call_logs_debug(self) -> None:
         log = MagicMock()
+        log.bind.return_value = log
         listener = LoggingListener(log)
         cb = MagicMock()
         cb.name = "cb1"
@@ -99,6 +98,7 @@ class TestLoggingListener:
     @pytest.mark.asyncio
     async def test_state_change_logs_info(self) -> None:
         log = MagicMock()
+        log.bind.return_value = log
         listener = LoggingListener(log)
         cb = MagicMock()
         cb.name = "cb1"

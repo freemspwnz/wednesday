@@ -87,7 +87,7 @@ class YamlCatalogFactory:
                     model_code = require_str(model_node.get("code"), field="model.code", path=source)
                     model_active = require_bool(model_node.get("active"), field="model.active", path=source)
                     min_tier = SubscriptionTier(
-                        require_int(model_node.get("min_tier"), field="model.min_tier", path=source)
+                        require_int(model_node.get("min_tier"), field="model.min_tier", path=source),
                     )
                     display_name = require_str(
                         model_node.get("display_name"),

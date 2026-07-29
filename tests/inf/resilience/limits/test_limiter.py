@@ -1,6 +1,4 @@
-"""Тесты обёртки ``Limits`` над limits."""
-
-from __future__ import annotations
+"""Tests for the ``Limits`` wrapper around limits."""
 
 import time
 from unittest.mock import AsyncMock, MagicMock

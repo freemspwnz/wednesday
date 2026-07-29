@@ -23,7 +23,7 @@ class TelegramConfig(BaseModel):
             exp_base=2.0,
             jitter=1,
             initial=2.0,
-        )
+        ),
     )
 
     limiter: RateLimitConfig = Field(
@@ -33,9 +33,9 @@ class TelegramConfig(BaseModel):
             strategy="sliding-window-counter",
             limits={
                 "global": "30/second",
-                "user": "1/second",
-                "chat": "20/minute",
+                "user": "3/second",
+                "chat": "30/minute",
                 "throttling": "1 per 5 seconds",
             },
-        )
+        ),
     )

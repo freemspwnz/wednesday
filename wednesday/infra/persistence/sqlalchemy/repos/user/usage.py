@@ -67,7 +67,7 @@ class SQLAUsageRepo(UsageRepo):
                         "daily_usage": daily_usage,
                         "daily_usage_on": usage_on,
                     },
-                )
+                ),
             )
         except IntegrityError as exc:
             raise DataIntegrityError(

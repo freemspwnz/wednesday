@@ -1,6 +1,4 @@
-"""Тесты обёртки ``Asyncbreaker`` над asyncbreaker."""
-
-from __future__ import annotations
+"""Tests for the ``Asyncbreaker`` wrapper around asyncbreaker."""
 
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
@@ -15,7 +13,7 @@ from infra.resilience.asyncbreaker.breaker import Asyncbreaker
 
 
 class _DomainAppError(AppError):
-    """Тестовая доменная ошибка для проверки проброса ``AppError``."""
+    """Test domain error used to verify ``AppError`` propagation."""
 
 
 @pytest.fixture

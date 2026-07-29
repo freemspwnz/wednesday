@@ -75,7 +75,7 @@ class SQLAUserRepo(UserRepo):
                         "updated_at": user.updated_at.value,
                         "last_seen_at": user.last_seen_at.value,
                     },
-                )
+                ),
             )
 
             await self._session.execute(
@@ -101,7 +101,7 @@ class SQLAUserRepo(UserRepo):
                         "language_code": user.profile.language_code,
                         "has_tg_premium": user.profile.has_tg_premium,
                     },
-                )
+                ),
             )
 
             await self._session.execute(
@@ -113,7 +113,7 @@ class SQLAUserRepo(UserRepo):
                 .on_conflict_do_update(
                     index_elements=[UserRoleORM.user_id],
                     set_={"role": int(user.role)},
-                )
+                ),
             )
 
             banned_until = user.state.until.value if isinstance(user.state, BannedState) else None
@@ -126,7 +126,7 @@ class SQLAUserRepo(UserRepo):
                 .on_conflict_do_update(
                     index_elements=[UserStateORM.user_id],
                     set_={"banned_until": banned_until},
-                )
+                ),
             )
 
             expires_at = user.subscription.expires_at.value if user.subscription.expires_at is not None else None
@@ -149,7 +149,7 @@ class SQLAUserRepo(UserRepo):
                         "started_at": user.subscription.started_at.value,
                         "expires_at": expires_at,
                     },
-                )
+                ),
             )
 
             await self._session.execute(
@@ -167,7 +167,7 @@ class SQLAUserRepo(UserRepo):
                         "series": str(user.settings.series),
                         "model": str(user.settings.model),
                     },
-                )
+                ),
             )
         except IntegrityError as exc:
             raise DataIntegrityError(

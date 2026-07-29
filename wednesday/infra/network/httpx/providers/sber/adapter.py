@@ -5,18 +5,13 @@ from httpx2 import Auth, Timeout
 
 from app.exceptions import AppError
 from app.protocols import Logger
-from domain.image import (
-    ImageGenerator,
-    ImageGenError,
-    TextGenerator,
-    TextGenError,
-)
+from domain.image import GenerationError, Generator
 
 from ...client import HttpClient
 
 
-class SberClient(ImageGenerator, TextGenerator):
-    """GigaChat adapter implementing domain image and text generator protocols."""
+class SberClient(Generator):
+    """GigaChat adapter implementing domain generator protocol."""
 
     _IMG_SRC_REGEX: Final[re.Pattern[str]] = re.compile(r'src="([^"]+)"')
 
@@ -70,7 +65,7 @@ class SberClient(ImageGenerator, TextGenerator):
                     content_preview=content[:200],
                     content_len=len(content),
                 )
-                raise ImageGenError("Image id not found in GigaChat response")
+                raise GenerationError("Image id not found in GigaChat response")
 
             file_id = match.group(1)
             image_response = await self._client.get(
@@ -79,23 +74,23 @@ class SberClient(ImageGenerator, TextGenerator):
                 auth=self._auth,
             )
             return image_response.content
-        except ImageGenError:
+        except GenerationError:
             raise
         except AppError as exc:
             # HttpClient / SberAuth already logged unexpected transport failures.
-            raise ImageGenError(str(exc)) from exc
+            raise GenerationError(str(exc)) from exc
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             self._logger.error(
                 "Unexpected GigaChat response format for image generation",
                 exc_info=True,
             )
-            raise ImageGenError("Unexpected GigaChat image response format") from exc
+            raise GenerationError("Unexpected GigaChat image response format") from exc
         except Exception as exc:
             self._logger.error(
                 "Unexpected error during image generation",
                 exc_info=True,
             )
-            raise ImageGenError("Unexpected error during image generation") from exc
+            raise GenerationError("Unexpected error during image generation") from exc
 
     async def generate_text(
         self,
@@ -124,19 +119,19 @@ class SberClient(ImageGenerator, TextGenerator):
                 raise TypeError("message content must be str")
             return content
         except AppError as exc:
-            raise TextGenError(str(exc)) from exc
+            raise GenerationError(str(exc)) from exc
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             self._logger.error(
                 "Unexpected GigaChat response format for text generation",
                 exc_info=True,
             )
-            raise TextGenError("Unexpected GigaChat text response format") from exc
+            raise GenerationError("Unexpected GigaChat text response format") from exc
         except Exception as exc:
             self._logger.error(
                 "Unexpected error during text generation",
                 exc_info=True,
             )
-            raise TextGenError("Unexpected error during text generation") from exc
+            raise GenerationError("Unexpected error during text generation") from exc
 
     async def check_health(self) -> bool:
         """Check health of the Sber API."""

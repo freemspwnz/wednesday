@@ -15,7 +15,11 @@ class Config(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore", frozen=True, env_nested_delimiter="__"
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+        env_nested_delimiter="__",
     )
 
     env: str = Field(default="DEV", alias="ENV")

@@ -1,6 +1,4 @@
-"""Тесты предиката is_retryable."""
-
-from __future__ import annotations
+"""Tests for the is_retryable predicate."""
 
 import pytest
 

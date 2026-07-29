@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -8,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.image import ImageId, VoteRepo
 from domain.image.vote import Vote
+from domain.user import UserId
 
 from ...models import VoteORM
 
@@ -16,11 +15,12 @@ class SQLAVoteRepo(VoteRepo):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get(self, image_id: ImageId, voter_id: UUID) -> Vote | None:
+    async def get(self, image_id: ImageId, voter_id: UserId) -> Vote | None:
         try:
+            voter_id = UserId.ensure(voter_id)
             stmt = select(VoteORM).where(
                 VoteORM.image_id == image_id.value,
-                VoteORM.voter_id == voter_id,
+                VoteORM.voter_id == voter_id.value,
             )
             result = await self._session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -43,13 +43,13 @@ class SQLAVoteRepo(VoteRepo):
                 insert(VoteORM)
                 .values(
                     image_id=vote.image_id.value,
-                    voter_id=vote.voter_id,
+                    voter_id=vote.voter_id.value,
                     value=vote.value,
                 )
                 .on_conflict_do_update(
                     index_elements=[VoteORM.image_id, VoteORM.voter_id],
                     set_={"value": vote.value},
-                )
+                ),
             )
         except IntegrityError as exc:
             raise DataIntegrityError(
@@ -73,7 +73,7 @@ class SQLAVoteRepo(VoteRepo):
             stmt = select(VoteORM).where(VoteORM.image_id == image_id.value)
             result = await self._session.execute(stmt)
             rows = result.scalars().all()
-            return [Vote(image_id=image_id, voter_id=row.voter_id, value=row.value) for row in rows]
+            return [Vote(image_id=image_id, voter_id=UserId(row.voter_id), value=row.value) for row in rows]
         except SQLAlchemyError as exc:
             raise RepositoryError(
                 "SQLAlchemy failed to list image votes.",

@@ -1,6 +1,4 @@
-from uuid import UUID
-
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +17,7 @@ from domain.image import (
     ImageId,
     ImageMeta,
     ImagePrompts,
+    ImageRating,
     ImageRepo,
     NormalizedPrompt,
     PromptSource,
@@ -26,8 +25,9 @@ from domain.image import (
 )
 from domain.image.vo.states import HiddenReason
 from domain.kernel.vo import AwareDatetime
+from domain.user import UserId
 
-from ...models import ImageORM, ViewORM
+from ...models import ImageORM
 
 
 class SQLAImageRepo(ImageRepo):
@@ -69,9 +69,10 @@ class SQLAImageRepo(ImageRepo):
                 insert(ImageORM)
                 .values(
                     id=image.id.value,
-                    author_id=image.meta.author_id,
+                    author_id=image.meta.author_id.value,
                     model=str(image.meta.model),
-                    score=image.score,
+                    likes=image.rating.likes,
+                    dislikes=image.rating.dislikes,
                     state=state_value,
                     hidden_reason=hidden_reason,
                     created_at=image.created_at.value,
@@ -83,9 +84,10 @@ class SQLAImageRepo(ImageRepo):
                 .on_conflict_do_update(
                     index_elements=[ImageORM.id],
                     set_={
-                        "author_id": image.meta.author_id,
+                        "author_id": image.meta.author_id.value,
                         "model": str(image.meta.model),
-                        "score": image.score,
+                        "likes": image.rating.likes,
+                        "dislikes": image.rating.dislikes,
                         "state": state_value,
                         "hidden_reason": hidden_reason,
                         "primary_prompt": primary_prompt,
@@ -93,7 +95,7 @@ class SQLAImageRepo(ImageRepo):
                         "prompt_source": prompt_source,
                         "telegram_file_id": str(image.file_id),
                     },
-                )
+                ),
             )
         except IntegrityError as exc:
             raise DataIntegrityError(
@@ -149,51 +151,6 @@ class SQLAImageRepo(ImageRepo):
         except Exception as exc:
             raise UnexpectedDBError("Unexpected error while loading image by telegram file id.") from exc
 
-    async def get_random_unseen_for_chat(
-        self,
-        chat_id: UUID,
-        *,
-        min_score: int,
-    ) -> Image | None:
-        try:
-            seen_exists = (
-                select(1)
-                .where(
-                    ViewORM.chat_id == chat_id,
-                    ViewORM.image_id == ImageORM.id,
-                )
-                .exists()
-            )
-            stmt = (
-                select(ImageORM)
-                .where(
-                    ImageORM.score > min_score - 1,
-                    ImageORM.state == "active",
-                    ~seen_exists,
-                )
-                .order_by(func.random())
-                .limit(1)
-            )
-            result = await self._session.execute(stmt)
-            orm_image = result.scalar_one_or_none()
-            if orm_image is None:
-                return None
-            return _image_from_orm(orm_image)
-        except ValueError as exc:
-            raise AggregateMappingError(
-                "Failed to map ORM image aggregate.",
-                operation="get_random_unseen_for_chat",
-                entity="image",
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to pick random unseen image.",
-                operation="get_random_unseen_for_chat",
-                entity="image",
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while picking random unseen image.") from exc
-
 
 def _state_to_orm(image: Image) -> tuple[str, str | None]:
     if isinstance(image.state, ActiveState):
@@ -230,7 +187,7 @@ def _prompts_from_orm(
 
 
 def _image_from_orm(orm: ImageORM) -> Image:
-    meta = ImageMeta(author_id=orm.author_id, model=Model.parse(orm.model))
+    meta = ImageMeta(author_id=UserId(orm.author_id), model=Model.parse(orm.model))
     prompts = _prompts_from_orm(
         primary_prompt=orm.primary_prompt,
         enriched_prompt=orm.enriched_prompt,
@@ -240,7 +197,7 @@ def _image_from_orm(orm: ImageORM) -> Image:
         id=ImageId(orm.id),
         meta=meta,
         created_at=AwareDatetime.from_datetime(orm.created_at),
-        score=orm.score,
+        rating=ImageRating(likes=orm.likes, dislikes=orm.dislikes),
         state=_state_from_orm(state=orm.state, hidden_reason=orm.hidden_reason),
         prompts=prompts,
         file_id=TelegramFileId.parse(orm.telegram_file_id),

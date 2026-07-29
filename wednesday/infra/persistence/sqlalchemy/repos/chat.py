@@ -69,7 +69,7 @@ class SQLAChatRepo(ChatRepo):
                 .on_conflict_do_update(
                     index_elements=[ChatORM.id],
                     set_={"updated_at": chat.updated_at.value},
-                )
+                ),
             )
 
             await self._session.execute(
@@ -89,7 +89,7 @@ class SQLAChatRepo(ChatRepo):
                         "title": chat.profile.title,
                         "username": chat.profile.username,
                     },
-                )
+                ),
             )
 
             is_active = isinstance(chat.state, ActiveState)
@@ -102,7 +102,7 @@ class SQLAChatRepo(ChatRepo):
                 .on_conflict_do_update(
                     index_elements=[ChatStateORM.chat_id],
                     set_={"is_active": is_active},
-                )
+                ),
             )
 
             await self._session.execute(
@@ -118,7 +118,7 @@ class SQLAChatRepo(ChatRepo):
                         "timezone": str(chat.schedules.timezone),
                         "weekday": int(chat.schedules.weekday),
                     },
-                )
+                ),
             )
 
             desired_slots = sorted(
@@ -132,7 +132,7 @@ class SQLAChatRepo(ChatRepo):
                             ChatScheduleSlotORM.chat_id == chat.id.value,
                             tuple_(ChatScheduleSlotORM.hour, ChatScheduleSlotORM.minute).not_in(desired_slots),
                         ),
-                    )
+                    ),
                 )
                 await self._session.execute(
                     insert(ChatScheduleSlotORM)
@@ -149,12 +149,12 @@ class SQLAChatRepo(ChatRepo):
                             ChatScheduleSlotORM.chat_id,
                             ChatScheduleSlotORM.hour,
                             ChatScheduleSlotORM.minute,
-                        ]
-                    )
+                        ],
+                    ),
                 )
             else:
                 await self._session.execute(
-                    delete(ChatScheduleSlotORM).where(ChatScheduleSlotORM.chat_id == chat.id.value)
+                    delete(ChatScheduleSlotORM).where(ChatScheduleSlotORM.chat_id == chat.id.value),
                 )
         except IntegrityError as exc:
             raise DataIntegrityError(
@@ -201,7 +201,7 @@ def _chat_from_orm(orm: ChatORM) -> Chat:
             sorted(
                 (ChatSchedule(hour=schedule.hour, minute=schedule.minute) for schedule in orm.schedule_slots),
                 key=lambda s: (s.hour, s.minute),
-            )
+            ),
         ),
     )
     profile = ChatProfile(
