@@ -7,7 +7,7 @@ class ImageState:
     """Base class for catalog image visibility state."""
 
     @classmethod
-    def ensure(cls, state: Self) -> Self:
-        if not isinstance(state, ImageState):
-            raise ValidationError("state must be an ImageState")
+    def ensure(cls, state: object) -> Self:
+        if not isinstance(state, cls):
+            raise ValidationError(f"state must be an instance of {cls.__name__}")
         return state

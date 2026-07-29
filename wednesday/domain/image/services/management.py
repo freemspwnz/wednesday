@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserRole
 
 from ..exceptions import ImageNotFoundError
 from ..image import Image
-from ..protocols import ImageRepo, VoteRepo
-from ..vo import HiddenReason, HiddenState, ImageId
+from ..protocols import ImageRepo
+from ..vo import HiddenReason, ImageId
 
 
 class ImageManagementService:
@@ -15,45 +13,40 @@ class ImageManagementService:
     @staticmethod
     async def hide(
         *,
-        image_id: ImageId,
+        id: ImageId,
         actor: UserRole,
-        image_repo: ImageRepo,
+        repo: ImageRepo,
         at: AwareDatetime,
     ) -> Image:
-        image_id = ImageId.ensure(image_id)
+        id = ImageId.ensure(id)
         actor = UserRole.ensure(actor)
         at = AwareDatetime.ensure(at)
 
-        image = await image_repo.get_by_id(image_id)
+        image = await repo.get_by_id(id)
         if image is None:
-            raise ImageNotFoundError(str(image_id))
+            raise ImageNotFoundError(str(id))
 
         image.hide(actor=actor, reason=HiddenReason.ADMIN, at=at)
-        await image_repo.save(image)
+        await repo.save(image)
         return image
 
     @staticmethod
     async def show(
         *,
-        image_id: ImageId,
+        id: ImageId,
         actor: UserRole,
-        image_repo: ImageRepo,
-        vote_repo: VoteRepo,
+        repo: ImageRepo,
         at: AwareDatetime,
     ) -> Image:
-        image_id = ImageId.ensure(image_id)
+        id = ImageId.ensure(id)
         actor = UserRole.ensure(actor)
         at = AwareDatetime.ensure(at)
 
-        image = await image_repo.get_by_id(image_id)
+        image = await repo.get_by_id(id)
         if image is None:
-            raise ImageNotFoundError(str(image_id))
-
-        was_admin_hidden = isinstance(image.state, HiddenState) and image.state.reason == HiddenReason.ADMIN
+            raise ImageNotFoundError(str(id))
 
         image.show(actor=actor, at=at)
-        if was_admin_hidden:
-            await vote_repo.reset(image_id)
 
-        await image_repo.save(image)
+        await repo.save(image)
         return image

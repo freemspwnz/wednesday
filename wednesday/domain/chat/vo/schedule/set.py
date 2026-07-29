@@ -1,7 +1,5 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import Final
+from dataclasses import dataclass, replace
+from typing import Final, Self
 from zoneinfo import ZoneInfo
 
 from ...exceptions import ScheduleLimitExceededError, ValidationError
@@ -27,40 +25,36 @@ class ChatScheduleSet:
         if len(self.schedules) > self.MAX_SCHEDULES:
             raise ScheduleLimitExceededError(self.MAX_SCHEDULES)
 
-    def change_timezone(self, timezone: ZoneInfo) -> ChatScheduleSet:
+    def change_timezone(self, timezone: ZoneInfo) -> Self:
         if timezone == self.timezone:
             return self
-        return ChatScheduleSet(timezone=timezone, weekday=self.weekday, schedules=self.schedules)
+        return replace(self, timezone=timezone)
 
-    def change_day(self, weekday: Weekday) -> ChatScheduleSet:
+    def change_day(self, weekday: Weekday) -> Self:
         if weekday == self.weekday:
             return self
-        return ChatScheduleSet(timezone=self.timezone, weekday=weekday, schedules=self.schedules)
+        return replace(self, weekday=weekday)
 
-    def add(self, schedule: ChatSchedule) -> ChatScheduleSet:
+    def add(self, schedule: ChatSchedule) -> Self:
         if len(self.schedules) >= self.MAX_SCHEDULES:
             raise ScheduleLimitExceededError(self.MAX_SCHEDULES)
         if schedule in self.schedules:
             return self
-        return ChatScheduleSet(timezone=self.timezone, weekday=self.weekday, schedules=(*self.schedules, schedule))
+        return replace(self, schedules=(*self.schedules, schedule))
 
-    def remove(self, schedule: ChatSchedule) -> ChatScheduleSet:
+    def remove(self, schedule: ChatSchedule) -> Self:
         if schedule not in self.schedules:
             return self
         new = tuple(s for s in self.schedules if s != schedule)
-        return ChatScheduleSet(
-            timezone=self.timezone,
-            weekday=self.weekday,
-            schedules=new,
-        )
+        return replace(self, schedules=new)
 
-    def clear(self) -> ChatScheduleSet:
+    def clear(self) -> Self:
         if self.schedules != ():
-            return ChatScheduleSet(timezone=self.timezone, weekday=self.weekday, schedules=())
+            return replace(self, schedules=())
         return self
 
     @classmethod
-    def ensure(cls, set: ChatScheduleSet) -> ChatScheduleSet:
+    def ensure(cls, set: object) -> Self:
         if not isinstance(set, cls):
-            raise ValidationError("set must be a ChatScheduleSet")
+            raise ValidationError(f"set must be a {cls.__name__}")
         return set

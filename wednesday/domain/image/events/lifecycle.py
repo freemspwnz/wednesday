@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 
-from ..exceptions import ValidationError
-from ..vo import ImageMeta, ImagePrompts
+from ..vo import ImageMeta, ImagePrompts, ImageRating
 from .base import ImageEvent
 
 
@@ -19,13 +16,11 @@ class ImageRegistered(ImageEvent):
 
 
 @dataclass(frozen=True)
-class ImageScoreRecalculated(ImageEvent):
-    old_score: int
-    new_score: int
+class ImageRatingChanged(ImageEvent):
+    old: ImageRating
+    new: ImageRating
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if not isinstance(self.old_score, int):
-            raise ValidationError("old_score must be an int")
-        if not isinstance(self.new_score, int):
-            raise ValidationError("new_score must be an int")
+        ImageRating.ensure(self.old)
+        ImageRating.ensure(self.new)

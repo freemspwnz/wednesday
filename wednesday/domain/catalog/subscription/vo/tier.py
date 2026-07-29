@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from enum import IntEnum
+from typing import Self
 
 from ....kernel import ValidationError
 
@@ -10,7 +9,7 @@ class SubscriptionTier(IntEnum):
     PREMIUM = 1
 
     @classmethod
-    def ensure(cls, tier: SubscriptionTier) -> SubscriptionTier:
+    def ensure(cls, tier: object) -> Self:
         if not isinstance(tier, cls):
-            raise ValidationError("tier must be a SubscriptionTier")
+            raise ValidationError(f"tier must be a {cls.__name__}")
         return tier

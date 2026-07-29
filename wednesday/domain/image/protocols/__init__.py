@@ -1,16 +1,14 @@
 from .catalog import PromptCatalog, PromptComponents
+from .generator import Generator
 from .image import ImageRepo
-from .img_gen import ImageGenerator
-from .txt_gen import TextGenerator
 from .view import ViewRepo
 from .vote import VoteRepo
 
 __all__ = [
-    "ImageGenerator",
+    "Generator",
     "ImageRepo",
     "PromptCatalog",
     "PromptComponents",
-    "TextGenerator",
     "ViewRepo",
     "VoteRepo",
 ]

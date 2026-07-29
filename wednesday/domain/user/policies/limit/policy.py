@@ -32,7 +32,7 @@ class LimitPolicy:
                 DailyLimitViolation(
                     daily_limit=limit,
                     used=daily_usage,
-                )
+                ),
             )
 
         if last_usage is not None:
@@ -42,7 +42,7 @@ class LimitPolicy:
                     CooldownViolation(
                         cooldown_minutes=cooldown,
                         remaining=remaining,
-                    )
+                    ),
                 )
 
         return cls.allow()

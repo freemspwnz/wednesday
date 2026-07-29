@@ -1,9 +1,15 @@
+"""Tests for image rating and other image policies."""
+
 import pytest
 
-from domain.image import ImageScorePolicy
-from domain.image.exceptions import ValidationError
-from domain.image.policies import (
+from domain.image import (
+    ActiveState,
+    HiddenReason,
+    HiddenState,
+    Hide,
     HideImage,
+    ImageRating,
+    ImageRatingPolicy,
     ManagementAccessCode,
     ManagementAccessPolicy,
     ManagementAction,
@@ -13,43 +19,86 @@ from domain.image.policies import (
     ModerationAllowed,
     ModerationCode,
     ModerationDenied,
+    NoOperation,
     PromptModerationPolicy,
+    Show,
     ShowImage,
+    ValidationError,
 )
-from domain.user.vo import UserRole
+from domain.user import UserRole
+
+from .factories import mk_rating
+
+
+@pytest.mark.unit
+def test_image_rating_policy_default() -> None:
+    assert ImageRatingPolicy.default() == ImageRating(likes=3, dislikes=0)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("votes", "expected"),
+    ("rating", "new", "old", "expected"),
     [
-        ([], 3),
-        ([1, 1, -1], 4),
-        ([-1, -1, -1, -1], -1),
+        (mk_rating(likes=3), 1, None, mk_rating(likes=4)),
+        (mk_rating(likes=3), -1, None, mk_rating(likes=3, dislikes=1)),
+        (mk_rating(likes=4), -1, 1, mk_rating(likes=3, dislikes=1)),
+        (mk_rating(likes=3, dislikes=1), 1, -1, mk_rating(likes=4)),
+        (mk_rating(likes=4), 1, 1, mk_rating(likes=4)),
     ],
 )
-def test_image_score_policy_compute(votes: list[int], expected: int) -> None:
-    assert ImageScorePolicy.compute(votes) == expected
+def test_image_rating_policy_add_vote(
+    rating: ImageRating,
+    new: int,
+    old: int | None,
+    expected: ImageRating,
+) -> None:
+    assert ImageRatingPolicy.add_vote(rating, new, old) == expected
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("score", "hidden", "selectable"),
-    [
-        (0, True, False),
-        (-1, True, False),
-        (1, False, True),
-    ],
-)
-def test_image_score_policy_hidden_and_selectable(score: int, hidden: bool, selectable: bool) -> None:
-    assert ImageScorePolicy.is_hidden(score) is hidden
-    assert ImageScorePolicy.is_selectable(score) is selectable
-
-
-@pytest.mark.unit
-def test_image_score_policy_rejects_invalid_vote() -> None:
+def test_image_rating_policy_add_vote_rejects_invalid() -> None:
     with pytest.raises(ValidationError):
-        ImageScorePolicy.compute([2])
+        ImageRatingPolicy.add_vote(mk_rating(), 2, None)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("rating", "selectable"),
+    [
+        (mk_rating(likes=0), True),
+        (mk_rating(likes=0, dislikes=1), False),
+        (mk_rating(likes=3), True),
+    ],
+)
+def test_image_rating_policy_is_selectable(rating: ImageRating, selectable: bool) -> None:
+    assert ImageRatingPolicy.is_selectable(rating) is selectable
+
+
+@pytest.mark.unit
+def test_image_rating_policy_evaluate() -> None:
+    active = ActiveState()
+    assert isinstance(
+        ImageRatingPolicy.evaluate(mk_rating(likes=3), active),
+        Show,
+    )
+    assert isinstance(
+        ImageRatingPolicy.evaluate(mk_rating(likes=0, dislikes=1), active),
+        Hide,
+    )
+    assert isinstance(
+        ImageRatingPolicy.evaluate(
+            mk_rating(likes=0, dislikes=1),
+            HiddenState(reason=HiddenReason.ADMIN),
+        ),
+        NoOperation,
+    )
+
+
+@pytest.mark.unit
+def test_image_rating_policy_on_show() -> None:
+    current = mk_rating(likes=1, dislikes=2)
+    assert ImageRatingPolicy.on_show(UserRole.SYSTEM, current) == current
+    assert ImageRatingPolicy.on_show(UserRole.OWNER, current) == ImageRatingPolicy.default()
 
 
 @pytest.mark.unit

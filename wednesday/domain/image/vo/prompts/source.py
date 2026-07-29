@@ -10,7 +10,7 @@ class PromptSource(StrEnum):
     LLM = "llm"
 
     @classmethod
-    def ensure(cls, source: Self) -> Self:
+    def ensure(cls, source: object) -> Self:
         if not isinstance(source, cls):
-            raise ValidationError("source must be a PromptSource")
+            raise ValidationError(f"source must be an instance of {cls.__name__}")
         return source

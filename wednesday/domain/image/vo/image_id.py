@@ -21,7 +21,7 @@ class ImageId:
         return cls(value=uuid4())
 
     @classmethod
-    def ensure(cls, image_id: Self) -> Self:
-        if not isinstance(image_id, ImageId):
-            raise ValidationError("image_id must be an ImageId")
+    def ensure(cls, image_id: object) -> Self:
+        if not isinstance(image_id, cls):
+            raise ValidationError(f"image_id must be an instance of {cls.__name__}")
         return image_id

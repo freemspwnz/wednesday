@@ -1,6 +1,5 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Self
 
 from ...catalog.subscription import SubscriptionPlan
 from ...kernel.vo import AwareDatetime
@@ -32,17 +31,13 @@ class UserSubscription:
         self,
         fallback: SubscriptionPlan,
         at: AwareDatetime,
-    ) -> UserSubscription:
+    ) -> Self:
         if self.is_active_at(at):
             return self
-        return UserSubscription(
-            plan=fallback,
-            started_at=self.expires_at or at,
-            expires_at=None,
-        )
+        return replace(self, plan=fallback, started_at=self.expires_at or at, expires_at=None)
 
     @classmethod
-    def ensure(cls, subscription: UserSubscription) -> UserSubscription:
+    def ensure(cls, subscription: object) -> Self:
         if not isinstance(subscription, cls):
-            raise ValidationError("subscription must be a UserSubscription")
+            raise ValidationError(f"subscription must be a {cls.__name__}")
         return subscription

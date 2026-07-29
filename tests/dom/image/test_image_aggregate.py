@@ -1,3 +1,5 @@
+"""Tests for Image aggregate rating / visibility behavior."""
+
 import pytest
 
 from domain.image import (
@@ -5,242 +7,194 @@ from domain.image import (
     HiddenReason,
     HiddenState,
     Image,
-    ImageScoreRecalculated,
+    ImageHidden,
+    ImageId,
+    ImageRating,
+    ImageRatingChanged,
+    ImageRegistered,
+    ImageShown,
     ImageState,
-    TelegramFileId,
+    ValidationError,
 )
-from domain.image.exceptions import AccessDeniedError, ValidationError
-from domain.user.vo import UserRole
+from domain.user import UserRole
 
-from .factories import dt, mk_image
+from .factories import dt, mk_file_id, mk_image, mk_meta, mk_prompts, mk_rating
 
 
 @pytest.mark.unit
-def test_image_register_restore_and_ensure() -> None:
-    image = mk_image(created_at=dt(10))
-    assert image.score == 3
-    assert image.is_selectable
+def test_image_register_defaults() -> None:
+    image = mk_image()
+    assert image.rating == ImageRating(likes=3, dislikes=0)
     assert isinstance(image.state, ActiveState)
-    assert image.file_id == TelegramFileId.parse("AgACAgIAAxkBAAI")
-    assert image.prompts.enriched is not None
+    events = image.pull_events()
+    assert len(events) == 1
+    assert isinstance(events[0], ImageRegistered)
 
+
+@pytest.mark.unit
+def test_image_restore_roundtrip() -> None:
+    image = mk_image(rating=mk_rating(likes=5))
     restored = Image.restore(
         id=image.id,
         meta=image.meta,
-        created_at=image.created_at,
-        score=image.score,
+        rating=image.rating,
         state=image.state,
         file_id=image.file_id,
         prompts=image.prompts,
+        created_at=image.created_at,
     )
-    assert Image.ensure(restored) is restored
+    assert restored.rating == image.rating
+    assert restored.id == image.id
 
 
 @pytest.mark.unit
-def test_recalculate_score_updates_score_without_changing_state() -> None:
-    image = mk_image(score=0, state=HiddenState(reason=HiddenReason.SCORE))
+def test_add_vote_updates_rating_without_changing_state() -> None:
+    image = mk_image(rating=mk_rating(likes=0, dislikes=1), state=HiddenState(reason=HiddenReason.RATING))
     image.pull_events()
 
-    image.recalculate_score([1, 1], at=dt(13))
+    image.add_vote(new=1, old=None, at=dt(13))
 
-    assert image.score == 5
+    assert image.rating == mk_rating(likes=1, dislikes=1)
     assert isinstance(image.state, HiddenState)
-    assert image.state.reason == HiddenReason.SCORE
-    assert not image.is_selectable
+    assert image.state.reason == HiddenReason.RATING
+    events = image.pull_events()
+    assert len(events) == 1
+    assert isinstance(events[0], ImageRatingChanged)
 
 
 @pytest.mark.unit
-def test_system_show_from_score_hidden_preserves_score() -> None:
-    image = mk_image(score=0, state=HiddenState(reason=HiddenReason.SCORE))
+def test_system_show_from_rating_hidden_preserves_rating() -> None:
+    image = mk_image(rating=mk_rating(likes=0, dislikes=1), state=HiddenState(reason=HiddenReason.RATING))
+    image.add_vote(new=1, old=None, at=dt(12))
+    image.add_vote(new=1, old=None, at=dt(12))
     image.pull_events()
-    image.recalculate_score([1, 1], at=dt(12))
 
     image.show(actor=UserRole.SYSTEM, at=dt(13))
 
-    assert image.score == 5
+    assert image.rating == mk_rating(likes=2, dislikes=1)
     assert isinstance(image.state, ActiveState)
-    assert image.is_selectable
+    assert isinstance(image.pull_events()[0], ImageShown)
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("actor", "method"),
-    [
-        (UserRole.OWNER, "hide"),
-        (UserRole.SYSTEM, "hide"),
-        (UserRole.OWNER, "show"),
-    ],
-)
-def test_image_hide_and_show(actor: UserRole, method: str) -> None:
+@pytest.mark.parametrize("actor", [UserRole.SYSTEM, UserRole.OWNER, UserRole.ADMIN])
+def test_hide_and_owner_show(actor: UserRole) -> None:
     image = mk_image()
     image.pull_events()
 
-    if method == "show":
-        image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(10))
-        image.pull_events()
-
-    if method == "hide":
-        reason = HiddenReason.SCORE if actor == UserRole.SYSTEM else HiddenReason.ADMIN
+    if actor in {UserRole.SYSTEM, UserRole.OWNER, UserRole.ADMIN}:
+        reason = HiddenReason.RATING if actor == UserRole.SYSTEM else HiddenReason.ADMIN
         image.hide(actor=actor, reason=reason, at=dt(11))
-    else:
-        image.show(actor=actor, at=dt(11))
-
-    if method == "hide":
-        assert image.score == 3
         assert isinstance(image.state, HiddenState)
-        expected_reason = HiddenReason.SCORE if actor == UserRole.SYSTEM else HiddenReason.ADMIN
+        assert image.rating == mk_rating(likes=3)
+        expected_reason = HiddenReason.RATING if actor == UserRole.SYSTEM else HiddenReason.ADMIN
         assert image.state.reason == expected_reason
-        assert image.is_hidden
-        assert not image.is_selectable
-    else:
-        assert image.score == 3
+        assert isinstance(image.pull_events()[0], ImageHidden)
+
+    if actor == UserRole.OWNER:
+        image.show(actor=actor, at=dt(12))
         assert isinstance(image.state, ActiveState)
-        assert image.is_selectable
+        assert image.rating == mk_rating(likes=3)
+        assert isinstance(image.pull_events()[0], ImageShown)
 
 
 @pytest.mark.unit
-def test_image_admin_hide_and_show_sequence() -> None:
-    image = mk_image()
+def test_owner_show_resets_rating_to_default() -> None:
+    image = mk_image(rating=mk_rating(likes=1, dislikes=2), state=HiddenState(reason=HiddenReason.ADMIN))
     image.pull_events()
 
-    image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
-    assert image.score == 3
     image.show(actor=UserRole.OWNER, at=dt(12))
+
+    assert image.rating == mk_rating(likes=3)
     assert isinstance(image.state, ActiveState)
-    assert image.score == 3
+
+
+@pytest.mark.unit
+def test_image_register_custom_rating_via_restore() -> None:
+    image = mk_image(rating=mk_rating(likes=5))
+    assert image.rating == mk_rating(likes=5)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("actor", "method"),
+    ("rating", "state", "message"),
     [
-        (UserRole.ADMIN, "show"),
-        (UserRole.USER, "hide"),
-        (UserRole.USER, "show"),
+        (
+            mk_rating(likes=3),
+            HiddenState(reason=HiddenReason.RATING),
+            "rating-hidden image must not have a selectable rating",
+        ),
+        (mk_rating(likes=0, dislikes=1), ActiveState(), "active image must have a selectable rating"),
     ],
 )
-def test_image_management_access_denied(actor: UserRole, method: str) -> None:
-    image = mk_image()
-    with pytest.raises(AccessDeniedError):
-        if method == "hide":
-            image.hide(actor=actor, reason=HiddenReason.ADMIN, at=dt(11))
-        else:
-            image.show(actor=actor, at=dt(11))
-
-
-@pytest.mark.unit
-def test_image_admin_can_hide_but_not_show() -> None:
-    image = mk_image()
-    image.hide(actor=UserRole.ADMIN, reason=HiddenReason.ADMIN, at=dt(11))
-    assert image.is_hidden
-
-    with pytest.raises(AccessDeniedError):
-        image.show(actor=UserRole.ADMIN, at=dt(12))
-
-
-@pytest.mark.unit
-def test_image_hide_is_idempotent() -> None:
-    image = mk_image()
-    image.pull_events()
-    image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
-    assert len(image.pull_events()) == 1
-    image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(12))
-    assert image.pull_events() == []
-
-
-@pytest.mark.unit
-def test_image_show_is_idempotent_after_hide() -> None:
-    image = mk_image()
-    image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
-    image.pull_events()
-    image.show(actor=UserRole.OWNER, at=dt(12))
-    assert len(image.pull_events()) == 1
-    image.show(actor=UserRole.OWNER, at=dt(13))
-    assert image.pull_events() == []
-
-
-@pytest.mark.unit
-def test_image_register_custom_score_via_restore() -> None:
-    image = mk_image(score=5)
-    assert image.score == 5
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize(
-    ("score", "state", "message"),
-    [
-        (3, HiddenState(reason=HiddenReason.SCORE), "score-hidden image must not have a selectable score"),
-        (0, ActiveState(), "active image must have a selectable score"),
-    ],
-)
-def test_image_validate_rejects_incoherent_state(score: int, state: ImageState, message: str) -> None:
-    base = mk_image()
+def test_image_validate_rejects_incoherent_state(
+    rating: ImageRating,
+    state: ImageState,
+    message: str,
+) -> None:
     with pytest.raises(ValidationError, match=message):
         Image.restore(
-            id=base.id,
-            meta=base.meta,
-            created_at=dt(10),
-            score=score,
+            id=ImageId.new(),
+            meta=mk_meta(),
+            rating=rating,
             state=state,
-            file_id=base.file_id,
-            prompts=base.prompts,
+            file_id=mk_file_id(),
+            prompts=mk_prompts(),
+            created_at=dt(10),
         )
 
 
 @pytest.mark.unit
-def test_image_validate_allows_admin_hidden_with_positive_score() -> None:
+def test_image_validate_allows_admin_hidden_with_positive_rating() -> None:
     image = Image.restore(
-        id=mk_image().id,
-        meta=mk_image().meta,
-        created_at=dt(10),
-        score=6,
+        id=ImageId.new(),
+        meta=mk_meta(),
+        rating=mk_rating(likes=6),
         state=HiddenState(reason=HiddenReason.ADMIN),
-        file_id=mk_image().file_id,
-        prompts=mk_image().prompts,
+        file_id=mk_file_id(),
+        prompts=mk_prompts(),
+        created_at=dt(10),
     )
-    assert image.score == 6
-    assert isinstance(image.state, HiddenState)
-    assert image.state.reason == HiddenReason.ADMIN
+    assert image.rating == mk_rating(likes=6)
 
 
 @pytest.mark.unit
-def test_recalculate_score_noop_emits_no_event() -> None:
+def test_add_vote_noop_emits_no_event() -> None:
     image = mk_image()
     image.pull_events()
 
-    image.recalculate_score([], at=dt(11))
+    image.add_vote(new=1, old=1, at=dt(11))
+
     assert image.pull_events() == []
 
 
 @pytest.mark.unit
-def test_recalculate_score_keeps_admin_hidden_but_updates_score() -> None:
-    image = mk_image()
-    image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
+def test_add_vote_keeps_admin_hidden_but_updates_rating() -> None:
+    image = mk_image(state=HiddenState(reason=HiddenReason.ADMIN))
     image.pull_events()
 
-    image.recalculate_score([1, 1, 1], at=dt(12))
+    image.add_vote(new=1, old=None, at=dt(12))
+    image.add_vote(new=1, old=None, at=dt(12))
+    image.add_vote(new=1, old=None, at=dt(12))
 
-    assert image.score == 6
+    assert image.rating == mk_rating(likes=6)
     assert isinstance(image.state, HiddenState)
     assert image.state.reason == HiddenReason.ADMIN
-    assert not image.is_selectable
-    assert image.is_hidden
-
     events = image.pull_events()
-    assert len(events) == 1
-    event = events[0]
-    assert isinstance(event, ImageScoreRecalculated)
-    assert event.old_score == 3
-    assert event.new_score == 6
+    assert len(events) == 3
+    event = events[-1]
+    assert isinstance(event, ImageRatingChanged)
+    assert event.old == mk_rating(likes=5)
+    assert event.new == mk_rating(likes=6)
 
 
 @pytest.mark.unit
-def test_hide_over_score_hidden_switches_reason_to_admin() -> None:
-    image = mk_image(score=0, state=HiddenState(reason=HiddenReason.SCORE))
+def test_hide_over_rating_hidden_switches_reason_to_admin() -> None:
+    image = mk_image(rating=mk_rating(likes=0, dislikes=1), state=HiddenState(reason=HiddenReason.RATING))
     image.pull_events()
 
     image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
 
     assert isinstance(image.state, HiddenState)
     assert image.state.reason == HiddenReason.ADMIN
-    assert image.score == 0
+    assert image.rating == mk_rating(likes=0, dislikes=1)

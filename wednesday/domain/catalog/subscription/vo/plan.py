@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 
 from ....kernel import ValidationError
 from .tier import SubscriptionTier
@@ -24,7 +23,7 @@ class SubscriptionPlan:
             raise ValidationError("cooldown_minutes must be >= 0")
 
     @classmethod
-    def ensure(cls, plan: SubscriptionPlan) -> SubscriptionPlan:
+    def ensure(cls, plan: object) -> Self:
         if not isinstance(plan, cls):
-            raise ValidationError("plan must be a SubscriptionPlan")
+            raise ValidationError(f"plan must be a {cls.__name__}")
         return plan

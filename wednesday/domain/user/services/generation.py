@@ -67,7 +67,7 @@ class UserGenerationService:
     ) -> None:
         """Check ban/limits without consuming a generation slot.
 
-        Intended flow: moderate prompt → assert_allowed → generate → record_usage.
+        Intended flow: assert_allowed → generate → record_usage.
         """
         id = UserId.ensure(id)
         at = AwareDatetime.ensure(at)

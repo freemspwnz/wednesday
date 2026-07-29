@@ -4,30 +4,33 @@ from typing import Self
 from uuid import UUID
 
 from domain.catalog import Model
+from domain.chat import ChatId
 from domain.image import (
     ActiveState,
+    GenerationError,
+    Generator,
     HiddenReason,
     HiddenState,
     Image,
     ImageId,
     ImageMeta,
     ImagePrompts,
+    ImageRating,
+    ImageRatingPolicy,
     NormalizedPrompt,
     PromptSource,
     TelegramFileId,
-    TextGenError,
 )
 from domain.image.protocols import (
-    ImageGenerator,
     ImageRepo,
     PromptCatalog,
     PromptComponents,
-    TextGenerator,
     ViewRepo,
     VoteRepo,
 )
 from domain.image.vote import Vote
 from domain.kernel.vo import AwareDatetime
+from domain.user import UserId
 
 
 def dt(hour: int) -> AwareDatetime:
@@ -38,8 +41,12 @@ def mk_file_id(value: str = "AgACAgIAAxkBAAI") -> TelegramFileId:
     return TelegramFileId.parse(value)
 
 
+def mk_user_id(value: int = 1) -> UserId:
+    return UserId(UUID(int=value))
+
+
 def mk_meta(*, author_id: int = 1, model: str = "gigachat-2-lite") -> ImageMeta:
-    return ImageMeta(author_id=UUID(int=author_id), model=Model.parse(model))
+    return ImageMeta(author_id=mk_user_id(author_id), model=Model.parse(model))
 
 
 def mk_prompts(
@@ -67,13 +74,17 @@ def mk_components() -> PromptComponents:
     )
 
 
+def mk_rating(*, likes: int = ImageRatingPolicy.BASE, dislikes: int = 0) -> ImageRating:
+    return ImageRating(likes=likes, dislikes=dislikes)
+
+
 def mk_image(  # noqa: PLR0913
     *,
     image_id: int = 1,
     model: str = "gigachat-2-lite",
     author_id: int = 1,
     created_at: AwareDatetime | None = None,
-    score: int | None = None,
+    rating: ImageRating | None = None,
     file_id: TelegramFileId | None = None,
     prompts: ImagePrompts | None = None,
     state: HiddenState | ActiveState | None = None,
@@ -84,7 +95,7 @@ def mk_image(  # noqa: PLR0913
     meta = mk_meta(author_id=author_id, model=model)
     image_id_vo = ImageId(UUID(int=image_id))
 
-    if score is None:
+    if rating is None and state is None:
         return Image.register(
             id=image_id_vo,
             meta=meta,
@@ -93,12 +104,20 @@ def mk_image(  # noqa: PLR0913
             created_at=current,
         )
 
-    resolved_state = state or (ActiveState() if score > 0 else HiddenState(reason=HiddenReason.SCORE))
+    resolved_rating = rating or ImageRatingPolicy.default()
+    if state is None:
+        resolved_state: ActiveState | HiddenState = (
+            ActiveState()
+            if ImageRatingPolicy.is_selectable(resolved_rating)
+            else HiddenState(reason=HiddenReason.RATING)
+        )
+    else:
+        resolved_state = state
     return Image.restore(
         id=image_id_vo,
         meta=meta,
         created_at=current,
-        score=score,
+        rating=resolved_rating,
         state=resolved_state,
         file_id=resolved_file_id,
         prompts=resolved_prompts,
@@ -129,15 +148,6 @@ class FakeImageRepo(ImageRepo):
                 return image
         return None
 
-    async def get_random_unseen_for_chat(self, chat_id: UUID, *, min_score: int) -> Image | None:
-        _ = chat_id
-        candidates = [
-            image
-            for image in self.images.values()
-            if image.score > min_score - 1 and isinstance(image.state, ActiveState)
-        ]
-        return candidates[0] if candidates else None
-
     @classmethod
     def with_images(cls, *images: Image) -> Self:
         repo = cls()
@@ -149,21 +159,36 @@ class FakeImageRepo(ImageRepo):
 @dataclass
 class FakeViewRepo(ViewRepo):
     shown: set[tuple[UUID, ImageId]] = field(default_factory=set)
+    candidates: list[Image] = field(default_factory=list)
 
-    async def was_shown(self, chat_id: UUID, image_id: ImageId) -> bool:
-        return (chat_id, ImageId.ensure(image_id)) in self.shown
+    async def was_shown(self, chat_id: ChatId, image_id: ImageId) -> bool:
+        chat_id = ChatId.ensure(chat_id)
+        return (chat_id.value, ImageId.ensure(image_id)) in self.shown
 
-    async def mark_shown(self, chat_id: UUID, image_id: ImageId, at: AwareDatetime) -> None:
+    async def mark_shown(self, chat_id: ChatId, image_id: ImageId, at: AwareDatetime) -> None:
         _ = at
-        self.shown.add((chat_id, ImageId.ensure(image_id)))
+        chat_id = ChatId.ensure(chat_id)
+        self.shown.add((chat_id.value, ImageId.ensure(image_id)))
+
+    async def get_unseen_for_chat(self, chat_id: ChatId, min_rating: int) -> ImageId | None:
+        chat_id = ChatId.ensure(chat_id)
+        for image in self.candidates:
+            if image.rating.value < min_rating:
+                continue
+            if not isinstance(image.state, ActiveState):
+                continue
+            if (chat_id.value, image.id) in self.shown:
+                continue
+            return image.id
+        return None
 
 
 @dataclass
 class FakeImageVoteRepo(VoteRepo):
-    votes: dict[tuple[ImageId, UUID], Vote] = field(default_factory=dict)
+    votes: dict[tuple[ImageId, UserId], Vote] = field(default_factory=dict)
 
-    async def get(self, image_id: ImageId, voter_id: UUID) -> Vote | None:
-        return self.votes.get((ImageId.ensure(image_id), voter_id))
+    async def get(self, image_id: ImageId, voter_id: UserId) -> Vote | None:
+        return self.votes.get((ImageId.ensure(image_id), UserId.ensure(voter_id)))
 
     async def upsert(self, vote: Vote) -> None:
         self.votes[vote.image_id, vote.voter_id] = vote
@@ -205,9 +230,10 @@ class FakePromptCatalog(PromptCatalog):
 
 
 @dataclass
-class FakeTextGenerator(TextGenerator):
-    response: str = "llm prompt"
-    fail: bool = False
+class FakeGenerator(Generator):
+    text_response: str = "llm prompt"
+    image_content: bytes = b"png-bytes"
+    fail_text: bool = False
 
     async def generate_text(
         self,
@@ -218,14 +244,9 @@ class FakeTextGenerator(TextGenerator):
         _ = model
         _ = system_prompt
         _ = user_prompt
-        if self.fail:
-            raise TextGenError("text generator unavailable")
-        return self.response
-
-
-@dataclass
-class FakeImageGenerator(ImageGenerator):
-    content: bytes = b"png-bytes"
+        if self.fail_text:
+            raise GenerationError("text generator unavailable")
+        return self.text_response
 
     async def generate_image(
         self,
@@ -236,4 +257,4 @@ class FakeImageGenerator(ImageGenerator):
         _ = model
         _ = system_prompt
         _ = user_prompt
-        return self.content
+        return self.image_content

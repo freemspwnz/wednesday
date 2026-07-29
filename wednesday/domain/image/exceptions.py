@@ -27,15 +27,8 @@ class PromptRejectedError(ImageError):
         super().__init__(f"prompt rejected: {code}")
 
 
-class ImageGenError(ImageError):
-    """Image generator failed."""
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-
-
-class TextGenError(ImageError):
-    """Text generator error."""
+class GenerationError(ImageError):
+    """Image generation failed."""
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -43,10 +36,9 @@ class TextGenError(ImageError):
 
 __all__ = [
     "AccessDeniedError",
+    "GenerationError",
     "ImageError",
-    "ImageGenError",
     "ImageNotFoundError",
     "PromptRejectedError",
-    "TextGenError",
     "ValidationError",
 ]

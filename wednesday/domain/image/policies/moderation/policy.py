@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 from collections.abc import Sequence
 
@@ -43,5 +41,5 @@ class PromptModerationPolicy:
             violation=ModerationViolation(
                 code=code,
                 meta=meta,
-            )
+            ),
         )

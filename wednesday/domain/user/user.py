@@ -182,7 +182,7 @@ class User:
                     occurred_at=at,
                     old_role=old_role,
                     new_role=new_role,
-                )
+                ),
             )
 
     def change_profile(
@@ -208,7 +208,7 @@ class User:
                     occurred_at=at,
                     old_profile=old_profile,
                     new_profile=new_profile,
-                )
+                ),
             )
 
     def change_subscription(
@@ -237,7 +237,7 @@ class User:
                     occurred_at=at,
                     old_subscription=old_subscription,
                     new_subscription=new_subscription,
-                )
+                ),
             )
 
     def change_settings(
@@ -263,7 +263,7 @@ class User:
                     occurred_at=at,
                     old_settings=old,
                     new_settings=new,
-                )
+                ),
             )
 
     def ban(
@@ -289,7 +289,7 @@ class User:
                     occurred_at=at,
                     until=until,
                     actor=actor,
-                )
+                ),
             )
 
     def unban(
@@ -311,7 +311,7 @@ class User:
                 user_id=self._id,
                 occurred_at=at,
                 actor=actor,
-            )
+            ),
         )
 
     def expire_ban_if_due(self, *, at: AwareDatetime) -> None:
@@ -335,7 +335,7 @@ class User:
                     occurred_at=at,
                     old_subscription=old,
                     new_subscription=effective,
-                )
+                ),
             )
 
     def mark_seen_at(self, *, at: AwareDatetime) -> None:

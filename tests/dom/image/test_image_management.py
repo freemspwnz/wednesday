@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from uuid import UUID
+"""Tests for ImageManagementService."""
 
 import pytest
 
@@ -10,102 +8,80 @@ from domain.image import (
     HiddenState,
     ImageManagementService,
     ImageNotFoundError,
-    ImageShown,
+    ImageRatingPolicy,
 )
-from domain.image.policies import ImageScorePolicy
-from domain.image.vote import Vote
-from domain.user.vo import UserRole
+from domain.user import UserRole
 
-from .factories import FakeImageRepo, FakeImageVoteRepo, dt, mk_image
+from .factories import FakeImageRepo, dt, mk_image, mk_rating
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_management_hide_persists_admin_hidden_without_changing_score() -> None:
-    image = mk_image(score=5)
+async def test_management_hide_persists_admin_hidden_without_changing_rating() -> None:
+    image = mk_image(rating=mk_rating(likes=5))
     image.pull_events()
-    image_repo = FakeImageRepo.with_images(image)
+    repo = FakeImageRepo.with_images(image)
 
     result = await ImageManagementService.hide(
-        image_id=image.id,
+        id=image.id,
         actor=UserRole.OWNER,
-        image_repo=image_repo,
+        repo=repo,
         at=dt(11),
     )
 
-    assert result.score == 5
     assert isinstance(result.state, HiddenState)
     assert result.state.reason == HiddenReason.ADMIN
-    assert image_repo.save_calls == 1
+    assert result.rating == mk_rating(likes=5)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_management_show_after_admin_hide_resets_votes_and_base_score() -> None:
-    image = mk_image()
+async def test_management_show_after_admin_hide_resets_rating_to_default() -> None:
+    image = mk_image(rating=mk_rating(likes=5))
     image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
     image.pull_events()
-    image_repo = FakeImageRepo.with_images(image)
-    vote_repo = FakeImageVoteRepo()
-
-    await vote_repo.upsert(Vote(image_id=image.id, voter_id=UUID(int=2), value=1))
-    await vote_repo.upsert(Vote(image_id=image.id, voter_id=UUID(int=3), value=1))
-    image.recalculate_score([1, 1], at=dt(12))
-    image_repo.images[image.id] = image
+    repo = FakeImageRepo.with_images(image)
 
     result = await ImageManagementService.show(
-        image_id=image.id,
+        id=image.id,
         actor=UserRole.OWNER,
-        image_repo=image_repo,
-        vote_repo=vote_repo,
-        at=dt(13),
+        repo=repo,
+        at=dt(12),
     )
 
     assert isinstance(result.state, ActiveState)
-    assert result.score == ImageScorePolicy.BASE
-    assert await vote_repo.list_for_image(image.id) == []
-    assert image_repo.save_calls == 1
-
-    events = result.pull_events()
-    shown_events = [event for event in events if isinstance(event, ImageShown)]
-    assert len(shown_events) == 1
+    assert result.rating == ImageRatingPolicy.default()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_management_show_from_score_hidden_does_not_reset_votes() -> None:
-    image = mk_image(score=0, state=HiddenState(reason=HiddenReason.SCORE))
-    image_repo = FakeImageRepo.with_images(image)
-    vote_repo = FakeImageVoteRepo()
-
-    from domain.image.vote import Vote
-
-    await vote_repo.upsert(Vote(image_id=image.id, voter_id=UUID(int=2), value=-1))
-    await vote_repo.upsert(Vote(image_id=image.id, voter_id=UUID(int=3), value=-1))
-    await vote_repo.upsert(Vote(image_id=image.id, voter_id=UUID(int=4), value=-1))
+async def test_management_show_from_rating_hidden_preserves_rating_for_system() -> None:
+    image = mk_image(
+        rating=mk_rating(likes=0, dislikes=1),
+        state=HiddenState(reason=HiddenReason.RATING),
+    )
+    image.add_vote(new=1, old=None, at=dt(11))
+    image.pull_events()
+    repo = FakeImageRepo.with_images(image)
 
     result = await ImageManagementService.show(
-        image_id=image.id,
-        actor=UserRole.OWNER,
-        image_repo=image_repo,
-        vote_repo=vote_repo,
-        at=dt(11),
+        id=image.id,
+        actor=UserRole.SYSTEM,
+        repo=repo,
+        at=dt(12),
     )
 
     assert isinstance(result.state, ActiveState)
-    assert result.score == ImageScorePolicy.BASE
-    assert len(await vote_repo.list_for_image(image.id)) == 3
+    assert result.rating == mk_rating(likes=1, dislikes=1)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_management_show_raises_when_image_missing() -> None:
-    image = mk_image()
+async def test_management_show_not_found() -> None:
     with pytest.raises(ImageNotFoundError):
         await ImageManagementService.show(
-            image_id=image.id,
+            id=mk_image(image_id=404).id,
             actor=UserRole.OWNER,
-            image_repo=FakeImageRepo(),
-            vote_repo=FakeImageVoteRepo(),
+            repo=FakeImageRepo(),
             at=dt(11),
         )

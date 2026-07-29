@@ -17,11 +17,18 @@ from .moderation import (
     ModerationViolation,
     PromptModerationPolicy,
 )
-from .score import ImageScorePolicy
+from .rating import (
+    Hide,
+    ImageRatingPolicy,
+    NoOperation,
+    RatingDecision,
+    Show,
+)
 
 __all__ = [
+    "Hide",
     "HideImage",
-    "ImageScorePolicy",
+    "ImageRatingPolicy",
     "ManagementAccessCode",
     "ManagementAccessDecision",
     "ManagementAccessPolicy",
@@ -34,6 +41,9 @@ __all__ = [
     "ModerationDecision",
     "ModerationDenied",
     "ModerationViolation",
+    "NoOperation",
     "PromptModerationPolicy",
+    "RatingDecision",
+    "Show",
     "ShowImage",
 ]

@@ -20,7 +20,7 @@ class ImageRender:
         ImagePrompts.ensure(self.prompts)
 
     @classmethod
-    def ensure(cls, render: Self) -> Self:
-        if not isinstance(render, ImageRender):
-            raise ValidationError("render must be an ImageRender")
+    def ensure(cls, render: object) -> Self:
+        if not isinstance(render, cls):
+            raise ValidationError(f"render must be an instance of {cls.__name__}")
         return render

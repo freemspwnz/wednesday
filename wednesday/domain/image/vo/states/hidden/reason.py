@@ -6,10 +6,10 @@ from ....exceptions import ValidationError
 
 class HiddenReason(StrEnum):
     ADMIN = "admin"
-    SCORE = "score"
+    RATING = "rating"
 
     @classmethod
-    def ensure(cls, reason: Self) -> Self:
+    def ensure(cls, reason: object) -> Self:
         if not isinstance(reason, cls):
-            raise ValidationError("reason must be a HiddenReason")
+            raise ValidationError(f"reason must be an instance of {cls.__name__}")
         return reason

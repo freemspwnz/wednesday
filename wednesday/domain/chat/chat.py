@@ -142,7 +142,7 @@ class Chat:
                     actor=actor,
                     old_profile=old,
                     new_profile=self._profile,
-                )
+                ),
             )
 
     def change_schedule_day(
@@ -169,7 +169,7 @@ class Chat:
                     actor=actor,
                     old_weekday=old,
                     new_weekday=self._schedules.weekday,
-                )
+                ),
             )
 
     def change_schedule_timezone(
@@ -197,7 +197,7 @@ class Chat:
                     actor=actor,
                     old_timezone=old,
                     new_timezone=self._schedules.timezone,
-                )
+                ),
             )
 
     def add_schedule(
@@ -222,7 +222,7 @@ class Chat:
                     occurred_at=at,
                     actor=actor,
                     schedule=schedule,
-                )
+                ),
             )
 
     def remove_schedule(
@@ -247,7 +247,7 @@ class Chat:
                     occurred_at=at,
                     actor=actor,
                     schedule=schedule,
-                )
+                ),
             )
 
     def clear_schedules(self, *, actor: ManagementActor, at: AwareDatetime) -> None:
@@ -264,7 +264,7 @@ class Chat:
                     chat_id=self._id,
                     occurred_at=at,
                     actor=actor,
-                )
+                ),
             )
 
     def activate(self, *, actor: ManagementActor, at: AwareDatetime) -> None:
@@ -280,7 +280,7 @@ class Chat:
                 chat_id=self._id,
                 occurred_at=at,
                 actor=actor,
-            )
+            ),
         )
 
     def deactivate(self, *, actor: ManagementActor, at: AwareDatetime) -> None:
@@ -296,7 +296,7 @@ class Chat:
                 chat_id=self._id,
                 occurred_at=at,
                 actor=actor,
-            )
+            ),
         )
 
     def _record_event(self, event: ChatEvent) -> None:

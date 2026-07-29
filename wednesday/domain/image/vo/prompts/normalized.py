@@ -33,7 +33,7 @@ class NormalizedPrompt:
         return cls(value=cls._normalize(raw))
 
     @classmethod
-    def ensure(cls, prompt: Self) -> Self:
-        if not isinstance(prompt, NormalizedPrompt):
-            raise ValidationError("prompt must be a NormalizedPrompt")
+    def ensure(cls, prompt: object) -> Self:
+        if not isinstance(prompt, cls):
+            raise ValidationError(f"prompt must be an instance of {cls.__name__}")
         return prompt

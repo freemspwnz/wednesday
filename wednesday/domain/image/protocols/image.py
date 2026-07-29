@@ -1,10 +1,10 @@
-from typing import Protocol
-from uuid import UUID
+from typing import Protocol, runtime_checkable
 
 from ..image import Image
 from ..vo import ImageId, TelegramFileId
 
 
+@runtime_checkable
 class ImageRepo(Protocol):
     """Catalog image repository."""
 
@@ -22,13 +22,4 @@ class ImageRepo(Protocol):
 
     async def get_by_telegram_file_id(self, file_id: TelegramFileId) -> Image | None:
         """Lookup image by Telegram file id."""
-        ...
-
-    async def get_random_unseen_for_chat(
-        self,
-        chat_id: UUID,
-        *,
-        min_score: int,
-    ) -> Image | None:
-        """Random unseen image for chat with score > min_score-1."""
         ...

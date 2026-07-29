@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Self
-from uuid import UUID
+
+from domain.user import UserId
 
 from ...catalog import Model
 from ..exceptions import ValidationError
@@ -12,16 +11,15 @@ from ..exceptions import ValidationError
 class ImageMeta:
     """Snapshot of who created the catalog entry and which model was used."""
 
-    author_id: UUID
+    author_id: UserId
     model: Model
 
     def __post_init__(self) -> None:
-        if not isinstance(self.author_id, UUID):
-            raise ValidationError("author_id must be a UUID")
+        UserId.ensure(self.author_id)
         Model.ensure(self.model)
 
     @classmethod
-    def ensure(cls, meta: Self) -> Self:
-        if not isinstance(meta, ImageMeta):
-            raise ValidationError("meta must be an ImageMeta")
+    def ensure(cls, meta: object) -> Self:
+        if not isinstance(meta, cls):
+            raise ValidationError(f"meta must be an instance of {cls.__name__}")
         return meta

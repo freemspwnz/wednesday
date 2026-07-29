@@ -1,13 +1,13 @@
 from .catalog import ImageCatalogService
-from .fallback import FallbackPromptService
 from .generation import ImageGenerationService
+from .lifecycle import ImageLifecycleService
 from .management import ImageManagementService
 from .vote import ImageVoteService
 
 __all__ = [
-    "FallbackPromptService",
     "ImageCatalogService",
     "ImageGenerationService",
+    "ImageLifecycleService",
     "ImageManagementService",
     "ImageVoteService",
 ]

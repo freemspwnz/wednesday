@@ -21,9 +21,9 @@ class ImagePrompts:
             NormalizedPrompt.ensure(self.enriched)
 
     @classmethod
-    def ensure(cls, prompts: Self) -> Self:
-        if not isinstance(prompts, ImagePrompts):
-            raise ValidationError("prompts must be an ImagePrompts")
+    def ensure(cls, prompts: object) -> Self:
+        if not isinstance(prompts, cls):
+            raise ValidationError(f"prompts must be an instance of {cls.__name__}")
         return prompts
 
     def effective(self) -> NormalizedPrompt:

@@ -1,13 +1,9 @@
-from __future__ import annotations
+from domain.chat import ChatId
+from domain.kernel import AwareDatetime
 
-from uuid import UUID
-
-from domain.kernel.vo import AwareDatetime
-
-from ..exceptions import ValidationError
-from ..image import Image
-from ..policies import ImageScorePolicy
-from ..protocols import ImageRepo, ViewRepo
+from ..policies import ImageRatingPolicy
+from ..protocols import ViewRepo
+from ..vo import ImageId
 
 
 class ImageCatalogService:
@@ -16,21 +12,19 @@ class ImageCatalogService:
     @staticmethod
     async def pick_for_chat(
         *,
-        chat_id: UUID,
-        image_repo: ImageRepo,
-        view_repo: ViewRepo,
+        chat_id: ChatId,
+        repo: ViewRepo,
         at: AwareDatetime,
-    ) -> Image | None:
-        if not isinstance(chat_id, UUID):
-            raise ValidationError("chat_id must be a UUID")
+    ) -> ImageId | None:
+        chat_id = ChatId.ensure(chat_id)
         at = AwareDatetime.ensure(at)
 
-        image = await image_repo.get_random_unseen_for_chat(
-            chat_id,
-            min_score=ImageScorePolicy.CATALOG_MIN_SCORE,
+        image_id = await repo.get_unseen_for_chat(
+            chat_id=chat_id,
+            min_rating=ImageRatingPolicy.SHOWABLE_RATING,
         )
-        if image is None:
+        if image_id is None:
             return None
 
-        await view_repo.mark_shown(chat_id, image.id, at=at)
-        return image
+        await repo.mark_shown(chat_id, image_id, at=at)
+        return image_id

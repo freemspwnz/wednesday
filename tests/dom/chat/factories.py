@@ -33,7 +33,7 @@ def private_profile(telegram_id: int = -1001) -> ChatProfile:
 
 
 def default_domain_chat_id() -> ChatId:
-    """Совпадает с дефолтным `mk_chat(chat_id=1)`."""
+    """Matches the default `mk_chat(chat_id=1)`."""
     return ChatId(value=UUID(int=1))
 
 

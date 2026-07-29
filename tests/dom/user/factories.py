@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Self
@@ -177,7 +175,7 @@ class FakeUserRepo(UserRepo):
         return repo
 
     @classmethod
-    def with_users(cls, *users: User) -> FakeUserRepo:
+    def with_users(cls, *users: User) -> Self:
         repo = cls()
         for user in users:
             repo.users[user.id] = user

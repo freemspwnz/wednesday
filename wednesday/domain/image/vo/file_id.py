@@ -28,7 +28,7 @@ class TelegramFileId:
         return cls(value=raw.strip())
 
     @classmethod
-    def ensure(cls, file_id: Self) -> Self:
-        if not isinstance(file_id, TelegramFileId):
-            raise ValidationError("file_id must be a TelegramFileId")
+    def ensure(cls, file_id: object) -> Self:
+        if not isinstance(file_id, cls):
+            raise ValidationError(f"file_id must be an instance of {cls.__name__}")
         return file_id
