@@ -1,7 +1,5 @@
 """User-facing command texts (/start, /help, stubs)."""
 
-from collections.abc import Sequence
-
 from aiogram.types import BotCommand
 
 WELCOME = (
@@ -34,29 +32,6 @@ HELP = (
 UNKNOWN_COMMAND = "❓ Неизвестная команда!\n\nИспользуйте /help для получения списка команд."
 
 WIP = "В разработке..."
-
-SET_MODEL_USAGE = "Использование: /set_model <модель>"
-
-RANDOM_CATALOG_EMPTY = "Каталог изображений пуст для этого чата.\nСгенерируйте новое: /generate"
-
-IMAGE_UNAVAILABLE = "Изображение недоступно для отправки."
-
-LIST_MODELS_EMPTY = "Нет доступных моделей для вашей подписки."
-
-LIST_MODELS_HEADER = "Доступные модели:"
-
-LIST_MODELS_FOOTER = "Выбор: /set_model <код модели>"
-
-
-def format_set_model_success(model: str) -> str:
-    return f"✅ Модель изменена: {model}"
-
-
-def format_list_models(models: Sequence[str]) -> str:
-    if not models:
-        return LIST_MODELS_EMPTY
-    lines = [LIST_MODELS_HEADER, "", *(f"• {model}" for model in models), "", LIST_MODELS_FOOTER]
-    return "\n".join(lines)
 
 
 # Bot commands in Telegram client.

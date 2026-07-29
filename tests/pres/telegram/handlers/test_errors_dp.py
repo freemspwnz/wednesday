@@ -1,7 +1,5 @@
 """Integration: dp.errors handler."""
 
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -14,7 +12,7 @@ from aiogram.types import Chat, Message, TelegramObject, Update, User
 from app.exceptions import AppError
 from domain.kernel.exceptions import ValidationError
 from presentation.aiogram.messages.exceptions import SERVER_ERROR
-from presentation.aiogram.routers.error import error_handler, send_text_to_update
+from presentation.aiogram.routers.errors import error_handler, send_text_to_update
 
 from ..factories import make_message
 

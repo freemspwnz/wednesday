@@ -1,7 +1,5 @@
 """Shared factories for presentation telegram tests (not pytest fixtures)."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from types import TracebackType
 from uuid import UUID

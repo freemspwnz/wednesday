@@ -1,6 +1,4 @@
-"""Тесты presentation.aiogram.middlewares.utils (shared helpers)."""
-
-from __future__ import annotations
+"""Tests for presentation.aiogram.middlewares.utils (shared helpers)."""
 
 from unittest.mock import MagicMock
 

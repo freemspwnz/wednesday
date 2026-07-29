@@ -4,7 +4,7 @@ from aiogram.exceptions import TelegramAPIError
 from app.protocols import Logger, RateLimiter, Retrier, ScopeFactory
 
 from .filters import AdminAccessFilter
-from .messages import commands as cmd_msg, system as system_msg
+from .messages import common as common_msg, system as system_msg
 from .middlewares import (
     DIMiddleware,
     RateLimitRequestMW,
@@ -13,13 +13,13 @@ from .middlewares import (
     ThrottlingMiddleware,
 )
 from .routers import (
-    admin_router,
     chat_router,
     common_router,
     error_handler,
     image_router,
     user_router,
 )
+from .routers.user import admin_router
 
 POLLING_ALLOWED_UPDATES: list[str] = [
     "message",
@@ -44,14 +44,14 @@ def setup_bot(
         RetryRequestMW(
             retrier=retrier,
             logger=logger,
-        )
+        ),
     )
 
     bot.session.middleware(
         RateLimitRequestMW(
             limiter=limiter,
             logger=logger,
-        )
+        ),
     )
 
 
@@ -88,7 +88,7 @@ def setup_dp(
     async def dp_startup(bot: Bot) -> None:
         su_logger = log.bind(event="startup")
         try:
-            await bot.set_my_commands(list(cmd_msg.BOT_COMMANDS))
+            await bot.set_my_commands(list(common_msg.BOT_COMMANDS))
         except TelegramAPIError as exc:
             su_logger.error(
                 "Failed to set bot commands menu",
@@ -122,7 +122,6 @@ def setup_dp(
 def build_root_router() -> Router:
     root_router = Router(name="root")
 
-    root_router.include_router(admin_router)
     root_router.include_router(chat_router)
     root_router.include_router(image_router)
     root_router.include_router(user_router)

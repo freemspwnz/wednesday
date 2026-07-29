@@ -1,47 +1,187 @@
 """Tests for image router handlers (/random, /generate) and vote keyboard."""
 
-from __future__ import annotations
-
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
-from aiogram.types import CallbackQuery, Message
+from aiogram.filters import CommandObject
+from aiogram.types import CallbackQuery, Chat as TgChat, Message, PhotoSize, User as TgUser
 
 from app.dto import ChatContext, ImageCard, UserContext
-from domain.image import ImageId, ImageNotFoundError, TelegramFileId
-from presentation.aiogram.messages import commands as cmd_msg, exceptions as exc_msg
-from presentation.aiogram.routers.image import ImageVoteData, build_vote_kb
-from presentation.aiogram.routers.image.router import cb_image_vote, cmd_generate, cmd_random
-from tests.dom.image.factories import dt, mk_image
+from domain.catalog import Model
+from domain.image import (
+    ImageMeta,
+    ImageNotFoundError,
+    ImagePrompts,
+    ImageRender,
+    NormalizedPrompt,
+    PromptRejectedError,
+    PromptSource,
+    TelegramFileId,
+)
+from presentation.aiogram.messages import exceptions as exc_msg, image as image_msg
+from presentation.aiogram.routers.image import (
+    ImageVoteData,
+    build_vote_kb,
+    cb_image_vote,
+    cmd_generate,
+    cmd_random,
+)
+from tests.dom.image.factories import dt, mk_image, mk_rating
 
 from ..factories import make_callback_query, make_message, mk_user_context
 
+_MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
+_IMAGE_KEY = str(UUID(int=7))
+
 
 @pytest.mark.unit
-def test_build_vote_kb_contains_up_and_down() -> None:
-    kb = build_vote_kb(image_id=ImageId(UUID(int=7)))
+def test_build_vote_kb_shows_likes_and_dislikes() -> None:
+    kb = build_vote_kb(image_id=_IMAGE_KEY, rating=mk_rating(likes=3, dislikes=1))
     row = kb.inline_keyboard[0]
     assert len(row) == 2
-    up_raw = row[0].callback_data
-    assert up_raw is not None
-    up = ImageVoteData.unpack(up_raw)
-    down_raw = row[1].callback_data
-    assert down_raw is not None
-    down = ImageVoteData.unpack(down_raw)
+    assert row[0].text == "👍 3"
+    assert row[1].text == "👎 1"
+
+    up = ImageVoteData.unpack(row[0].callback_data or "")
+    down = ImageVoteData.unpack(row[1].callback_data or "")
     assert up is not None and down is not None
     assert up.value == 1
     assert down.value == -1
-    assert up.image_id == str(UUID(int=7))
+    assert up.image_id == _IMAGE_KEY
+
+
+def _mk_render() -> ImageRender:
+    return ImageRender(
+        content=b"png-bytes",
+        prompts=ImagePrompts(
+            primary=NormalizedPrompt.parse("frog"),
+            source=PromptSource.USER,
+        ),
+    )
+
+
+def _mk_sent_photo(*, file_id: str = "AgACAgIAAxkBAAI") -> Message:
+    return Message(
+        message_id=2,
+        date=_MSG_DATE,
+        chat=TgChat(id=1, type="private"),
+        from_user=TgUser(id=1, is_bot=True, first_name="Bot"),
+        photo=[
+            PhotoSize(file_id=file_id, file_unique_id="uid", width=100, height=100),
+        ],
+    )
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cmd_generate_replies_wip() -> None:
+async def test_cmd_generate_with_prompt_success(mock_scope: MagicMock) -> None:
+    user = mk_user_context()
+    render = _mk_render()
+    image = mk_image(
+        image_id=11,
+        rating=mk_rating(likes=1),
+        created_at=dt(10),
+        file_id=TelegramFileId.parse("AgACAgIAAxkBAAI"),
+    )
+    card = ImageCard.from_domain(image)
+
+    mock_scope.user_generation_uc.assert_allowed = AsyncMock()
+    mock_scope.image_generation_uc.by_user = AsyncMock(return_value=render)
+    mock_scope.image_generation_uc.register = AsyncMock(return_value=card)
+    mock_scope.user_generation_uc.record_usage = AsyncMock()
+
+    message = make_message(text="/generate cute frog")
+    command = CommandObject(prefix="/", command="generate", args="cute frog")
+    status = MagicMock()
+    status.delete = AsyncMock()
+    sent = _mk_sent_photo()
+
+    with (
+        patch.object(Message, "answer", new_callable=AsyncMock, return_value=status) as answer,
+        patch.object(Message, "answer_photo", new_callable=AsyncMock, return_value=sent) as answer_photo,
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit_markup,
+    ):
+        await cmd_generate(message, command, user, mock_scope)
+
+    answer.assert_awaited_once_with(image_msg.GENERATION_STARTED)
+    mock_scope.user_generation_uc.assert_allowed.assert_awaited_once()
+    mock_scope.image_generation_uc.by_user.assert_awaited_once()
+    by_user_kwargs = mock_scope.image_generation_uc.by_user.await_args.kwargs
+    assert by_user_kwargs["prompt"] == "cute frog"
+    mock_scope.image_generation_uc.random.assert_not_called()
+    answer_photo.assert_awaited_once()
+    mock_scope.image_generation_uc.register.assert_awaited_once()
+    kwargs = mock_scope.image_generation_uc.register.await_args.kwargs
+    assert kwargs["file_id"] == TelegramFileId.parse("AgACAgIAAxkBAAI")
+    assert isinstance(kwargs["meta"], ImageMeta)
+    assert kwargs["meta"].author_id == user.id
+    assert kwargs["meta"].model == Model.parse(user.model)
+    assert "image_id" in kwargs
+    edit_markup.assert_awaited_once()
+    assert edit_markup.await_args is not None
+    markup = edit_markup.await_args.kwargs["reply_markup"]
+    assert [b.text for b in markup.inline_keyboard[0]] == ["👍 1", "👎 0"]
+    mock_scope.user_generation_uc.record_usage.assert_awaited_once()
+    status.delete.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cmd_generate_without_args_uses_random(mock_scope: MagicMock) -> None:
+    user = mk_user_context()
+    render = _mk_render()
+    image = mk_image(image_id=12, rating=mk_rating(likes=1), created_at=dt(10))
+    card = ImageCard.from_domain(image)
+
+    mock_scope.user_generation_uc.assert_allowed = AsyncMock()
+    mock_scope.image_generation_uc.random = AsyncMock(return_value=render)
+    mock_scope.image_generation_uc.register = AsyncMock(return_value=card)
+    mock_scope.user_generation_uc.record_usage = AsyncMock()
+
     message = make_message(text="/generate")
-    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
-        await cmd_generate(message)
-    answer.assert_awaited_once_with(text=cmd_msg.WIP)
+    command = CommandObject(prefix="/", command="generate", args=None)
+    status = MagicMock()
+    status.delete = AsyncMock()
+
+    with (
+        patch.object(Message, "answer", new_callable=AsyncMock, return_value=status),
+        patch.object(Message, "answer_photo", new_callable=AsyncMock, return_value=_mk_sent_photo()),
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock),
+    ):
+        await cmd_generate(message, command, user, mock_scope)
+
+    mock_scope.image_generation_uc.random.assert_awaited_once()
+    mock_scope.image_generation_uc.by_user.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cmd_generate_rejected_prompt_assigns_ban(mock_scope: MagicMock) -> None:
+    user = mk_user_context()
+    mock_scope.user_generation_uc.assert_allowed = AsyncMock()
+    mock_scope.image_generation_uc.by_user = AsyncMock(
+        side_effect=PromptRejectedError("prohibited_content"),
+    )
+    mock_scope.user_moderation_uc.assign_ban = AsyncMock()
+    mock_scope.user_generation_uc.record_usage = AsyncMock()
+
+    message = make_message(text="/generate naked frog")
+    command = CommandObject(prefix="/", command="generate", args="naked frog")
+    status = MagicMock()
+    status.delete = AsyncMock()
+    status.edit_text = AsyncMock()
+
+    with patch.object(Message, "answer", new_callable=AsyncMock, return_value=status) as answer:
+        await cmd_generate(message, command, user, mock_scope)
+
+    mock_scope.user_generation_uc.assert_allowed.assert_awaited_once()
+    mock_scope.image_generation_uc.by_user.assert_awaited_once()
+    mock_scope.user_moderation_uc.assign_ban.assert_awaited_once()
+    mock_scope.user_generation_uc.record_usage.assert_not_awaited()
+    answer.assert_awaited_once_with(image_msg.GENERATION_STARTED)
+    status.edit_text.assert_awaited_once_with(exc_msg.PROMPT_REJECTED)
 
 
 @pytest.mark.unit
@@ -49,15 +189,14 @@ async def test_cmd_generate_replies_wip() -> None:
 async def test_random_empty_catalog(
     chat_context: ChatContext,
     mock_scope: MagicMock,
-    mock_logger: MagicMock,
 ) -> None:
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=None)
     message = make_message(text="/random")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
-        await cmd_random(message, chat_context, mock_scope, mock_logger)
+        await cmd_random(message, chat_context, mock_scope)
 
-    answer.assert_awaited_once_with(cmd_msg.RANDOM_CATALOG_EMPTY)
+    answer.assert_awaited_once_with(image_msg.RANDOM_CATALOG_EMPTY)
 
 
 @pytest.mark.unit
@@ -65,11 +204,10 @@ async def test_random_empty_catalog(
 async def test_random_sends_photo_with_keyboard(
     chat_context: ChatContext,
     mock_scope: MagicMock,
-    mock_logger: MagicMock,
 ) -> None:
     image = mk_image(
         image_id=7,
-        score=2,
+        rating=mk_rating(likes=2, dislikes=1),
         created_at=dt(10),
         file_id=TelegramFileId.parse("AgACAgIAAxkB"),
     )
@@ -81,13 +219,15 @@ async def test_random_sends_photo_with_keyboard(
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch.object(Message, "answer_photo", new_callable=AsyncMock) as answer_photo,
     ):
-        await cmd_random(message, chat_context, mock_scope, mock_logger)
+        await cmd_random(message, chat_context, mock_scope)
 
     answer.assert_not_awaited()
     answer_photo.assert_awaited_once()
     kwargs = answer_photo.await_args_list[0].kwargs
     assert kwargs["photo"] == "AgACAgIAAxkB"
-    assert kwargs["reply_markup"] is not None
+    markup = kwargs["reply_markup"]
+    assert markup is not None
+    assert [b.text for b in markup.inline_keyboard[0]] == ["👍 2", "👎 1"]
 
 
 @pytest.fixture
@@ -97,21 +237,78 @@ def voter_context() -> UserContext:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cb_image_vote_success(
+async def test_cb_image_vote_updates_markup(
     voter_context: UserContext,
     mock_scope: MagicMock,
-    mock_logger: MagicMock,
 ) -> None:
-    image = mk_image(image_id=9, score=1, created_at=dt(10))
-    mock_scope.image_vote_uc.vote = AsyncMock(return_value=image)
+    image = mk_image(image_id=9, rating=mk_rating(likes=4, dislikes=1), created_at=dt(10))
+    card = ImageCard.from_domain(image)
+    mock_scope.image_vote_uc.vote = AsyncMock(return_value=card)
     payload = ImageVoteData(image_id=str(UUID(int=9)), value=1)
-    callback = make_callback_query(data=payload.pack())
+    callback = make_callback_query(data=payload.pack(), chat_id=-100)
 
-    with patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer:
-        await cb_image_vote(callback, payload, voter_context, mock_scope, mock_logger)
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit_markup,
+    ):
+        await cb_image_vote(callback, payload, voter_context, mock_scope)
 
     mock_scope.image_vote_uc.vote.assert_awaited_once()
-    answer.assert_awaited_once()
+    vote_kwargs = mock_scope.image_vote_uc.vote.await_args.kwargs
+    assert vote_kwargs["voter_id"] == voter_context.id
+    edit_markup.assert_awaited_once()
+    assert edit_markup.await_args is not None
+    markup = edit_markup.await_args.kwargs["reply_markup"]
+    assert [b.text for b in markup.inline_keyboard[0]] == ["👍 4", "👎 1"]
+    answer.assert_awaited_once_with()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_image_vote_same_markup_skips_edit(
+    voter_context: UserContext,
+    mock_scope: MagicMock,
+) -> None:
+    image = mk_image(image_id=9, rating=mk_rating(likes=4, dislikes=1), created_at=dt(10))
+    card = ImageCard.from_domain(image)
+    mock_scope.image_vote_uc.vote = AsyncMock(return_value=card)
+    payload = ImageVoteData(image_id=str(UUID(int=9)), value=1)
+    callback = make_callback_query(data=payload.pack(), chat_id=1)
+    assert isinstance(callback.message, Message)
+    object.__setattr__(
+        callback.message,
+        "reply_markup",
+        build_vote_kb(image_id=str(UUID(int=9)), rating=card.rating),
+    )
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit_markup,
+    ):
+        await cb_image_vote(callback, payload, voter_context, mock_scope)
+
+    edit_markup.assert_not_awaited()
+    answer.assert_awaited_once_with()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_image_vote_noop_answers_without_edit(
+    voter_context: UserContext,
+    mock_scope: MagicMock,
+) -> None:
+    mock_scope.image_vote_uc.vote = AsyncMock(return_value=None)
+    payload = ImageVoteData(image_id=str(UUID(int=9)), value=1)
+    callback = make_callback_query(data=payload.pack(), chat_id=1)
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit_markup,
+    ):
+        await cb_image_vote(callback, payload, voter_context, mock_scope)
+
+    edit_markup.assert_not_awaited()
+    answer.assert_awaited_once_with()
 
 
 @pytest.mark.unit
@@ -119,7 +316,6 @@ async def test_cb_image_vote_success(
 async def test_cb_image_vote_image_not_found(
     voter_context: UserContext,
     mock_scope: MagicMock,
-    mock_logger: MagicMock,
 ) -> None:
     mock_scope.image_vote_uc.vote = AsyncMock(side_effect=ImageNotFoundError(str(UUID(int=404))))
     payload = ImageVoteData(image_id=str(UUID(int=404)), value=-1)
@@ -128,6 +324,6 @@ async def test_cb_image_vote_image_not_found(
     with (
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as callback_answer,
     ):
-        await cb_image_vote(callback, payload, voter_context, mock_scope, mock_logger)
+        await cb_image_vote(callback, payload, voter_context, mock_scope)
 
     callback_answer.assert_awaited_once_with(exc_msg.IMAGE_NOT_FOUND, show_alert=True)

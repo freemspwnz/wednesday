@@ -7,7 +7,7 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from domain.user.exceptions import ModelNotFoundError, ModelSelectionError
-from presentation.aiogram.messages import commands as cmd_msg, exceptions as exc_msg, user as user_msg
+from presentation.aiogram.messages import exceptions as exc_msg, user as user_msg
 from presentation.aiogram.routers import user as handlers
 from tests.dom.user.factories import descriptor_lite, descriptor_pro, dt, mk_user
 
@@ -35,7 +35,7 @@ async def test_set_model_usage() -> None:
     message = make_message(text="/set_model")
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
         await handlers.cmd_set_model_usage(message)
-    answer.assert_awaited_once_with(cmd_msg.SET_MODEL_USAGE)
+    answer.assert_awaited_once_with(user_msg.SET_MODEL_USAGE)
 
 
 @pytest.mark.unit
@@ -55,7 +55,7 @@ async def test_set_model_success(user_context: UserContext, mock_scope: MagicMoc
         )
 
     mock_scope.user_generation_uc.select_model.assert_awaited_once()
-    answer.assert_awaited_once_with(cmd_msg.format_set_model_success("gigachat-2-lite"))
+    answer.assert_awaited_once_with(user_msg.format_set_model_success("gigachat-2-lite"))
 
 
 @pytest.mark.unit
@@ -111,7 +111,7 @@ async def test_list_models_filters_by_tier(
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
         await handlers.cmd_list_models(message, user_context, mock_scope, mock_logger)
 
-    answer.assert_awaited_once_with(cmd_msg.format_list_models(["gigachat-2-lite"]))
+    answer.assert_awaited_once_with(user_msg.format_list_models(["gigachat-2-lite"]))
 
 
 @pytest.mark.unit
@@ -125,4 +125,4 @@ async def test_list_models_empty_for_tier(
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
         await handlers.cmd_list_models(message, user_context, mock_scope, mock_logger)
 
-    answer.assert_awaited_once_with(cmd_msg.LIST_MODELS_EMPTY)
+    answer.assert_awaited_once_with(user_msg.LIST_MODELS_EMPTY)

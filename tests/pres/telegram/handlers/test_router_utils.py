@@ -1,6 +1,4 @@
-"""Тесты routers/utils: парсинг, membership, run_message_handler."""
-
-from __future__ import annotations
+"""Tests for routers/utils: parsing, membership, run_message_handler."""
 
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 

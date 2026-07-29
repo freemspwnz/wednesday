@@ -1,6 +1,4 @@
-"""Тесты aiogram-фильтров presentation-слоя."""
-
-from __future__ import annotations
+"""Tests for presentation-layer aiogram filters."""
 
 from datetime import UTC, datetime
 

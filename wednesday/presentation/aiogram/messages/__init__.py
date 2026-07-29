@@ -1,1 +1,1 @@
-"""Bot user-facing text constants, grouped by module."""
+"""Bot user-facing text constants, grouped by router domain."""

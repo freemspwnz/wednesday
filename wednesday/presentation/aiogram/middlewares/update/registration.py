@@ -20,6 +20,14 @@ class RegistrationMiddleware(BaseMiddleware):
     DTO fields such as is_active are not applied to existing aggregates on register.
     """
 
+    _UPDATE_PAYLOAD_ATTRS: tuple[str, ...] = (
+        "message",
+        "edited_message",
+        "callback_query",
+        "my_chat_member",
+        "chat_member",
+    )
+
     def __init__(
         self,
         *,
@@ -36,23 +44,26 @@ class RegistrationMiddleware(BaseMiddleware):
         user: UserContext | None = None
         chat: ChatContext | None = None
 
-        if self._should_skip_registration(event):
+        # dp.update.middleware receives Update; handlers see the nested payload.
+        payload = self._unwrap_update(event)
+
+        if self._should_skip_registration(payload):
             data["user"] = None
             data["chat"] = None
             return await handler(event, data)
 
-        request_scope = require_request_scope(data.get("scope"))
+        scope = require_request_scope(data.get("scope"))
 
-        tg_user = self._extract_user(event)
-        tg_chat = self._extract_chat(event)
+        tg_user = self._extract_user(payload)
+        tg_chat = self._extract_chat(payload)
 
         if tg_user is not None:
-            user = await request_scope.user_lifecycle_uc.register(
+            user = await scope.user_lifecycle_uc.register(
                 profile=self._to_user_profile(tg_user),
             )
 
         if tg_chat is not None:
-            chat = await request_scope.chat_management_uc.register(
+            chat = await scope.chat_management_uc.register(
                 profile=self._to_chat_profile(tg_chat),
             )
 
@@ -61,9 +72,18 @@ class RegistrationMiddleware(BaseMiddleware):
 
         return await handler(event, data)
 
+    @classmethod
+    def _unwrap_update(cls, event: TelegramObject) -> TelegramObject:
+        """Return nested message/callback/chat_member payload when ``event`` is Update."""
+        for attr in cls._UPDATE_PAYLOAD_ATTRS:
+            payload = getattr(event, attr, None)
+            if isinstance(payload, TelegramObject):
+                return payload
+        return event
+
     @staticmethod
     def _should_skip_registration(event: TelegramObject) -> bool:
-        """Bot left/kicked from chat: handler uses find_by_tg_id only, no get_or_create."""
+        """Bot left/kicked from a chat: handler uses find_by_tg_id only, no get_or_create."""
         if not isinstance(event, ChatMemberUpdated):
             return False
         member = event.new_chat_member

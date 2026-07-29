@@ -1,6 +1,4 @@
-"""Тесты RegistrationMiddleware."""
-
-from __future__ import annotations
+"""Tests for RegistrationMiddleware."""
 
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -10,12 +8,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram.enums import ChatMemberStatus
 from aiogram.types import (
+    CallbackQuery,
     Chat,
     ChatMember,
     ChatMemberLeft,
     ChatMemberMember,
     ChatMemberUpdated,
     Message,
+    Update,
     User,
 )
 
@@ -89,6 +89,23 @@ class TestMapping:
         found = RegistrationMiddleware._extract_entity(entity_type=entity_type, event=event)
         assert found is getattr(event, attr)
 
+    def test_unwrap_update_prefers_callback_query(self) -> None:
+        user = User(id=7, is_bot=False, first_name="Voter")
+        chat = Chat(id=1, type="private")
+        message = Message(message_id=1, date=_MSG_DATE, chat=chat, from_user=user)
+        callback = CallbackQuery(
+            id="cq1",
+            from_user=user,
+            chat_instance="test",
+            data="imgvote:x:1",
+            message=message,
+        )
+        update = Update(update_id=1, callback_query=callback)
+
+        assert RegistrationMiddleware._unwrap_update(update) is callback
+        assert RegistrationMiddleware._extract_entity(entity_type="user", event=callback) is user
+        assert RegistrationMiddleware._extract_entity(entity_type="chat", event=callback) is chat
+
     @pytest.mark.parametrize(
         ("joined", "expected_skip"),
         [
@@ -160,6 +177,42 @@ async def test_call_skips_on_bot_left(mock_scope: MagicMock, mock_logger: MagicM
     assert data["chat"] is None
     mock_scope.user_lifecycle_uc.register.assert_not_awaited()
     mock_scope.chat_management_uc.register.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_call_registers_user_from_callback_query_update(
+    mock_scope: MagicMock,
+    mock_logger: MagicMock,
+) -> None:
+    reg_user = mk_user_context()
+    reg_chat = mk_chat_context(tg_id=1, chat_type=ChatType.PRIVATE)
+    mock_scope.user_lifecycle_uc.register.return_value = reg_user
+    mock_scope.chat_management_uc.register.return_value = reg_chat
+
+    middleware = RegistrationMiddleware(logger=mock_logger)
+    handler = AsyncMock()
+    user = User(id=1, is_bot=False, first_name="A")
+    chat = Chat(id=1, type="private")
+    message = Message(message_id=1, date=_MSG_DATE, chat=chat, from_user=user)
+    callback = CallbackQuery(
+        id="cq1",
+        from_user=user,
+        chat_instance="test",
+        data="imgvote:x:-1",
+        message=message,
+    )
+    update = Update(update_id=42, callback_query=callback)
+    data: dict[str, object] = {"scope": mock_scope}
+
+    await middleware(handler, update, data)
+
+    assert data["user"] == reg_user
+    assert data["chat"] == reg_chat
+    handler.assert_awaited_once()
+    mock_scope.user_lifecycle_uc.register.assert_awaited_once()
+    call_kwargs = mock_scope.user_lifecycle_uc.register.await_args.kwargs
+    assert call_kwargs["profile"].telegram_id == 1
 
 
 @pytest.mark.unit

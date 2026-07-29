@@ -1,7 +1,5 @@
 """Tests for profile message formatting."""
 
-from __future__ import annotations
-
 import pytest
 
 from domain.catalog import Model, Series, Vendor

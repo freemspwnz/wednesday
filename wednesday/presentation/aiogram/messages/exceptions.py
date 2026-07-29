@@ -8,7 +8,11 @@ from domain.chat.exceptions import (
     ChatNotFoundError,
     ScheduleLimitExceededError,
 )
-from domain.image.exceptions import ImageNotFoundError
+from domain.image.exceptions import (
+    GenerationError,
+    ImageNotFoundError,
+    PromptRejectedError,
+)
 from domain.kernel.exceptions import (
     DomainError,
     InvalidStateTransitionError,
@@ -39,7 +43,9 @@ ACCESS_RESTRICTED = "Доступ ограничен."
 
 INSUFFICIENT_PERMISSIONS = "Недостаточно прав для этой операции."
 
-LIMIT_EXHAUSTED = "Лимит исчерпан. Попробуйте позже."
+LIMIT_EXHAUSTED = "Лимит исчерпан. Приходите завтра."
+
+WAIT_FOR_COOLDOWN = "Подождите ещё {minutes} мин. {seconds} сек. перед новой попыткой."
 
 SCHEDULE_LIMIT_EXCEEDED = "Достигнут лимит расписаний для чата."
 
@@ -51,10 +57,26 @@ IMAGE_NOT_FOUND = "Изображение не найдено."
 
 MODEL_NOT_FOUND = "Модель не найдена."
 
+PROMPT_REJECTED = "Промпт отклонён модерацией."
+
+GENERATION_FAILED = "Не удалось сгенерировать изображение. Попробуйте позже."
+
 _MODEL_SELECTION_MESSAGES: dict[str, str] = {
     "model_not_active": "Эта модель недоступна.",
     "tier_too_low": "Модель недоступна для вашей подписки.",
 }
+
+
+def _cooldown_message(exc: CooldownViolationError) -> str:
+    remaining = exc.details.get("remaining_seconds")
+    if isinstance(remaining, int) and remaining > 0:
+        total_seconds = remaining
+    else:
+        cooldown = exc.details.get("cooldown_minutes")
+        minutes = cooldown if isinstance(cooldown, int) and cooldown > 0 else 1
+        total_seconds = minutes * 60
+    minutes, seconds = divmod(total_seconds, 60)
+    return WAIT_FOR_COOLDOWN.format(minutes=minutes, seconds=seconds)
 
 
 def user_message_for_exception(exc: BaseException) -> str | None:
@@ -69,10 +91,16 @@ def user_message_for_exception(exc: BaseException) -> str | None:
         return ACCESS_RESTRICTED
     if isinstance(exc, UserAccessDeniedError | ChatAccessDeniedError):
         return INSUFFICIENT_PERMISSIONS
-    if isinstance(exc, LimitViolationError | CooldownViolationError):
+    if isinstance(exc, LimitViolationError):
         return LIMIT_EXHAUSTED
+    if isinstance(exc, CooldownViolationError):
+        return _cooldown_message(exc)
     if isinstance(exc, ScheduleLimitExceededError):
         return SCHEDULE_LIMIT_EXCEEDED
+    if isinstance(exc, PromptRejectedError):
+        return PROMPT_REJECTED
+    if isinstance(exc, GenerationError):
+        return GENERATION_FAILED
     if isinstance(exc, ImageNotFoundError):
         return IMAGE_NOT_FOUND
     if isinstance(exc, ModelNotFoundError):

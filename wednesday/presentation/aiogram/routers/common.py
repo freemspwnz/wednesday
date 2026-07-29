@@ -6,7 +6,7 @@ from aiogram.types import Message
 
 from app.protocols import Logger
 
-from ..messages import commands as cmd_msg
+from ..messages import common as common_msg
 
 common_router = Router(name="common")
 
@@ -18,7 +18,7 @@ async def cmd_start(
 ) -> None:
     """Welcome message and command list."""
     logger.info("Command /start", user_id=message.from_user.id if message.from_user else None)
-    await message.reply(text=cmd_msg.WELCOME)
+    await message.reply(text=common_msg.WELCOME)
 
 
 @common_router.message(Command("help"))
@@ -28,7 +28,7 @@ async def cmd_help(
 ) -> None:
     """Command help."""
     logger.info("Command /help", user_id=message.from_user.id if message.from_user else None)
-    await message.reply(text=cmd_msg.HELP)
+    await message.reply(text=common_msg.HELP)
 
 
 @common_router.message(F.text.startswith("/"))
@@ -38,4 +38,4 @@ async def cmd_unknown(
 ) -> None:
     """Any unknown command (registered after specific commands)."""
     logger.info("Unknown command", user_id=message.from_user.id if message.from_user else None)
-    await message.reply(text=cmd_msg.UNKNOWN_COMMAND)
+    await message.reply(text=common_msg.UNKNOWN_COMMAND)

@@ -1,6 +1,4 @@
-"""Тесты user_message_for_exception."""
-
-from __future__ import annotations
+"""Tests for user_message_for_exception."""
 
 from collections.abc import Callable
 from uuid import UUID
@@ -14,7 +12,7 @@ from domain.chat.exceptions import (
     ChatNotFoundError,
     ScheduleLimitExceededError,
 )
-from domain.image.exceptions import ImageNotFoundError
+from domain.image.exceptions import GenerationError, ImageNotFoundError, PromptRejectedError
 from domain.kernel.exceptions import (
     DomainError,
     InvalidStateTransitionError,
@@ -32,8 +30,12 @@ from domain.user.exceptions import (
     UserNotFoundError,
 )
 from presentation.aiogram.messages.exceptions import (
+    GENERATION_FAILED,
     IMAGE_NOT_FOUND,
+    LIMIT_EXHAUSTED,
     MODEL_NOT_FOUND,
+    PROMPT_REJECTED,
+    WAIT_FOR_COOLDOWN,
     user_message_for_exception,
 )
 
@@ -46,9 +48,18 @@ def _cases() -> list[tuple[Callable[[], BaseException], str | None]]:
         (lambda: UserBannedError("banned"), "Доступ ограничен."),
         (lambda: UserAccessDeniedError("no"), "Недостаточно прав для этой операции."),
         (lambda: ChatAccessDeniedError("no"), "Недостаточно прав для этой операции."),
-        (lambda: LimitViolationError("lim", {}), "Лимит исчерпан. Попробуйте позже."),
-        (lambda: CooldownViolationError("cd", {}), "Лимит исчерпан. Попробуйте позже."),
+        (lambda: LimitViolationError("lim", {}), LIMIT_EXHAUSTED),
+        (
+            lambda: CooldownViolationError("cd", {"remaining_seconds": 90, "cooldown_minutes": 3}),
+            WAIT_FOR_COOLDOWN.format(minutes=1, seconds=30),
+        ),
+        (
+            lambda: CooldownViolationError("cd", {}),
+            WAIT_FOR_COOLDOWN.format(minutes=1, seconds=0),
+        ),
         (lambda: ScheduleLimitExceededError(5), "Достигнут лимит расписаний для чата."),
+        (lambda: PromptRejectedError("prohibited_content"), PROMPT_REJECTED),
+        (lambda: GenerationError("boom"), GENERATION_FAILED),
         (lambda: ImageNotFoundError("img-1"), IMAGE_NOT_FOUND),
         (lambda: ModelNotFoundError("missing-model"), MODEL_NOT_FOUND),
         (lambda: ModelSelectionError("tier_too_low"), "Модель недоступна для вашей подписки."),

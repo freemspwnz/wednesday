@@ -1,7 +1,5 @@
 """Direct tests for admin router handlers."""
 
-from __future__ import annotations
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,8 +7,9 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from domain.user.exceptions import AccessDeniedError
-from presentation.aiogram.messages import admin as admin_msg, commands as cmd_msg, exceptions as exc_msg
-from presentation.aiogram.routers import admin as h
+from presentation.aiogram.messages import common as common_msg, exceptions as exc_msg
+from presentation.aiogram.messages.user import admin as admin_msg
+from presentation.aiogram.routers.user import admin as h
 
 from ..factories import make_message, mk_user_context
 
@@ -20,7 +19,7 @@ from ..factories import make_message, mk_user_context
 @pytest.mark.parametrize(
     ("handler", "expected"),
     [
-        (h.cmd_status, cmd_msg.WIP),
+        (h.cmd_status, common_msg.WIP),
         (h.cmd_unban_usage, admin_msg.UNBAN_USAGE),
     ],
 )

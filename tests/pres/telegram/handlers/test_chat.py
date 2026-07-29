@@ -1,7 +1,5 @@
 """Tests for chat router (events and schedule commands)."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -24,7 +22,7 @@ from aiogram.types import (
 from domain.chat import AccessDeniedError, ChatMember, ChatMemberId, ChatMemberRole, Weekday
 from domain.kernel.exceptions import InvalidStateTransitionError
 from presentation.aiogram.messages import chat as chat_msg, exceptions as exc_msg
-from presentation.aiogram.routers.chat import router as h
+from presentation.aiogram.routers import chat as h
 
 from ..factories import make_message
 
@@ -199,7 +197,7 @@ async def test_cmd_schedule_add_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context),
         ),
@@ -224,7 +222,7 @@ async def test_cmd_schedule_add_denied_by_domain_policy(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context, role=ChatMemberRole.MEMBER),
         ),
@@ -251,7 +249,7 @@ async def test_cmd_activate_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.management.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context),
         ),
@@ -281,7 +279,7 @@ async def test_cmd_deactivate_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.management.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context),
         ),
@@ -307,7 +305,7 @@ async def test_cmd_activate_denied_by_domain_policy(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.management.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context, role=ChatMemberRole.MEMBER),
         ),
@@ -334,7 +332,7 @@ async def test_cmd_schedule_remove_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context),
         ),
@@ -362,7 +360,7 @@ async def test_cmd_schedule_clear_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context),
         ),
@@ -390,7 +388,7 @@ async def test_cmd_schedule_day_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context),
         ),
@@ -421,7 +419,7 @@ async def test_cmd_schedule_tz_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=_member_actor(chat_context),
         ),

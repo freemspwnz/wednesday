@@ -22,7 +22,7 @@ from presentation.aiogram.middlewares.update.di import DIMiddleware
 from presentation.aiogram.middlewares.update.registration import RegistrationMiddleware
 from presentation.aiogram.middlewares.update.throttling import ThrottlingMiddleware
 
-from ..factories import ScopeCM, make_message, mk_chat_context, mk_user_context
+from ..factories import ScopeCM, make_callback_query, make_message, mk_chat_context, mk_user_context
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -62,6 +62,19 @@ async def _feed(dp: Dispatcher, update: Update) -> dict[str, Any]:
     @router.message()
     async def on_message(
         _: Message,
+        scope: object,
+        user: object,
+        chat: object,
+        logger: object,
+    ) -> None:
+        captured["scope"] = scope
+        captured["user"] = user
+        captured["chat"] = chat
+        captured["logger"] = logger
+
+    @router.callback_query()
+    async def on_callback(
+        _: object,
         scope: object,
         user: object,
         chat: object,
@@ -118,6 +131,39 @@ async def test_message_chain_injects_scope_registers_and_throttles(
     mock_scope.user_lifecycle_uc.register.assert_awaited_once()
     mock_scope.chat_management_uc.register.assert_awaited_once()
     assert mock_limiter.call.await_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_callback_query_chain_registers_user_and_chat(
+    mock_scope: MagicMock,
+    mock_logger: MagicMock,
+    mock_limiter: MagicMock,
+) -> None:
+    reg_user = mk_user_context()
+    reg_chat = mk_chat_context(tg_id=1)
+    mock_scope.user_lifecycle_uc.register.return_value = reg_user
+    mock_scope.chat_management_uc.register.return_value = reg_chat
+    mock_scope.logger = mock_logger
+
+    dp = Dispatcher()
+    _register_production_update_middlewares(
+        dp,
+        scope_factory=MagicMock(return_value=ScopeCM(mock_scope)),
+        limiter=mock_limiter,
+        logger=mock_logger,
+    )
+
+    captured = await _feed(
+        dp,
+        Update(update_id=4, callback_query=make_callback_query(data="imgvote:x:1")),
+    )
+
+    assert captured["scope"] is mock_scope
+    assert captured["user"] == reg_user
+    assert captured["chat"] == reg_chat
+    mock_scope.user_lifecycle_uc.register.assert_awaited_once()
+    mock_scope.chat_management_uc.register.assert_awaited_once()
 
 
 @pytest.mark.unit

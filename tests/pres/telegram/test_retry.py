@@ -1,6 +1,4 @@
-"""Тесты is_telegram_retryable."""
-
-from __future__ import annotations
+"""Tests for is_telegram_retryable."""
 
 from unittest.mock import MagicMock
 
@@ -8,7 +6,7 @@ import pytest
 from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter, TelegramServerError
 
 from app.exceptions import TooManyRequests
-from presentation.aiogram.retry_predicate import is_telegram_retryable
+from presentation.aiogram.predicate import is_telegram_retryable
 
 _TELEGRAM_METHOD = MagicMock()
 

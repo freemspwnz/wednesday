@@ -1,6 +1,6 @@
 """Aiogram presentation layer."""
 
-from .retry_predicate import is_telegram_retryable
+from .predicate import is_telegram_retryable
 from .setup import POLLING_ALLOWED_UPDATES, setup_bot, setup_dp
 
 __all__ = [

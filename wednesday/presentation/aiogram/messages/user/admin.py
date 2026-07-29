@@ -8,10 +8,6 @@ MOD_USAGE = "Использование: /mod <telegram_id>"
 
 UNMOD_USAGE = "Использование: /unmod <telegram_id>"
 
-SET_LIMIT_USAGE = "Использование: /set_limit <значение>"
-
-SET_USED_USAGE = "Использование: /set_used <значение>"
-
 USER_PROMOTED = "Пользователь {tg_id} назначен админом."
 
 USER_DEMOTED = "У пользователя {tg_id} сняты права админа."
