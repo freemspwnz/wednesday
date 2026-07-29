@@ -94,6 +94,7 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - ./catalog:/app/catalog:ro
+      - ./certs:/app/certs:ro
     networks:
       - wednesday
     expose:

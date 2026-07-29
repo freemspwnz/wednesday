@@ -41,8 +41,6 @@ class HttpClientFactory:
     ) -> HttpClient:
         self._logger.debug("Building HTTP client...")
 
-        transport = AsyncHTTPTransport()
-
         limits = Limits(
             max_connections=http.max_connections,
             max_keepalive_connections=http.max_keepalive_connections,
@@ -57,15 +55,18 @@ class HttpClientFactory:
             pool=http.timeouts["base"].pool,
         )
 
+        transport = AsyncHTTPTransport(
+            verify=http.verify,
+            http2=http.http2,
+            limits=limits,
+        )
+
         client = AsyncClient(
             base_url=http.base_url,
             timeout=timeout,
-            limits=limits,
             transport=transport,
             follow_redirects=http.follow_redirects,
-            http2=http.http2,
             headers=http.headers,
-            verify=http.verify,
         )
 
         policy = ResiliencePolicy(

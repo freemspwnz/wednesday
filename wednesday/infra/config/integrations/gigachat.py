@@ -61,7 +61,7 @@ class GigaChatConfig(BaseModel):
             keepalive_expiry=10,
             headers={"User-Agent": "wednesday/7.2.0"},
             verify=True,
-            http2=True,
+            http2=False,
             follow_redirects=True,
         ),
     )
