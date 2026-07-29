@@ -1,5 +1,7 @@
 """ORM: User aggregate root."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
