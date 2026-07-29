@@ -1,69 +1,79 @@
 # Changelog
 
-## [7.2.0] — 2026-06-02
+## [7.3.0] — 2026-07-29
 
 ### Added
 
 **Domain**
-- Новый bounded context `image`: aggregate, vote flow, score policy, events и доменные ошибки.
-- `domain/catalog`: vocabularies моделей/подписок + `ModelCatalog` / `SubscriptionCatalog` протоколы.
-- `UserSettings`, `ModelSelectionPolicy`, `ModelSelectionService`; политика выбора модели по tier/active.
-- Порты `UsageRepo` и `ViolationRepo` перенесены в `domain.user.protocols`.
+- Image BC: management (`hide`/`show` + `ManagementAccessPolicy`), generation (`ImageGenerationService`, prompt pipeline), moderation промптов (`PromptModerationPolicy`).
+- `ManagementAccessPolicy`: ADMIN — только hide; OWNER/SYSTEM — hide+show.
+- VO/events: `ImagePrompts` / `PromptSource` / `ImageRender`, `HiddenState`/`HiddenReason`, `ImageHidden`/`ImageShown`.
+- `ImageRating` VO и `ImageRatingPolicy` (net rating вместо целочисленного score); `ImageLifecycleService.apply_vote`.
+- Доменные сервисы user/chat: lifecycle, management, schedule, moderation; `UserGenerationService` (выбор модели + доступ к генерации).
+- Порты `PromptCatalog`, `Generator`, `ViewRepo`; `VoteRepo.reset` / `get_if_exists`; `Vote.voter_id: UserId`.
 
 **Infrastructure**
-- SQLAlchemy persistence для `Image`, `UserSettings`, `Usage`, `Violation`.
-- Alembic-миграция `fb548c333d1f` (таблицы `user_settings`, `images`, `image_votes`, `image_seen`, `user_usage`, `user_violations`) + backfill дефолтных user settings.
-- YAML adapters для каталогов моделей/подписок (`YamlCatalogFactory`) с DI wiring.
-- `UserSnapshot` v2: поля `model_vendor`, `model_series`, `model`.
+- Alembic `ea4c99f0601f`: `status`→`state`, `votes`→`score`→`likes`/`dislikes`, `user_prompt`→`primary_prompt` + `prompt_source`; `image_seen`→`image_view`; NOT NULL на `telegram_file_id` / `primary_prompt`.
+- `YamlPromptCatalog` + `catalog/prompts.yaml` (system prompts и fallback components).
+- Network layer на httpx2: `HttpClient` / factory / policy / registry; Sber/GigaChat (`SberAuth`, `SberClient`) через `NetworkContainer` (nested config + PROD checks; shutdown закрывает providers).
+- HTTP-метрики (`HttpxMetrics`: duration/totals по method/url/outcome/status).
 
 **Application**
-- `ImageCard` DTO для отправки фото + vote callbacks.
-- Регистрация пользователя создаёт дефолтные `UserSettings` из каталогов.
-- Единый `ImageCommandsUseCase` (`pick_for_chat` + `vote`) и `ImageCommandService`.
+- Capability-scoped image UC: `ImageCatalogUseCase`, `ImageVoteUseCase`, `ImageManagementUseCase`, `ImageGenerationUseCase` (+ `ImageBaseUseCase`; HTTP render вне UoW, `register` после отправки).
+- Capability-scoped user UC: `lifecycle` / `management` / `moderation` / `generation` (`assert_allowed` / `record_usage`, `assign_ban`).
+- Capability-scoped chat UC: `management` / `schedule`.
+- Тонкие UC поверх доменных сервисов (app оставляет UoW / cache / DTO / logging).
 
 **Presentation**
-- Роутер изображений: `/random`, inline vote callbacks, keyboard.
-- Команды и тексты для `/set_model`, `/list_models`, `/random`.
-- Новый модуль `messages/user.py` (вместо `messages/profile.py`).
-- In-chat schedule router: `/schedule`, `add/remove/clear`, `day`, `tz`.
+- Роутеры и messages разбиты на модули: `chat/` → `chat_member` / `management` / `schedule`; `user/` package; `image/vote/`; `messages/common.py`, `messages/image.py`, `messages/user/`; `error.py` → `errors.py`; `retry_predicate.py` → `predicate.py`.
 
 ### Changed
 
 **Domain**
-- Унифицированы access-ошибки через `kernel.AccessDeniedError` (убраны дубли chat/user).
-- Сервисы (model selection/moderation) загружают и сохраняют `User` через `UserRepo`.
-- `ModelSelectionPolicy` проверяет effective subscription; `change_settings` и expiry требуют явный fallback-plan.
-- Расширены usage/violation порты (`record_usage`, `record_violation`).
+- Командная логика перенесена из app-сервисов в domain services; app UC тонкие.
+- `Image._score` → `Image._rating` (`ImageRating`); событие `ImageScoreRecalculated` → `ImageRatingChanged`.
+- `ImageGenerator` + `TextGenerator` объединены в `Generator`; `FallbackService` влит в generation service.
+- `ImageCatalogService.pick_for_chat` делегирует unseen-выбор в `ViewRepo`.
+- Usage: `assert_allowed` только проверка; списание через `record_usage` после успеха.
+- `UsageRepo`: `get_stats` / `record` (вместо `get_usage_stats` / `record_usage`).
 
 **Infrastructure**
-- Жизненный цикл SQLAlchemy перенесён в `SQLAUoWFactory` (engine/sessionmaker/metrics/`aclose`), DI закрывает БД через `uow_factory.aclose()`.
-- Мониторинг перестроен на VictoriaMetrics + Vector + Loki + Grafana provisioning:
-  - Prometheus/promtail и старые celery/frog dashboards удалены.
-  - Inline PromQL в runtime dashboard.
-  - Алерты только через Grafana provisioning.
-- CI job для мониторинга переименован.
-- Docker: каталоги `catalog/*.yaml` монтируются read-only (`./catalog:/app/catalog:ro`), без bake в образ; пути задаются через `YAML__MODELS_PATH` и `YAML__SUBSCRIPTIONS_PATH`.
+- ORM/repos под rating и views: `SQLAViewRepo.get_unseen_for_chat`, маппинг likes/dislikes; `pick_random` убран с image repo.
+- `ObserveContainer.collector` / `metrics_registry` → единый `metrics` (`PrometheusRegistry` владеет collector + `serve`); адаптеры `retry`/`cb`/`rl`/`cache`/`db`/`http`; `MetricsCollector.serve` убран.
+- DB metrics: полная сигнатура SQLAlchemy cursor hooks на `DBMetrics`/`SQLAMetrics`.
+- `RedisRepoRegistry` сам создаёт `RedisClient`; accessors `users`/`chats`.
+- YAML package `catalog` → `catalogs`; factory accessors `models`/`subscriptions`/`prompts`; `PersistenceContainer.catalog` (был `catalog_factory`).
+- Resilience factories: `retrier`/`breaker`/`limiter`; конфиги только явные (без root `Config.retry`/`rate_limit`/`circuit_breaker`).
+- `TelegramConfig`: nested `retrier`/`limiter`; PROD check `TELEGRAM__LIMITER__STORAGE`; `RateLimitConfig` key `base_limit` → `base`.
+- GigaChat: `cert`, `base_url` → `api.giga.chat`, rate limit 2/s; compose монтирует `./certs`.
+- Logging: bootstrap в `get_logger`; убрана инъекция `user_id`/`chat_id`/`generation_id` (=None); extras `service`→`app`, `version`→`ver`; structured kwargs у limiter/breaker/retry; mute `httpcore2`.
+- Каталоги prompts/models упрощены под текущий generation pipeline.
 
 **Application**
-- Технологические исключения заменены layer-абстракциями:
-  - SQLA* → `DBError` hierarchy.
-  - Prometheus*/loguru → `Metrics*` / `logging`.
-- Регистрация через domain `UserProfile` / `ChatProfile`, строгие `UserContext` / `ChatContext`.
-- `UserCommandsUseCase.select_model` встроен в user command flow.
-- Удалены лишние `from __future__ import annotations` в app-слое; docstrings/comments выровнены на английский.
+- DI/Scope: `cache`/`catalog`/`uow` (был `uow_factory`); plural accessors; image/user/chat UC вместо монолитов.
+- `ImageCard.score` → `ImageCard.rating`; `file_id` всегда `TelegramFileId`.
+- Generation UC: единый `Generator`; `by_user` парсит raw prompt → `NormalizedPrompt`.
+- Vote UC: duplicate → `None`; catalog UC: stale id → `ImageNotFoundError`; management `show()` сбрасывает votes для OWNER.
+- Удалены `app/services` и app-level `UserNotFoundError`/`ChatNotFoundError` (domain NotFound).
 
 **Presentation**
-- `/set_model` переведён на `user_commands_uc`.
-- `/random` и vote callbacks переведены на `image_commands_uc`.
-- Chat events переорганизованы в `routers/chat` (router/parsers/mappers).
-- `/schedule` доступен всем участникам группы; schedule help добавлен в welcome/help.
+- Middleware/session: `rate_limiter`/`retry` → `limiter`/`retrier`.
+- Admin-router поглощён management/user flows; `messages/admin.py` / монолитные builders убраны.
+- `/random`: убрана ветка `IMAGE_UNAVAILABLE` (file_id всегда есть).
+- Aiogram limits: user 3/s, chat 30/min.
 
 ### Fixed
 
-- После мутирующих chat-команд обновляется Redis snapshot чата (`cache_registry.chat.set`), чтобы исключить устаревший `ChatContext` в последующих update.
+- Usage не списывается до успешной генерации; rejected prompts не жгут слот и не стопорят strikes — `assign_ban` всегда пишет violation перед решением о бане.
+- `from __future__ import annotations` возвращён там, где TYPE_CHECKING-импорты иначе дают `NameError`.
+- GigaChat: `verify`/`http2` на `AsyncHTTPTransport` (иначе httpx игнорирует их при custom transport); default http2=false.
+- CI: версия Poetry из repository variable `vars.POETRY_VERSION` (и ARG в Docker).
 
 ### Removed
 
-- `ModelSelectionUseCase`, `ImageRandomUseCase`, `ImageVoteUseCase` (заменены едиными command flows).
-- `ImageRandomService` (заменён `ImageCommandService`).
-- `messages/profile.py` и связанные тесты профиля (заменены на `messages/user.py` + `tests/.../messages/test_user.py`).
+- `ImageCommandsUseCase`, app `*CommandsService` / registration services.
+- `ModelSelectionService` (влит в `UserGenerationService`).
+- `ImageScorePolicy`, отдельные `ImageGenerator`/`TextGenerator`, `FallbackService`.
+- `routers/admin.py`, `messages/admin.py` / `messages/commands.py` / монолитный `messages/user.py`.
+- Root-level `Config.retry` / `rate_limit` / `circuit_breaker`.
+- `MetricsCollector.serve`.

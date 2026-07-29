@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "wednesday"
-version = "7.2.0"
+version = "7.3.0"
 description = "Telegram bot generating Wednesday frog meme images."
 readme = "README.md"
 license = "MIT"

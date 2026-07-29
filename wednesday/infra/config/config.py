@@ -23,7 +23,7 @@ class Config(BaseSettings):
     )
 
     env: str = Field(default="DEV", alias="ENV")
-    version: str = Field(default="7.2.0", alias="VERSION")
+    version: str = Field(default="7.3.0", alias="VERSION")
 
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     gigachat: GigaChatConfig = Field(default_factory=GigaChatConfig)
