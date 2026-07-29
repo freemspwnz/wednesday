@@ -8,10 +8,10 @@ vendors:
         display_name: GigaChat
         min_tier: 0
         models:
-          - code: gigachat-2-lite
+          - code: gigachat-2
             active: true
             min_tier: 0
-            display_name: GigaChat 2 Lite
+            display_name: GigaChat 2
           - code: gigachat-2-pro
             active: true
             min_tier: 1
@@ -20,6 +20,10 @@ vendors:
             active: true
             min_tier: 1
             display_name: GigaChat 2 Max
+          - code: gigachat-3-ultra
+            active: true
+            min_tier: 1
+            display_name: GigaChat 3 Ultra
   - code: yandex
     active: false
     display_name: Yandex

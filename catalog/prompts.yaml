@@ -1,161 +1,103 @@
 system_prompts:
   enrichment: |
-    You enrich short user ideas into detailed image prompts for a Wednesday frog meme.
-    Return only the final prompt text, no explanations.
+    Turn the user idea into one concrete scene for an image.
+    Main character: Wednesday frog (green meme frog), clearly visible.
+    Write 1-2 short sentences: who, what they do, where, art style.
+    No questions, no lists, no markdown, no quotes.
+    Output only the scene description.
+
   generation: |
-    You generate Wednesday frog meme images from the given prompt.
-    Follow the prompt accurately and keep the Wednesday frog character recognizable.
+    You are an image generator.
+    Draw the scene from the user message as a single Wednesday frog meme illustration.
+    Wednesday frog must be the main recognizable character.
+    One clear scene, coherent style, no text, captions, watermarks, or UI.
+    If the request is to create an image, call the image generation function.
+
   base: |
-    Invent a random, creative prompt for a Wednesday frog meme image.
-    Include subject, style, and scene. Return only the prompt text.
+    Invent one unexpected, highly specific scene with Wednesday frog
+    (meme frog) as the only main character.
+    Vary: era, location, props, weather, camera angle, art medium.
+    Avoid generic poses (just sitting/standing/smiling).
+    Prefer odd combinations of object + place + action.
+    1-2 short sentences. No lists, markdown, or quotes.
+    Output only the scene.
 
 components:
   heroes:
-    - Frog
-    - Bear
-    - Wolf
-    - Cat
-    - Dog
-    - Fox
-    - Rabbit
-    - Mouse
-    - Bird
-    - Fish
-    - Man
-    - Woman
-    - Child
-    - Old man
-    - Old woman
-    - Baby
-    - Teenager
-    - Adult
+    - frog
+    - bear
+    - wolf
+    - cat
+    - fox
+    - rabbit
+    - owl
+    - penguin
+    - hedgehog
+    - raccoon
+
   colors:
     - green
-    - yellow
+    - golden
     - purple
     - red
     - blue
-    - lightblue
     - orange
-    - black
-    - brown
     - pink
-    - lightgreen
-    - gray
-    - white
-    - amber
-    - silver
-    - gold
-    - platinum
-    - diamond
-    - ruby
-    - sapphire
-    - emerald
-    - opal
-    - coral
-    - navy
     - teal
-    - lime
-    - maroon
-    - olive
-    - indigo
-    - violet
-    - lavender
-    - magenta
+    - silver
+    - amber
+
   styles:
     - cartoon
-    - realistic
-    - cute
-    - friendly
-    - bright colors
-    - funny
-    - expressive
-    - vibrant
-    - cool
-    - stylish
-    - modern
-    - adorable
-    - charming
-    - detailed
-    - energetic
-    - dynamic
-    - colorful
-    - heroic
-    - powerful
-    - dramatic
-    - creative
-    - artistic
-    - imaginative
-    - dreamy
-    - magical
-    - mystical
-    - ethereal
-    - otherworldly
-    - cosmic
+    - pixel art
+    - watercolor
+    - pop art
+    - anime
+    - retro poster
+    - oil painting
+    - flat vector
+    - comic book
+    - sticker
+
   professions:
     - chef
-    - scientist
-    - artist
-    - musician
     - astronaut
-    - detective
     - pirate
-    - knight
     - wizard
-    - doctor
-    - teacher
-    - lawyer
-    - police
-    - fireman
-    - nurse
-    - driver
-    - pilot
-    - sailor
-    - farmer
-    - fisherman
-    - hunter
-    - cook
-    - baker
-    - waiter
-    - waitress
+    - detective
+    - knight
+    - scientist
+    - musician
+    - samurai
+    - cowboy
+
   actions:
     - sitting on a mushroom
-    - jumping with excitement
-    - wearing sunglasses
-    - yawning in bed
-    - moving to music
-    - with cape flying
-    - cooking in kitchen
-    - with test tubes
-    - painting pictures
+    - riding a skateboard
+    - drinking coffee
     - playing guitar
-    - in space
-    - with magnifying glass
-    - with eye patch and hat
-    - with sword and shield
-    - with magic wand
-    - with bow and arrow
-    - with a book
-    - with a telescope
-    - with a microscope
-    - with a telescope
+    - flying through space
+    - cooking pancakes
+    - reading a book
+    - holding a sword
+    - casting a spell
+    - surfing a wave
+
   places:
-    - in a city
-    - in a mountain
-    - in a river
-    - in a lake
-    - in an ocean
-    - in a forest
-    - in a desert
-    - in a beach
-    - in a snow
-    - in a jungle
-    - in a savannah
-    - in a tundra
-    - in a taiga
+    - in a neon city
+    - on a mountain top
+    - in a cozy kitchen
+    - in outer space
+    - in a dark forest
+    - on a tropical beach
+    - in a medieval castle
+    - in a rainy street
+    - on a cloud
+    - underwater
+
   portraits:
     - portrait
     - close-up
-    - headshot
     - full body
     - half body
+    - dynamic pose

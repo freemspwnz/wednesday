@@ -41,10 +41,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     echo $TZ > /etc/timezone && \
     rm -rf /var/lib/apt/lists/*
 
-# Создаем пользователя заранее
+# Create user
 RUN useradd --create-home --shell /bin/bash app
 
-# Зависимости и установленные пакеты из builder
+# Dependencies and installed packages from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
@@ -52,7 +52,7 @@ COPY --chown=app:app wednesday/ /app/wednesday/
 COPY --chown=app:app alembic/ /app/alembic/
 COPY --chown=app:app alembic.ini /app/alembic.ini
 
-# Копируем entrypoint и даем права
+# Copy entrypoint and give permissions
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
