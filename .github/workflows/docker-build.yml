@@ -52,6 +52,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
+          build-args: POETRY_VERSION=${{ vars.POETRY_VERSION }}
           context: .
           push: true
           platforms: linux/amd64,linux/arm64

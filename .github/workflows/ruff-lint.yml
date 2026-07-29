@@ -13,8 +13,6 @@ permissions:
 jobs:
   ruff-lint:
     runs-on: ubuntu-latest
-    env:
-      POETRY_VERSION: "1.8.4"
 
     steps:
       - name: Checkout repository
@@ -28,7 +26,7 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: ${{ env.POETRY_VERSION }}
+          version: ${{ vars.POETRY_VERSION }}
 
       - name: Install dependencies
         run: |

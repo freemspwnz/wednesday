@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc python3-dev libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-ENV POETRY_VERSION=2.1.2 \
+ARG POETRY_VERSION=2.3.2
+ENV POETRY_VERSION=${POETRY_VERSION} \
 POETRY_VIRTUALENVS_CREATE=false \
 POETRY_NO_INTERACTION=1 \
 POETRY_CACHE_DIR=/tmp/poetry_cache
