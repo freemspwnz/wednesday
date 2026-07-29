@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+from typing import Self
 
-from domain.image import Image, ImageId, TelegramFileId
+from domain.image import Image, ImageId, ImageRating, TelegramFileId
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,12 +10,12 @@ class ImageCard:
 
     id: ImageId
     file_id: TelegramFileId
-    score: int
+    rating: ImageRating
 
     @classmethod
-    def from_domain(cls, image: Image) -> ImageCard:
+    def from_domain(cls, image: Image) -> Self:
         return cls(
             id=image.id,
             file_id=image.file_id,
-            score=image.score,
+            rating=image.rating,
         )

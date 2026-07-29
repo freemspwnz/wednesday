@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Self, runtime_checkable
 
 
 @runtime_checkable
@@ -98,7 +96,7 @@ class Logger(Protocol):
         """
         ...
 
-    def bind(self, **kwargs: object) -> Logger:
+    def bind(self, **kwargs: object) -> Self:
         """Create a new logger instance with bound context.
 
         Args:

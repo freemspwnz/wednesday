@@ -12,11 +12,11 @@ from domain.image import (
     HiddenState,
     ImageId,
     ImageNotFoundError,
+    Vote,
 )
-from domain.image.vote import Vote
 from domain.kernel.vo import AwareDatetime
-from domain.user import UserRole
-from tests.dom.image.factories import FakeImageRepo, FakeImageVoteRepo, mk_image
+from domain.user import UserId, UserRole
+from tests.dom.image.factories import FakeImageRepo, FakeImageVoteRepo, mk_image, mk_rating
 
 from ...factories import FakeUoW, mk_logger
 
@@ -28,7 +28,7 @@ def dt(hour: int) -> AwareDatetime:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_uc_hide_persists_admin_hidden() -> None:
-    image = mk_image(image_id=7, score=2, created_at=dt(10))
+    image = mk_image(image_id=7, rating=mk_rating(likes=2), created_at=dt(10))
     image_repo = FakeImageRepo.with_images(image)
     uow = FakeUoW(images=image_repo)
     uc = ImageManagementUseCase(uow=uow, logger=mk_logger())
@@ -37,19 +37,19 @@ async def test_uc_hide_persists_admin_hidden() -> None:
 
     assert isinstance(got.state, HiddenState)
     assert got.state.reason == HiddenReason.ADMIN
-    assert got.score == 2
+    assert got.rating == mk_rating(likes=2)
     assert uow.enter_count == uow.exit_count == 1
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_uc_show_after_admin_hide_resets_votes() -> None:
-    image = mk_image(image_id=8, score=2, created_at=dt(10))
+    image = mk_image(image_id=8, rating=mk_rating(likes=2), created_at=dt(10))
     image.hide(actor=UserRole.OWNER, reason=HiddenReason.ADMIN, at=dt(11))
     image.pull_events()
     image_repo = FakeImageRepo.with_images(image)
     vote_repo = FakeImageVoteRepo()
-    await vote_repo.upsert(Vote(image_id=image.id, voter_id=UUID(int=1), value=1))
+    await vote_repo.upsert(Vote(image_id=image.id, voter_id=UserId(UUID(int=1)), value=1))
     uow = FakeUoW(images=image_repo, votes=vote_repo)
     uc = ImageManagementUseCase(uow=uow, logger=mk_logger())
 

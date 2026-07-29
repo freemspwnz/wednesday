@@ -1,5 +1,5 @@
-from domain.image import Image, ImageId, ImageManagementService
-from domain.kernel.vo import AwareDatetime
+from domain.image import Image, ImageId, ImageManagementService, ImageVoteService
+from domain.kernel import AwareDatetime
 from domain.user import UserRole
 
 from .base import ImageBaseUseCase
@@ -22,9 +22,9 @@ class ImageManagementUseCase(ImageBaseUseCase):
         )
         async with self._uow:
             image = await ImageManagementService.hide(
-                image_id=image_id,
+                id=image_id,
                 actor=actor,
-                image_repo=self._uow.images,
+                repo=self._uow.images,
                 at=at,
             )
         self._logger.info(
@@ -48,12 +48,13 @@ class ImageManagementUseCase(ImageBaseUseCase):
         )
         async with self._uow:
             image = await ImageManagementService.show(
-                image_id=image_id,
+                id=image_id,
                 actor=actor,
-                image_repo=self._uow.images,
-                vote_repo=self._uow.votes,
+                repo=self._uow.images,
                 at=at,
             )
+            if actor == UserRole.OWNER:
+                await ImageVoteService.reset(id=image_id, repo=self._uow.votes)
         self._logger.info(
             "Image aggregate updated",
             action="show",

@@ -15,7 +15,10 @@ class RateLimiter[L](Protocol):
         ...
 
     def __call__(
-        self, limit: L, *args: str, cost: int = 1
+        self,
+        limit: L,
+        *args: str,
+        cost: int = 1,
     ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
         """Rate limiter decorator."""
         ...

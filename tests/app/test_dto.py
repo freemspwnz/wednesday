@@ -12,7 +12,7 @@ from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
 from domain.user.vo import UserSettings, UserSubscription
 from tests.dom.catalog.plans import PREMIUM_PLAN
-from tests.dom.image.factories import mk_image
+from tests.dom.image.factories import mk_image, mk_rating
 
 
 def _dt(hour: int) -> AwareDatetime:
@@ -93,7 +93,7 @@ def test_chat_context_from_domain_maps_schedule_fields() -> None:
 def test_image_card_from_domain_maps_fields() -> None:
     image = mk_image(
         image_id=7,
-        score=3,
+        rating=mk_rating(likes=3),
         created_at=_dt(10),
         file_id=TelegramFileId.parse("AgACAgIAAxkB"),
     )
@@ -102,4 +102,4 @@ def test_image_card_from_domain_maps_fields() -> None:
 
     assert card.id == image.id
     assert card.file_id == TelegramFileId.parse("AgACAgIAAxkB")
-    assert card.score == 3
+    assert card.rating == mk_rating(likes=3)

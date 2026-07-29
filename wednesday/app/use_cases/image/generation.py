@@ -1,12 +1,10 @@
-from uuid import UUID
-
 from app.dto import ImageCard
 from app.protocols import Logger, UoW
 from domain.catalog import Model
 from domain.image import (
+    Generator,
     Image,
     ImageGenerationService,
-    ImageGenerator,
     ImageId,
     ImageMeta,
     ImageRender,
@@ -14,9 +12,8 @@ from domain.image import (
     PromptCatalog,
     PromptModerationPolicy,
     TelegramFileId,
-    TextGenerator,
 )
-from domain.kernel.vo import AwareDatetime
+from domain.kernel import AwareDatetime
 
 from .base import ImageBaseUseCase
 
@@ -28,39 +25,37 @@ class ImageGenerationUseCase(ImageBaseUseCase):
     HTTP render methods stay outside UoW.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
-        uow: UoW,
+        gen: Generator,
         prompts: PromptCatalog,
-        txt_gen: TextGenerator,
-        img_gen: ImageGenerator,
-        moderation: PromptModerationPolicy,
+        policy: PromptModerationPolicy,
+        uow: UoW,
         logger: Logger,
     ) -> None:
         super().__init__(uow=uow, logger=logger)
+        self._gen = gen
         self._prompts = prompts
-        self._txt_gen = txt_gen
-        self._img_gen = img_gen
-        self._moderation = moderation
+        self._policy = policy
 
     async def by_user(
         self,
         *,
         model: Model,
-        user_input: NormalizedPrompt,
+        prompt: str,
     ) -> ImageRender:
         self._logger.debug(
             "Image generation by user started",
             model=str(model),
         )
+        normalized = NormalizedPrompt.parse(prompt)
         render = await ImageGenerationService.by_user(
             model=model,
-            user_input=user_input,
+            prompt=normalized,
             catalog=self._prompts,
-            moderation=self._moderation,
-            txt_gen=self._txt_gen,
-            img_gen=self._img_gen,
+            policy=self._policy,
+            gen=self._gen,
         )
         self._logger.debug(
             "Image generation by user finished",
@@ -74,8 +69,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         render = await ImageGenerationService.random(
             model=model,
             catalog=self._prompts,
-            txt_gen=self._txt_gen,
-            img_gen=self._img_gen,
+            gen=self._gen,
         )
         self._logger.debug(
             "Random image generation finished",
@@ -87,17 +81,17 @@ class ImageGenerationUseCase(ImageBaseUseCase):
     async def register(
         self,
         *,
-        render: ImageRender,
+        image_id: ImageId,
         file_id: TelegramFileId,
-        author_id: UUID,
-        model: Model,
+        meta: ImageMeta,
+        render: ImageRender,
         at: AwareDatetime,
     ) -> ImageCard:
         """Persist a catalog image after Telegram upload yields file_id."""
 
         image = Image.register(
-            id=ImageId.new(),
-            meta=ImageMeta(author_id=author_id, model=model),
+            id=image_id,
+            meta=meta,
             file_id=file_id,
             prompts=render.prompts,
             created_at=at,
@@ -105,13 +99,13 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         self._logger.debug(
             "Image catalog registration started",
             image_id=str(image.id.value),
-            author_id=str(author_id),
+            author_id=str(meta.author_id.value),
         )
         async with self._uow:
             await self._uow.images.save(image)
         self._logger.info(
             "Image aggregate registered",
             image_id=str(image.id.value),
-            author_id=str(author_id),
+            author_id=str(meta.author_id.value),
         )
         return ImageCard.from_domain(image)

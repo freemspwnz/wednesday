@@ -8,9 +8,10 @@ import pytest
 
 from app.dto import ImageCard
 from app.use_cases.image import ImageCatalogUseCase
-from domain.image import ImageScorePolicy
+from domain.chat import ChatId
+from domain.image import ImageId, ImageNotFoundError, ImageRatingPolicy
 from domain.kernel.vo import AwareDatetime
-from tests.dom.image.factories import mk_image
+from tests.dom.image.factories import FakeImageRepo, FakeViewRepo, mk_image, mk_rating
 
 from ...factories import FakeUoW, mk_logger
 
@@ -22,19 +23,18 @@ def dt(hour: int) -> AwareDatetime:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_uc_pick_for_chat_returns_none_when_catalog_empty() -> None:
-    images = AsyncMock()
     views = AsyncMock()
-    images.get_random_unseen_for_chat.return_value = None
-    uow = FakeUoW(images=images, views=views)
+    views.get_unseen_for_chat.return_value = None
+    uow = FakeUoW(views=views)
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
-    chat_id = UUID(int=99)
+    chat_id = ChatId(UUID(int=99))
 
     result = await uc.pick_for_chat(chat_id=chat_id, at=dt(10))
 
     assert result is None
-    images.get_random_unseen_for_chat.assert_awaited_once_with(
-        chat_id,
-        min_score=ImageScorePolicy.CATALOG_MIN_SCORE,
+    views.get_unseen_for_chat.assert_awaited_once_with(
+        chat_id=chat_id,
+        min_rating=ImageRatingPolicy.SHOWABLE_RATING,
     )
     views.mark_shown.assert_not_awaited()
     assert uow.enter_count == uow.exit_count == 1
@@ -43,34 +43,33 @@ async def test_uc_pick_for_chat_returns_none_when_catalog_empty() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_uc_pick_for_chat_marks_shown_and_returns_card() -> None:
-    image = mk_image(image_id=3, score=2, created_at=dt(9))
-    images = AsyncMock()
-    views = AsyncMock()
-    images.get_random_unseen_for_chat.return_value = image
+    image = mk_image(image_id=3, rating=mk_rating(likes=2), created_at=dt(9))
+    views = FakeViewRepo(candidates=[image])
+    images = FakeImageRepo.with_images(image)
     uow = FakeUoW(images=images, views=views)
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
-    chat_id = UUID(int=100)
+    chat_id = ChatId(UUID(int=100))
 
     result = await uc.pick_for_chat(chat_id=chat_id, at=dt(10))
 
     assert isinstance(result, ImageCard)
     assert result.id == image.id
-    assert result.score == 2
-    views.mark_shown.assert_awaited_once_with(chat_id, image.id, at=dt(10))
+    assert result.rating == mk_rating(likes=2)
+    assert (chat_id.value, image.id) in views.shown
     assert uow.enter_count == uow.exit_count == 1
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_uc_pick_for_chat_runs_in_uow() -> None:
-    image = mk_image(image_id=4, score=1, created_at=dt(9))
-    uow = FakeUoW()
+    image = mk_image(image_id=4, rating=mk_rating(likes=1), created_at=dt(9))
+    uow = FakeUoW(images=FakeImageRepo.with_images(image))
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
-    chat_id = UUID(int=101)
+    chat_id = ChatId(UUID(int=101))
 
     with patch(
         "app.use_cases.image.catalog.ImageCatalogService.pick_for_chat",
-        new=AsyncMock(return_value=image),
+        new=AsyncMock(return_value=image.id),
     ) as pick:
         got = await uc.pick_for_chat(chat_id=chat_id, at=dt(11))
 
@@ -79,7 +78,19 @@ async def test_uc_pick_for_chat_runs_in_uow() -> None:
     assert uow.enter_count == uow.exit_count == 1
     pick.assert_awaited_once_with(
         chat_id=chat_id,
-        image_repo=uow.images,
-        view_repo=uow.views,
+        repo=uow.views,
         at=dt(11),
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_pick_for_chat_raises_when_image_missing() -> None:
+    views = AsyncMock()
+    views.get_unseen_for_chat.return_value = ImageId(UUID(int=77))
+    views.mark_shown = AsyncMock()
+    uow = FakeUoW(images=FakeImageRepo(), views=views)
+    uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
+
+    with pytest.raises(ImageNotFoundError):
+        await uc.pick_for_chat(chat_id=ChatId(UUID(int=102)), at=dt(10))

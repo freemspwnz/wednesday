@@ -9,6 +9,8 @@ from app.dto import ImageCard
 from app.use_cases.image import ImageGenerationUseCase
 from domain.catalog import Model
 from domain.image import (
+    ImageId,
+    ImageMeta,
     ImagePrompts,
     ImageRender,
     NormalizedPrompt,
@@ -18,12 +20,8 @@ from domain.image import (
     TelegramFileId,
 )
 from domain.kernel.vo import AwareDatetime
-from tests.dom.image.factories import (
-    FakeImageGenerator,
-    FakeImageRepo,
-    FakePromptCatalog,
-    FakeTextGenerator,
-)
+from domain.user import UserId
+from tests.dom.image.factories import FakeGenerator, FakeImageRepo, FakePromptCatalog
 
 from ...factories import FakeUoW, mk_logger
 
@@ -35,15 +33,13 @@ def dt(hour: int) -> AwareDatetime:
 def _make_uc(
     *,
     uow: FakeUoW | None = None,
-    txt_gen: FakeTextGenerator | None = None,
-    img_gen: FakeImageGenerator | None = None,
+    gen: FakeGenerator | None = None,
 ) -> ImageGenerationUseCase:
     return ImageGenerationUseCase(
         uow=uow or FakeUoW(),
         prompts=FakePromptCatalog(),
-        txt_gen=txt_gen or FakeTextGenerator(response="enriched frog"),
-        img_gen=img_gen or FakeImageGenerator(content=b"png"),
-        moderation=PromptModerationPolicy(),
+        gen=gen or FakeGenerator(text_response="enriched frog", image_content=b"png"),
+        policy=PromptModerationPolicy(),
         logger=mk_logger(),
     )
 
@@ -65,7 +61,7 @@ async def test_uc_by_user_returns_render() -> None:
 
     render = await uc.by_user(
         model=Model.parse("gigachat-2-lite"),
-        user_input=NormalizedPrompt.parse("frog meme"),
+        prompt="frog meme",
     )
 
     assert isinstance(render, ImageRender)
@@ -81,7 +77,7 @@ async def test_uc_by_user_rejects_banned_prompt() -> None:
     with pytest.raises(PromptRejectedError):
         await uc.by_user(
             model=Model.parse("gigachat-2-lite"),
-            user_input=NormalizedPrompt.parse("naked frog"),
+            prompt="naked frog",
         )
 
 
@@ -89,8 +85,7 @@ async def test_uc_by_user_rejects_banned_prompt() -> None:
 @pytest.mark.asyncio
 async def test_uc_random_returns_render() -> None:
     uc = _make_uc(
-        txt_gen=FakeTextGenerator(response="random frog"),
-        img_gen=FakeImageGenerator(content=b"rnd"),
+        gen=FakeGenerator(text_response="random frog", image_content=b"rnd"),
     )
 
     render = await uc.random(model=Model.parse("gigachat-2-lite"))
@@ -108,19 +103,21 @@ async def test_uc_register_persists_image_in_uow() -> None:
     uc = _make_uc(uow=uow)
     render = _mk_render()
     file_id = TelegramFileId.parse("AgACAgIAAxkBAAI")
-    author_id = UUID(int=42)
+    author_id = UserId(UUID(int=42))
     model = Model.parse("gigachat-2-lite")
+    image_id = ImageId(UUID(int=77))
 
     card = await uc.register(
-        render=render,
+        image_id=image_id,
         file_id=file_id,
-        author_id=author_id,
-        model=model,
+        meta=ImageMeta(author_id=author_id, model=model),
+        render=render,
         at=dt(12),
     )
 
     assert isinstance(card, ImageCard)
     assert card.file_id == file_id
+    assert card.id == image_id
     assert uow.enter_count == uow.exit_count == 1
     saved = await image_repo.get_by_id(card.id)
     assert saved is not None
