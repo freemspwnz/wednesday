@@ -1,0 +1,81 @@
+# Wednesday observability stack: VictoriaMetrics + Grafana + Loki + Vector.
+# Requires external Docker network `monitoring` (create once: docker network create monitoring).
+# Connect the bot container to the same network so scrape target wednesday:8080 resolves.
+#
+#   docker network create monitoring
+#   docker compose -f monitoring/docker-compose.yml up -d
+#   docker network connect monitoring wednesday   # if bot compose does not attach it
+
+name: monitoring
+
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.149.0
+    container_name: victoriametrics
+    restart: unless-stopped
+    command:
+      - "-retentionPeriod=14d"
+      - "-promscrape.config=/etc/prometheus/prometheus.yml"
+    volumes:
+      - vm_data:/victoria-metrics-data
+      - ./vm/scrape.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - monitoring
+    expose:
+      - "8428"
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring
+    expose:
+      - "3100"
+
+  vector:
+    image: timberio/vector:0.38.0-alpine
+    container_name: vector
+    restart: unless-stopped
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - ./vector/vector.yaml:/etc/vector/vector.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:13.1-slim
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - monitoring
+    depends_on:
+      - victoriametrics
+      - loki
+
+volumes:
+  vm_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  monitoring:
+    name: monitoring
+    external: true

@@ -1,0 +1,35 @@
+sources:
+  docker_logs:
+    type: docker_logs
+    docker_host: unix:///var/run/docker.sock
+    include_containers: ["wednesday"]
+
+transforms:
+  parse_loguru:
+    type: remap
+    inputs: ["docker_logs"]
+    source: |
+      parsed, err = parse_json(string!(.message))
+      if err != null {
+        abort
+      }
+      .message = string(parsed.record.message) ?? string(parsed.text) ?? .message
+      .service = string(parsed.record.extra.app) ?? "wednesday"
+      .env = string(parsed.record.extra.env) ?? "unknown"
+      .level = string(parsed.record.level.name) ?? "INFO"
+      .ver = string(parsed.record.extra.ver) ?? "unknown"
+
+sinks:
+  loki:
+    type: loki
+    inputs: ["parse_loguru"]
+    endpoint: "http://loki:3100"
+    encoding:
+      codec: json
+    out_of_order_action: accept
+    labels:
+      container_name: "{{ container_name }}"
+      service: "{{ service }}"
+      env: "{{ env }}"
+      level: "{{ level }}"
+      host: "${HOSTNAME:-localhost}"
