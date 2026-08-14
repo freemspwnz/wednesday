@@ -53,6 +53,18 @@ def _command_name(message: Message) -> str:
     return text.split()[0] if text else "/unknown"
 
 
+def _command_module(message: Message) -> str:
+    name = _command_name(message).lstrip("/").split("@", 1)[0]
+    return name or "unknown"
+
+
+def _callback_module(callback: CallbackQuery) -> str:
+    raw = callback.data
+    if not raw:
+        return "callback"
+    return raw.split(":", 1)[0]
+
+
 async def is_bot_member_of_chat(bot: Bot, tg_chat_id: int) -> bool:
     """True if the bot is currently a member of the chat (not left/kicked)."""
     me = await bot.me()
@@ -72,7 +84,7 @@ async def run_message_handler(
         await message.answer(text)
 
     return await _run_handler(
-        logger,
+        logger.bind(module=_command_module(message)),
         action,
         log_event="Command handler failed",
         log_extra={"command": _command_name(message)},
@@ -89,7 +101,7 @@ async def run_callback_handler(
         await callback.answer(text, show_alert=True)
 
     return await _run_handler(
-        logger,
+        logger.bind(module=_callback_module(callback)),
         action,
         log_event="Callback handler failed",
         log_extra={"callback_data": callback.data},
