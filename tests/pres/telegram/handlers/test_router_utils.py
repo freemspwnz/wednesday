@@ -108,6 +108,7 @@ async def test_run_message_handler_fallback(mock_logger: MagicMock) -> None:
     ):
         await run_message_handler(make_message(), mock_logger, action)
     answer.assert_awaited_once_with(COMMAND_FAILURE)
+    mock_logger.bind.assert_called_once_with(module="cmd")
     mock_logger.warning.assert_called_once()
     mock_logger.info.assert_not_called()
 
@@ -122,9 +123,26 @@ async def test_run_message_handler_logs_cooldown_at_info(mock_logger: MagicMock)
         await run_message_handler(make_message(), mock_logger, action)
 
     answer.assert_awaited_once_with(WAIT_FOR_COOLDOWN.format(minutes=1, seconds=30))
+    mock_logger.bind.assert_called_once_with(module="cmd")
     mock_logger.info.assert_called_once()
     mock_logger.warning.assert_not_called()
     assert mock_logger.info.call_args.kwargs["error_type"] == "CooldownViolationError"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_message_handler_binds_command_module(mock_logger: MagicMock) -> None:
+    async def action() -> None:
+        raise RuntimeError("boom")
+
+    with (
+        patch("presentation.aiogram.routers.utils.user_message_for_exception", return_value=None),
+        patch.object(Message, "answer", new_callable=AsyncMock),
+    ):
+        await run_message_handler(make_message(text="/generate@bot extra"), mock_logger, action)
+
+    mock_logger.bind.assert_called_once_with(module="generate")
+    mock_logger.warning.assert_called_once()
 
 
 @pytest.mark.unit
@@ -172,3 +190,5 @@ async def test_run_callback_handler_alert_when_no_message(mock_logger: MagicMock
         await run_callback_handler(callback, mock_logger, action)
 
     answer.assert_awaited_once_with(COMMAND_FAILURE, show_alert=True)
+    mock_logger.bind.assert_called_once_with(module="imgvote")
+    mock_logger.warning.assert_called_once()
