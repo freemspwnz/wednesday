@@ -50,6 +50,7 @@ async def cmd_generate(
     message: Message,
     command: CommandObject,
     user: UserContext,
+    chat: ChatContext,
     scope: RequestScope,
 ) -> None:
     """Generate an image from a user prompt or a random LLM prompt."""
@@ -87,6 +88,7 @@ async def cmd_generate(
             file_id=file_id,
             meta=ImageMeta(author_id=user.id, model=model),
             render=render,
+            chat_id=chat.id,
             at=at,
         )
         await sent.edit_reply_markup(

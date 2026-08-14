@@ -76,7 +76,10 @@ def _mk_sent_photo(*, file_id: str = "AgACAgIAAxkBAAI") -> Message:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cmd_generate_with_prompt_success(mock_scope: MagicMock) -> None:
+async def test_cmd_generate_with_prompt_success(
+    mock_scope: MagicMock,
+    chat_context: ChatContext,
+) -> None:
     user = mk_user_context()
     render = _mk_render()
     image = mk_image(
@@ -103,7 +106,7 @@ async def test_cmd_generate_with_prompt_success(mock_scope: MagicMock) -> None:
         patch.object(Message, "answer_photo", new_callable=AsyncMock, return_value=sent) as answer_photo,
         patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit_markup,
     ):
-        await cmd_generate(message, command, user, mock_scope)
+        await cmd_generate(message, command, user, chat_context, mock_scope)
 
     answer.assert_awaited_once_with(image_msg.GENERATION_STARTED)
     mock_scope.user_generation_uc.assert_allowed.assert_awaited_once()
@@ -118,6 +121,7 @@ async def test_cmd_generate_with_prompt_success(mock_scope: MagicMock) -> None:
     assert isinstance(kwargs["meta"], ImageMeta)
     assert kwargs["meta"].author_id == user.id
     assert kwargs["meta"].model == Model.parse(user.model)
+    assert kwargs["chat_id"] == chat_context.id
     assert "image_id" in kwargs
     edit_markup.assert_awaited_once()
     assert edit_markup.await_args is not None
@@ -129,7 +133,10 @@ async def test_cmd_generate_with_prompt_success(mock_scope: MagicMock) -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cmd_generate_without_args_uses_random(mock_scope: MagicMock) -> None:
+async def test_cmd_generate_without_args_uses_random(
+    mock_scope: MagicMock,
+    chat_context: ChatContext,
+) -> None:
     user = mk_user_context()
     render = _mk_render()
     image = mk_image(image_id=12, rating=mk_rating(likes=1), created_at=dt(10))
@@ -150,7 +157,7 @@ async def test_cmd_generate_without_args_uses_random(mock_scope: MagicMock) -> N
         patch.object(Message, "answer_photo", new_callable=AsyncMock, return_value=_mk_sent_photo()),
         patch.object(Message, "edit_reply_markup", new_callable=AsyncMock),
     ):
-        await cmd_generate(message, command, user, mock_scope)
+        await cmd_generate(message, command, user, chat_context, mock_scope)
 
     mock_scope.image_generation_uc.random.assert_awaited_once()
     mock_scope.image_generation_uc.by_user.assert_not_called()
@@ -158,7 +165,10 @@ async def test_cmd_generate_without_args_uses_random(mock_scope: MagicMock) -> N
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cmd_generate_rejected_prompt_assigns_ban(mock_scope: MagicMock) -> None:
+async def test_cmd_generate_rejected_prompt_assigns_ban(
+    mock_scope: MagicMock,
+    chat_context: ChatContext,
+) -> None:
     user = mk_user_context()
     mock_scope.user_generation_uc.assert_allowed = AsyncMock()
     mock_scope.image_generation_uc.by_user = AsyncMock(
@@ -174,7 +184,7 @@ async def test_cmd_generate_rejected_prompt_assigns_ban(mock_scope: MagicMock) -
     status.edit_text = AsyncMock()
 
     with patch.object(Message, "answer", new_callable=AsyncMock, return_value=status) as answer:
-        await cmd_generate(message, command, user, mock_scope)
+        await cmd_generate(message, command, user, chat_context, mock_scope)
 
     mock_scope.user_generation_uc.assert_allowed.assert_awaited_once()
     mock_scope.image_generation_uc.by_user.assert_awaited_once()

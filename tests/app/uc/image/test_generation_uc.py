@@ -6,8 +6,9 @@ from uuid import UUID
 import pytest
 
 from app.dto import ImageCard
-from app.use_cases.image import ImageGenerationUseCase
+from app.use_cases.image import ImageCatalogUseCase, ImageGenerationUseCase
 from domain.catalog import Model
+from domain.chat import ChatId
 from domain.image import (
     ImageId,
     ImageMeta,
@@ -21,7 +22,7 @@ from domain.image import (
 )
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserId
-from tests.dom.image.factories import FakeGenerator, FakeImageRepo, FakePromptCatalog
+from tests.dom.image.factories import FakeGenerator, FakeImageRepo, FakePromptCatalog, FakeViewRepo
 
 from ...factories import FakeUoW, mk_logger
 
@@ -95,32 +96,61 @@ async def test_uc_random_returns_render() -> None:
     assert render.prompts.source == PromptSource.LLM
 
 
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_uc_register_persists_image_in_uow() -> None:
-    image_repo = FakeImageRepo()
-    uow = FakeUoW(images=image_repo)
-    uc = _make_uc(uow=uow)
-    render = _mk_render()
-    file_id = TelegramFileId.parse("AgACAgIAAxkBAAI")
-    author_id = UserId(UUID(int=42))
-    model = Model.parse("gigachat-2-lite")
-    image_id = ImageId(UUID(int=77))
-
-    card = await uc.register(
-        image_id=image_id,
-        file_id=file_id,
-        meta=ImageMeta(author_id=author_id, model=model),
-        render=render,
+async def _register(uc: ImageGenerationUseCase, *, chat_id: ChatId) -> ImageCard:
+    return await uc.register(
+        image_id=ImageId(UUID(int=77)),
+        file_id=TelegramFileId.parse("AgACAgIAAxkBAAI"),
+        meta=ImageMeta(author_id=UserId(UUID(int=42)), model=Model.parse("gigachat-2-lite")),
+        render=_mk_render(),
+        chat_id=chat_id,
         at=dt(12),
     )
 
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_register_persists_image_and_view_in_uow() -> None:
+    image_repo = FakeImageRepo()
+    views = FakeViewRepo()
+    uow = FakeUoW(images=image_repo, views=views)
+    uc = _make_uc(uow=uow)
+    chat_id = ChatId(UUID(int=100))
+    image_id = ImageId(UUID(int=77))
+    author_id = UserId(UUID(int=42))
+    model = Model.parse("gigachat-2-lite")
+
+    card = await _register(uc, chat_id=chat_id)
+
     assert isinstance(card, ImageCard)
-    assert card.file_id == file_id
+    assert card.file_id == TelegramFileId.parse("AgACAgIAAxkBAAI")
     assert card.id == image_id
     assert uow.enter_count == uow.exit_count == 1
     saved = await image_repo.get_by_id(card.id)
     assert saved is not None
     assert saved.meta.author_id == author_id
     assert saved.meta.model == model
-    assert saved.prompts == render.prompts
+    assert saved.prompts == _mk_render().prompts
+    assert (chat_id.value, image_id) in views.shown
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_register_hides_image_from_same_chat_random() -> None:
+    image_repo = FakeImageRepo()
+    views = FakeViewRepo()
+    uow = FakeUoW(images=image_repo, views=views)
+    gen_uc = _make_uc(uow=uow)
+    catalog_uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
+    chat_id = ChatId(UUID(int=100))
+    other_chat_id = ChatId(UUID(int=101))
+
+    card = await _register(gen_uc, chat_id=chat_id)
+    saved = await image_repo.get_by_id(card.id)
+    assert saved is not None
+    views.candidates = [saved]
+
+    assert await catalog_uc.pick_for_chat(chat_id=chat_id, at=dt(13)) is None
+
+    picked = await catalog_uc.pick_for_chat(chat_id=other_chat_id, at=dt(13))
+    assert picked is not None
+    assert picked.id == card.id

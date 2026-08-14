@@ -1,6 +1,7 @@
 from app.dto import ImageCard
 from app.protocols import Logger, UoW
 from domain.catalog import Model
+from domain.chat import ChatId
 from domain.image import (
     Generator,
     Image,
@@ -78,16 +79,21 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         )
         return render
 
-    async def register(
+    async def register(  # noqa: PLR0913
         self,
         *,
         image_id: ImageId,
         file_id: TelegramFileId,
         meta: ImageMeta,
         render: ImageRender,
+        chat_id: ChatId,
         at: AwareDatetime,
     ) -> ImageCard:
-        """Persist a catalog image after Telegram upload yields file_id."""
+        """Persist a catalog image after Telegram upload yields file_id.
+
+        Records a view for the chat that already received the photo so
+        /random will not pick it again in the same chat.
+        """
 
         image = Image.register(
             id=image_id,
@@ -100,12 +106,15 @@ class ImageGenerationUseCase(ImageBaseUseCase):
             "Image catalog registration started",
             image_id=str(image.id.value),
             author_id=str(meta.author_id.value),
+            chat_id=str(chat_id.value),
         )
         async with self._uow:
             await self._uow.images.save(image)
+            await self._uow.views.mark_shown(chat_id, image.id, at=at)
         self._logger.info(
             "Image aggregate registered",
             image_id=str(image.id.value),
             author_id=str(meta.author_id.value),
+            chat_id=str(chat_id.value),
         )
         return ImageCard.from_domain(image)
