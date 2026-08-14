@@ -7,7 +7,8 @@ from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramForbiddenError
 from aiogram.types import CallbackQuery, Message, User as TgUser
 
-from presentation.aiogram.messages.exceptions import COMMAND_FAILURE
+from domain.user.exceptions import CooldownViolationError
+from presentation.aiogram.messages.exceptions import COMMAND_FAILURE, WAIT_FOR_COOLDOWN
 from presentation.aiogram.routers.utils import (
     is_bot_member_of_chat,
     parse_positive_int,
@@ -107,6 +108,23 @@ async def test_run_message_handler_fallback(mock_logger: MagicMock) -> None:
     ):
         await run_message_handler(make_message(), mock_logger, action)
     answer.assert_awaited_once_with(COMMAND_FAILURE)
+    mock_logger.warning.assert_called_once()
+    mock_logger.info.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_message_handler_logs_cooldown_at_info(mock_logger: MagicMock) -> None:
+    async def action() -> None:
+        raise CooldownViolationError("cd", {"remaining_seconds": 90})
+
+    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+        await run_message_handler(make_message(), mock_logger, action)
+
+    answer.assert_awaited_once_with(WAIT_FOR_COOLDOWN.format(minutes=1, seconds=30))
+    mock_logger.info.assert_called_once()
+    mock_logger.warning.assert_not_called()
+    assert mock_logger.info.call_args.kwargs["error_type"] == "CooldownViolationError"
 
 
 @pytest.mark.unit

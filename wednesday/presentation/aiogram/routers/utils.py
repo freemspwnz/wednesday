@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.exceptions import unwrap_exception
 from app.protocols import Logger
+from domain.kernel.exceptions import DomainError
 
 from ..messages.exceptions import COMMAND_FAILURE, user_message_for_exception
 
@@ -109,6 +110,7 @@ async def _run_handler(
     except Exception as exc:
         root = unwrap_exception(exc)
         text = user_message_for_exception(root) or COMMAND_FAILURE
-        logger.warning(log_event, **log_extra, error_type=type(root).__name__, error=str(root))
+        log = logger.info if isinstance(root, DomainError) else logger.warning
+        log(log_event, **log_extra, error_type=type(root).__name__, error=str(root))
         await reply(text)
         return None
