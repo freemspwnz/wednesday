@@ -1,14 +1,13 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
-from asyncbreaker import CircuitBreaker, CircuitBreakerListener
-from asyncbreaker.state import CircuitBreakerBaseState
+from asyncbreaker import CircuitBreaker, CircuitState as LibState, Listener
 
 from app.protocols import CBMetrics
 
 from ..state import CircuitState
 
 
-class MetricsListener(CircuitBreakerListener):
+class MetricsListener(Listener):
     """
     Circuit breaker state listener.
     """
@@ -18,30 +17,33 @@ class MetricsListener(CircuitBreakerListener):
 
     async def before_call(
         self,
-        cb: CircuitBreaker,
-        func: Callable,
+        breaker: CircuitBreaker,
+        func: Callable[..., Awaitable[object]],
         *args: object,
         **kwargs: object,
     ) -> None:
         self._metrics.before_call()
 
-    async def failure(self, cb: CircuitBreaker, exc: Exception) -> None:
-        self._metrics.after_call(name=cb.name, result="failure")
+    async def failure(self, breaker: CircuitBreaker, exception: Exception) -> None:
+        name = breaker.name or "unknown"
+        self._metrics.after_call(name=name, result="failure")
 
-    async def success(self, cb: CircuitBreaker) -> None:
-        self._metrics.after_call(name=cb.name, result="success")
+    async def success(self, breaker: CircuitBreaker) -> None:
+        name = breaker.name or "unknown"
+        self._metrics.after_call(name=name, result="success")
 
     async def state_change(
         self,
-        cb: CircuitBreaker,
-        old: CircuitBreakerBaseState,
-        new: CircuitBreakerBaseState,
+        breaker: CircuitBreaker,
+        old: LibState,
+        new: LibState,
     ) -> None:
-        mapped_new = CircuitState.from_external(new)
-        mapped_old = CircuitState.from_external(old)
+        name = breaker.name or "unknown"
+        mapped_new = CircuitState.from_library(new)
+        mapped_old = CircuitState.from_library(old)
 
         self._metrics.on_state_change(
-            name=cb.name,
+            name=name,
             old_state=str(mapped_old),
             new_state=str(mapped_new),
         )

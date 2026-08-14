@@ -1,33 +1,27 @@
 """Tests for listeners and ``CircuitState`` in the asyncbreaker slice."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from asyncbreaker import CircuitState as LibState
 
 from infra.resilience.asyncbreaker.listeners.logging import LoggingListener
 from infra.resilience.asyncbreaker.listeners.metrics import MetricsListener
 from infra.resilience.asyncbreaker.state import CircuitState
 
 
-def _state_mock(name: str) -> MagicMock:
-    m = MagicMock()
-    m.state.name = name
-    return m
-
-
 @pytest.mark.unit
 class TestCircuitState:
-    def test_from_external_closed(self) -> None:
-        ext = _state_mock("CLOSED")
-        assert CircuitState.from_external(ext) is CircuitState.CLOSED
+    def test_from_library_closed(self) -> None:
+        assert CircuitState.from_library(LibState.CLOSED) is CircuitState.CLOSED
 
-    def test_from_external_open(self) -> None:
-        ext = _state_mock("OPEN")
-        assert CircuitState.from_external(ext) is CircuitState.OPEN
+    def test_from_library_open(self) -> None:
+        assert CircuitState.from_library(LibState.OPEN) is CircuitState.OPEN
 
-    def test_from_external_unknown_maps_to_unknown(self) -> None:
-        ext = _state_mock("NOT_A_REAL_STATE")
-        assert CircuitState.from_external(ext) is CircuitState.UNKNOWN
+    def test_from_library_unknown_maps_to_unknown(self) -> None:
+        unknown = SimpleNamespace(name="NOT_A_REAL_STATE")
+        assert CircuitState.from_library(unknown) is CircuitState.UNKNOWN  # type: ignore[arg-type]
 
     def test_str_is_lower_name(self) -> None:
         assert str(CircuitState.HALF_OPEN) == "half_open"
@@ -67,8 +61,8 @@ class TestMetricsListener:
         listener = MetricsListener(metrics)
         cb = MagicMock()
         cb.name = "cb1"
-        old = _state_mock("CLOSED")
-        new = _state_mock("OPEN")
+        old = LibState.CLOSED
+        new = LibState.OPEN
 
         await listener.state_change(cb, old, new)
 
@@ -102,8 +96,8 @@ class TestLoggingListener:
         listener = LoggingListener(log)
         cb = MagicMock()
         cb.name = "cb1"
-        old = _state_mock("HALF_OPEN")
-        new = _state_mock("CLOSED")
+        old = LibState.HALF_OPEN
+        new = LibState.CLOSED
 
         await listener.state_change(cb, old, new)
         log.info.assert_called_once()

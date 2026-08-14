@@ -3,9 +3,9 @@ from typing import Literal
 
 from asyncbreaker import (
     CircuitBreaker as Breaker,
-    CircuitBreakerStorage,
-    CircuitMemoryStorage,
-    CircuitRedisStorage,
+    CircuitStorage,
+    MemoryStorage,
+    RedisStorage,
 )
 from redis.asyncio import Redis
 
@@ -54,14 +54,14 @@ def _storage(
     storage: Literal["redis", "memory"],
     namespace: str,
     redis: Redis,
-) -> CircuitBreakerStorage:
+) -> CircuitStorage:
     match storage:
         case "redis":
-            return CircuitRedisStorage(
-                redis_client=redis,
+            return RedisStorage(
+                redis=redis,
                 namespace=namespace,
             )
         case "memory":
-            return CircuitMemoryStorage()
+            return MemoryStorage()
         case _:
             raise ValueError(f"Invalid storage: {storage}")

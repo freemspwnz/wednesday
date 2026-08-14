@@ -1,12 +1,10 @@
 """Tests for the ``Asyncbreaker`` wrapper around asyncbreaker."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from asyncbreaker import StorageError
-from asyncbreaker.state import CircuitBreakerError
-from asyncbreaker.timeutil import naive_utc_now
+from asyncbreaker import CircuitError, StorageError
 
 from app.exceptions import AppError, CircuitOpenError, CircuitStorageError, UnexpectedCircuitError
 from infra.resilience.asyncbreaker.breaker import Asyncbreaker
@@ -66,9 +64,9 @@ class TestAsyncBreakerCall:
         async def work() -> None:
             return None
 
-        reopen = naive_utc_now() + timedelta(seconds=100)
+        reopen = datetime.now(UTC) + timedelta(seconds=100)
         mock_breaker.call = AsyncMock(
-            side_effect=CircuitBreakerError("open", reopen_time=reopen),
+            side_effect=CircuitError("open", reopen_time=reopen),
         )
 
         with pytest.raises(CircuitOpenError) as ei:
@@ -76,7 +74,7 @@ class TestAsyncBreakerCall:
 
         assert "unit-cb" in str(ei.value)
         assert 90.0 <= ei.value.retry_after <= 100.5
-        assert isinstance(ei.value.__cause__, CircuitBreakerError)
+        assert isinstance(ei.value.__cause__, CircuitError)
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_error_without_reopen_zero_retry_after(
@@ -88,7 +86,7 @@ class TestAsyncBreakerCall:
             return None
 
         mock_breaker.call = AsyncMock(
-            side_effect=CircuitBreakerError("open", reopen_time=None),
+            side_effect=CircuitError("open", reopen_time=None),
         )
 
         with pytest.raises(CircuitOpenError) as ei:

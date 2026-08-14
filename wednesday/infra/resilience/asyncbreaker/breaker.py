@@ -1,8 +1,8 @@
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import TypeVar
+from typing import NoReturn, TypeVar
 
-from asyncbreaker import CircuitBreaker as Breaker, CircuitBreakerError, StorageError
+from asyncbreaker import CircuitBreaker as Breaker, CircuitError, StorageError
 
 from app.exceptions import AppError, CircuitOpenError, CircuitStorageError, UnexpectedCircuitError
 from app.protocols import CircuitBreaker, Logger
@@ -39,22 +39,14 @@ class Asyncbreaker(CircuitBreaker):
         try:
             return await self._breaker.call(func, *args, **kwargs)  # type: ignore[no-any-return]
 
-        except CircuitBreakerError as e:
-            retry_after = max(0.0, e.time_remaining.total_seconds())
+        except CircuitError as e:
             raise CircuitOpenError(
                 message=f"Circuit {self._breaker.name} is open.",
-                retry_after=retry_after,
+                retry_after=e.retry_after,
             ) from e
 
         except StorageError as e:
-            self._logger.error(
-                "Circuit breaker storage unavailable",
-                name=self._breaker.name,
-                exc_info=True,
-            )
-            raise CircuitStorageError(
-                "Circuit breaker storage is unavailable; request rejected.",
-            ) from e
+            self._log_storage_error_and_raise(e)
 
         except AppError:
             raise
@@ -74,39 +66,28 @@ class Asyncbreaker(CircuitBreaker):
             await self._breaker.open()
 
         except StorageError as e:
-            self._logger.error(
-                "Circuit breaker storage error",
-                name=self._breaker.name,
-                exc_info=True,
-            )
-            raise CircuitStorageError(
-                "Circuit breaker storage is unavailable; request rejected.",
-            ) from e
+            self._log_storage_error_and_raise(e)
 
     async def half_open(self) -> None:
         try:
             await self._breaker.half_open()
 
         except StorageError as e:
-            self._logger.error(
-                "Circuit breaker storage error",
-                name=self._breaker.name,
-                exc_info=True,
-            )
-            raise CircuitStorageError(
-                "Circuit breaker storage is unavailable; request rejected.",
-            ) from e
+            self._log_storage_error_and_raise(e)
 
     async def close(self) -> None:
         try:
             await self._breaker.close()
 
         except StorageError as e:
-            self._logger.error(
-                "Circuit breaker storage error",
-                name=self._breaker.name,
-                exc_info=True,
-            )
-            raise CircuitStorageError(
-                "Circuit breaker storage is unavailable; request rejected.",
-            ) from e
+            self._log_storage_error_and_raise(e)
+
+    def _log_storage_error_and_raise(self, exc: StorageError) -> NoReturn:
+        self._logger.error(
+            "Circuit breaker storage error",
+            name=self._breaker.name,
+            exc_info=True,
+        )
+        raise CircuitStorageError(
+            "Circuit breaker storage is unavailable; request rejected.",
+        ) from exc

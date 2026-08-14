@@ -1,6 +1,7 @@
 from enum import Enum
+from typing import Self
 
-from asyncbreaker.state import CircuitBreakerBaseState
+from asyncbreaker import CircuitState as LibState
 
 
 class CircuitState(float, Enum):
@@ -13,8 +14,8 @@ class CircuitState(float, Enum):
         return self.name.lower()
 
     @classmethod
-    def from_external(cls, external_state: CircuitBreakerBaseState) -> "CircuitState":
+    def from_library(cls, state: LibState) -> Self:
         try:
-            return cls[external_state.state.name]
-        except (KeyError, AttributeError):
+            return cls[state.name]
+        except KeyError:
             return cls.UNKNOWN
