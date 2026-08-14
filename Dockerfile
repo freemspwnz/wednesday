@@ -1,59 +1,55 @@
 # syntax=docker/dockerfile:1
 
+ARG UV_VERSION=0.12.1
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 # --- Stage 1: Builder ---
 FROM python:3.12-slim AS builder
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc python3-dev libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-ARG POETRY_VERSION=2.3.2
-ENV POETRY_VERSION=${POETRY_VERSION} \
-POETRY_VIRTUALENVS_CREATE=false \
-POETRY_NO_INTERACTION=1 \
-POETRY_CACHE_DIR=/tmp/poetry_cache
-
-RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
+COPY --from=uv /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock README.md ./
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
 
-RUN poetry install --only main --no-root --no-ansi \
-    && rm -rf "$POETRY_CACHE_DIR"
+COPY pyproject.toml uv.lock README.md LICENSE ./
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
 
 COPY wednesday ./wednesday
 
-RUN poetry install --only main --no-ansi \
-    && rm -rf "$POETRY_CACHE_DIR"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable
 
 # --- Stage 2: Final ---
 FROM python:3.12-slim
 
 ENV TZ=Europe/Amsterdam \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/app/.venv \
+    PATH="/app/.venv/bin:$PATH"
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata gosu && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     echo $TZ > /etc/timezone && \
     rm -rf /var/lib/apt/lists/*
 
-# Create user
 RUN useradd --create-home --shell /bin/bash app
 
-# Dependencies and installed packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app wednesday/ /app/wednesday/
 COPY --chown=app:app alembic/ /app/alembic/
 COPY --chown=app:app alembic.ini /app/alembic.ini
 
-# Copy entrypoint and give permissions
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

@@ -15,7 +15,7 @@ Telegram-бот с асинхронной архитектурой (aiogram 3, S
 ```bash
 git clone https://github.com/freemspwnz/wednesday.git
 cd wednesday
-poetry install
+uv sync --group dev
 cp .env.example .env
 ```
 
@@ -128,7 +128,7 @@ make type          # mypy
 make test          # pytest
 make test-cov      # pytest + coverage
 make build         # docker image
-make run           # poetry run python wednesday/main.py
+make run           # uv run python wednesday/main.py
 ```
 
 CI (`.github/workflows/ci.yml`): lint, format, mypy, pytest — без шага `migrate` (тесты persistence на моках).

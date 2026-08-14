@@ -21,19 +21,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Python and uv
+        uses: ./.github/actions/setup-python-uv
         with:
           python-version: ${{ inputs.python-version }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ vars.POETRY_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          poetry install --with dev --no-interaction
 
       - name: Run tests
         env:
@@ -42,7 +33,7 @@ jobs:
 
       - name: Coverage report
         if: always()
-        run: poetry run coverage report --fail-under=50 --ignore-errors || true
+        run: uv run coverage report --fail-under=50 --ignore-errors || true
 
       - name: Upload coverage to Codecov
         if: always()

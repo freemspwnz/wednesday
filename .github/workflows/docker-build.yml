@@ -52,7 +52,6 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          build-args: POETRY_VERSION=${{ vars.POETRY_VERSION }}
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
@@ -87,3 +86,6 @@ jobs:
             --tmpfs /var/tmp:rw,nosuid,size=64m \
             --tmpfs /run:rw,nosuid,size=16m \
             "$IMAGE" python3 -c "from infra.config import Config"
+
+          docker run --rm --platform linux/amd64 "$IMAGE" \
+            python3 -c "import importlib.util as u; assert u.find_spec('poetry') is None"

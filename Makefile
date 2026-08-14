@@ -1,5 +1,5 @@
 PYTHON ?= python3
-POETRY ?= poetry run
+UV ?= uv run
 IMAGE_NAME := wednesday
 
 PATHS := wednesday/ tests/
@@ -14,23 +14,23 @@ help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 lint: ## Run ruff lint
-	$(POETRY) ruff check $(PATHS)
+	$(UV) ruff check $(PATHS)
 
 format: ## Apply auto-fixes and formatting ruff
-	$(POETRY) ruff check $(PATHS) --fix
-	$(POETRY) ruff format $(PATHS)
+	$(UV) ruff check $(PATHS) --fix
+	$(UV) ruff format $(PATHS)
 
 format-check: ## Check ruff formatting
-	$(POETRY) ruff format --check $(PATHS)
+	$(UV) ruff format --check $(PATHS)
 
 type: ## Run mypy on all paths and tests
-	$(POETRY) mypy $(PATHS)
+	$(UV) mypy $(PATHS)
 
 test: ## Run all tests
-	$(POETRY) pytest $(TESTS)
+	$(UV) pytest $(TESTS)
 
 test-cov: ## Coverage + junit.xml
-	$(POETRY) pytest $(TESTS) $(COV) --cov-report=term-missing \
+	$(UV) pytest $(TESTS) $(COV) --cov-report=term-missing \
 		--cov-report=xml:coverage.xml --junitxml=junit.xml
 
 clean: ## Clean temporary artifacts
@@ -42,11 +42,11 @@ build: ## Build Docker image
 	@docker build -t $(IMAGE_NAME):local .
 
 migrate: ## Apply all Alembic migrations (upgrade head)
-	$(POETRY) alembic upgrade head
+	$(UV) alembic upgrade head
 
 migrate-revision: ## Generate migration from ORM diff (MSG=name, needs DB)
 	@test -n "$(MSG)" || (echo "Usage: make migrate-revision MSG=describe_change" && exit 1)
-	$(POETRY) alembic revision --autogenerate -m "$(MSG)"
+	$(UV) alembic revision --autogenerate -m "$(MSG)"
 
 run: ## Run the application
-	$(POETRY) python wednesday/main.py
+	$(UV) python wednesday/main.py
