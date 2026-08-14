@@ -82,6 +82,6 @@ ruff_profile.txt
 ruff_*.txt
 
 # Development documentation and WIP files
-/docs/dev/
 .ci_failed
 /wip
+/dev
