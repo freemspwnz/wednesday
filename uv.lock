@@ -1917,7 +1917,7 @@ wheels = [
 
 [[package]]
 name = "wednesday"
-version = "7.3.0"
+version = "7.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiogram" },

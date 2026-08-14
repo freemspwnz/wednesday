@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wednesday"
-version = "7.3.0"
+version = "7.4.0"
 description = "Telegram bot generating Wednesday frog meme images."
 readme = "README.md"
 license = "MIT"

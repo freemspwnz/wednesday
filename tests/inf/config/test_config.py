@@ -19,7 +19,7 @@ class TestConfigDefaults:
         cfg = Config(_env_file=None, ENV="DEV", metrics=MetricsConfig(enabled=False))
 
         assert cfg.env == "DEV"
-        assert cfg.version == "7.3.0"
+        assert cfg.version == "7.4.0"
         assert cfg.telegram.limiter.storage == "redis"
         assert cfg.telegram.retrier.name == "telegram"
         assert cfg.gigachat.limiter.storage == "redis"

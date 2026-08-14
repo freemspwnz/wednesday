@@ -29,7 +29,7 @@ class HttpConfig(BaseModel):
     base_url: str = Field(default="", description="Base URL for all requests")
 
     headers: dict[str, str] | None = Field(
-        default={"User-Agent": "wednesday/7.3.0"},
+        default={"User-Agent": "wednesday/7.4.0"},
         description="Default headers for all requests",
     )
     verify: bool | str = Field(default=True, description="SSL certificate verification")
