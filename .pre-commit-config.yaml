@@ -1,5 +1,5 @@
 # Pre-commit hooks for Wednesday.
-# Python quality (ruff, mypy) through Makefile and Poetry (the same goals as in CI).
+# Python quality (ruff, mypy) through Makefile and uv (the same goals as in CI).
 #
 # Installation:
 #   pre-commit install
@@ -79,7 +79,7 @@ repos:
         pass_filenames: false
 
   # ---------------------------
-  # Python: Makefile / Poetry (parity with CI)
+  # Python: Makefile / uv (parity with CI)
   # ---------------------------
   - repo: local
     hooks:
