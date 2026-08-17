@@ -99,6 +99,7 @@ class Limits(RateLimiter[RateLimitItem]):
             stats = await self._limiter.get_window_stats(limit, *identifiers)
 
         except (ConcurrentUpdateError, StorageError) as e:
+            self._metrics.on_error(name=limit.namespace, operation="get_stats", error="storage")
             self._logger.warning(
                 "Rate limiter storage error",
                 operation="get_window_stats",
@@ -107,6 +108,7 @@ class Limits(RateLimiter[RateLimitItem]):
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
         except Exception as e:
+            self._metrics.on_error(name=limit.namespace, operation="get_stats", error="unexpected")
             self._logger.exception(
                 "Rate limiter get_window_stats failed",
                 operation="get_window_stats",
@@ -140,6 +142,7 @@ class Limits(RateLimiter[RateLimitItem]):
             await self._limiter.clear(limit, *identifiers)
 
         except (ConcurrentUpdateError, StorageError) as e:
+            self._metrics.on_error(name=limit.namespace, operation="reset", error="storage")
             self._logger.warning(
                 "Rate limiter storage error",
                 operation="reset",
@@ -148,6 +151,7 @@ class Limits(RateLimiter[RateLimitItem]):
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
         except Exception as e:
+            self._metrics.on_error(name=limit.namespace, operation="reset", error="unexpected")
             self._logger.exception(
                 "Rate limiter reset failed",
                 operation="reset",
@@ -171,6 +175,7 @@ class Limits(RateLimiter[RateLimitItem]):
             result = await op(limit, *identifiers, cost=cost)
 
         except (ConcurrentUpdateError, StorageError) as e:
+            self._metrics.on_error(name=limit.namespace, operation="call", error="storage")
             self._logger.warning(
                 "Rate limiter storage error",
                 operation=op.__name__,
@@ -179,6 +184,7 @@ class Limits(RateLimiter[RateLimitItem]):
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
         except Exception as e:
+            self._metrics.on_error(name=limit.namespace, operation="call", error="unexpected")
             self._logger.exception(
                 "Rate limiter unexpected error",
                 operation=op.__name__,
