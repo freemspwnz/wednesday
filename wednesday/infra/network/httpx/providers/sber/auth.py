@@ -6,7 +6,7 @@ from http import HTTPStatus
 
 from httpx2 import AsyncClient, Auth, Request, Response
 
-from app.exceptions import HttpAuthError, UnexpectedHttpError
+from app.exceptions import HttpAuthError, HttpResponseError, UnexpectedHttpError
 from app.protocols import Logger
 
 from ...errors import map_httpx_error
@@ -82,7 +82,15 @@ class SberAuth(Auth):
             ) from exc
         except Exception as exc:
             mapped = map_httpx_error(exc, method="POST", url=self._url)
-            if isinstance(mapped, UnexpectedHttpError):
+            if isinstance(mapped, HttpResponseError):
+                self._logger.warning(
+                    "OAuth HTTP response error",
+                    method="POST",
+                    url=self._url,
+                    status_code=mapped.status_code,
+                    response_body=mapped.body,
+                )
+            elif isinstance(mapped, UnexpectedHttpError):
                 self._logger.error(
                     "Failed to fetch auth token",
                     auth_url=self._url,

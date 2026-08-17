@@ -2,7 +2,7 @@ from collections.abc import Awaitable, Callable
 
 from httpx2 import AsyncClient, Response
 
-from app.exceptions import AppError, UnexpectedHttpError
+from app.exceptions import AppError, HttpResponseError, UnexpectedHttpError
 from app.protocols import HttpMetrics, Logger
 
 from .errors import map_httpx_error
@@ -81,7 +81,15 @@ class HttpClient:
         except Exception as exc:
             self._metrics.on_error(method=method.__name__, url=url, exc=exc)
             mapped = map_httpx_error(exc, method=method.__name__, url=url)
-            if isinstance(mapped, UnexpectedHttpError):
+            if isinstance(mapped, HttpResponseError):
+                self._logger.warning(
+                    "HTTP response error",
+                    method=method.__name__,
+                    url=url,
+                    status_code=mapped.status_code,
+                    response_body=mapped.body,
+                )
+            elif isinstance(mapped, UnexpectedHttpError):
                 self._logger.error(
                     "HTTP request failed",
                     method=method.__name__,
