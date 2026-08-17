@@ -3,14 +3,15 @@
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import ClassVar
 
 from app.protocols import CacheMetrics, CacheOperation, MetricsCollector
 
-_PREFIX = "redis"
-
 
 class RedisMetrics(CacheMetrics):
-    """Metrics adapter for Redis cache."""
+    """Redis cache metrics adapter."""
+
+    _PREFIX: ClassVar[str] = "redis"
 
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector
@@ -29,18 +30,18 @@ class RedisMetrics(CacheMetrics):
             duration = time.perf_counter() - start
             status = self._resolve_status(res=res, errored=errored)
             self._collector.increment(
-                name=f"{_PREFIX}_operations_total",
+                name=f"{self._PREFIX}_operations_total",
                 labels={"operation": operation, "status": status},
             )
             self._collector.observe(
-                name=f"{_PREFIX}_operation_duration_seconds",
+                name=f"{self._PREFIX}_operation_duration_seconds",
                 value=duration,
                 labels={"operation": operation},
             )
 
     def set_queue_size(self, queue_name: str, count: int) -> None:
         self._collector.set_gauge(
-            name=f"{_PREFIX}_queue_size",
+            name=f"{self._PREFIX}_queue_size",
             value=float(count),
             labels={"queue": queue_name},
         )

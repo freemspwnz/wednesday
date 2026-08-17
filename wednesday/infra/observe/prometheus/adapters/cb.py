@@ -1,21 +1,22 @@
 """Asyncbreaker metrics adapter."""
 
 import time
+from typing import ClassVar
 
 from app.protocols import CBMetrics, MetricsCollector
 
 from ._common import TimerContext
 
-_STATE_VALUES: dict[str, float] = {
-    "CLOSED": 0.0,
-    "HALF_OPEN": 0.5,
-    "OPEN": 1.0,
-    "UNKNOWN": -1.0,
-}
-
 
 class AsyncbreakerMetrics(CBMetrics):
-    """Metrics adapter for asyncbreaker."""
+    """Asyncbreaker metrics adapter."""
+
+    _STATE_VALUES: ClassVar[dict[str, float]] = {
+        "CLOSED": 0.0,
+        "HALF_OPEN": 0.5,
+        "OPEN": 1.0,
+        "UNKNOWN": -1.0,
+    }
 
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector
@@ -42,7 +43,7 @@ class AsyncbreakerMetrics(CBMetrics):
 
         self._collector.set_gauge(
             name="cb_state",
-            value=_STATE_VALUES.get(new_state.upper(), -1.0),
+            value=self._STATE_VALUES.get(new_state.upper(), -1.0),
             labels={"name": name},
         )
         self._collector.increment(

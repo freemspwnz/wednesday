@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from typing import ClassVar
 
 from httpx2 import AsyncClient, AsyncHTTPTransport, Limits, Timeout
 
@@ -10,11 +11,11 @@ from .client import HttpClient
 from .policy import ResiliencePolicy
 from .predicate import is_httpx_retryable
 
-_HTTP_CLIENT_CLOSE_TIMEOUT = 5.0
-
 
 class HttpClientFactory:
     """Build resilient httpx2 clients from HTTP and resilience configs."""
+
+    _CLOSE_TIMEOUT: ClassVar[float] = 5.0
 
     def __init__(
         self,
@@ -85,7 +86,7 @@ class HttpClientFactory:
     async def aclose(self, client: HttpClient) -> None:
         self._logger.debug("Closing HTTP client...")
         try:
-            async with asyncio.timeout(_HTTP_CLIENT_CLOSE_TIMEOUT):
+            async with asyncio.timeout(self._CLOSE_TIMEOUT):
                 await client.aclose()
             self._logger.debug("HTTP client closed successfully")
         except TimeoutError:

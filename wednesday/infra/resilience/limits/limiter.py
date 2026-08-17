@@ -2,7 +2,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from functools import wraps
 from math import ceil
-from typing import TypeVar
+from typing import ClassVar, TypeVar
 
 from limits import RateLimitItem, WindowStats
 from limits.aio.strategies import RateLimiter as Limiter
@@ -13,11 +13,11 @@ from app.protocols import Logger, RateLimiter, RLMetrics
 
 T = TypeVar("T")
 
-_DEFAULT_RETRY_AFTER = 1
-
 
 class Limits(RateLimiter[RateLimitItem]):
     """Rate limiter based on limits library."""
+
+    _DEFAULT_RETRY_AFTER: ClassVar[int] = 1
 
     def __init__(
         self,
@@ -189,9 +189,9 @@ class Limits(RateLimiter[RateLimitItem]):
                 stats = None
             raise self._build_exception(limit, stats)
 
-    @staticmethod
-    def _build_exception(limit: RateLimitItem, stats: WindowStats | None = None) -> TooManyRequests:
-        sleep_time = _DEFAULT_RETRY_AFTER
+    @classmethod
+    def _build_exception(cls, limit: RateLimitItem, stats: WindowStats | None = None) -> TooManyRequests:
+        sleep_time = cls._DEFAULT_RETRY_AFTER
         reset_time = time.time() + sleep_time
         remaining = None
 
