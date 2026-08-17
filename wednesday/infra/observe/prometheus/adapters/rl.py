@@ -15,82 +15,87 @@ class LimitsMetrics(RLMetrics):
     def before_call(self) -> None:
         self._call_timer.start()
 
-    def on_call(self, *, name: str, limit: str, result: bool) -> None:
+    def on_call(self, *, limiter: str, bucket: str, limit: str, result: bool) -> None:
+        labels = {"limiter": limiter, "bucket": bucket}
         self._collector.observe(
             name="rl_calls_duration_seconds",
             value=self._call_timer.elapsed(),
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.increment(
             name="rl_calls_total",
             labels={
-                "name": name,
+                **labels,
                 "limit": limit,
                 "result": "success" if result else "failure",
             },
         )
 
-    def on_error(self, *, name: str, operation: str, error: str) -> None:
+    def on_error(self, *, limiter: str, bucket: str, operation: str, error: str) -> None:
         if operation == "get_stats":
             duration_metric = "rl_window_stats_duration_seconds"
         elif operation == "reset":
             duration_metric = "rl_resets_duration_seconds"
         else:
             duration_metric = "rl_calls_duration_seconds"
+        labels = {"limiter": limiter, "bucket": bucket}
         self._collector.observe(
             name=duration_metric,
             value=self._call_timer.elapsed(),
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.increment(
             name="rl_errors_total",
-            labels={"name": name, "operation": operation, "error": error},
+            labels={**labels, "operation": operation, "error": error},
         )
 
     def on_get_stats(
         self,
         *,
-        name: str,
+        limiter: str,
+        bucket: str,
         reset_time: float,
         remaining: int,
     ) -> None:
+        labels = {"limiter": limiter, "bucket": bucket}
         self._collector.observe(
             name="rl_window_stats_duration_seconds",
             value=self._call_timer.elapsed(),
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.set_gauge(
             name="rl_window_stats_remaining",
             value=remaining,
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.set_gauge(
             name="rl_window_stats_reset_timestamp_seconds",
             value=reset_time,
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.increment(
             name="rl_window_stats_calls_total",
-            labels={"name": name, "result": "success"},
+            labels={**labels, "result": "success"},
         )
 
-    def on_reset(self, *, name: str, limit: int) -> None:
+    def on_reset(self, *, limiter: str, bucket: str, limit: int) -> None:
+        labels = {"limiter": limiter, "bucket": bucket}
         self._collector.observe(
             name="rl_resets_duration_seconds",
             value=self._call_timer.elapsed(),
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.set_gauge(
             name="rl_window_stats_remaining",
             value=float(limit),
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.set_gauge(
             name="rl_window_stats_reset_timestamp_seconds",
             value=0.0,
-            labels={"name": name},
+            labels=labels,
         )
         self._collector.increment(
             name="rl_reset_calls_total",
-            labels={"name": name},
+            labels=labels,
         )

@@ -58,7 +58,8 @@ class TestLimitsCall:
         mock_backend.hit.assert_awaited_once_with(limit_item, "user:1", cost=1)
         mock_metrics.before_call.assert_called_once()
         mock_metrics.on_call.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             limit=str(limit_item),
             result=True,
         )
@@ -87,7 +88,8 @@ class TestLimitsCall:
         assert exc.reset_at == stats.reset_time
         assert exc.retry_after == 31
         mock_metrics.on_call.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             limit=str(limit_item),
             result=False,
         )
@@ -114,12 +116,14 @@ class TestLimitsCall:
         assert ei.value.retry_after == _DEFAULT_RETRY_AFTER
         assert ei.value.limit == "test:base"
         mock_metrics.on_call.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             limit=str(limit_item),
             result=False,
         )
         mock_metrics.on_error.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             operation="get_stats",
             error="storage",
         )
@@ -142,7 +146,8 @@ class TestLimitsCall:
         mock_metrics.before_call.assert_called_once()
         mock_metrics.on_call.assert_not_called()
         mock_metrics.on_error.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             operation="call",
             error="storage",
         )
@@ -164,7 +169,8 @@ class TestLimitsCall:
         assert isinstance(ei.value.__cause__, RuntimeError)
         mock_metrics.on_call.assert_not_called()
         mock_metrics.on_error.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             operation="call",
             error="unexpected",
         )
@@ -211,7 +217,8 @@ class TestLimitsGetWindowStats:
 
         assert out is stats
         mock_metrics.on_get_stats.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             reset_time=50.0,
             remaining=2,
         )
@@ -232,7 +239,8 @@ class TestLimitsGetWindowStats:
 
         mock_metrics.on_get_stats.assert_not_called()
         mock_metrics.on_error.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             operation="get_stats",
             error="storage",
         )
@@ -252,7 +260,8 @@ class TestLimitsGetWindowStats:
 
         mock_metrics.on_get_stats.assert_not_called()
         mock_metrics.on_error.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             operation="get_stats",
             error="unexpected",
         )
@@ -274,7 +283,8 @@ class TestLimitsReset:
 
         mock_backend.clear.assert_awaited_once_with(limit_item, "id")
         mock_metrics.on_reset.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             limit=limit_item.amount,
         )
         mock_metrics.on_error.assert_not_called()
@@ -294,7 +304,8 @@ class TestLimitsReset:
 
         mock_metrics.on_reset.assert_not_called()
         mock_metrics.on_error.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             operation="reset",
             error="storage",
         )
@@ -314,7 +325,8 @@ class TestLimitsReset:
 
         mock_metrics.on_reset.assert_not_called()
         mock_metrics.on_error.assert_called_once_with(
-            name="test:base",
+            limiter="test",
+            bucket="base",
             operation="reset",
             error="unexpected",
         )

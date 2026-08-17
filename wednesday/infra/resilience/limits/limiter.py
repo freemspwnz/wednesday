@@ -87,7 +87,7 @@ class Limits(RateLimiter[RateLimitItem]):
             stats = await self._limiter.get_window_stats(limit, *identifiers)
 
         except (ConcurrentUpdateError, StorageError) as e:
-            self._metrics.on_error(name=limit.namespace, operation="get_stats", error="storage")
+            self._metrics.on_error(**self._metric_scope(limit), operation="get_stats", error="storage")
             self._logger.warning(
                 "Rate limiter storage error",
                 operation="get_window_stats",
@@ -96,7 +96,7 @@ class Limits(RateLimiter[RateLimitItem]):
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
         except Exception as e:
-            self._metrics.on_error(name=limit.namespace, operation="get_stats", error="unexpected")
+            self._metrics.on_error(**self._metric_scope(limit), operation="get_stats", error="unexpected")
             self._logger.exception(
                 "Rate limiter get_window_stats failed",
                 operation="get_window_stats",
@@ -107,7 +107,7 @@ class Limits(RateLimiter[RateLimitItem]):
             ) from e
 
         self._metrics.on_get_stats(
-            name=limit.namespace,
+            **self._metric_scope(limit),
             reset_time=stats.reset_time,
             remaining=stats.remaining,
         )
@@ -126,7 +126,7 @@ class Limits(RateLimiter[RateLimitItem]):
             await self._limiter.clear(limit, *identifiers)
 
         except (ConcurrentUpdateError, StorageError) as e:
-            self._metrics.on_error(name=limit.namespace, operation="reset", error="storage")
+            self._metrics.on_error(**self._metric_scope(limit), operation="reset", error="storage")
             self._logger.warning(
                 "Rate limiter storage error",
                 operation="reset",
@@ -135,7 +135,7 @@ class Limits(RateLimiter[RateLimitItem]):
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
         except Exception as e:
-            self._metrics.on_error(name=limit.namespace, operation="reset", error="unexpected")
+            self._metrics.on_error(**self._metric_scope(limit), operation="reset", error="unexpected")
             self._logger.exception(
                 "Rate limiter reset failed",
                 operation="reset",
@@ -143,7 +143,7 @@ class Limits(RateLimiter[RateLimitItem]):
             )
             raise UnexpectedLimitError(f"Unexpected error while resetting rate limiter {limit.namespace}") from e
 
-        self._metrics.on_reset(name=limit.namespace, limit=limit.amount)
+        self._metrics.on_reset(**self._metric_scope(limit), limit=limit.amount)
 
     async def _run_op(
         self,
@@ -159,7 +159,7 @@ class Limits(RateLimiter[RateLimitItem]):
             result = await op(limit, *identifiers, cost=cost)
 
         except (ConcurrentUpdateError, StorageError) as e:
-            self._metrics.on_error(name=limit.namespace, operation="call", error="storage")
+            self._metrics.on_error(**self._metric_scope(limit), operation="call", error="storage")
             self._logger.warning(
                 "Rate limiter storage error",
                 operation=op.__name__,
@@ -168,7 +168,7 @@ class Limits(RateLimiter[RateLimitItem]):
             raise LimitStorageError("Rate limiter backend unavailable") from e
 
         except Exception as e:
-            self._metrics.on_error(name=limit.namespace, operation="call", error="unexpected")
+            self._metrics.on_error(**self._metric_scope(limit), operation="call", error="unexpected")
             self._logger.exception(
                 "Rate limiter unexpected error",
                 operation=op.__name__,
@@ -177,7 +177,7 @@ class Limits(RateLimiter[RateLimitItem]):
             raise UnexpectedLimitError(f"Unexpected error while calling rate limiter {limit.namespace}") from e
 
         self._metrics.on_call(
-            name=limit.namespace,
+            **self._metric_scope(limit),
             limit=str(limit),
             result=result,
         )
@@ -209,10 +209,15 @@ class Limits(RateLimiter[RateLimitItem]):
         )
 
     @staticmethod
-    def _debug_fields(limit: RateLimitItem) -> dict[str, str]:
+    def _scope(limit: RateLimitItem) -> tuple[str, str]:
         limiter, _, bucket = limit.namespace.partition(":")
-        return {
-            "limiter": limiter,
-            "bucket": bucket or limiter,
-            "limit": str(limit),
-        }
+        return limiter, bucket or limiter
+
+    @classmethod
+    def _metric_scope(cls, limit: RateLimitItem) -> dict[str, str]:
+        limiter, bucket = cls._scope(limit)
+        return {"limiter": limiter, "bucket": bucket}
+
+    @classmethod
+    def _debug_fields(cls, limit: RateLimitItem) -> dict[str, str]:
+        return {**cls._metric_scope(limit), "limit": str(limit)}
