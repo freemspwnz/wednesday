@@ -53,6 +53,7 @@ async def main() -> None:
     )
 
     try:
+        await container.persistence.warmup()
         metrics.serve()
         await dp.start_polling(bot, allowed_updates=POLLING_ALLOWED_UPDATES)
 

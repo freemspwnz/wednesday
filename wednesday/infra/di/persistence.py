@@ -63,6 +63,13 @@ class PersistenceContainer:
             logger=self._observe.logger,
         )
 
+    async def warmup(self) -> None:
+        self._logger.info("Warming up persistence container...")
+        await self.uow_factory.warmup()
+        self._logger.info("SQLA connection verified")
+        await self.cache.warmup()
+        self._logger.info("Redis connection verified")
+
     async def shutdown(self) -> None:
         self._logger.info("Shutting down persistence container...")
 

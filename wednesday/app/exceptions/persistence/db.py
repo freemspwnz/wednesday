@@ -30,5 +30,9 @@ class AggregateMappingError(RepositoryError):
     """Invalid persistence payload for domain aggregate reconstruction."""
 
 
+class DBUnavailableError(DBError):
+    """Database is not available."""
+
+
 class UnexpectedDBError(UnexpectedAppError):
     """Unexpected database infrastructure error."""

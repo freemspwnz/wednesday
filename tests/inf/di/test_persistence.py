@@ -65,3 +65,24 @@ class TestPersistenceContainer:
             await pc.shutdown()
 
         mock_uow_factory.aclose.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_warmup_verifies_postgres_then_cache(
+        self,
+        di_config: Config,
+        observe_container: ObserveContainer,
+    ) -> None:
+        order: list[str] = []
+        mock_uow_factory = MagicMock()
+        mock_uow_factory.warmup = AsyncMock(side_effect=lambda: order.append("postgres"))
+        mock_cache = MagicMock()
+        mock_cache.warmup = AsyncMock(side_effect=lambda: order.append("redis"))
+        with (
+            patch("infra.di.persistence.build_redis", return_value=MagicMock()),
+            patch("infra.di.persistence.SQLAUoWFactory", return_value=mock_uow_factory),
+        ):
+            pc = PersistenceContainer(config=di_config, observe=observe_container)
+            pc.__dict__["cache"] = mock_cache
+            await pc.warmup()
+
+        assert order == ["postgres", "redis"]

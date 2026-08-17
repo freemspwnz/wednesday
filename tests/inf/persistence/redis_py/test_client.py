@@ -155,3 +155,36 @@ class TestRedisClientOperations:
 
         with pytest.raises(CacheUnavailableError):
             await client.get("k")
+
+
+@pytest.mark.unit
+class TestRedisClientWarmup:
+    @pytest.mark.asyncio
+    async def test_warmup_pings_redis(
+        self,
+        cache_metrics: MagicMock,
+        mock_logger: MagicMock,
+    ) -> None:
+        redis = MagicMock()
+        redis.ping = AsyncMock(return_value=True)
+        client = RedisClient(redis=redis, metrics=cache_metrics, logger=mock_logger)
+
+        await client.warmup()
+
+        redis.ping.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
+    async def test_warmup_maps_connection_error(
+        self,
+        cache_metrics: MagicMock,
+        mock_logger: MagicMock,
+    ) -> None:
+        redis = MagicMock()
+        redis.ping = AsyncMock(side_effect=redis_exc.ConnectionError("refused"))
+        client = RedisClient(redis=redis, metrics=cache_metrics, logger=mock_logger)
+
+        with pytest.raises(CacheUnavailableError) as exc_info:
+            await client.warmup()
+
+        assert exc_info.value.operation == "ping"
+        assert isinstance(exc_info.value.__cause__, redis_exc.ConnectionError)

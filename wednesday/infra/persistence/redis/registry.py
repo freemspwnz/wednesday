@@ -30,6 +30,9 @@ class RedisRepoRegistry(CacheRepoRegistry):
         self._metrics = metrics
         self._logger = logger
 
+    async def warmup(self) -> None:
+        await self._client.warmup()
+
     @cached_property
     def users(self) -> CacheRepo[UserContext, User]:
         return RedisUserRepo(

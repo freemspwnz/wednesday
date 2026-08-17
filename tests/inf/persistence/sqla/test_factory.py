@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import create_engine as create_sync_engine, text
 
 import infra.persistence.sqlalchemy.factory as sqla_factory
+from app.exceptions import DBUnavailableError
 from infra.config.persistence.postgres import PostgresConfig
 from infra.observe.prometheus.adapters.sqla import SQLAMetrics
 from infra.persistence.sqlalchemy.factory import SQLAUoWFactory
@@ -125,3 +126,45 @@ async def test_aclose_logs_non_critical_exception(monkeypatch: pytest.MonkeyPatc
 
     logger.error.assert_called_once()
     logger.info.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+@pytest.mark.asyncio
+async def test_warmup_executes_select_1() -> None:
+    conn = AsyncMock()
+    connect_cm = AsyncMock()
+    connect_cm.__aenter__.return_value = conn
+    connect_cm.__aexit__.return_value = False
+    engine = MagicMock()
+    engine.connect.return_value = connect_cm
+    logger = Mock()
+    logger.bind.return_value = logger
+    config = PostgresConfig(url="postgresql://user:pass@localhost:5432/test_db")
+    factory = SQLAUoWFactory(config=config, metrics=MagicMock(), logger=logger)
+    factory.__dict__["_engine"] = engine
+
+    await factory.warmup()
+
+    conn.execute.assert_awaited_once()
+    statement = conn.execute.await_args.args[0]
+    assert str(statement) == "SELECT 1"
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+@pytest.mark.asyncio
+async def test_warmup_maps_oserror_to_db_unavailable() -> None:
+    engine = MagicMock()
+    engine.connect.side_effect = OSError("refused")
+    logger = Mock()
+    logger.bind.return_value = logger
+    config = PostgresConfig(url="postgresql://user:pass@localhost:5432/test_db")
+    factory = SQLAUoWFactory(config=config, metrics=MagicMock(), logger=logger)
+    factory.__dict__["_engine"] = engine
+
+    with pytest.raises(DBUnavailableError, match="Database is not available") as exc_info:
+        await factory.warmup()
+
+    assert isinstance(exc_info.value.__cause__, OSError)
+    logger.error.assert_called_once()

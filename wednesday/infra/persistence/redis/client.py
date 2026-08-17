@@ -19,7 +19,8 @@ class RedisClient(CacheClient):
     Wraps ``redis.asyncio.Redis`` and records cache operation metrics.
     Network and server errors of Redis are translated to ``app.exceptions`` and
     propagated to the calling code (use case / middleware solve retries).
-    ``get_queue_size`` — infra helper outside the ``CacheClient`` protocol.
+    ``warmup`` pings Redis at boot. ``get_queue_size`` is an infra helper
+    outside the ``CacheClient`` protocol.
     """
 
     def __init__(
@@ -63,6 +64,17 @@ class RedisClient(CacheClient):
             count = await self._execute("llen", lambda: self._redis.llen(queue_name))  # type: ignore[arg-type, return-value]
             self._metrics.set_queue_size(queue_name, count)
             return count
+
+    async def warmup(self) -> None:
+        """Ping Redis so boot fails if the cache is unreachable."""
+
+        async def ping() -> bool:
+            pong = self._redis.ping()
+            if isinstance(pong, bool):
+                return pong
+            return await pong
+
+        await self._execute("ping", ping)
 
     async def _execute(self, operation: str, coro: Callable[[], Awaitable[R]]) -> R:
         try:

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from main import main
 
-from app.exceptions import MetricsHttpExporterError
+from app.exceptions import CacheUnavailableError, DBUnavailableError, MetricsHttpExporterError
 
 
 @pytest.fixture
@@ -24,6 +24,7 @@ def main_mocks() -> dict[str, MagicMock | AsyncMock]:
     container.get_scope = MagicMock()
     container.resilience.limiter.return_value = MagicMock()
     container.resilience.retrier.return_value = MagicMock()
+    container.persistence.warmup = AsyncMock()
 
     bot = MagicMock()
     bot.session.close = AsyncMock()
@@ -52,6 +53,59 @@ async def test_main_closes_bot_and_shuts_down_container(main_mocks: dict[str, Ma
     ):
         await main()
 
+    main_mocks["bot"].session.close.assert_awaited_once()
+    main_mocks["container"].shutdown.assert_awaited_once()
+    main_mocks["container"].persistence.warmup.assert_awaited_once()
+    main_mocks["dp"].start_polling.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_main_fails_when_postgres_unreachable_and_shuts_down(
+    main_mocks: dict[str, MagicMock | AsyncMock],
+) -> None:
+    main_mocks["container"].persistence.warmup.side_effect = DBUnavailableError("down")
+
+    with (
+        patch("main.Config", return_value=main_mocks["config"]),
+        patch("main.Container", return_value=main_mocks["container"]),
+        patch("main.Bot", return_value=main_mocks["bot"]),
+        patch("main.Dispatcher", return_value=main_mocks["dp"]),
+        patch("main.setup_bot"),
+        patch("main.setup_dp"),
+        pytest.raises(DBUnavailableError, match="down"),
+    ):
+        await main()
+
+    main_mocks["container"].observe.metrics.serve.assert_not_called()
+    main_mocks["dp"].start_polling.assert_not_called()
+    main_mocks["bot"].session.close.assert_awaited_once()
+    main_mocks["container"].shutdown.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_main_fails_when_redis_unreachable_and_shuts_down(
+    main_mocks: dict[str, MagicMock | AsyncMock],
+) -> None:
+    main_mocks["container"].persistence.warmup.side_effect = CacheUnavailableError(
+        "down",
+        operation="ping",
+    )
+
+    with (
+        patch("main.Config", return_value=main_mocks["config"]),
+        patch("main.Container", return_value=main_mocks["container"]),
+        patch("main.Bot", return_value=main_mocks["bot"]),
+        patch("main.Dispatcher", return_value=main_mocks["dp"]),
+        patch("main.setup_bot"),
+        patch("main.setup_dp"),
+        pytest.raises(CacheUnavailableError, match="down"),
+    ):
+        await main()
+
+    main_mocks["container"].observe.metrics.serve.assert_not_called()
+    main_mocks["dp"].start_polling.assert_not_called()
     main_mocks["bot"].session.close.assert_awaited_once()
     main_mocks["container"].shutdown.assert_awaited_once()
 

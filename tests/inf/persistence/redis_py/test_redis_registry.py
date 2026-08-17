@@ -64,3 +64,21 @@ class TestRedisRepoRegistry:
         )
         assert await reg.chats.get_by_id(11) is None
         redis.get.assert_awaited_once_with("STAGE:1.2.3:ctx:chat:11")
+
+    @pytest.mark.asyncio
+    async def test_warmup_delegates_to_client(
+        self,
+        cache_metrics: MagicMock,
+        mock_logger: MagicMock,
+    ) -> None:
+        redis = MagicMock()
+        redis.ping = AsyncMock(return_value=True)
+        reg = RedisRepoRegistry(
+            redis=redis,
+            metrics=cache_metrics,
+            logger=mock_logger,
+        )
+
+        await reg.warmup()
+
+        redis.ping.assert_awaited_once_with()
