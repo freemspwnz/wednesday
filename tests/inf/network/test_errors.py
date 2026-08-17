@@ -36,6 +36,31 @@ class TestMapHttpxError:
         mapped = map_httpx_error(exc, method="GET", url="https://x/y")
         assert isinstance(mapped, HttpResponseError)
         assert mapped.status_code == 503
+        assert mapped.body == ""
+
+    def test_http_status_keeps_truncated_body(self) -> None:
+        request = httpx2.Request("POST", "https://x/chat")
+        response = httpx2.Response(
+            429,
+            request=request,
+            json={"error": "too many concurrent requests"},
+        )
+        exc = httpx2.HTTPStatusError("boom", request=request, response=response)
+        mapped = map_httpx_error(exc, method="POST", url="https://x/chat")
+        assert isinstance(mapped, HttpResponseError)
+        assert mapped.status_code == 429
+        assert "too many concurrent requests" in mapped.body
+        assert "HTTP 429" in str(mapped)
+        assert "too many concurrent requests" not in str(mapped)
+
+    def test_http_status_truncates_long_body(self) -> None:
+        request = httpx2.Request("GET", "https://x/y")
+        payload = "a" * 2000
+        response = httpx2.Response(400, request=request, text=payload)
+        exc = httpx2.HTTPStatusError("boom", request=request, response=response)
+        mapped = map_httpx_error(exc, method="GET", url="https://x/y")
+        assert isinstance(mapped, HttpResponseError)
+        assert mapped.body == "a" * 1024
 
     def test_generic_http_error(self) -> None:
         mapped = map_httpx_error(httpx2.HTTPError("x"), method="GET", url="https://x")

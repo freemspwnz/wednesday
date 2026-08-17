@@ -34,9 +34,11 @@ class HttpResponseError(HttpRequestError):
         method: str,
         url: str,
         status_code: int,
+        body: str = "",
     ) -> None:
         super().__init__(message, method=method, url=url)
         self.status_code = status_code
+        self.body = body
 
 
 class HttpAuthError(HttpRequestError):

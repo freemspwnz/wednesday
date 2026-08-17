@@ -47,20 +47,27 @@ class TestHttpClient:
             mock_http_metrics.on_response.assert_called_once()
             assert mock_http_metrics.on_response.call_args.kwargs["status_code"] == 200
             mock_http_metrics.on_error.assert_not_called()
+            mock_logger.warning.assert_not_called()
         finally:
             await client.aclose()
 
     @pytest.mark.asyncio
     async def test_http_status_error_is_mapped(self, mock_http_metrics: MagicMock, mock_logger: MagicMock) -> None:
         def handler(request: httpx2.Request) -> httpx2.Response:
-            return httpx2.Response(503, request=request)
+            return httpx2.Response(503, request=request, json={"reason": "overloaded"})
 
         client = _client(handler=httpx2.MockTransport(handler), metrics=mock_http_metrics, logger=mock_logger)
         try:
             with pytest.raises(HttpResponseError) as exc_info:
                 await client.get("/boom")
             assert exc_info.value.status_code == 503
+            assert "overloaded" in exc_info.value.body
             mock_http_metrics.on_error.assert_called_once()
+            mock_logger.warning.assert_called_once()
+            logged = mock_logger.warning.call_args
+            assert logged.args[0] == "HTTP response error"
+            assert logged.kwargs["status_code"] == 503
+            assert "overloaded" in logged.kwargs["response_body"]
         finally:
             await client.aclose()
 

@@ -94,3 +94,28 @@ class TestSberAuth:
                 await anext(flow)
         finally:
             await raw.aclose()
+
+    @pytest.mark.asyncio
+    async def test_oauth_http_error_logs_response_body(self, mock_logger: MagicMock) -> None:
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(401, json={"error": "invalid_client"})
+
+        raw = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+        auth = SberAuth(
+            client=raw,
+            url="https://auth.example.com/oauth",
+            key="basic-key",
+            scope="GIGACHAT_API_PERS",
+            logger=mock_logger,
+        )
+        try:
+            flow = auth.async_auth_flow(httpx2.Request("GET", "https://api.example.com/x"))
+            with pytest.raises(HttpAuthError):
+                await anext(flow)
+            mock_logger.warning.assert_called_once()
+            logged = mock_logger.warning.call_args
+            assert logged.args[0] == "OAuth HTTP response error"
+            assert logged.kwargs["status_code"] == 401
+            assert "invalid_client" in logged.kwargs["response_body"]
+        finally:
+            await raw.aclose()

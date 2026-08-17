@@ -1,4 +1,4 @@
-from httpx2 import HTTPError, HTTPStatusError, TimeoutException, TransportError
+from httpx2 import HTTPError, HTTPStatusError, Response, TimeoutException, TransportError
 
 from app.exceptions import (
     AppError,
@@ -7,6 +7,19 @@ from app.exceptions import (
     HttpTransportError,
     UnexpectedHttpError,
 )
+
+_BODY_PREVIEW_LIMIT = 1024
+
+
+def _preview_response_body(response: Response, *, limit: int = _BODY_PREVIEW_LIMIT) -> str:
+    try:
+        text = response.text
+    except (UnicodeError, ValueError, LookupError):
+        return "<unreadable>"
+    collapsed = " ".join(text.split())
+    if len(collapsed) > limit:
+        return collapsed[:limit]
+    return collapsed
 
 
 def map_httpx_error(exc: BaseException, *, method: str, url: str) -> AppError:
@@ -35,6 +48,7 @@ def map_httpx_error(exc: BaseException, *, method: str, url: str) -> AppError:
             method=method,
             url=url,
             status_code=status_code,
+            body=_preview_response_body(exc.response),
         )
 
     if isinstance(exc, HTTPError):
