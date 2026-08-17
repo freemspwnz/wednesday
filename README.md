@@ -34,7 +34,9 @@ make run
 
 ### Docker
 
-В `docker-compose.yml` сервисы Postgres/Redis по умолчанию закомментированы — нужны внешние инстансы в сети `wednesday` или раскомментируйте сервисы в compose. Миграции выполняются в `docker-entrypoint.sh` перед `main.py`.
+В `compose.yml` сервисы Postgres/Redis по умолчанию закомментированы — нужны внешние инстансы в сети `wednesday` или раскомментируйте сервисы в compose. Миграции выполняются в `docker-entrypoint.sh` перед `main.py`.
+
+При `METRICS__ENABLED=true` в контейнере задайте `METRICS__HOST=0.0.0.0`, чтобы VictoriaMetrics могла скрейпить `http://wednesday:8080/metrics` по сети `monitoring`. Порт на host пробрасывать не нужно.
 
 Каталоги моделей/подписок не запекаются в образ и должны монтироваться в контейнер read-only:
 
