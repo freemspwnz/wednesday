@@ -1,13 +1,15 @@
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
 
 from ..exceptions import ValidationError
-
-_MAX_LENGTH = 256
 
 
 @dataclass(frozen=True)
 class TelegramFileId:
+    """Value Object: telegram file id."""
+
+    _MAX_LENGTH: ClassVar[int] = 256
+
     value: str
 
     def __post_init__(self) -> None:
@@ -15,8 +17,8 @@ class TelegramFileId:
             raise ValidationError("value must be a str")
         if not self.value.strip():
             raise ValidationError("telegram file id cannot be empty")
-        if len(self.value) > _MAX_LENGTH:
-            raise ValidationError(f"telegram file id exceeds max length {_MAX_LENGTH}")
+        if len(self.value) > self._MAX_LENGTH:
+            raise ValidationError(f"telegram file id exceeds max length {self._MAX_LENGTH}")
 
     def __str__(self) -> str:
         return self.value

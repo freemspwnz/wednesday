@@ -1,3 +1,4 @@
+from typing import ClassVar
 from zoneinfo import ZoneInfo
 
 from domain.kernel.vo import AwareDatetime
@@ -7,14 +8,15 @@ from ..protocols import ChatRepo
 from ..vo import ChatId, ChatProfile, ChatScheduleSet, ManagementActor, Weekday
 from .utils import chat_id_from_tg, load_or_raise
 
-_UTC = ZoneInfo("UTC")
-
 
 class ChatManagementService:
     """Load chat aggregate, apply profile/lifecycle commands, and save."""
 
-    @staticmethod
+    _UTC: ClassVar[ZoneInfo] = ZoneInfo("UTC")
+
+    @classmethod
     async def get_or_create(
+        cls,
         *,
         profile: ChatProfile,
         repo: ChatRepo,
@@ -32,7 +34,7 @@ class ChatManagementService:
             id=chat_id,
             profile=profile,
             schedules=ChatScheduleSet(
-                timezone=_UTC,
+                timezone=cls._UTC,
                 weekday=Weekday.WEDNESDAY,
                 schedules=(),
             ),
