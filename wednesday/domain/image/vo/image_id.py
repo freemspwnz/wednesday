@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Self
-from uuid import UUID, uuid4
+from uuid import UUID
+
+from uuid_utils.compat import uuid7
 
 from ..exceptions import ValidationError
 
@@ -18,7 +20,7 @@ class ImageId:
 
     @classmethod
     def new(cls) -> Self:
-        return cls(value=uuid4())
+        return cls(value=uuid7())
 
     @classmethod
     def ensure(cls, image_id: object) -> Self:

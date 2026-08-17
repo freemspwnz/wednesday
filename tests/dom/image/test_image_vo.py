@@ -107,7 +107,17 @@ def test_image_render_validation() -> None:
 @pytest.mark.unit
 def test_image_id_new_and_ensure() -> None:
     image_id = ImageId.new()
+    assert image_id.value.version == 7
     assert ImageId.ensure(image_id) is image_id
+
+
+@pytest.mark.unit
+def test_image_id_accepts_existing_v4() -> None:
+    from uuid import uuid4
+
+    legacy = ImageId(value=uuid4())
+    assert legacy.value.version == 4
+    assert ImageId.ensure(legacy) is legacy
 
 
 @pytest.mark.unit
