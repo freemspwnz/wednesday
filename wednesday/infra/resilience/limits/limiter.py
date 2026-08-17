@@ -63,11 +63,7 @@ class Limits(RateLimiter[RateLimitItem]):
         *identifiers: str,
         cost: int = 1,
     ) -> None:
-        self._logger.debug(
-            "Rate limiter call request",
-            name=limit.namespace,
-            limit=str(limit),
-        )
+        self._logger.debug("Rate limiter call request", **self._debug_fields(limit))
         await self._run_op(self._limiter.hit, limit, *identifiers, cost=cost)
 
     async def test(
@@ -76,11 +72,7 @@ class Limits(RateLimiter[RateLimitItem]):
         *identifiers: str,
         cost: int = 1,
     ) -> None:
-        self._logger.debug(
-            "Rate limiter test call request",
-            name=limit.namespace,
-            limit=str(limit),
-        )
+        self._logger.debug("Rate limiter test call request", **self._debug_fields(limit))
         await self._run_op(self._limiter.test, limit, *identifiers, cost=cost)
 
     async def get_window_stats(
@@ -88,11 +80,7 @@ class Limits(RateLimiter[RateLimitItem]):
         limit: RateLimitItem,
         *identifiers: str,
     ) -> WindowStats:
-        self._logger.debug(
-            "Rate limit window stats request",
-            name=limit.namespace,
-            limit=str(limit),
-        )
+        self._logger.debug("Rate limit window stats request", **self._debug_fields(limit))
         self._metrics.before_call()
 
         try:
@@ -131,11 +119,7 @@ class Limits(RateLimiter[RateLimitItem]):
         limit: RateLimitItem,
         *identifiers: str,
     ) -> None:
-        self._logger.debug(
-            "Rate limiter reset request",
-            name=limit.namespace,
-            limit=str(limit),
-        )
+        self._logger.debug("Rate limiter reset request", **self._debug_fields(limit))
         self._metrics.before_call()
 
         try:
@@ -223,3 +207,12 @@ class Limits(RateLimiter[RateLimitItem]):
             remaining=remaining,
             limit=limit.namespace,
         )
+
+    @staticmethod
+    def _debug_fields(limit: RateLimitItem) -> dict[str, str]:
+        limiter, _, bucket = limit.namespace.partition(":")
+        return {
+            "limiter": limiter,
+            "bucket": bucket or limiter,
+            "limit": str(limit),
+        }

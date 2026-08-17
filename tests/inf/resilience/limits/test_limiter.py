@@ -318,3 +318,84 @@ class TestLimitsReset:
             operation="reset",
             error="unexpected",
         )
+
+
+def _assert_debug_fields(logger: MagicMock, message: str, limit_item: RateLimitItem) -> None:
+    logger.debug.assert_any_call(
+        message,
+        limiter="test",
+        bucket="base",
+        limit=str(limit_item),
+    )
+    kwargs = logger.debug.call_args.kwargs
+    assert "name" not in kwargs
+
+
+@pytest.mark.unit
+class TestLimitsDebugLogs:
+    @pytest.mark.asyncio
+    async def test_call_logs_limiter_and_bucket(
+        self,
+        rate_limits: Limits,
+        mock_backend: MagicMock,
+        mock_logger: MagicMock,
+        limit_item: RateLimitItem,
+    ) -> None:
+        mock_backend.hit = AsyncMock(return_value=True)
+
+        await rate_limits.call(limit_item, "user:1")
+
+        _assert_debug_fields(mock_logger, "Rate limiter call request", limit_item)
+
+    @pytest.mark.asyncio
+    async def test_test_logs_limiter_and_bucket(
+        self,
+        rate_limits: Limits,
+        mock_backend: MagicMock,
+        mock_logger: MagicMock,
+        limit_item: RateLimitItem,
+    ) -> None:
+        mock_backend.test = AsyncMock(return_value=True)
+
+        await rate_limits.test(limit_item, "user:1")
+
+        _assert_debug_fields(mock_logger, "Rate limiter test call request", limit_item)
+
+    @pytest.mark.asyncio
+    async def test_get_window_stats_logs_limiter_and_bucket(
+        self,
+        rate_limits: Limits,
+        mock_backend: MagicMock,
+        mock_logger: MagicMock,
+        limit_item: RateLimitItem,
+    ) -> None:
+        stats = MagicMock()
+        stats.reset_time = 50.0
+        stats.remaining = 2
+        mock_backend.get_window_stats = AsyncMock(return_value=stats)
+
+        await rate_limits.get_window_stats(limit_item, "id")
+
+        _assert_debug_fields(mock_logger, "Rate limit window stats request", limit_item)
+
+    @pytest.mark.asyncio
+    async def test_reset_logs_limiter_and_bucket(
+        self,
+        rate_limits: Limits,
+        mock_backend: MagicMock,
+        mock_logger: MagicMock,
+        limit_item: RateLimitItem,
+    ) -> None:
+        mock_backend.clear = AsyncMock()
+
+        await rate_limits.reset(limit_item, "id")
+
+        _assert_debug_fields(mock_logger, "Rate limiter reset request", limit_item)
+
+    def test_debug_fields_without_colon_uses_namespace_as_bucket(self) -> None:
+        item = parse("1/second")
+        item.namespace = "telegram"
+        fields = Limits._debug_fields(item)
+        assert fields["limiter"] == "telegram"
+        assert fields["bucket"] == "telegram"
+        assert "name" not in fields
