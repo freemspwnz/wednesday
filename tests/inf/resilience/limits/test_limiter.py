@@ -62,6 +62,7 @@ class TestLimitsCall:
             limit=str(limit_item),
             result=True,
         )
+        mock_metrics.on_error.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_hit_exceeded_raises_too_many_requests(
@@ -91,12 +92,14 @@ class TestLimitsCall:
             result=False,
         )
         mock_backend.get_window_stats.assert_awaited_once_with(limit_item, "user:1")
+        mock_metrics.on_error.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_hit_exceeded_uses_default_retry_when_stats_unavailable(
         self,
         rate_limits: Limits,
         mock_backend: MagicMock,
+        mock_metrics: MagicMock,
         limit_item: RateLimitItem,
     ) -> None:
         mock_backend.hit = AsyncMock(return_value=False)
@@ -110,6 +113,16 @@ class TestLimitsCall:
         assert ei.value.remaining is None
         assert ei.value.retry_after == _DEFAULT_RETRY_AFTER
         assert ei.value.limit == "test:base"
+        mock_metrics.on_call.assert_called_once_with(
+            name="test:base",
+            limit=str(limit_item),
+            result=False,
+        )
+        mock_metrics.on_error.assert_called_once_with(
+            name="test:base",
+            operation="get_stats",
+            error="storage",
+        )
 
     @pytest.mark.asyncio
     async def test_storage_error_maps_to_limit_storage_error(
@@ -128,12 +141,18 @@ class TestLimitsCall:
         assert isinstance(ei.value.__cause__, StorageError)
         mock_metrics.before_call.assert_called_once()
         mock_metrics.on_call.assert_not_called()
+        mock_metrics.on_error.assert_called_once_with(
+            name="test:base",
+            operation="call",
+            error="storage",
+        )
 
     @pytest.mark.asyncio
     async def test_unexpected_error_maps_to_unexpected_limit_error(
         self,
         rate_limits: Limits,
         mock_backend: MagicMock,
+        mock_metrics: MagicMock,
         limit_item: RateLimitItem,
     ) -> None:
         mock_backend.hit = AsyncMock(side_effect=RuntimeError("boom"))
@@ -143,6 +162,12 @@ class TestLimitsCall:
 
         assert "test:base" in str(ei.value)
         assert isinstance(ei.value.__cause__, RuntimeError)
+        mock_metrics.on_call.assert_not_called()
+        mock_metrics.on_error.assert_called_once_with(
+            name="test:base",
+            operation="call",
+            error="unexpected",
+        )
 
 
 @pytest.mark.unit
@@ -190,18 +215,47 @@ class TestLimitsGetWindowStats:
             reset_time=50.0,
             remaining=2,
         )
+        mock_metrics.on_error.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_storage_error(
         self,
         rate_limits: Limits,
         mock_backend: MagicMock,
+        mock_metrics: MagicMock,
         limit_item: RateLimitItem,
     ) -> None:
         mock_backend.get_window_stats = AsyncMock(side_effect=StorageError(RuntimeError("down")))
 
         with pytest.raises(LimitStorageError):
             await rate_limits.get_window_stats(limit_item)
+
+        mock_metrics.on_get_stats.assert_not_called()
+        mock_metrics.on_error.assert_called_once_with(
+            name="test:base",
+            operation="get_stats",
+            error="storage",
+        )
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error(
+        self,
+        rate_limits: Limits,
+        mock_backend: MagicMock,
+        mock_metrics: MagicMock,
+        limit_item: RateLimitItem,
+    ) -> None:
+        mock_backend.get_window_stats = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(UnexpectedLimitError):
+            await rate_limits.get_window_stats(limit_item)
+
+        mock_metrics.on_get_stats.assert_not_called()
+        mock_metrics.on_error.assert_called_once_with(
+            name="test:base",
+            operation="get_stats",
+            error="unexpected",
+        )
 
 
 @pytest.mark.unit
@@ -223,15 +277,44 @@ class TestLimitsReset:
             name="test:base",
             limit=limit_item.amount,
         )
+        mock_metrics.on_error.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_storage_error(
         self,
         rate_limits: Limits,
         mock_backend: MagicMock,
+        mock_metrics: MagicMock,
         limit_item: RateLimitItem,
     ) -> None:
         mock_backend.clear = AsyncMock(side_effect=StorageError(RuntimeError("down")))
 
         with pytest.raises(LimitStorageError):
             await rate_limits.reset(limit_item)
+
+        mock_metrics.on_reset.assert_not_called()
+        mock_metrics.on_error.assert_called_once_with(
+            name="test:base",
+            operation="reset",
+            error="storage",
+        )
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error(
+        self,
+        rate_limits: Limits,
+        mock_backend: MagicMock,
+        mock_metrics: MagicMock,
+        limit_item: RateLimitItem,
+    ) -> None:
+        mock_backend.clear = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(UnexpectedLimitError):
+            await rate_limits.reset(limit_item)
+
+        mock_metrics.on_reset.assert_not_called()
+        mock_metrics.on_error.assert_called_once_with(
+            name="test:base",
+            operation="reset",
+            error="unexpected",
+        )

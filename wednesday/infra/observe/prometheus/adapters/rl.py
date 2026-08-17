@@ -15,7 +15,7 @@ class LimitsMetrics(RLMetrics):
     def before_call(self) -> None:
         self._call_timer.start()
 
-    def on_call(self, name: str, limit: str, result: bool) -> None:
+    def on_call(self, *, name: str, limit: str, result: bool) -> None:
         self._collector.observe(
             name="rl_calls_duration_seconds",
             value=self._call_timer.elapsed(),
@@ -30,8 +30,26 @@ class LimitsMetrics(RLMetrics):
             },
         )
 
+    def on_error(self, *, name: str, operation: str, error: str) -> None:
+        if operation == "get_stats":
+            duration_metric = "rl_window_stats_duration_seconds"
+        elif operation == "reset":
+            duration_metric = "rl_resets_duration_seconds"
+        else:
+            duration_metric = "rl_calls_duration_seconds"
+        self._collector.observe(
+            name=duration_metric,
+            value=self._call_timer.elapsed(),
+            labels={"name": name},
+        )
+        self._collector.increment(
+            name="rl_errors_total",
+            labels={"name": name, "operation": operation, "error": error},
+        )
+
     def on_get_stats(
         self,
+        *,
         name: str,
         reset_time: float,
         remaining: int,
@@ -56,7 +74,7 @@ class LimitsMetrics(RLMetrics):
             labels={"name": name, "result": "success"},
         )
 
-    def on_reset(self, name: str, limit: int) -> None:
+    def on_reset(self, *, name: str, limit: int) -> None:
         self._collector.observe(
             name="rl_resets_duration_seconds",
             value=self._call_timer.elapsed(),
