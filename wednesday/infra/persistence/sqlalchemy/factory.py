@@ -1,5 +1,6 @@
 import asyncio
 from functools import cached_property
+from typing import ClassVar
 
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
@@ -17,11 +18,11 @@ from infra.config import PostgresConfig
 
 from .uow import SQLAUoW
 
-_SQLA_CLOSE_TIMEOUT = 5.0
-
 
 class SQLAUoWFactory(UoWFactory):
     """Creates ``SQLAUoW`` instances backed by a shared async engine."""
+
+    _CLOSE_TIMEOUT: ClassVar[float] = 5.0
 
     def __init__(self, *, config: PostgresConfig, metrics: DBMetrics, logger: Logger) -> None:
         self._config = config
@@ -43,7 +44,7 @@ class SQLAUoWFactory(UoWFactory):
     async def aclose(self) -> None:
         self._logger.debug("Closing SQLAlchemy async engine...")
         try:
-            async with asyncio.timeout(_SQLA_CLOSE_TIMEOUT):
+            async with asyncio.timeout(self._CLOSE_TIMEOUT):
                 await self._engine.dispose()
         except TimeoutError:
             self._logger.warning("SQLAlchemy engine dispose timed out. Forced exit.")

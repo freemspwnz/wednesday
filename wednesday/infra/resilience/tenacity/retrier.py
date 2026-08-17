@@ -1,7 +1,7 @@
 from builtins import BaseException
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import TypeVar
+from typing import ClassVar, TypeVar
 
 from tenacity import RetryCallState, RetryError as TenacityRetryError
 from tenacity.asyncio import AsyncRetrying
@@ -13,15 +13,16 @@ from infra.config import RetryConfig
 from .factory import retrier_factory
 
 T = TypeVar("T")
-STATUS_RETRY = "retry"
-STATUS_FAILED = "failed"
-STATUS_SUCCESS = "success"
 
 
 class Tenacity(Retrier):
     """
     Universal retry policy with adjustable exponential backoff.
     """
+
+    _STATUS_RETRY: ClassVar[str] = "retry"
+    _STATUS_FAILED: ClassVar[str] = "failed"
+    _STATUS_SUCCESS: ClassVar[str] = "success"
 
     def __init__(
         self,
@@ -71,7 +72,7 @@ class Tenacity(Retrier):
             self._metrics.on_retry(
                 name=self._name,
                 attempt=attempt_number,
-                status=STATUS_SUCCESS,
+                status=self._STATUS_SUCCESS,
             )
 
             self._metrics.after_retry(
@@ -103,7 +104,7 @@ class Tenacity(Retrier):
         self._metrics.on_retry(
             name=self._name,
             attempt=attempt_number,
-            status=STATUS_RETRY,
+            status=self._STATUS_RETRY,
         )
         self._metrics.observe_wait_duration(
             name=self._name,
@@ -117,9 +118,7 @@ class Tenacity(Retrier):
         )
 
     def _after(self, retry_state: RetryCallState) -> None:
-        self._metrics.after_retry(
-            name=self._name,
-        )
+        self._metrics.after_retry(name=self._name)
 
     def _before(self, retry_state: RetryCallState) -> None:
         self._metrics.before_retry()
@@ -127,7 +126,11 @@ class Tenacity(Retrier):
     def _on_failure(self, retrier: AsyncRetrying, e: BaseException) -> None:
         attempt_number = retrier.statistics.get('attempt_number', 1)
 
-        self._metrics.on_retry(name=self._name, attempt=attempt_number, status=STATUS_FAILED)
+        self._metrics.on_retry(
+            name=self._name,
+            attempt=attempt_number,
+            status=self._STATUS_FAILED,
+        )
 
         msg = "Unexpected error while retrying"
         exc_info = True

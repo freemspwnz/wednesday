@@ -8,7 +8,7 @@ from limits import RateLimitItem, parse
 from limits.errors import StorageError
 
 from app.exceptions import LimitStorageError, TooManyRequests, UnexpectedLimitError
-from infra.resilience.limits.limiter import _DEFAULT_RETRY_AFTER, Limits
+from infra.resilience.limits.limiter import Limits
 
 
 @pytest.fixture
@@ -113,7 +113,7 @@ class TestLimitsCall:
             await rate_limits.call(limit_item, "user:1")
 
         assert ei.value.remaining is None
-        assert ei.value.retry_after == _DEFAULT_RETRY_AFTER
+        assert ei.value.retry_after == Limits._DEFAULT_RETRY_AFTER
         assert ei.value.limit == "test:base"
         mock_metrics.on_call.assert_called_once_with(
             limiter="test",

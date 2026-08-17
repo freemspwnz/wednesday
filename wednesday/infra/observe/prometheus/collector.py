@@ -1,7 +1,7 @@
 """Prometheus implementation of MetricsCollector."""
 
 from collections.abc import Mapping
-from typing import TypeVar
+from typing import ClassVar, TypeVar
 
 from prometheus_client import (
     CollectorRegistry,
@@ -16,12 +16,13 @@ from app.exceptions import MetricsExportError
 from app.protocols import Logger, MetricsCollector
 from infra.config import MetricsConfig
 
-_NAMESPACE = "wednesday"
 _M = TypeVar("_M", Counter, Gauge, Histogram)
 
 
 class PrometheusCollector(MetricsCollector):
     """Pull-modeled metrics collector on prometheus_client library."""
+
+    _NAMESPACE: ClassVar[str] = "wednesday"
 
     def __init__(
         self,
@@ -83,7 +84,7 @@ class PrometheusCollector(MetricsCollector):
             name,
             f"{factory.__name__} {name}",
             labelnames=labelnames,
-            namespace=_NAMESPACE,
+            namespace=self._NAMESPACE,
             registry=self._registry,
         )
         cache[name] = metric
@@ -94,7 +95,7 @@ class PrometheusCollector(MetricsCollector):
         info = Info(
             "build",
             "Wednesday build / runtime metadata",
-            namespace=_NAMESPACE,
+            namespace=self._NAMESPACE,
             registry=self._registry,
         )
         info.info({"env": env, "version": version})

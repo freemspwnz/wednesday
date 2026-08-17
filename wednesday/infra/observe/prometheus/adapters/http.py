@@ -1,24 +1,24 @@
 """Outbound HTTP metrics adapter (library-agnostic)."""
 
+from typing import ClassVar
 from urllib.parse import urlparse
 
 from app.protocols import HttpMetrics, MetricsCollector
 
 from ._common import TimerContext
 
-_PREFIX = "http"
-
-_TIMEOUT_TYPE_NAMES = frozenset({
-    "TimeoutException",
-    "ConnectTimeout",
-    "ReadTimeout",
-    "WriteTimeout",
-    "PoolTimeout",
-})
-
 
 class HttpxMetrics(HttpMetrics):
-    """Records outbound HTTP call duration and outcome."""
+    """Outbound HTTP metrics adapter."""
+
+    _PREFIX: ClassVar[str] = "http"
+    _TIMEOUT_TYPE_NAMES: ClassVar[frozenset[str]] = frozenset({
+        "TimeoutException",
+        "ConnectTimeout",
+        "ReadTimeout",
+        "WriteTimeout",
+        "PoolTimeout",
+    })
 
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector
@@ -52,12 +52,12 @@ class HttpxMetrics(HttpMetrics):
             "status_code": str(status_code),
         }
         self._collector.observe(
-            name=f"{_PREFIX}_request_duration_seconds",
+            name=f"{self._PREFIX}_request_duration_seconds",
             value=self._timer.elapsed(),
             labels=labels,
         )
         self._collector.increment(
-            name=f"{_PREFIX}_requests_total",
+            name=f"{self._PREFIX}_requests_total",
             labels=labels,
         )
 
@@ -94,10 +94,11 @@ class HttpxMetrics(HttpMetrics):
             return None
         return int(status_code)
 
-    @staticmethod
-    def _is_timeout_error(exc: BaseException) -> bool:
-        return any(cls.__name__ in _TIMEOUT_TYPE_NAMES for cls in type(exc).__mro__)
+    @classmethod
+    def _is_timeout_error(cls, exc: BaseException) -> bool:
+        names = cls._TIMEOUT_TYPE_NAMES
+        return any(mro_cls.__name__ in names for mro_cls in type(exc).__mro__)
 
     @staticmethod
     def _is_transport_error(exc: BaseException) -> bool:
-        return any(cls.__name__ == "TransportError" for cls in type(exc).__mro__)
+        return any(mro_cls.__name__ == "TransportError" for mro_cls in type(exc).__mro__)

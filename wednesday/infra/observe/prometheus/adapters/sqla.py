@@ -3,15 +3,17 @@
 import re
 import time
 import weakref
-from typing import Any
+from typing import Any, ClassVar
 
 from app.protocols import DBMetrics, MetricsCollector
 
-_PREFIX = "sqlalchemy"
-_COMMAND_RE = re.compile(r"^\s*(\w+)", re.IGNORECASE)
-
 
 class SQLAMetrics(DBMetrics):
+    """SQLAlchemy query metrics adapter."""
+
+    _PREFIX: ClassVar[str] = "sqlalchemy"
+    _COMMAND_RE: ClassVar[re.Pattern[str]] = re.compile(r"^\s*(\w+)", re.IGNORECASE)
+
     def __init__(self, *, collector: MetricsCollector) -> None:
         self._collector = collector
         self._start_times: weakref.WeakKeyDictionary[Any, float] = weakref.WeakKeyDictionary()
@@ -55,27 +57,27 @@ class SQLAMetrics(DBMetrics):
             self._start_times.pop(context, None)
         self._emit_error(command=self._extract_command(statement), error_type=error_type)
 
-    @staticmethod
-    def _extract_command(statement: str) -> str:
+    @classmethod
+    def _extract_command(cls, statement: str) -> str:
         if not statement:
             return "unknown"
-        match = _COMMAND_RE.match(statement)
+        match = cls._COMMAND_RE.match(statement)
         return match.group(1).upper() if match else "unknown"
 
     def _emit_success(self, *, command: str, duration_seconds: float) -> None:
         labels = {"command": command}
         self._collector.observe(
-            name=f"{_PREFIX}_query_duration_seconds",
+            name=f"{self._PREFIX}_query_duration_seconds",
             value=duration_seconds,
             labels=labels,
         )
         self._collector.increment(
-            name=f"{_PREFIX}_queries_total",
+            name=f"{self._PREFIX}_queries_total",
             labels={**labels, "status": "success"},
         )
 
     def _emit_error(self, *, command: str, error_type: str) -> None:
         self._collector.increment(
-            name=f"{_PREFIX}_errors_total",
+            name=f"{self._PREFIX}_errors_total",
             labels={"command": command, "error_type": error_type},
         )
