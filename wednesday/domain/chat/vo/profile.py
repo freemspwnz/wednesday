@@ -4,9 +4,6 @@ from typing import ClassVar, Self
 from ..exceptions import ValidationError
 from .type import ChatType
 
-MAX_TITLE_LENGTH = 255
-MAX_USERNAME_LENGTH = 32
-
 
 @dataclass(frozen=True)
 class ChatProfile:
@@ -17,6 +14,9 @@ class ChatProfile:
         ChatType.GROUP,
         ChatType.SUPERGROUP,
     }
+
+    _MAX_TITLE_LENGTH: ClassVar[int] = 255
+    _MAX_USERNAME_LENGTH: ClassVar[int] = 32
 
     type: ChatType
     telegram_id: int
@@ -30,9 +30,9 @@ class ChatProfile:
             raise ValidationError("Chat Telegram ID must be non-zero")
         if self.type in self.NEED_TITLE_OR_USERNAME and not (self.title or self.username):
             raise ValidationError("public chat needs title or username")
-        if self.title and len(self.title) > MAX_TITLE_LENGTH:
+        if self.title and len(self.title) > self._MAX_TITLE_LENGTH:
             raise ValidationError("Chat title too long")
-        if self.username and len(self.username) > MAX_USERNAME_LENGTH:
+        if self.username and len(self.username) > self._MAX_USERNAME_LENGTH:
             raise ValidationError("Chat username too long")
 
     @classmethod

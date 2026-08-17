@@ -1,15 +1,17 @@
 import re
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
 
 from ....kernel import ValidationError
-
-_MAX_CODE_LENGTH = 64
-_CODE_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 @dataclass(frozen=True)
 class Vendor:
+    """Value Object: vendor."""
+
+    _MAX_CODE_LENGTH: ClassVar[int] = 64
+    _CODE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
     value: str
 
     def __post_init__(self) -> None:
@@ -17,9 +19,9 @@ class Vendor:
             raise ValidationError("vendor must be a str")
         if not self.value:
             raise ValidationError("vendor cannot be empty")
-        if len(self.value) > _MAX_CODE_LENGTH:
-            raise ValidationError(f"vendor exceeds max length {_MAX_CODE_LENGTH}")
-        if not _CODE_PATTERN.match(self.value):
+        if len(self.value) > self._MAX_CODE_LENGTH:
+            raise ValidationError(f"vendor exceeds max length {self._MAX_CODE_LENGTH}")
+        if not self._CODE_PATTERN.match(self.value):
             raise ValidationError("vendor must contain only lowercase letters, digits and hyphens")
 
     def __str__(self) -> str:

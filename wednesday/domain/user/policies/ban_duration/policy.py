@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from ...vo import AwareDatetime
 from .vo import (
     BanAssigned,
@@ -8,16 +10,16 @@ from .vo import (
     ViolationStats,
 )
 
-MAX_TOTAL_VIOLATIONS = 10
-MAX_WEEKLY_VIOLATIONS = 5
-MAX_DAILY_VIOLATIONS = 3
-MAX_HOURLY_VIOLATIONS = 2
-
 
 class BanDurationPolicy:
     """
     Advanced domain policy for moderation.
     """
+
+    _MAX_TOTAL_VIOLATIONS: ClassVar[int] = 10
+    _MAX_WEEKLY_VIOLATIONS: ClassVar[int] = 5
+    _MAX_DAILY_VIOLATIONS: ClassVar[int] = 3
+    _MAX_HOURLY_VIOLATIONS: ClassVar[int] = 2
 
     @classmethod
     def evaluate(
@@ -25,16 +27,16 @@ class BanDurationPolicy:
         stats: ViolationStats,
         at: AwareDatetime,
     ) -> BanDurationDecision:
-        if stats.total >= MAX_TOTAL_VIOLATIONS:
+        if stats.total >= cls._MAX_TOTAL_VIOLATIONS:
             return cls.assign(at + BanDuration.year(), BanDurationCode.BAN_1_YEAR)
 
-        if stats.week >= MAX_WEEKLY_VIOLATIONS:
+        if stats.week >= cls._MAX_WEEKLY_VIOLATIONS:
             return cls.assign(at + BanDuration.week(), BanDurationCode.BAN_1_WEEK)
 
-        if stats.today >= MAX_DAILY_VIOLATIONS:
+        if stats.today >= cls._MAX_DAILY_VIOLATIONS:
             return cls.assign(at + BanDuration.day(), BanDurationCode.BAN_1_DAY)
 
-        if stats.hour >= MAX_HOURLY_VIOLATIONS:
+        if stats.hour >= cls._MAX_HOURLY_VIOLATIONS:
             return cls.assign(at + BanDuration.hour(), BanDurationCode.BAN_1_HOUR)
 
         return cls.deny()

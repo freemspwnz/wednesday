@@ -10,6 +10,8 @@ from .vendor import Vendor
 
 @dataclass(frozen=True)
 class ModelDescriptor:
+    """Value Object: model descriptor."""
+
     model: Model
     vendor: Vendor
     series: Series

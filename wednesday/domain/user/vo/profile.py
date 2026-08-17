@@ -1,14 +1,16 @@
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
 
 from ...kernel.vo import NonEmptyStr
 from ..exceptions import ValidationError
 
-MAX_USERNAME_LENGTH = 64
-
 
 @dataclass(frozen=True)
 class UserProfile:
+    """Value Object: user profile."""
+
+    _MAX_USERNAME_LENGTH: ClassVar[int] = 64
+
     telegram_id: int
     is_bot: bool
     first_name: NonEmptyStr
@@ -22,7 +24,7 @@ class UserProfile:
             raise ValidationError("telegram_id must be int")
         if self.telegram_id <= 0:
             raise ValidationError("telegram_id must be positive")
-        if self.username and len(self.username) > MAX_USERNAME_LENGTH:
+        if self.username and len(self.username) > self._MAX_USERNAME_LENGTH:
             raise ValidationError("username too long")
 
     @property
