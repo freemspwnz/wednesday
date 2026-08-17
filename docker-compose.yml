@@ -97,8 +97,6 @@ services:
       - ./certs:/app/certs:ro
     networks:
       - wednesday
-    expose:
-      - "${METRICS__PORT:-8080}"
     deploy:
       resources:
         limits:
