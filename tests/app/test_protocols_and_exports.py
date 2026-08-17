@@ -24,6 +24,7 @@ def test_public_exports_are_available() -> None:
     assert hasattr(dto_module, "ChatContext")
     assert hasattr(exc_module, "RepositoryError")
     assert hasattr(exc_module, "DBError")
+    assert hasattr(exc_module, "DBUnavailableError")
     assert hasattr(exc_module, "MetricsError")
     assert hasattr(exc_module, "CacheError")
     assert hasattr(exc_module, "TooManyRequests")

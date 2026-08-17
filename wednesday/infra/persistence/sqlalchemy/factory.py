@@ -1,15 +1,17 @@
 import asyncio
 from functools import cached_property
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.interfaces import ExceptionContext
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     async_sessionmaker,
     create_async_engine,
 )
 
+from app.exceptions import DBUnavailableError
 from app.protocols import DBMetrics, Logger, UoW, UoWFactory
 from infra.config import PostgresConfig
 
@@ -28,6 +30,15 @@ class SQLAUoWFactory(UoWFactory):
 
     def __call__(self) -> UoW:
         return SQLAUoW(self._sessionmaker)
+
+    async def warmup(self) -> None:
+        """Open a connection and run ``SELECT 1`` so boot fails if Postgres is down."""
+        try:
+            async with self._engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        except (SQLAlchemyError, OSError, TimeoutError) as e:
+            self._logger.error("Database is not available.", exc_info=True)
+            raise DBUnavailableError("Database is not available.") from e
 
     async def aclose(self) -> None:
         self._logger.debug("Closing SQLAlchemy async engine...")

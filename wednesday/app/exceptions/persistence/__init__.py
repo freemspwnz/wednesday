@@ -12,7 +12,14 @@ from .catalog import (
     CatalogParseError,
     UnexpectedCatalogError,
 )
-from .db import AggregateMappingError, DataIntegrityError, DBError, RepositoryError, UnexpectedDBError
+from .db import (
+    AggregateMappingError,
+    DataIntegrityError,
+    DBError,
+    DBUnavailableError,
+    RepositoryError,
+    UnexpectedDBError,
+)
 
 __all__ = [
     "AggregateMappingError",
@@ -25,6 +32,7 @@ __all__ = [
     "CatalogNotFoundError",
     "CatalogParseError",
     "DBError",
+    "DBUnavailableError",
     "DataIntegrityError",
     "RepositoryError",
     "UnexpectedCacheError",
