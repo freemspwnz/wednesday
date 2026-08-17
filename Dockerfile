@@ -7,7 +7,7 @@ FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 FROM python:3.12-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc python3-dev libpq-dev && \
+    gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=uv /uv /uvx /bin/
