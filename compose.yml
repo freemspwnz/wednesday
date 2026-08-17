@@ -79,10 +79,10 @@ services:
     restart: unless-stopped
     read_only: true       # for nobody to change files in runtime
     tmpfs:                # for ability to write temp files for app itself
-      - /tmp              # Временные файлы Python, tempfile
-      - /var/tmp          # Дополнительные временные файлы
-      - /root/.cache      # Кеши Python библиотек (если запускается от root)
-      - /run              # PID файлы, сокеты
+      - /tmp              # Python temp files
+      - /var/tmp          # Additional temporary files
+      - /root/.cache      # Python library caches (if started from root)
+      - /run              # PID files, sockets
     # depends_on:
     #   postgres:
     #     condition: service_healthy

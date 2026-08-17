@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+**Infrastructure**
+- Корневой compose-файл переименован: `docker-compose.yml` → `compose.yml` (Compose v2 default).
+- В `.env.example` для metrics задан `METRICS__HOST=0.0.0.0` — bind для scrape из Docker network.
+
 ## [7.4.0] — 2026-08-14
 
 ### Added
