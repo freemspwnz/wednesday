@@ -81,7 +81,7 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         { "expr": "wednesday_cb_state", "legendFormat": "{{name}}", "refId": "A" },
-        { "expr": "sum by (name) (rate(wednesday_rl_calls_total{result=\"failure\"}[5m]))", "legendFormat": "rl fail {{name}}", "refId": "B" }
+        { "expr": "sum by (limiter, bucket) (rate(wednesday_rl_calls_total{result=\"failure\"}[5m]))", "legendFormat": "rl fail {{limiter}} {{bucket}}", "refId": "B" }
       ],
       "title": "Circuit breaker state / RL failures",
       "type": "timeseries"
