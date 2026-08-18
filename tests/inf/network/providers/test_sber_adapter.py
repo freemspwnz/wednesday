@@ -47,6 +47,14 @@ class TestSberClient:
         text = await sber.generate_text("gigachat-2-lite", "sys", "user")
         assert text == "hello frog"
         client.post.assert_awaited_once()
+        body = client.post.await_args.kwargs["json"]
+        assert body["temperature"] == SberClient._TEXT_TEMPERATURE == 0.9
+        assert body["top_p"] == SberClient._TEXT_TOP_P == 0.95
+        assert body["model"] == "gigachat-2-lite"
+        assert body["messages"] == [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "user"},
+        ]
 
     @pytest.mark.asyncio
     async def test_generate_text_maps_app_error(self, mock_logger: MagicMock) -> None:
@@ -65,7 +73,19 @@ class TestSberClient:
         sber = SberClient(client=client, auth=MagicMock(), timeouts=_timeouts(), logger=mock_logger)
         content = await sber.generate_image("gigachat-2-pro", "sys", "draw frog")
         assert content == b"PNGDATA"
+        client.post.assert_awaited_once()
         client.get.assert_awaited_once()
+        body = client.post.await_args.kwargs["json"]
+        assert body == {
+            "model": "gigachat-2-pro",
+            "messages": [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "draw frog"},
+            ],
+            "function_call": "auto",
+        }
+        assert "temperature" not in body
+        assert "top_p" not in body
 
     @pytest.mark.asyncio
     async def test_generate_image_missing_src_raises(self, mock_logger: MagicMock) -> None:
