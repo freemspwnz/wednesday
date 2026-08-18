@@ -2,7 +2,7 @@ import asyncio
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Final
+from typing import ClassVar, Final
 
 from httpx2 import Auth, Timeout
 
@@ -24,6 +24,8 @@ class SberClient(Generator):
     is not shared across processes.
     """
 
+    _TEXT_TEMPERATURE: ClassVar[float] = 0.9
+    _TEXT_TOP_P: ClassVar[float] = 0.95
     _IMG_SRC_REGEX: Final[re.Pattern[str]] = re.compile(r'src="([^"]+)"')
 
     def __init__(
@@ -127,6 +129,8 @@ class SberClient(Generator):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
+                "temperature": self._TEXT_TEMPERATURE,
+                "top_p": self._TEXT_TOP_P,
             }
 
             try:
