@@ -26,7 +26,6 @@ from .policies import (
     ManagementDenied,
 )
 from .protocols import ChatRepo
-from .services import ChatManagementService, ChatScheduleService
 from .vo import (
     ActiveState,
     ChatId,
@@ -53,7 +52,6 @@ __all__ = [
     "ChatError",
     "ChatEvent",
     "ChatId",
-    "ChatManagementService",
     "ChatMember",
     "ChatMemberId",
     "ChatMemberRole",
@@ -66,7 +64,6 @@ __all__ = [
     "ChatScheduleCleared",
     "ChatScheduleDayChanged",
     "ChatScheduleRemoved",
-    "ChatScheduleService",
     "ChatScheduleSet",
     "ChatScheduleTimezoneChanged",
     "ChatState",

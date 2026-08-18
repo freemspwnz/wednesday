@@ -2,7 +2,7 @@ from collections.abc import Awaitable, Callable
 
 from app.dto import ChatContext
 from app.protocols import CacheRepo, Logger, UoW
-from domain.chat import Chat, ChatId
+from domain.chat import Chat, ChatId, ChatNotFoundError
 
 
 class ChatBaseUseCase:
@@ -46,4 +46,10 @@ class ChatBaseUseCase:
             action=action,
             tg_id=chat.profile.telegram_id,
         )
+        return chat
+
+    async def _load_chat_or_raise(self, *, chat_id: ChatId) -> Chat:
+        chat = await self._uow.chats.get_by_id(chat_id)
+        if chat is None:
+            raise ChatNotFoundError(str(chat_id))
         return chat
