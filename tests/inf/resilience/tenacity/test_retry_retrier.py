@@ -111,6 +111,54 @@ class TestTenacityRetrier:
         assert isinstance(err.__cause__, Exception)
 
     @pytest.mark.asyncio
+    async def test_execute_exhausted_logs_retries_exhausted_message(
+        self,
+        mock_logger: MagicMock,
+    ) -> None:
+        metrics = MagicMock()
+        r = Tenacity(
+            config=_fast_config(attempts=2, reraise=False),
+            predicate=lambda e: isinstance(e, ValueError),
+            metrics=metrics,
+            logger=mock_logger,
+        )
+
+        async def always_fail() -> None:
+            raise ValueError("boom")
+
+        with pytest.raises(MaxAttemptsExhaustedError):
+            await r.execute(always_fail)
+
+        mock_logger.error.assert_called_once()
+        logged = mock_logger.error.call_args
+        assert logged.args[0] == "Retry attempts exhausted"
+        assert logged.kwargs["exc_info"] is False
+
+    @pytest.mark.asyncio
+    async def test_execute_unexpected_error_logs_with_exc_info(
+        self,
+        mock_logger: MagicMock,
+    ) -> None:
+        metrics = MagicMock()
+        r = Tenacity(
+            config=_fast_config(attempts=1, reraise=False),
+            predicate=lambda e: False,
+            metrics=metrics,
+            logger=mock_logger,
+        )
+
+        async def bad() -> None:
+            raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            await r.execute(bad)
+
+        mock_logger.error.assert_called_once()
+        logged = mock_logger.error.call_args
+        assert logged.args[0] == "Unexpected error while retrying"
+        assert logged.kwargs["exc_info"] is True
+
+    @pytest.mark.asyncio
     async def test_execute_reraise_true_propagates_last_exception(
         self,
         mock_logger: MagicMock,
