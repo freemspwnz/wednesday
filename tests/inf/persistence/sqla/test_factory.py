@@ -47,7 +47,42 @@ def test_sqlauowfactory_passes_expected_options(monkeypatch: pytest.MonkeyPatch)
     assert captured["pool_size"] == 3
     assert captured["max_overflow"] == 7
     assert str(captured["url"]).startswith("postgresql+asyncpg://")
-    attach.assert_called_once_with(sync_engine, metrics)
+    attach.assert_called_once_with(sync_engine, metrics, logger.bind.return_value)
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+def test_handle_error_logs_command_and_error_type_without_statement(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_logger: MagicMock,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _listen(_engine: object, event_name: str, handler: object) -> None:
+        if event_name == "handle_error":
+            captured["handler"] = handler
+
+    monkeypatch.setattr(sqla_factory.event, "listen", _listen)
+    metrics = MagicMock()
+    config = PostgresConfig(url="postgresql://user:pass@localhost:5432/test_db")
+    factory = SQLAUoWFactory(config=config, metrics=metrics, logger=mock_logger)
+    factory._attach_engine_metrics(Mock(), metrics, mock_logger)
+
+    handler = captured["handler"]
+    assert callable(handler)
+
+    ctx = Mock()
+    ctx.statement = "SELECT * FROM users WHERE id = $1"
+    ctx.original_exception = RuntimeError("connection lost")
+    handler(ctx)
+
+    metrics.on_cursor_error.assert_called_once()
+    mock_logger.warning.assert_called_once()
+    logged = mock_logger.warning.call_args
+    assert logged.args[0] == "Database query failed"
+    assert logged.kwargs["command"] == "SELECT"
+    assert logged.kwargs["error_type"] == "RuntimeError"
+    assert "statement" not in logged.kwargs
 
 
 @pytest.mark.unit
@@ -67,7 +102,7 @@ def test_attach_engine_metrics_delegates_to_db_metrics(mock_logger: MagicMock) -
     )
     metrics = SQLAMetrics(collector=collector)
     engine = create_sync_engine("sqlite:///:memory:")
-    SQLAUoWFactory._attach_engine_metrics(engine, metrics)
+    SQLAUoWFactory._attach_engine_metrics(engine, metrics, mock_logger)
 
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
