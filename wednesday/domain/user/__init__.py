@@ -37,12 +37,6 @@ from .policies import (
     ViolationStats,
 )
 from .protocols import UsageRepo, UserRepo, ViolationRepo
-from .services import (
-    UserGenerationService,
-    UserLifecycleService,
-    UserManagementService,
-    UserModerationService,
-)
 from .user import User
 from .vo import (
     ActiveState,
@@ -82,11 +76,7 @@ __all__ = [
     "UserBannedError",
     "UserError",
     "UserEvent",
-    "UserGenerationService",
     "UserId",
-    "UserLifecycleService",
-    "UserManagementService",
-    "UserModerationService",
     "UserNotBannedError",
     "UserNotFoundError",
     "UserProfile",

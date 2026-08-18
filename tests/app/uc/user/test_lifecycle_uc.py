@@ -1,7 +1,7 @@
 """Tests for UserLifecycleUseCase."""
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -33,7 +33,7 @@ from .helpers import (
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_uc_register_loads_via_domain_and_caches() -> None:
+async def test_uc_register_loads_and_caches() -> None:
     repo = AsyncMock()
     uc, _, cache = make_lifecycle_uc(repo=repo)
     user_profile = profile(tg_id=42)
@@ -47,16 +47,13 @@ async def test_uc_register_loads_via_domain_and_caches() -> None:
         at=dt(10),
     )
 
-    with patch(
-        "app.use_cases.user.lifecycle.UserLifecycleService.get_or_create",
-        new=AsyncMock(return_value=domain_user),
-    ) as get_or_create:
-        got = await uc.register(profile=user_profile)
+    repo.get_by_id.return_value = domain_user
+    got = await uc.register(profile=user_profile)
 
     assert isinstance(got, UserContext)
     assert got.tg_id == 42
     cache.users.set.assert_awaited_once_with(domain_user)
-    get_or_create.assert_awaited()
+    repo.save.assert_awaited_once_with(domain_user)
 
 
 @pytest.mark.unit
@@ -68,14 +65,9 @@ async def test_uc_register_returns_cached_value_without_uow() -> None:
     cached = mk_user_context(user_id=42)
     cache.users.get_by_id.return_value = cached
 
-    with patch(
-        "app.use_cases.user.lifecycle.UserLifecycleService.get_or_create",
-        new=AsyncMock(),
-    ) as get_or_create:
-        got = await uc.register(profile=user_profile)
+    got = await uc.register(profile=user_profile)
 
     assert got is cached
-    get_or_create.assert_not_awaited()
     assert uow.enter_count == 0
 
 
@@ -87,19 +79,11 @@ async def test_uc_find_by_tg_id_loads_from_db_without_create() -> None:
     cache.users.get_by_id.return_value = None
     domain_user = mk_user(user_id=8, now=dt(10))
 
-    with patch(
-        "app.use_cases.user.lifecycle.UserLifecycleService.get_if_exists",
-        new=AsyncMock(return_value=domain_user),
-    ) as get_if_exists:
-        with patch(
-            "app.use_cases.user.lifecycle.UserLifecycleService.get_or_create",
-            new=AsyncMock(),
-        ) as get_or_create:
-            got = await uc.find_by_tg_id(tg_id=domain_user.profile.telegram_id)
+    repo.get_by_id.return_value = domain_user
+    got = await uc.find_by_tg_id(tg_id=domain_user.profile.telegram_id)
 
     assert isinstance(got, UserContext)
-    get_if_exists.assert_awaited_once()
-    get_or_create.assert_not_awaited()
+    repo.get_by_id.assert_awaited_once()
     cache.users.set.assert_awaited_once_with(domain_user)
 
 
@@ -110,14 +94,11 @@ async def test_uc_find_by_tg_id_returns_none_without_create() -> None:
     uc, _, cache = make_lifecycle_uc(repo=repo)
     cache.users.get_by_id.return_value = None
 
-    with patch(
-        "app.use_cases.user.lifecycle.UserLifecycleService.get_if_exists",
-        new=AsyncMock(return_value=None),
-    ) as get_if_exists:
-        got = await uc.find_by_tg_id(tg_id=404)
+    repo.get_by_id.return_value = None
+    got = await uc.find_by_tg_id(tg_id=404)
 
     assert got is None
-    get_if_exists.assert_awaited_once()
+    repo.get_by_id.assert_awaited_once()
     cache.users.set.assert_not_awaited()
 
 

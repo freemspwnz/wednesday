@@ -84,10 +84,6 @@ def test_public_init_exports_are_minimal_and_stable() -> None:
         "ActiveState",
         "BannedState",
         "UserEvent",
-        "UserGenerationService",
-        "UserLifecycleService",
-        "UserManagementService",
-        "UserModerationService",
         "UsageStats",
         "ViolationStats",
     }
