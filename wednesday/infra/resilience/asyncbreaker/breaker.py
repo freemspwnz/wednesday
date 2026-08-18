@@ -40,10 +40,16 @@ class Asyncbreaker(CircuitBreaker):
             return await self._breaker.call(func, *args, **kwargs)  # type: ignore[no-any-return]
 
         except CircuitError as e:
-            raise CircuitOpenError(
+            open_error = CircuitOpenError(
                 message=f"Circuit {self._breaker.name} is open.",
                 retry_after=e.retry_after,
-            ) from e
+            )
+            self._logger.warning(
+                "Circuit breaker rejected call",
+                name=self._breaker.name,
+                retry_after=open_error.retry_after,
+            )
+            raise open_error from e
 
         except StorageError as e:
             self._log_storage_error_and_raise(e)

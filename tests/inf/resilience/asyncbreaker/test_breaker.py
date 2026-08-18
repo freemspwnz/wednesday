@@ -60,6 +60,7 @@ class TestAsyncBreakerCall:
         self,
         async_breaker: Asyncbreaker,
         mock_breaker: MagicMock,
+        mock_logger: MagicMock,
     ) -> None:
         async def work() -> None:
             return None
@@ -75,6 +76,10 @@ class TestAsyncBreakerCall:
         assert "unit-cb" in str(ei.value)
         assert 90.0 <= ei.value.retry_after <= 100.5
         assert isinstance(ei.value.__cause__, CircuitError)
+        mock_logger.warning.assert_called_once()
+        logged = mock_logger.warning.call_args
+        assert logged.args[0] == "Circuit breaker rejected call"
+        assert logged.kwargs["name"] == "unit-cb"
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_error_without_reopen_zero_retry_after(

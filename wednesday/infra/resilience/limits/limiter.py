@@ -187,7 +187,15 @@ class Limits(RateLimiter[RateLimitItem]):
                 stats = await self.get_window_stats(limit, *identifiers)
             except LimitStorageError:
                 stats = None
-            raise self._build_exception(limit, stats)
+            exc = self._build_exception(limit, stats)
+            self._logger.warning(
+                "Rate limit exceeded",
+                limit=exc.limit,
+                retry_after=exc.retry_after,
+                remaining=exc.remaining,
+                **self._metric_scope(limit),
+            )
+            raise exc
 
     @classmethod
     def _build_exception(cls, limit: RateLimitItem, stats: WindowStats | None = None) -> TooManyRequests:
