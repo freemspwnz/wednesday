@@ -1,36 +1,41 @@
 # Changelog
 
-## [Unreleased]
-
-### Changed
-
-**Infrastructure**
-- Корневой compose-файл переименован: `docker-compose.yml` → `compose.yml` (Compose v2 default).
-- В `.env.example` для metrics задан `METRICS__HOST=0.0.0.0` — bind для scrape из Docker network.
-
-## [7.4.0] — 2026-08-14
+## [7.5.0] — 2026-08-18
 
 ### Added
 
-**Observability**
-- Стек мониторинга: Loki 3.x (TSDB/v13, retention 14d) + Vector + Grafana в `monitoring/docker-compose.yml`.
-- Vector: wednesday-only `vector.yaml`, парсинг loguru JSON, лейблы Loki `service`/`env`/`level`.
-- Grafana alerts: `noDataState: OK`, `ExporterDown` по `up{job="wednesday"}`, LogQL suspicious-secrets как в UI.
+**Domain**
+- Новые `ImageId` генерируются как UUIDv7 (RFC 9562) через `uuid-utils`; существующие v4/v5 не затронуты.
+
+**Infrastructure**
+- Startup fail-fast: если Postgres или Redis недоступен при старте, процесс завершается с ненулевым кодом (`DBUnavailableError` / `CacheUnavailableError`).
+
+**CI**
+- GitHub Release автоматически создаётся на `v*` тегах после публикации Docker-образа; notes берутся из `CHANGELOG.md`.
 
 ### Changed
 
+**Domain**
+- Константы валидации/политик вынесены из module-level на владеющий тип как `ClassVar` (frozen dataclass, VO, policy, service).
+
 **Infrastructure**
-- Сборка и зависимости: Poetry → uv (PEP 621 + hatchling, `uv.lock`, CI `uv sync`, Docker `.venv`).
-- `asyncbreaker` 2.1.x: адаптер под новый API, app-протоколы без изменений.
+- Infra-константы (shutdown timeout, metric prefix/namespace, retry/limiter labels) — на владеющем классе как `ClassVar`.
+- Версия приложения берётся из `pyproject.toml` через `importlib.metadata`; хардкод версии убран из Config, HttpConfig, GigaChatConfig и тестов. `VERSION` env по-прежнему переопределяет.
+- GigaChat text/image вызовы сериализованы через `Semaphore(1)` — GIGACHAT_API_PERS не принимает параллельные completions.
+- HTTP error body (до 1 КБ) сохраняется на `HttpResponseError` и логируется — Sber 4xx причины видны в Loki без ручного повтора.
+- Rate-limiter логи и метрики используют раздельные `limiter` + `bucket` вместо fused `name=telegram:chat`.
+- Rate-limiter метрики записываются и при storage/unexpected ошибках (ранее таймер оставался открытым).
+- Корневой compose-файл переименован: `docker-compose.yml` → `compose.yml` (Compose v2 default).
+- `python3-dev` убран из Docker builder — на python:3.12-slim (Trixie) он тянул заголовки Python 3.13.
+- Неиспользуемые Taskiq-остатки удалены из `pyproject.toml`.
+- Неиспользуемый `expose` убран из wednesday-сервиса в compose.
 
 **CI**
-- `dependency-review-action` v5 (Node 24).
+- Docker actions обновлены до Node 24 runtime train (setup-qemu/buildx/login v4, metadata v6, build-push v7).
+- `setup-uv` обновлён до v7.
 
 ### Fixed
 
-**Application**
-- `/generate` пишет `(chat_id, image_id)` в `image_view` в том же UoW, что и save каталога — `/random` в этом чате не показывает только что сгенерированную картинку; другие чаты её ещё могут получить.
-
-**Presentation**
-- Ожидаемые `DomainError` (cooldown и т.п.) в handler wrapper логируются как INFO, а не WARNING.
-- В логах `Command/Callback handler failed` модуль берётся из имени команды / префикса callback — в Loki больше не `module=unknown`.
+**Infrastructure**
+- Rate-limiter: `on_error` фиксирует duration при сбое Redis/backend.
+- HTTP client: truncated response body логируется при 4xx/5xx.
