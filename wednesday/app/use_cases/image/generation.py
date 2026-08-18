@@ -1,18 +1,23 @@
+from random import choice
+
 from app.dto import ImageCard
 from app.protocols import Logger, UoW
 from domain.catalog import Model
 from domain.chat import ChatId
 from domain.image import (
+    GenerationError,
     Generator,
     Image,
-    ImageGenerationService,
     ImageId,
     ImageMeta,
+    ImagePrompts,
     ImageRender,
     NormalizedPrompt,
     PromptCatalog,
     PromptModerationPolicy,
+    PromptSource,
     TelegramFileId,
+    ValidationError,
 )
 from domain.kernel import AwareDatetime
 
@@ -50,14 +55,34 @@ class ImageGenerationUseCase(ImageBaseUseCase):
             "Image generation by user started",
             model=str(model),
         )
+        resolved_model = Model.ensure(model)
         normalized = NormalizedPrompt.parse(prompt)
-        render = await ImageGenerationService.by_user(
-            model=model,
-            prompt=normalized,
-            catalog=self._prompts,
-            policy=self._policy,
-            gen=self._gen,
+        Image.moderate(prompt=normalized, policy=self._policy)
+
+        enriched: NormalizedPrompt | None = None
+        enrichment_system = await self._prompts.enrichment_prompt()
+        try:
+            enriched_raw = await self._gen.generate_text(
+                model=str(resolved_model),
+                system_prompt=enrichment_system,
+                user_prompt=str(normalized),
+            )
+            enriched = NormalizedPrompt.parse(enriched_raw)
+        except (GenerationError, ValidationError):
+            pass
+
+        prompts = ImagePrompts(
+            primary=normalized,
+            source=PromptSource.USER,
+            enriched=enriched,
         )
+        generation_system = await self._prompts.generation_prompt()
+        content = await self._gen.generate_image(
+            model=str(resolved_model),
+            system_prompt=generation_system,
+            user_prompt=str(prompts.effective()),
+        )
+        render = ImageRender(content=content, prompts=prompts)
         self._logger.debug(
             "Image generation by user finished",
             model=str(model),
@@ -67,11 +92,29 @@ class ImageGenerationUseCase(ImageBaseUseCase):
 
     async def random(self, *, model: Model) -> ImageRender:
         self._logger.debug("Random image generation started", model=str(model))
-        render = await ImageGenerationService.random(
-            model=model,
-            catalog=self._prompts,
-            gen=self._gen,
+        resolved_model = Model.ensure(model)
+        source = PromptSource.LLM
+        base_system = await self._prompts.base_prompt()
+        try:
+            prompt = NormalizedPrompt.parse(
+                await self._gen.generate_text(
+                    model=str(resolved_model),
+                    system_prompt=base_system,
+                    user_prompt="",
+                ),
+            )
+        except (GenerationError, ValidationError):
+            prompt = await self._fallback_prompt()
+            source = PromptSource.FALLBACK
+
+        prompts = ImagePrompts(primary=prompt, source=source)
+        generation_system = await self._prompts.generation_prompt()
+        content = await self._gen.generate_image(
+            model=str(resolved_model),
+            system_prompt=generation_system,
+            user_prompt=str(prompts.effective()),
         )
+        render = ImageRender(content=content, prompts=prompts)
         self._logger.debug(
             "Random image generation finished",
             model=str(model),
@@ -118,3 +161,15 @@ class ImageGenerationUseCase(ImageBaseUseCase):
             chat_id=str(chat_id.value),
         )
         return ImageCard.from_domain(image)
+
+    async def _fallback_prompt(self) -> NormalizedPrompt:
+        components = await self._prompts.components()
+        hero = choice(components.heroes)
+        color = choice(components.colors)
+        style = choice(components.styles)
+        profession = choice(components.professions)
+        action = choice(components.actions)
+        place = choice(components.places)
+        portrait = choice(components.portraits)
+        prompt = f"Wednesday meme frog, {hero}, {color}, {style}, {profession}, {action}, {place}, {portrait}"
+        return NormalizedPrompt.parse(prompt)
