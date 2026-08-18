@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Chat as TgChat, Message, PhotoSize, Use
 
 from app.dto import ChatContext, ImageCard, UserContext
 from domain.catalog import Model
+from domain.chat import ChatProfile, ChatType
 from domain.image import (
     ImageMeta,
     ImageNotFoundError,
@@ -30,7 +31,7 @@ from presentation.aiogram.routers.image import (
 )
 from tests.dom.image.factories import dt, mk_image, mk_rating
 
-from ..factories import make_callback_query, make_message, mk_user_context
+from ..factories import make_callback_query, make_message, mk_chat_context, mk_user_context
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 _IMAGE_KEY = str(UUID(int=7))
@@ -263,6 +264,8 @@ async def test_cb_image_vote_updates_markup(
 ) -> None:
     image = mk_image(image_id=9, rating=mk_rating(likes=4, dislikes=1), created_at=dt(10))
     card = ImageCard.from_domain(image)
+    private_chat = mk_chat_context(tg_id=voter_context.tg_id, chat_type=ChatType.PRIVATE, domain_id=77)
+    mock_scope.chat_management_uc.register = AsyncMock(return_value=private_chat)
     mock_scope.image_vote_uc.vote = AsyncMock(return_value=card)
     payload = ImageVoteData(image_id=str(UUID(int=9)), value=1)
     callback = make_callback_query(data=payload.pack(), chat_id=-100)
@@ -273,9 +276,13 @@ async def test_cb_image_vote_updates_markup(
     ):
         await cb_image_vote(callback, payload, voter_context, mock_scope)
 
+    mock_scope.chat_management_uc.register.assert_awaited_once_with(
+        profile=ChatProfile(type=ChatType.PRIVATE, telegram_id=voter_context.tg_id),
+    )
     mock_scope.image_vote_uc.vote.assert_awaited_once()
     vote_kwargs = mock_scope.image_vote_uc.vote.await_args.kwargs
     assert vote_kwargs["voter_id"] == voter_context.id
+    assert vote_kwargs["chat_id"] == private_chat.id
     edit_markup.assert_awaited_once()
     assert edit_markup.await_args is not None
     markup = edit_markup.await_args.kwargs["reply_markup"]
