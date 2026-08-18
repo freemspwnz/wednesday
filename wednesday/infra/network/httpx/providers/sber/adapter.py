@@ -50,6 +50,7 @@ class SberClient(Generator):
         system_prompt: str,
         user_prompt: str,
     ) -> bytes:
+        self._logger.info("GigaChat generation started", operation="image", model=model)
         async with self._with_slot(self._timeouts["image"].read):
             payload = {
                 "model": model,
@@ -86,7 +87,14 @@ class SberClient(Generator):
                     timeout=self._timeouts["image"],
                     auth=self._auth,
                 )
-                return image_response.content
+                image_bytes = image_response.content
+                self._logger.info(
+                    "GigaChat generation finished",
+                    operation="image",
+                    model=model,
+                    bytes=len(image_bytes),
+                )
+                return image_bytes
             except GenerationError:
                 raise
             except AppError as exc:
@@ -111,6 +119,7 @@ class SberClient(Generator):
         system_prompt: str,
         user_prompt: str,
     ) -> str:
+        self._logger.info("GigaChat generation started", operation="text", model=model)
         async with self._with_slot(self._timeouts["prompt"].read):
             payload = {
                 "model": model,
@@ -131,6 +140,12 @@ class SberClient(Generator):
                 content: str = data["choices"][0]["message"]["content"]
                 if not isinstance(content, str):
                     raise TypeError("message content must be str")
+                self._logger.info(
+                    "GigaChat generation finished",
+                    operation="text",
+                    model=model,
+                    chars=len(content),
+                )
                 return content
             except AppError as exc:
                 raise GenerationError(str(exc)) from exc
@@ -169,6 +184,7 @@ class SberClient(Generator):
         try:
             await asyncio.wait_for(self._slot.acquire(), timeout=timeout)
         except TimeoutError:
+            self._logger.warning("GigaChat slot busy", timeout=timeout)
             raise GenerationError("GigaChat slot busy") from None
         try:
             yield
