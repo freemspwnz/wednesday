@@ -1,5 +1,7 @@
 """Tests for the root Config model and PROD validation."""
 
+from importlib.metadata import version as pkg_version
+
 import pytest
 from pydantic import SecretStr, ValidationError
 
@@ -19,13 +21,16 @@ class TestConfigDefaults:
         cfg = Config(_env_file=None, ENV="DEV", metrics=MetricsConfig(enabled=False))
 
         assert cfg.env == "DEV"
-        assert cfg.version == "7.4.0"
+        assert cfg.version == pkg_version("wednesday")
         assert cfg.telegram.limiter.storage == "redis"
         assert cfg.telegram.retrier.name == "telegram"
         assert cfg.gigachat.limiter.storage == "redis"
         assert cfg.gigachat.breaker.storage == "redis"
         assert cfg.logging.serialize is False
         assert cfg.metrics.enabled is False
+
+        cfg_override = Config(_env_file=None, VERSION="1.2.3")
+        assert cfg_override.version == "1.2.3"
 
     def test_postgres_dsn_asyncpg_scheme(self) -> None:
         cfg = Config(

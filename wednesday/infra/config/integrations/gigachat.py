@@ -59,7 +59,6 @@ class GigaChatConfig(BaseModel):
             max_connections=10,
             max_keepalive_connections=10,
             keepalive_expiry=10,
-            headers={"User-Agent": "wednesday/7.4.0"},
             verify=True,
             http2=False,
             follow_redirects=True,

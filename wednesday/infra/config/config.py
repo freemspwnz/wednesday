@@ -1,3 +1,4 @@
+from importlib.metadata import version as _pkg_version
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -23,7 +24,7 @@ class Config(BaseSettings):
     )
 
     env: str = Field(default="DEV", alias="ENV")
-    version: str = Field(default="7.4.0", alias="VERSION")
+    version: str = Field(default_factory=lambda: _pkg_version("wednesday"), alias="VERSION")
 
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     gigachat: GigaChatConfig = Field(default_factory=GigaChatConfig)
