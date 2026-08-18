@@ -1,11 +1,15 @@
+from zoneinfo import ZoneInfo
+
 from app.dto import ChatContext
 from domain.chat import (
     Chat,
     ChatId,
-    ChatManagementService,
     ChatProfile,
+    ChatScheduleSet,
     ManagementActor,
+    Weekday,
 )
+from domain.chat.helpers import chat_id_from_tg
 from domain.kernel.vo import AwareDatetime
 
 from .base import ChatBaseUseCase
@@ -30,11 +34,7 @@ class ChatManagementUseCase(ChatBaseUseCase):
             tg_id=profile.telegram_id,
         )
         async with self._uow:
-            resolved = await ChatManagementService.get_or_create(
-                profile=profile,
-                repo=self._uow.chats,
-                at=AwareDatetime.now_utc(),
-            )
+            resolved = await self._get_or_create(profile=profile, at=AwareDatetime.now_utc())
 
         await self._cache.set(resolved)
         self._logger.debug(
@@ -53,10 +53,7 @@ class ChatManagementUseCase(ChatBaseUseCase):
 
         self._logger.debug("Chat lookup cache miss", tg_id=tg_id)
         async with self._uow:
-            entity = await ChatManagementService.get_if_exists(
-                tg_id=tg_id,
-                repo=self._uow.chats,
-            )
+            entity = await self._uow.chats.get_by_id(chat_id_from_tg(tg_id))
         if entity is None:
             return None
 
@@ -74,11 +71,10 @@ class ChatManagementUseCase(ChatBaseUseCase):
         return await self._run_mutating(
             action="change_profile",
             chat_id=chat_id,
-            runner=lambda: ChatManagementService.change_profile(
-                id=chat_id,
+            runner=lambda: self._change_profile(
+                chat_id=chat_id,
                 actor=actor,
                 new_profile=new_profile,
-                repo=self._uow.chats,
                 at=at,
             ),
         )
@@ -93,12 +89,7 @@ class ChatManagementUseCase(ChatBaseUseCase):
         return await self._run_mutating(
             action="activate",
             chat_id=chat_id,
-            runner=lambda: ChatManagementService.activate(
-                id=chat_id,
-                actor=actor,
-                repo=self._uow.chats,
-                at=at,
-            ),
+            runner=lambda: self._activate(chat_id=chat_id, actor=actor, at=at),
         )
 
     async def deactivate(
@@ -111,10 +102,45 @@ class ChatManagementUseCase(ChatBaseUseCase):
         return await self._run_mutating(
             action="deactivate",
             chat_id=chat_id,
-            runner=lambda: ChatManagementService.deactivate(
-                id=chat_id,
-                actor=actor,
-                repo=self._uow.chats,
-                at=at,
-            ),
+            runner=lambda: self._deactivate(chat_id=chat_id, actor=actor, at=at),
         )
+
+    async def _get_or_create(self, *, profile: ChatProfile, at: AwareDatetime) -> Chat:
+        chat_id = chat_id_from_tg(profile.telegram_id)
+        existing = await self._uow.chats.get_by_id(chat_id)
+        if existing is not None:
+            return existing
+
+        schedules = ChatScheduleSet(
+            timezone=ZoneInfo("UTC"),
+            weekday=Weekday.WEDNESDAY,
+            schedules=(),
+        )
+        chat = Chat.register(id=chat_id, profile=profile, schedules=schedules, at=at)
+        await self._uow.chats.save(chat)
+        return chat
+
+    async def _change_profile(
+        self,
+        *,
+        chat_id: ChatId,
+        actor: ManagementActor,
+        new_profile: ChatProfile,
+        at: AwareDatetime,
+    ) -> Chat:
+        chat = await self._load_chat_or_raise(chat_id=chat_id)
+        chat.change_profile(actor=actor, new_profile=new_profile, at=at)
+        await self._uow.chats.save(chat)
+        return chat
+
+    async def _activate(self, *, chat_id: ChatId, actor: ManagementActor, at: AwareDatetime) -> Chat:
+        chat = await self._load_chat_or_raise(chat_id=chat_id)
+        chat.activate(actor=actor, at=at)
+        await self._uow.chats.save(chat)
+        return chat
+
+    async def _deactivate(self, *, chat_id: ChatId, actor: ManagementActor, at: AwareDatetime) -> Chat:
+        chat = await self._load_chat_or_raise(chat_id=chat_id)
+        chat.deactivate(actor=actor, at=at)
+        await self._uow.chats.save(chat)
+        return chat

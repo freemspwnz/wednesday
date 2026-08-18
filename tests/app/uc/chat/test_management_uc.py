@@ -1,6 +1,6 @@
 """Tests for ChatManagementUseCase."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -19,23 +19,20 @@ from .helpers import dt, make_management_uc, member_actor, mk_chat, owner_actor
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_uc_register_loads_via_domain_and_caches() -> None:
+async def test_uc_register_loads_and_caches() -> None:
     repo = AsyncMock()
     uc, _, cache = make_management_uc(repo=repo)
     profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
     cache.chats.get_by_id.return_value = None
     domain_chat = mk_chat(chat_id=7, telegram_id=-100, now=dt(10))
 
-    with patch(
-        "app.use_cases.chat.management.ChatManagementService.get_or_create",
-        new=AsyncMock(return_value=domain_chat),
-    ) as get_or_create:
-        got = await uc.register(profile=profile)
+    repo.get_by_id.return_value = domain_chat
+    got = await uc.register(profile=profile)
 
     assert isinstance(got, ChatContext)
     assert got.tg_id == -100
     cache.chats.set.assert_awaited_once_with(domain_chat)
-    get_or_create.assert_awaited()
+    repo.save.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -47,14 +44,9 @@ async def test_uc_register_returns_cached_value_without_uow() -> None:
     cached = mk_chat_context(tg_id=-100, chat_type=ChatType.GROUP)
     cache.chats.get_by_id.return_value = cached
 
-    with patch(
-        "app.use_cases.chat.management.ChatManagementService.get_or_create",
-        new=AsyncMock(),
-    ) as get_or_create:
-        got = await uc.register(profile=profile)
+    got = await uc.register(profile=profile)
 
     assert got is cached
-    get_or_create.assert_not_awaited()
     assert uow.enter_count == 0
 
 
@@ -66,20 +58,12 @@ async def test_uc_find_by_tg_id_loads_from_db_without_create() -> None:
     cache.chats.get_by_id.return_value = None
     domain_chat = mk_chat(chat_id=8, telegram_id=-200, now=dt(10))
 
-    with patch(
-        "app.use_cases.chat.management.ChatManagementService.get_if_exists",
-        new=AsyncMock(return_value=domain_chat),
-    ) as get_if_exists:
-        with patch(
-            "app.use_cases.chat.management.ChatManagementService.get_or_create",
-            new=AsyncMock(),
-        ) as get_or_create:
-            got = await uc.find_by_tg_id(tg_id=-200)
+    repo.get_by_id.return_value = domain_chat
+    got = await uc.find_by_tg_id(tg_id=-200)
 
     assert isinstance(got, ChatContext)
     assert got.tg_id == -200
-    get_if_exists.assert_awaited_once()
-    get_or_create.assert_not_awaited()
+    repo.get_by_id.assert_awaited_once()
     cache.chats.set.assert_awaited_once_with(domain_chat)
 
 
