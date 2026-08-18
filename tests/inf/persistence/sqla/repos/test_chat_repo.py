@@ -92,3 +92,41 @@ async def test_get_by_id_wraps_mapping_errors() -> None:
 
     with pytest.raises(AggregateMappingError):
         await repo.get_by_id(mk_chat().id)
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+@pytest.mark.asyncio
+async def test_list_active_scheduled_filters_active_chats_with_slots() -> None:
+    session = AsyncMock()
+    result = Mock()
+    result.scalars.return_value.all.return_value = []
+    session.execute.return_value = result
+    repo = SQLAChatRepo(session=session)
+
+    got = await repo.list_active_scheduled()
+
+    assert got == []
+    sql = str(session.execute.await_args.args[0])
+    assert "chat_states" in sql
+    assert "is_active" in sql
+    assert "chat_schedule_slots" in sql
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+@pytest.mark.asyncio
+async def test_list_active_scheduled_wraps_mapping_errors() -> None:
+    session = AsyncMock()
+    orm_chat = ChatORM(
+        id=mk_chat().id.value,
+        created_at=_dt(10),
+        updated_at=_dt(10),
+    )
+    result = Mock()
+    result.scalars.return_value.all.return_value = [orm_chat]
+    session.execute.return_value = result
+    repo = SQLAChatRepo(session=session)
+
+    with pytest.raises(AggregateMappingError):
+        await repo.list_active_scheduled()

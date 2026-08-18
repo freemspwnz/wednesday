@@ -18,3 +18,7 @@ class ChatRepo(Protocol):
     async def exists(self, chat_id: ChatId) -> bool:
         """Check if chat exists."""
         ...
+
+    async def list_active_scheduled(self) -> list[Chat]:
+        """Load active chats that have at least one schedule slot."""
+        ...
