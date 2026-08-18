@@ -57,6 +57,29 @@ class SQLAChatRepo(ChatRepo):
         except Exception as exc:
             raise UnexpectedDBError("Unexpected error while reading chat aggregate.") from exc
 
+    async def list_active_scheduled(self) -> list[Chat]:
+        try:
+            stmt = select(ChatORM).where(
+                ChatORM.state.has(is_active=True),
+                ChatORM.schedule_slots.any(),
+            )
+            result = await self._session.execute(stmt)
+            return [_chat_from_orm(orm) for orm in result.scalars().all()]
+        except ValueError as exc:
+            raise AggregateMappingError(
+                "Failed to map ORM chat aggregate.",
+                operation="list_active_scheduled",
+                entity="chat",
+            ) from exc
+        except SQLAlchemyError as exc:
+            raise RepositoryError(
+                "SQLAlchemy failed to list scheduled chats.",
+                operation="list_active_scheduled",
+                entity="chat",
+            ) from exc
+        except Exception as exc:
+            raise UnexpectedDBError("Unexpected error while listing scheduled chats.") from exc
+
     async def save(self, chat: Chat) -> None:
         try:
             await self._session.execute(
