@@ -11,6 +11,7 @@ from app.protocols import Logger, RequestScope, ScopeFactory
 from domain.chat import Chat
 from domain.kernel.vo import AwareDatetime
 
+from ..messages import image as image_msg
 from ..routers.image.vote import build_vote_kb
 
 _SlotKey = tuple[UUID, date, int, int]
@@ -20,8 +21,13 @@ class CatalogScheduleRunner:
     """Send unseen catalog photos when a chat schedule slot is due.
 
     Shares the bot process and Telegram session (outbound limits/retries).
-    Does not call GigaChat. Duplicate sends in the same local minute are
-    suppressed in-memory and reset on process restart.
+    Does not call GigaChat. A catalog view is recorded only after Telegram
+    accepts the photo. If the chat has no unseen image, send a notice
+    suggesting ``/generate`` — not a silent skip.
+
+    Duplicate sends in the same local minute are suppressed in-memory and
+    reset on process restart. A failed send also occupies that minute so
+    the tick does not consume the next unseen image.
     """
 
     def __init__(
@@ -64,16 +70,21 @@ class CatalogScheduleRunner:
             return
 
         try:
-            card = await scope.image_catalog_uc.pick_for_chat(chat_id=chat.id, at=at)
-            if card is None:
-                self._logger.info(
-                    "Catalog schedule skipped: no unseen image",
-                    chat_id=str(chat.id.value),
-                    tg_id=chat.profile.telegram_id,
-                )
-                self._fired.add(key)
-                return
+            card = await scope.image_catalog_uc.pick_for_chat(chat_id=chat.id)
+        except Exception:
+            self._logger.warning(
+                "Catalog schedule pick failed",
+                chat_id=str(chat.id.value),
+                tg_id=chat.profile.telegram_id,
+                exc_info=True,
+            )
+            return
 
+        if card is None:
+            await self._send_empty_notice(chat=chat, key=key)
+            return
+
+        try:
             await self._bot.send_photo(
                 chat_id=chat.profile.telegram_id,
                 photo=str(card.file_id),
@@ -86,6 +97,7 @@ class CatalogScheduleRunner:
                 tg_id=chat.profile.telegram_id,
                 exc_info=True,
             )
+            self._fired.add(key)
             return
         except Exception:
             self._logger.warning(
@@ -94,7 +106,23 @@ class CatalogScheduleRunner:
                 tg_id=chat.profile.telegram_id,
                 exc_info=True,
             )
+            self._fired.add(key)
             return
+
+        try:
+            await scope.image_catalog_uc.mark_shown(
+                chat_id=chat.id,
+                image_id=card.id,
+                at=at,
+            )
+        except Exception:
+            self._logger.warning(
+                "Catalog schedule mark shown failed",
+                chat_id=str(chat.id.value),
+                tg_id=chat.profile.telegram_id,
+                image_id=str(card.id.value),
+                exc_info=True,
+            )
 
         self._fired.add(key)
         self._logger.info(
@@ -103,6 +131,27 @@ class CatalogScheduleRunner:
             tg_id=chat.profile.telegram_id,
             image_id=str(card.id.value),
         )
+
+    async def _send_empty_notice(self, *, chat: Chat, key: _SlotKey) -> None:
+        try:
+            await self._bot.send_message(
+                chat_id=chat.profile.telegram_id,
+                text=image_msg.SCHEDULE_CATALOG_EMPTY,
+            )
+        except TelegramAPIError:
+            self._logger.warning(
+                "Catalog schedule notice failed",
+                chat_id=str(chat.id.value),
+                tg_id=chat.profile.telegram_id,
+                exc_info=True,
+            )
+        else:
+            self._logger.info(
+                "Catalog schedule notice: no unseen image",
+                chat_id=str(chat.id.value),
+                tg_id=chat.profile.telegram_id,
+            )
+        self._fired.add(key)
 
     def _prune_fired(self, at: AwareDatetime) -> None:
         cutoff = at.value.date() - timedelta(days=2)

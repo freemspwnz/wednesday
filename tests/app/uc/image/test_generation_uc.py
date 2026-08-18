@@ -185,8 +185,8 @@ async def test_uc_register_hides_image_from_same_chat_random() -> None:
     assert saved is not None
     views.candidates = [saved]
 
-    assert await catalog_uc.pick_for_chat(chat_id=chat_id, at=dt(13)) is None
+    assert await catalog_uc.pick_for_chat(chat_id=chat_id) is None
 
-    picked = await catalog_uc.pick_for_chat(chat_id=other_chat_id, at=dt(13))
+    picked = await catalog_uc.pick_for_chat(chat_id=other_chat_id)
     assert picked is not None
     assert picked.id == card.id

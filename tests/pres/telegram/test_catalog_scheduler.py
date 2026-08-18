@@ -8,6 +8,7 @@ from aiogram.exceptions import TelegramForbiddenError
 
 from app.dto import ImageCard
 from domain.kernel.vo import AwareDatetime
+from presentation.aiogram.messages import image as image_msg
 from presentation.aiogram.scheduler.catalog import CatalogScheduleRunner
 from tests.dom.chat.factories import mk_chat
 from tests.dom.image.factories import mk_image
@@ -50,19 +51,24 @@ async def test_tick_sends_unseen_catalog_photo(
     await runner.tick(at=_WED_NOON)
 
     mock_scope.chat_schedule_uc.list_due.assert_awaited_once_with(at=_WED_NOON)
-    mock_scope.image_catalog_uc.pick_for_chat.assert_awaited_once_with(chat_id=chat.id, at=_WED_NOON)
+    mock_scope.image_catalog_uc.pick_for_chat.assert_awaited_once_with(chat_id=chat.id)
     bot.send_photo.assert_awaited_once()
     kwargs = bot.send_photo.await_args.kwargs
     assert kwargs["chat_id"] == chat.profile.telegram_id
     assert kwargs["photo"] == str(card.file_id)
     assert kwargs["reply_markup"] is not None
+    mock_scope.image_catalog_uc.mark_shown.assert_awaited_once_with(
+        chat_id=chat.id,
+        image_id=card.id,
+        at=_WED_NOON,
+    )
     mock_scope.image_generation_uc.by_user.assert_not_called()
     mock_scope.image_generation_uc.random.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_tick_skips_send_when_catalog_empty(
+async def test_tick_sends_notice_when_catalog_empty(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
@@ -75,6 +81,11 @@ async def test_tick_skips_send_when_catalog_empty(
     await runner.tick(at=_WED_NOON)
 
     bot.send_photo.assert_not_called()
+    bot.send_message.assert_awaited_once_with(
+        chat_id=chat.profile.telegram_id,
+        text=image_msg.SCHEDULE_CATALOG_EMPTY,
+    )
+    mock_scope.image_catalog_uc.mark_shown.assert_not_awaited()
     assert mock_scope.image_catalog_uc.pick_for_chat.await_count == 1
 
 
@@ -94,6 +105,31 @@ async def test_tick_does_not_send_twice_in_the_same_minute(
     await runner.tick(at=_WED_NOON)
 
     bot.send_photo.assert_awaited_once()
+    assert mock_scope.image_catalog_uc.pick_for_chat.await_count == 1
+    assert mock_scope.image_catalog_uc.mark_shown.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_tick_send_error_does_not_mark_shown_or_retry(
+    mock_scope: MagicMock,
+    mock_logger: MagicMock,
+) -> None:
+    chat = mk_chat(now=_WED_NOON)
+    card = ImageCard.from_domain(mk_image())
+    mock_scope.chat_schedule_uc.list_due = AsyncMock(return_value=[chat])
+    mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=card)
+    bot = AsyncMock()
+    bot.send_photo = AsyncMock(
+        side_effect=TelegramForbiddenError(method=MagicMock(), message="kicked"),
+    )
+    runner, _ = _runner(mock_scope=mock_scope, mock_logger=mock_logger, bot=bot)
+
+    await runner.tick(at=_WED_NOON)
+    await runner.tick(at=_WED_NOON)
+
+    assert bot.send_photo.await_count == 1
+    mock_scope.image_catalog_uc.mark_shown.assert_not_awaited()
     assert mock_scope.image_catalog_uc.pick_for_chat.await_count == 1
 
 
@@ -121,3 +157,8 @@ async def test_tick_send_error_does_not_block_next_chat(
 
     assert bot.send_photo.await_count == 2
     assert bot.send_photo.await_args.kwargs["chat_id"] == ok.profile.telegram_id
+    mock_scope.image_catalog_uc.mark_shown.assert_awaited_once_with(
+        chat_id=ok.id,
+        image_id=card.id,
+        at=_WED_NOON,
+    )
