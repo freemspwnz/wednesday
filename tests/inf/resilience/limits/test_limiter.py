@@ -97,6 +97,31 @@ class TestLimitsCall:
         mock_metrics.on_error.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_hit_exceeded_logs_warning(
+        self,
+        rate_limits: Limits,
+        mock_backend: MagicMock,
+        mock_logger: MagicMock,
+        limit_item: RateLimitItem,
+    ) -> None:
+        mock_backend.hit = AsyncMock(return_value=False)
+        stats = MagicMock()
+        stats.reset_time = time.time() + 30.5
+        stats.remaining = 0
+        mock_backend.get_window_stats = AsyncMock(return_value=stats)
+
+        with pytest.raises(TooManyRequests):
+            await rate_limits.call(limit_item, "user:1")
+
+        mock_logger.warning.assert_called_once()
+        logged = mock_logger.warning.call_args
+        assert logged.args[0] == "Rate limit exceeded"
+        assert logged.kwargs["limit"] == "test:base"
+        assert logged.kwargs["retry_after"] == 31
+        assert logged.kwargs["limiter"] == "test"
+        assert logged.kwargs["bucket"] == "base"
+
+    @pytest.mark.asyncio
     async def test_hit_exceeded_uses_default_retry_when_stats_unavailable(
         self,
         rate_limits: Limits,
