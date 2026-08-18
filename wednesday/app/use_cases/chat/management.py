@@ -118,6 +118,7 @@ class ChatManagementUseCase(ChatBaseUseCase):
         )
         chat = Chat.register(id=chat_id, profile=profile, schedules=schedules, at=at)
         await self._uow.chats.save(chat)
+        self._logger.info("Chat registered", tg_id=profile.telegram_id)
         return chat
 
     async def _change_profile(

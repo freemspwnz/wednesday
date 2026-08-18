@@ -20,15 +20,8 @@ from domain.user import (
 )
 from tests.dom.user.factories import default_settings, subscription_free
 
-from ...factories import mk_user_context
-from .helpers import (
-    dt,
-    make_lifecycle_uc,
-    make_management_uc,
-    make_moderation_uc,
-    mk_user,
-    profile,
-)
+from ...factories import mk_logger, mk_user_context
+from .helpers import dt, make_lifecycle_uc, make_management_uc, make_moderation_uc, mk_user, profile
 
 
 @pytest.mark.unit
@@ -69,6 +62,38 @@ async def test_uc_register_returns_cached_value_without_uow() -> None:
 
     assert got is cached
     assert uow.enter_count == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_register_logs_info_on_first_create() -> None:
+    log = mk_logger()
+    repo = AsyncMock()
+    uc, _, cache = make_lifecycle_uc(repo=repo, logger=log)
+    user_profile = profile(tg_id=42)
+    cache.users.get_by_id.return_value = None
+    repo.get_by_id.return_value = None
+
+    got = await uc.register(profile=user_profile)
+
+    assert got.tg_id == 42
+    log.info.assert_called_once_with("User registered", tg_id=42)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_register_skips_info_for_existing_user() -> None:
+    log = mk_logger()
+    repo = AsyncMock()
+    uc, _, cache = make_lifecycle_uc(repo=repo, logger=log)
+    user_profile = profile(tg_id=42)
+    cache.users.get_by_id.return_value = None
+    domain_user = mk_user(user_id=42, now=dt(10))
+    repo.get_by_id.return_value = domain_user
+
+    await uc.register(profile=user_profile)
+
+    log.info.assert_not_called()
 
 
 @pytest.mark.unit

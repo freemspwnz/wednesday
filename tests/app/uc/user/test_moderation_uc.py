@@ -9,6 +9,7 @@ from domain.user.exceptions import InvalidStateTransitionError
 from domain.user.policies import ViolationStats
 from tests.dom.user.factories import FakeUserRepo, FakeViolationRepo
 
+from ...factories import mk_logger
 from .helpers import dt, make_moderation_uc, mk_user
 
 
@@ -76,7 +77,8 @@ async def test_uc_assign_ban_records_strike_without_ban_under_threshold() -> Non
     user = mk_user(now=dt(10))
     user_repo = FakeUserRepo.with_users(user)
     violations = FakeViolationRepo(stats=ViolationStats(hour=0, today=0, week=0, total=0))
-    uc, uow, cache = make_moderation_uc(repo=user_repo, violations=violations)
+    log = mk_logger()
+    uc, uow, cache = make_moderation_uc(repo=user_repo, violations=violations, logger=log)
 
     got = await uc.assign_ban(user_id=user.id, at=dt(12))
 
@@ -84,6 +86,11 @@ async def test_uc_assign_ban_records_strike_without_ban_under_threshold() -> Non
     assert violations.stats.total == 1
     assert uow.enter_count == uow.exit_count == 1
     cache.users.set.assert_awaited_once_with(got)
+    log.info.assert_called_once_with(
+        "Moderation strike recorded, no ban assigned",
+        user_id=str(user.id.value),
+        violations_total=1,
+    )
 
 
 @pytest.mark.unit
@@ -92,7 +99,8 @@ async def test_uc_assign_ban_bans_when_threshold_reached() -> None:
     user = mk_user(now=dt(10))
     user_repo = FakeUserRepo.with_users(user)
     violations = FakeViolationRepo(stats=ViolationStats(hour=1, today=1, week=1, total=1))
-    uc, _, cache = make_moderation_uc(repo=user_repo, violations=violations)
+    log = mk_logger()
+    uc, _, cache = make_moderation_uc(repo=user_repo, violations=violations, logger=log)
 
     got = await uc.assign_ban(user_id=user.id, at=dt(12))
 
@@ -100,3 +108,7 @@ async def test_uc_assign_ban_bans_when_threshold_reached() -> None:
     assert got.state.is_banned_at(dt(12))
     assert violations.stats.total == 2
     cache.users.set.assert_awaited_once_with(got)
+    log.info.assert_called_once()
+    assert log.info.call_args.args[0] == "User banned by moderation policy"
+    assert log.info.call_args.kwargs["user_id"] == str(user.id.value)
+    assert log.info.call_args.kwargs["violations_total"] == 2

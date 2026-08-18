@@ -1,11 +1,13 @@
 """Tests for ImageGenerationUseCase."""
 
 from datetime import UTC, datetime
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
 
 from app.dto import ImageCard
+from app.protocols import Logger
 from app.use_cases.image import ImageCatalogUseCase, ImageGenerationUseCase
 from domain.catalog import Model
 from domain.chat import ChatId
@@ -35,13 +37,14 @@ def _make_uc(
     *,
     uow: FakeUoW | None = None,
     gen: FakeGenerator | None = None,
+    logger: Logger | None = None,
 ) -> ImageGenerationUseCase:
     return ImageGenerationUseCase(
         uow=uow or FakeUoW(),
         prompts=FakePromptCatalog(),
         gen=gen or FakeGenerator(text_response="enriched frog", image_content=b"png"),
         policy=PromptModerationPolicy(),
-        logger=mk_logger(),
+        logger=logger or Mock(spec=Logger),
     )
 
 
@@ -72,6 +75,21 @@ async def test_uc_by_user_returns_render() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_uc_by_user_logs_finish_at_info() -> None:
+    log = mk_logger()
+    uc = _make_uc(logger=log)
+
+    await uc.by_user(model=Model.parse("gigachat-2-lite"), prompt="frog meme")
+
+    log.info.assert_called_once_with(
+        "Image generation by user finished",
+        model="gigachat-2-lite",
+        bytes=3,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_uc_by_user_rejects_banned_prompt() -> None:
     uc = _make_uc()
 
@@ -94,6 +112,24 @@ async def test_uc_random_returns_render() -> None:
     assert isinstance(render, ImageRender)
     assert render.content == b"rnd"
     assert render.prompts.source == PromptSource.LLM
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_random_logs_finish_at_info() -> None:
+    log = mk_logger()
+    uc = _make_uc(
+        gen=FakeGenerator(text_response="random frog", image_content=b"rnd"),
+        logger=log,
+    )
+
+    await uc.random(model=Model.parse("gigachat-2-lite"))
+
+    log.info.assert_called_once_with(
+        "Random image generation finished",
+        model="gigachat-2-lite",
+        bytes=3,
+    )
 
 
 async def _register(uc: ImageGenerationUseCase, *, chat_id: ChatId) -> ImageCard:

@@ -1,7 +1,7 @@
 """Shared helpers for user use-case tests."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 from app.use_cases.user import (
@@ -48,8 +48,9 @@ def make_lifecycle_uc(
     *,
     repo: AsyncMock,
     cache_registry: FakeCacheRegistry | None = None,
+    logger: Mock | None = None,
 ) -> tuple[UserLifecycleUseCase, FakeUoW, FakeCacheRegistry]:
-    log = mk_logger()
+    log = logger or mk_logger()
     uow = FakeUoW(users=repo)
     cache = cache_registry or FakeCacheRegistry()
     uc = UserLifecycleUseCase(
@@ -83,8 +84,9 @@ def make_moderation_uc(
     repo: AsyncMock | object,
     violations: ViolationRepo | AsyncMock | None = None,
     cache_registry: FakeCacheRegistry | None = None,
+    logger: Mock | None = None,
 ) -> tuple[UserModerationUseCase, FakeUoW, FakeCacheRegistry]:
-    log = mk_logger()
+    log = logger or mk_logger()
     uow = FakeUoW(users=repo, violations=violations)  # type: ignore[arg-type]
     cache = cache_registry or FakeCacheRegistry()
     uc = UserModerationUseCase(

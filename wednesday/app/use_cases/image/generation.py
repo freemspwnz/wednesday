@@ -83,7 +83,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
             user_prompt=str(prompts.effective()),
         )
         render = ImageRender(content=content, prompts=prompts)
-        self._logger.debug(
+        self._logger.info(
             "Image generation by user finished",
             model=str(model),
             bytes=len(render.content),
@@ -115,7 +115,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
             user_prompt=str(prompts.effective()),
         )
         render = ImageRender(content=content, prompts=prompts)
-        self._logger.debug(
+        self._logger.info(
             "Random image generation finished",
             model=str(model),
             bytes=len(render.content),

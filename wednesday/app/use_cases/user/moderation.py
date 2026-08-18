@@ -104,10 +104,21 @@ class UserModerationUseCase(UserBaseUseCase):
         decision = BanDurationPolicy.evaluate(stats=stats, at=at)
         match decision:
             case NoBan():
+                self._logger.info(
+                    "Moderation strike recorded, no ban assigned",
+                    user_id=str(user_id.value),
+                    violations_total=stats.total,
+                )
                 return user
             case BanAssigned(banned_until=until):
                 user.ban(actor=UserRole.SYSTEM, until=until, at=at)
                 await self._uow.users.save(user)
+                self._logger.info(
+                    "User banned by moderation policy",
+                    user_id=str(user_id.value),
+                    banned_until=str(until),
+                    violations_total=stats.total,
+                )
                 return user
             case _:
                 raise ValidationError("unknown ban duration decision")
