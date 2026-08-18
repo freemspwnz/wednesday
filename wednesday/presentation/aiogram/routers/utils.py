@@ -1,6 +1,7 @@
 """Utilities shared by routers in this package (admin command parsing, replies)."""
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import TypeVar
 
 from aiogram import Bot
@@ -22,6 +23,13 @@ _BOT_MEMBER_STATUSES = frozenset({
     ChatMemberStatus.CREATOR,
     ChatMemberStatus.RESTRICTED,
 })
+
+
+@dataclass(frozen=True, slots=True)
+class _HandlerLogContext:
+    started_event: str
+    failed_event: str
+    extra: dict[str, object]
 
 
 def parse_telegram_id(raw: str) -> int:
@@ -86,8 +94,15 @@ async def run_message_handler(
     return await _run_handler(
         logger.bind(module=_command_module(message)),
         action,
-        log_event="Command handler failed",
-        log_extra={"command": _command_name(message)},
+        log=_HandlerLogContext(
+            started_event="Command handler started",
+            failed_event="Command handler failed",
+            extra={
+                "command": _command_name(message),
+                "user_id": message.from_user.id if message.from_user else None,
+                "chat_id": message.chat.id if message.chat else None,
+            },
+        ),
         reply=reply,
     )
 
@@ -103,8 +118,15 @@ async def run_callback_handler(
     return await _run_handler(
         logger.bind(module=_callback_module(callback)),
         action,
-        log_event="Callback handler failed",
-        log_extra={"callback_data": callback.data},
+        log=_HandlerLogContext(
+            started_event="Callback handler started",
+            failed_event="Callback handler failed",
+            extra={
+                "callback_data": callback.data,
+                "user_id": callback.from_user.id if callback.from_user else None,
+                "chat_id": callback.message.chat.id if callback.message and callback.message.chat else None,
+            },
+        ),
         reply=reply,
     )
 
@@ -113,16 +135,16 @@ async def _run_handler(
     logger: Logger,
     action: Callable[[], Awaitable[T]],
     *,
-    log_event: str,
-    log_extra: dict[str, object],
+    log: _HandlerLogContext,
     reply: Callable[[str], Awaitable[None]],
 ) -> T | None:
+    logger.info(log.started_event, **log.extra)
     try:
         return await action()
     except Exception as exc:
         root = unwrap_exception(exc)
         text = user_message_for_exception(root) or COMMAND_FAILURE
-        log = logger.info if isinstance(root, DomainError) else logger.warning
-        log(log_event, **log_extra, error_type=type(root).__name__, error=str(root))
+        log_fn = logger.info if isinstance(root, DomainError) else logger.warning
+        log_fn(log.failed_event, **log.extra, error_type=type(root).__name__, error=str(root))
         await reply(text)
         return None

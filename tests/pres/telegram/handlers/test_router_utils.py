@@ -83,6 +83,13 @@ async def test_run_message_handler_success(mock_logger: MagicMock) -> None:
         return "ok"
 
     assert await run_message_handler(make_message(), mock_logger, action) == "ok"
+    mock_logger.bind.assert_called_once_with(module="cmd")
+    mock_logger.info.assert_called_once_with(
+        "Command handler started",
+        command="/cmd",
+        user_id=1,
+        chat_id=1,
+    )
 
 
 @pytest.mark.unit
@@ -109,8 +116,8 @@ async def test_run_message_handler_fallback(mock_logger: MagicMock) -> None:
         await run_message_handler(make_message(), mock_logger, action)
     answer.assert_awaited_once_with(COMMAND_FAILURE)
     mock_logger.bind.assert_called_once_with(module="cmd")
+    assert mock_logger.info.call_count == 1
     mock_logger.warning.assert_called_once()
-    mock_logger.info.assert_not_called()
 
 
 @pytest.mark.unit
@@ -124,9 +131,9 @@ async def test_run_message_handler_logs_cooldown_at_info(mock_logger: MagicMock)
 
     answer.assert_awaited_once_with(WAIT_FOR_COOLDOWN.format(minutes=1, seconds=30))
     mock_logger.bind.assert_called_once_with(module="cmd")
-    mock_logger.info.assert_called_once()
+    assert mock_logger.info.call_count == 2
     mock_logger.warning.assert_not_called()
-    assert mock_logger.info.call_args.kwargs["error_type"] == "CooldownViolationError"
+    assert mock_logger.info.call_args_list[1].kwargs["error_type"] == "CooldownViolationError"
 
 
 @pytest.mark.unit
@@ -154,6 +161,13 @@ async def test_run_callback_handler_success(mock_logger: MagicMock) -> None:
         return "ok"
 
     assert await run_callback_handler(callback, mock_logger, action) == "ok"
+    mock_logger.bind.assert_called_once_with(module="test")
+    mock_logger.info.assert_called_once_with(
+        "Callback handler started",
+        callback_data="test",
+        user_id=1,
+        chat_id=1,
+    )
 
 
 @pytest.mark.unit
