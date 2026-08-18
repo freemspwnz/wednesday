@@ -2,7 +2,15 @@ from collections.abc import Awaitable, Callable
 
 from httpx2 import AsyncClient, Response
 
-from app.exceptions import AppError, HttpResponseError, UnexpectedHttpError
+from app.exceptions import (
+    AppError,
+    CircuitOpenError,
+    HttpRequestError,
+    HttpResponseError,
+    MaxAttemptsExhaustedError,
+    TooManyRequests,
+    UnexpectedHttpError,
+)
 from app.protocols import HttpMetrics, Logger
 
 from .errors import map_httpx_error
@@ -77,24 +85,52 @@ class HttpClient:
             return response
         except AppError as exc:
             self._metrics.on_error(method=method.__name__, url=url, exc=exc)
+            self._log_request_failure(method=method.__name__, url=url, exc=exc)
             raise
         except Exception as exc:
             self._metrics.on_error(method=method.__name__, url=url, exc=exc)
             mapped = map_httpx_error(exc, method=method.__name__, url=url)
-            if isinstance(mapped, HttpResponseError):
-                self._logger.warning(
-                    "HTTP response error",
-                    method=method.__name__,
-                    url=url,
-                    status_code=mapped.status_code,
-                    response_body=mapped.body,
-                )
-            elif isinstance(mapped, UnexpectedHttpError):
-                self._logger.error(
-                    "HTTP request failed",
-                    method=method.__name__,
-                    url=url,
-                    error=str(mapped),
-                    exc_info=True,
-                )
+            self._log_request_failure(method=method.__name__, url=url, exc=mapped)
             raise mapped from exc
+
+    def _log_request_failure(self, *, method: str, url: str, exc: AppError) -> None:
+        error_type = type(exc).__name__
+        base = {"method": method, "url": url, "error_type": error_type}
+
+        if isinstance(exc, HttpResponseError):
+            self._logger.warning(
+                "HTTP response error",
+                status_code=exc.status_code,
+                response_body=exc.body,
+                **base,
+            )
+        elif isinstance(exc, HttpRequestError):
+            self._logger.warning("HTTP request failed", **base)
+        elif isinstance(exc, TooManyRequests):
+            self._logger.warning(
+                "HTTP rate limit exceeded",
+                limit=exc.limit,
+                retry_after=exc.retry_after,
+                **base,
+            )
+        elif isinstance(exc, CircuitOpenError):
+            self._logger.warning(
+                "HTTP circuit open",
+                retry_after=exc.retry_after,
+                **base,
+            )
+        elif isinstance(exc, MaxAttemptsExhaustedError):
+            self._logger.warning(
+                "HTTP retry attempts exhausted",
+                attempts=exc.attempts,
+                **base,
+            )
+        elif isinstance(exc, UnexpectedHttpError):
+            self._logger.error(
+                "HTTP request failed",
+                error=str(exc),
+                exc_info=True,
+                **base,
+            )
+        else:
+            self._logger.warning("HTTP request rejected", **base)

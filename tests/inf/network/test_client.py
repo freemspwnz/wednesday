@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import httpx2
 import pytest
 
-from app.exceptions import HttpResponseError, HttpTimeoutError, TooManyRequests
+from app.exceptions import CircuitOpenError, HttpResponseError, HttpTimeoutError, HttpTransportError, TooManyRequests
 from infra.network.httpx.client import HttpClient
 from infra.network.httpx.policy import ResiliencePolicy
 
@@ -113,6 +113,11 @@ class TestHttpClient:
             with pytest.raises(TooManyRequests):
                 await client.get("/x")
             mock_http_metrics.on_error.assert_called_once()
+            mock_logger.warning.assert_called_once()
+            logged = mock_logger.warning.call_args
+            assert logged.args[0] == "HTTP rate limit exceeded"
+            assert logged.kwargs["error_type"] == "TooManyRequests"
+            assert logged.kwargs["limit"] == "base"
         finally:
             await client.aclose()
 
@@ -125,5 +130,61 @@ class TestHttpClient:
         try:
             with pytest.raises(HttpTimeoutError):
                 await client.post("/chat")
+            mock_logger.warning.assert_called_once()
+            logged = mock_logger.warning.call_args
+            assert logged.args[0] == "HTTP request failed"
+            assert logged.kwargs["error_type"] == "HttpTimeoutError"
+        finally:
+            await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_transport_error_is_logged(self, mock_http_metrics: MagicMock, mock_logger: MagicMock) -> None:
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("refused", request=request)
+
+        client = _client(handler=httpx2.MockTransport(handler), metrics=mock_http_metrics, logger=mock_logger)
+        try:
+            with pytest.raises(HttpTransportError):
+                await client.get("/models")
+            mock_logger.warning.assert_called_once()
+            assert mock_logger.warning.call_args.kwargs["error_type"] == "HttpTransportError"
+        finally:
+            await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_circuit_open_from_policy_is_logged(
+        self,
+        mock_http_metrics: MagicMock,
+        mock_logger: MagicMock,
+    ) -> None:
+        class OpenBreaker(PassThroughBreaker):
+            def __call__(self, func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+                async def wrapper(*args: object, **kwargs: object) -> T:
+                    _ = func, args, kwargs
+                    raise CircuitOpenError("open", retry_after=2.5)
+
+                return wrapper
+
+        raw = httpx2.AsyncClient(
+            transport=httpx2.MockTransport(lambda r: httpx2.Response(200)),
+            base_url="https://api.example.com/",
+        )
+        client = HttpClient(
+            client=raw,
+            policy=ResiliencePolicy(
+                retrier=PassThroughRetrier(),
+                breaker=OpenBreaker(),
+                limiter=PassThroughLimiter(),
+            ),
+            metrics=mock_http_metrics,
+            logger=mock_logger,
+        )
+        try:
+            with pytest.raises(CircuitOpenError):
+                await client.get("/x")
+            mock_logger.warning.assert_called_once()
+            logged = mock_logger.warning.call_args
+            assert logged.args[0] == "HTTP circuit open"
+            assert logged.kwargs["retry_after"] == 2.5
         finally:
             await client.aclose()
