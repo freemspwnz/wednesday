@@ -37,13 +37,6 @@ from .policies import (
     ShowImage,
 )
 from .protocols import Generator, ImageRepo, PromptCatalog, ViewRepo, VoteRepo
-from .services import (
-    ImageCatalogService,
-    ImageGenerationService,
-    ImageLifecycleService,
-    ImageManagementService,
-    ImageVoteService,
-)
 from .vo import (
     ActiveState,
     HiddenReason,
@@ -70,14 +63,10 @@ __all__ = [
     "Hide",
     "HideImage",
     "Image",
-    "ImageCatalogService",
     "ImageError",
     "ImageEvent",
-    "ImageGenerationService",
     "ImageHidden",
     "ImageId",
-    "ImageLifecycleService",
-    "ImageManagementService",
     "ImageMeta",
     "ImageNotFoundError",
     "ImagePrompts",
@@ -89,7 +78,6 @@ __all__ = [
     "ImageRepo",
     "ImageShown",
     "ImageState",
-    "ImageVoteService",
     "ManagementAccessCode",
     "ManagementAccessDecision",
     "ManagementAccessPolicy",

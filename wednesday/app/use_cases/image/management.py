@@ -1,4 +1,4 @@
-from domain.image import Image, ImageId, ImageManagementService, ImageVoteService
+from domain.image import HiddenReason, Image, ImageId
 from domain.kernel import AwareDatetime
 from domain.user import UserRole
 
@@ -21,12 +21,9 @@ class ImageManagementUseCase(ImageBaseUseCase):
             actor=str(actor),
         )
         async with self._uow:
-            image = await ImageManagementService.hide(
-                id=image_id,
-                actor=actor,
-                repo=self._uow.images,
-                at=at,
-            )
+            image = await self._load_image_or_raise(image_id=image_id)
+            image.hide(actor=actor, reason=HiddenReason.ADMIN, at=at)
+            await self._uow.images.save(image)
         self._logger.info(
             "Image aggregate updated",
             action="hide",
@@ -47,14 +44,11 @@ class ImageManagementUseCase(ImageBaseUseCase):
             actor=str(actor),
         )
         async with self._uow:
-            image = await ImageManagementService.show(
-                id=image_id,
-                actor=actor,
-                repo=self._uow.images,
-                at=at,
-            )
+            image = await self._load_image_or_raise(image_id=image_id)
+            image.show(actor=actor, at=at)
+            await self._uow.images.save(image)
             if actor == UserRole.OWNER:
-                await ImageVoteService.reset(id=image_id, repo=self._uow.votes)
+                await self._uow.votes.reset(image_id)
         self._logger.info(
             "Image aggregate updated",
             action="show",

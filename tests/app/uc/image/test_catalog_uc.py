@@ -1,7 +1,7 @@
 """Tests for ImageCatalogUseCase."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -63,24 +63,16 @@ async def test_uc_pick_for_chat_marks_shown_and_returns_card() -> None:
 @pytest.mark.asyncio
 async def test_uc_pick_for_chat_runs_in_uow() -> None:
     image = mk_image(image_id=4, rating=mk_rating(likes=1), created_at=dt(9))
-    uow = FakeUoW(images=FakeImageRepo.with_images(image))
+    views = FakeViewRepo(candidates=[image])
+    uow = FakeUoW(images=FakeImageRepo.with_images(image), views=views)
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=101))
 
-    with patch(
-        "app.use_cases.image.catalog.ImageCatalogService.pick_for_chat",
-        new=AsyncMock(return_value=image.id),
-    ) as pick:
-        got = await uc.pick_for_chat(chat_id=chat_id, at=dt(11))
+    got = await uc.pick_for_chat(chat_id=chat_id, at=dt(11))
 
     assert got is not None
     assert got.id == image.id
     assert uow.enter_count == uow.exit_count == 1
-    pick.assert_awaited_once_with(
-        chat_id=chat_id,
-        repo=uow.views,
-        at=dt(11),
-    )
 
 
 @pytest.mark.unit
