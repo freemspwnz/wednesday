@@ -212,6 +212,7 @@ async def test_random_empty_catalog(
         await cmd_random(message, chat_context, mock_scope)
 
     answer.assert_awaited_once_with(image_msg.RANDOM_CATALOG_EMPTY)
+    mock_scope.image_catalog_uc.mark_shown.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -243,6 +244,10 @@ async def test_random_sends_photo_with_keyboard(
     markup = kwargs["reply_markup"]
     assert markup is not None
     assert [b.text for b in markup.inline_keyboard[0]] == ["👍 2", "👎 1"]
+    mock_scope.image_catalog_uc.mark_shown.assert_awaited_once()
+    mark_kwargs = mock_scope.image_catalog_uc.mark_shown.await_args.kwargs
+    assert mark_kwargs["chat_id"] == chat_context.id
+    assert mark_kwargs["image_id"] == card.id
 
 
 @pytest.fixture

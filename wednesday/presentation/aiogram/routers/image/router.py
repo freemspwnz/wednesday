@@ -29,10 +29,7 @@ async def cmd_random(
     """Send a random unseen catalog image for the current chat."""
 
     async def _action() -> None:
-        card = await scope.image_catalog_uc.pick_for_chat(
-            chat_id=chat.id,
-            at=AwareDatetime.now_utc(),
-        )
+        card = await scope.image_catalog_uc.pick_for_chat(chat_id=chat.id)
         if card is None:
             await message.answer(image_msg.RANDOM_CATALOG_EMPTY)
             return
@@ -40,6 +37,11 @@ async def cmd_random(
         await message.answer_photo(
             photo=str(card.file_id),
             reply_markup=build_vote_kb(image_id=str(card.id), rating=card.rating),
+        )
+        await scope.image_catalog_uc.mark_shown(
+            chat_id=chat.id,
+            image_id=card.id,
+            at=AwareDatetime.now_utc(),
         )
 
     await run_message_handler(message, scope.logger, _action)

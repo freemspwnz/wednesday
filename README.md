@@ -70,11 +70,11 @@ docker compose restart wednesday
 
 ```
 wednesday/
-├── main.py                 # Composition root: Config → Container → aiogram polling
+├── main.py                 # Composition root: Config → Container → polling + catalog scheduler
 ├── app/                    # DTO, протоколы, исключения приложения
 ├── domain/                 # Агрегаты и доменная логика
 ├── infra/                  # Config, DI, persistence, observe, resilience
-└── presentation/aiogram/   # Bot, dispatcher, routers, middlewares
+└── presentation/aiogram/   # Bot, dispatcher, routers, scheduler, middlewares
 
 alembic/                    # Миграции PostgreSQL (схема wednesday_schema)
 catalog/                    # Каталоги подписок и доступных моделей
@@ -82,6 +82,8 @@ tests/                      # Тесты
 ```
 
 Слои **не смешиваются**: эволюция схемы — только Alembic; runtime — `main.py` + DI.
+
+Расписание чата исполняется в том же процессе, что и polling: раз в минуту тикер шлёт unseen-фото из каталога (без GigaChat). Если чат уже всё посмотрел — текстовый notice с `/generate`, не silent skip. Просмотр записывается только после успешной отправки в Telegram.
 
 ---
 
