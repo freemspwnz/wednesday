@@ -1,7 +1,7 @@
 """Shared helpers for chat use-case tests."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -52,8 +52,12 @@ def member_actor(chat: Chat) -> ChatMember:
     return ChatMember(id=ChatMemberId(3), role=ChatMemberRole.MEMBER, chat_id=chat.id)
 
 
-def make_management_uc(*, repo: AsyncMock) -> tuple[ChatManagementUseCase, FakeUoW, FakeCacheRegistry]:
-    log = mk_logger()
+def make_management_uc(
+    *,
+    repo: AsyncMock,
+    logger: Mock | None = None,
+) -> tuple[ChatManagementUseCase, FakeUoW, FakeCacheRegistry]:
+    log = logger or mk_logger()
     uow = FakeUoW(chats=repo)
     cache = FakeCacheRegistry()
     uc = ChatManagementUseCase(uow=uow, cache=cache.chats, logger=log)

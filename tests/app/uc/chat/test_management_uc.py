@@ -13,7 +13,7 @@ from domain.chat import (
 )
 from domain.chat.exceptions import InvalidStateTransitionError
 
-from ...factories import mk_chat_context
+from ...factories import mk_chat_context, mk_logger
 from .helpers import dt, make_management_uc, member_actor, mk_chat, owner_actor
 
 
@@ -48,6 +48,39 @@ async def test_uc_register_returns_cached_value_without_uow() -> None:
 
     assert got is cached
     assert uow.enter_count == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_register_logs_info_on_first_create() -> None:
+    log = mk_logger()
+    repo = AsyncMock()
+    uc, _, cache = make_management_uc(repo=repo, logger=log)
+    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
+    cache.chats.get_by_id.return_value = None
+    repo.get_by_id.return_value = None
+
+    got = await uc.register(profile=profile)
+
+    assert got.tg_id == -100
+    repo.save.assert_awaited_once()
+    log.info.assert_called_once_with("Chat registered", tg_id=-100)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_register_skips_info_for_existing_chat() -> None:
+    log = mk_logger()
+    repo = AsyncMock()
+    uc, _, cache = make_management_uc(repo=repo, logger=log)
+    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
+    cache.chats.get_by_id.return_value = None
+    domain_chat = mk_chat(chat_id=7, telegram_id=-100, now=dt(10))
+    repo.get_by_id.return_value = domain_chat
+
+    await uc.register(profile=profile)
+
+    log.info.assert_not_called()
 
 
 @pytest.mark.unit

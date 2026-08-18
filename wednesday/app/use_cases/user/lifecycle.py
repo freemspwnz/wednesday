@@ -104,6 +104,7 @@ class UserLifecycleUseCase(UserBaseUseCase):
             at=at,
         )
         await self._uow.users.save(user)
+        self._logger.info("User registered", tg_id=profile.telegram_id)
         return user
 
     async def _expire_subscription_if_due(self, *, user_id: UserId, at: AwareDatetime) -> User:
