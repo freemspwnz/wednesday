@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery
 
 from app.dto import UserContext
 from app.protocols import RequestScope
+from domain.chat import ChatProfile, ChatType
 from domain.image import ImageId
 from domain.kernel.vo import AwareDatetime
 
@@ -25,9 +26,13 @@ async def cb_image_vote(
     """Record a vote and refresh likes / dislikes on the keyboard."""
 
     async def _action() -> None:
+        private_chat = await scope.chat_management_uc.register(
+            profile=ChatProfile(type=ChatType.PRIVATE, telegram_id=user.tg_id),
+        )
         card = await scope.image_vote_uc.vote(
             image_id=ImageId(UUID(callback_data.image_id)),
             voter_id=user.id,
+            chat_id=private_chat.id,
             value=callback_data.value,
             at=AwareDatetime.now_utc(),
         )
