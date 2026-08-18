@@ -134,7 +134,11 @@ class Tenacity(Retrier):
 
         msg = "Unexpected error while retrying"
         exc_info = True
-        if isinstance(e, TenacityRetryError | AppError):
+        error_type = type(e).__name__
+        if isinstance(e, TenacityRetryError):
+            msg = "Retry attempts exhausted"
+            exc_info = False
+        elif isinstance(e, AppError):
             msg = "Retry execution failed"
             exc_info = False
 
@@ -142,5 +146,6 @@ class Tenacity(Retrier):
             msg,
             name=self._name,
             attempt=attempt_number,
+            error_type=error_type,
             exc_info=exc_info,
         )
