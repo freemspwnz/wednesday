@@ -186,6 +186,11 @@ async def test_cmd_generate_rejected_prompt_assigns_ban(
     with patch.object(Message, "answer", new_callable=AsyncMock, return_value=status) as answer:
         await cmd_generate(message, command, user, chat_context, mock_scope)
 
+    mock_scope.logger.warning.assert_called_once_with(
+        "Prompt rejected",
+        user_id=str(user.id.value),
+        code="prohibited_content",
+    )
     mock_scope.user_generation_uc.assert_allowed.assert_awaited_once()
     mock_scope.image_generation_uc.by_user.assert_awaited_once()
     mock_scope.user_moderation_uc.assign_ban.assert_awaited_once()
