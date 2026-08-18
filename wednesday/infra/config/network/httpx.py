@@ -1,3 +1,4 @@
+from importlib.metadata import version
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -29,7 +30,7 @@ class HttpConfig(BaseModel):
     base_url: str = Field(default="", description="Base URL for all requests")
 
     headers: dict[str, str] | None = Field(
-        default={"User-Agent": "wednesday/7.4.0"},
+        default={"User-Agent": f"wednesday/{version('wednesday')}"},
         description="Default headers for all requests",
     )
     verify: bool | str = Field(default=True, description="SSL certificate verification")
