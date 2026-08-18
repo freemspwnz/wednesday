@@ -68,6 +68,11 @@ async def cmd_generate(
             try:
                 render = await scope.image_generation_uc.by_user(model=model, prompt=raw_prompt)
             except PromptRejectedError as exc:
+                logger.warning(
+                    "Prompt rejected",
+                    user_id=str(user.id.value),
+                    code=exc.code,
+                )
                 await scope.user_moderation_uc.assign_ban(user_id=user.id, at=at)
                 await status.edit_text(user_message_for_exception(exc))
                 return
