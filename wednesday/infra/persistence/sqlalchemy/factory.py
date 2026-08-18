@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
 from app.exceptions import DBUnavailableError
 from app.protocols import DBMetrics, Logger, UoW, UoWFactory
 from infra.config import PostgresConfig
+from infra.observe.prometheus.adapters.sqla import SQLAMetrics
 
 from .uow import SQLAUoW
 
@@ -70,17 +71,25 @@ class SQLAUoWFactory(UoWFactory):
             pool_size=self._config.pool_size,
             max_overflow=self._config.max_overflow,
         )
-        self._attach_engine_metrics(engine.sync_engine, self._metrics)
+        self._attach_engine_metrics(engine.sync_engine, self._metrics, self._logger)
         self._logger.debug("SQLAlchemy engine created successfully.")
         return engine
 
     @staticmethod
-    def _attach_engine_metrics(engine: Engine, metrics: DBMetrics) -> None:
+    def _attach_engine_metrics(engine: Engine, metrics: DBMetrics, logger: Logger) -> None:
         def handle_error(exception_context: ExceptionContext) -> None:
+            statement = exception_context.statement or ""
+            error_type = type(exception_context.original_exception).__name__
+            command = SQLAMetrics._extract_command(statement)
             metrics.on_cursor_error(
-                statement=exception_context.statement or "",
-                error_type=type(exception_context.original_exception).__name__,
+                statement=statement,
+                error_type=error_type,
                 context=getattr(exception_context, "execution_context", None),
+            )
+            logger.warning(
+                "Database query failed",
+                command=command,
+                error_type=error_type,
             )
 
         event.listen(engine, "before_cursor_execute", metrics.on_before_cursor_execute)
