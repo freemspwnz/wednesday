@@ -2,6 +2,7 @@ from dataclasses import dataclass, replace
 from typing import Final, Self
 from zoneinfo import ZoneInfo
 
+from ....kernel.vo import AwareDatetime
 from ...exceptions import ScheduleLimitExceededError, ValidationError
 from .schedule import ChatSchedule
 from .weekday import Weekday
@@ -52,6 +53,16 @@ class ChatScheduleSet:
         if self.schedules != ():
             return replace(self, schedules=())
         return self
+
+    def is_due_at(self, at: AwareDatetime) -> bool:
+        """True when ``at`` matches weekday and a slot in this set's timezone."""
+        at = AwareDatetime.ensure(at)
+        if not self.schedules:
+            return False
+        local = at.value.astimezone(self.timezone)
+        if Weekday(local.isoweekday()) != self.weekday:
+            return False
+        return any(slot.hour == local.hour and slot.minute == local.minute for slot in self.schedules)
 
     @classmethod
     def ensure(cls, set: object) -> Self:

@@ -120,6 +120,13 @@ class Chat:
     def updated_at(self) -> AwareDatetime:
         return self._updated_at
 
+    def is_due_at(self, at: AwareDatetime) -> bool:
+        """True when the chat is active and a schedule slot matches ``at``."""
+        at = AwareDatetime.ensure(at)
+        if not isinstance(self._state, ActiveState):
+            return False
+        return self._schedules.is_due_at(at)
+
     def pull_events(self) -> list[ChatEvent]:
         events = list(self._events)
         self._events.clear()
