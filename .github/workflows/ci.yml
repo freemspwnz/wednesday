@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   # ============================================================================
-  # Линтинг и проверка форматирования (параллельно)
+  # Linting and formatting checks (parallel)
   # ============================================================================
 
   lint:
@@ -46,7 +46,7 @@ jobs:
     uses: ./.github/workflows/dependency-review.yml
 
   # ============================================================================
-  # Дополнительные проверки (параллельно с тестами)
+  # Additional checks (parallel to tests)
   # ============================================================================
 
   monitoring:
@@ -56,7 +56,7 @@ jobs:
     uses: ./.github/workflows/loki.yml
 
   # ============================================================================
-  # Унифицированный набор всех Pytest тестов
+  # Unified set of all Pytest tests
   # ============================================================================
 
   pytest:
@@ -65,6 +65,10 @@ jobs:
       python-version: ${{ vars.PYTHON_VERSION }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================================================
+  # Docker image build and push to GHCR
+  # ============================================================================
 
   docker-build:
     name: Docker image (release tags only)
@@ -78,3 +82,15 @@ jobs:
     uses: ./.github/workflows/docker-build.yml
     with:
       image-name: wednesday
+
+  # ============================================================================
+  # GitHub Release creation
+  # ============================================================================
+
+  github-release:
+    name: GitHub Release
+    needs: [docker-build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/gh-release.yml
