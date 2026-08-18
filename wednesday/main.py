@@ -5,12 +5,14 @@ starts aiogram bot and prometheus http server.
 """
 
 import asyncio
+from contextlib import suppress
 
 from aiogram import Bot, Dispatcher
 
 from infra.config import Config
 from infra.di import Container
 from presentation.aiogram import POLLING_ALLOWED_UPDATES, is_telegram_retryable, setup_bot, setup_dp
+from presentation.aiogram.scheduler import CatalogScheduleRunner
 
 
 async def main() -> None:
@@ -55,7 +57,18 @@ async def main() -> None:
     try:
         await container.persistence.warmup()
         metrics.serve()
-        await dp.start_polling(bot, allowed_updates=POLLING_ALLOWED_UPDATES)
+        runner = CatalogScheduleRunner(
+            bot=bot,
+            scope_factory=container.get_scope,
+            logger=container.observe.logger,
+        )
+        runner_task = asyncio.create_task(runner.run(), name="catalog-schedule")
+        try:
+            await dp.start_polling(bot, allowed_updates=POLLING_ALLOWED_UPDATES)
+        finally:
+            runner_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await runner_task
 
     except Exception:
         logger.exception("Unexpected runtime error. Shutting down...")

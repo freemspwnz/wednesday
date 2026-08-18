@@ -32,11 +32,15 @@ def main_mocks() -> dict[str, MagicMock | AsyncMock]:
     dp = MagicMock()
     dp.start_polling = AsyncMock()
 
+    runner = MagicMock()
+    runner.run = AsyncMock()
+
     return {
         "config": config,
         "container": container,
         "bot": bot,
         "dp": dp,
+        "runner": runner,
     }
 
 
@@ -50,6 +54,7 @@ async def test_main_closes_bot_and_shuts_down_container(main_mocks: dict[str, Ma
         patch("main.Dispatcher", return_value=main_mocks["dp"]),
         patch("main.setup_bot"),
         patch("main.setup_dp"),
+        patch("main.CatalogScheduleRunner", return_value=main_mocks["runner"]),
     ):
         await main()
 
@@ -57,6 +62,7 @@ async def test_main_closes_bot_and_shuts_down_container(main_mocks: dict[str, Ma
     main_mocks["container"].shutdown.assert_awaited_once()
     main_mocks["container"].persistence.warmup.assert_awaited_once()
     main_mocks["dp"].start_polling.assert_awaited_once()
+    main_mocks["runner"].run.assert_called()
 
 
 @pytest.mark.unit
@@ -147,6 +153,7 @@ async def test_main_reraises_polling_error_and_still_shuts_down(
         patch("main.Dispatcher", return_value=main_mocks["dp"]),
         patch("main.setup_bot"),
         patch("main.setup_dp"),
+        patch("main.CatalogScheduleRunner", return_value=main_mocks["runner"]),
         pytest.raises(RuntimeError, match="polling failed"),
     ):
         await main()
