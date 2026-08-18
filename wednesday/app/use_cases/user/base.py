@@ -2,7 +2,7 @@ from collections.abc import Awaitable, Callable
 
 from app.dto import UserContext
 from app.protocols import CacheRepo, Logger, UoW
-from domain.user import User, UserId
+from domain.user import User, UserId, UserNotFoundError
 
 
 class UserBaseUseCase:
@@ -46,4 +46,10 @@ class UserBaseUseCase:
             action=action,
             tg_id=user.profile.telegram_id,
         )
+        return user
+
+    async def _load_user_or_raise(self, *, user_id: UserId) -> User:
+        user = await self._uow.users.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(str(user_id))
         return user

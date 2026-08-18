@@ -2,7 +2,8 @@ from app.dto import UserContext
 from app.protocols import CacheRepo, Logger, UoW
 from domain.catalog import ModelCatalog, SubscriptionCatalog
 from domain.kernel.vo import AwareDatetime
-from domain.user import User, UserId, UserLifecycleService, UserProfile
+from domain.user import User, UserId, UserProfile, UserRole, UserSettings, UserSubscription
+from domain.user.helpers import user_id_from_tg
 
 from .base import UserBaseUseCase
 
@@ -39,13 +40,7 @@ class UserLifecycleUseCase(UserBaseUseCase):
             tg_id=profile.telegram_id,
         )
         async with self._uow:
-            resolved = await UserLifecycleService.get_or_create(
-                profile=profile,
-                repo=self._uow.users,
-                models=self._models,
-                subscriptions=self._subscriptions,
-                at=AwareDatetime.now_utc(),
-            )
+            resolved = await self._get_or_create(profile=profile, at=AwareDatetime.now_utc())
 
         await self._cache.set(resolved)
         self._logger.debug(
@@ -64,10 +59,7 @@ class UserLifecycleUseCase(UserBaseUseCase):
 
         self._logger.debug("User lookup cache miss", tg_id=tg_id)
         async with self._uow:
-            entity = await UserLifecycleService.get_if_exists(
-                tg_id=tg_id,
-                repo=self._uow.users,
-            )
+            entity = await self._uow.users.get_by_id(user_id_from_tg(tg_id))
         if entity is None:
             return None
 
@@ -78,19 +70,45 @@ class UserLifecycleUseCase(UserBaseUseCase):
         return await self._run_mutating(
             action="expire_subscription_if_due",
             user_id=user_id,
-            runner=lambda: UserLifecycleService.expire_subscription_if_due(
-                id=user_id,
-                repo=self._uow.users,
-                subscriptions=self._subscriptions,
-                at=at,
-            ),
+            runner=lambda: self._expire_subscription_if_due(user_id=user_id, at=at),
         )
 
     async def mark_seen(self, *, user_id: UserId, at: AwareDatetime) -> User:
         self._log_scenario_start(action="mark_seen", user_id=user_id)
         async with self._uow:
-            return await UserLifecycleService.mark_seen(
-                id=user_id,
-                repo=self._uow.users,
-                at=at,
-            )
+            user = await self._load_user_or_raise(user_id=user_id)
+            user.mark_seen_at(at=at)
+            await self._uow.users.save(user)
+            return user
+
+    async def _get_or_create(self, *, profile: UserProfile, at: AwareDatetime) -> User:
+        user_id = user_id_from_tg(profile.telegram_id)
+        existing = await self._uow.users.get_by_id(user_id)
+        if existing is not None:
+            existing.mark_seen_at(at=at)
+            await self._uow.users.save(existing)
+            return existing
+
+        default_plan = await self._subscriptions.default_plan()
+        default_descriptor = await self._models.default_for_tier(default_plan.tier)
+        user = User.register(
+            id=user_id,
+            profile=profile,
+            role=UserRole.USER,
+            subscription=UserSubscription(
+                plan=default_plan,
+                started_at=at,
+                expires_at=None,
+            ),
+            settings=UserSettings.from_descriptor(default_descriptor),
+            at=at,
+        )
+        await self._uow.users.save(user)
+        return user
+
+    async def _expire_subscription_if_due(self, *, user_id: UserId, at: AwareDatetime) -> User:
+        user = await self._load_user_or_raise(user_id=user_id)
+        fallback = await self._subscriptions.default_plan()
+        user.expire_subscription_if_due(fallback=fallback, at=at)
+        await self._uow.users.save(user)
+        return user
