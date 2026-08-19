@@ -13,6 +13,7 @@ WELCOME = (
     "/random - Случайное изображение из каталога\n"
     "/set_model - Выбрать модель генерации\n"
     "/list_models - Список доступных моделей\n"
+    "/reset - Сбросить просмотренные изображения\n"
     "/schedule help - Показать команды для настройки расписания (только в чате)\n"
 )
 
@@ -26,6 +27,7 @@ HELP = (
     "/random - Случайное изображение из каталога\n"
     "/set_model - Выбрать модель генерации\n"
     "/list_models - Список доступных моделей\n"
+    "/reset - Сбросить просмотренные изображения\n"
     "/schedule help - Показать команды для настройки расписания (только в чате)\n"
 )
 
@@ -43,4 +45,5 @@ BOT_COMMANDS: tuple[BotCommand, ...] = (
     BotCommand(command="random", description="Случайное изображение из каталога"),
     BotCommand(command="set_model", description="Выбрать модель для генерации изображений"),
     BotCommand(command="list_models", description="Список доступных моделей"),
+    BotCommand(command="reset", description="Сбросить просмотренные изображения"),
 )
