@@ -391,6 +391,37 @@ async def test_view_mark_shown_wraps_integrity_error() -> None:
 @pytest.mark.unit
 @pytest.mark.infra
 @pytest.mark.asyncio
+async def test_view_reset_for_chat_builds_delete_query() -> None:
+    session = AsyncMock()
+    result = Mock()
+    result.all.return_value = [(UUID(int=1),), (UUID(int=2),), (UUID(int=3),)]
+    session.execute.return_value = result
+    repo = SQLAViewRepo(session=session)
+    chat_id = ChatId(UUID(int=42))
+
+    count = await repo.reset_for_chat(chat_id)
+
+    assert count == 3
+    sql = str(session.execute.await_args.args[0])
+    assert "DELETE" in sql
+    assert "image_view" in sql
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+@pytest.mark.asyncio
+async def test_view_reset_for_chat_wraps_sqla_error() -> None:
+    session = AsyncMock()
+    session.execute.side_effect = SQLAlchemyError("db down")
+    repo = SQLAViewRepo(session=session)
+
+    with pytest.raises(RepositoryError):
+        await repo.reset_for_chat(ChatId(UUID(int=42)))
+
+
+@pytest.mark.unit
+@pytest.mark.infra
+@pytest.mark.asyncio
 async def test_vote_get_wraps_sqla_error() -> None:
     session = AsyncMock()
     session.execute.side_effect = SQLAlchemyError("db down")
