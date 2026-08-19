@@ -1,4 +1,4 @@
-from sqlalchemy import exists, func, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -115,3 +115,19 @@ class SQLAViewRepo(ViewRepo):
             ) from exc
         except Exception as exc:
             raise UnexpectedDBError("Unexpected error while picking unseen image for chat.") from exc
+
+    async def reset_for_chat(self, chat_id: ChatId) -> int:
+        try:
+            chat_id = ChatId.ensure(chat_id)
+            result = await self._session.execute(
+                delete(ViewORM).where(ViewORM.chat_id == chat_id.value).returning(ViewORM.image_id),
+            )
+            return len(result.all())
+        except SQLAlchemyError as exc:
+            raise RepositoryError(
+                "SQLAlchemy failed to reset image view history for chat.",
+                operation="reset_for_chat",
+                entity="image_view",
+            ) from exc
+        except Exception as exc:
+            raise UnexpectedDBError("Unexpected error while resetting image view history for chat.") from exc

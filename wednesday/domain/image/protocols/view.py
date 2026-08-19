@@ -33,3 +33,7 @@ class ViewRepo(Protocol):
     ) -> ImageId | None:
         """Get unseen image for chat."""
         ...
+
+    async def reset_for_chat(self, chat_id: ChatId) -> int:
+        """Reset view history for chat."""
+        ...

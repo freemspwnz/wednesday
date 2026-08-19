@@ -182,6 +182,12 @@ class FakeViewRepo(ViewRepo):
             return image.id
         return None
 
+    async def reset_for_chat(self, chat_id: ChatId) -> int:
+        chat_id = ChatId.ensure(chat_id)
+        before = len(self.shown)
+        self.shown = {key for key in self.shown if key[0] != chat_id.value}
+        return before - len(self.shown)
+
 
 @dataclass
 class FakeImageVoteRepo(VoteRepo):
