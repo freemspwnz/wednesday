@@ -36,7 +36,7 @@ from .policies import (
     UsageStats,
     ViolationStats,
 )
-from .protocols import UsageRepo, UserRepo, ViolationRepo
+from .protocols import UsageRepo, UsageSnapshot, UserRepo, ViolationRepo
 from .user import User
 from .vo import (
     ActiveState,
@@ -69,6 +69,7 @@ __all__ = [
     "StaleWriteError",
     "Unban",
     "UsageRepo",
+    "UsageSnapshot",
     "UsageStats",
     "User",
     "UserBanExpired",

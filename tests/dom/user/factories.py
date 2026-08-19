@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Self
@@ -16,7 +17,7 @@ from domain.catalog import (
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
 from domain.user.policies import UsageStats, ViolationStats
-from domain.user.protocols import UsageRepo, UserRepo, ViolationRepo
+from domain.user.protocols import UsageRepo, UsageSnapshot, UserRepo, ViolationRepo
 from domain.user.vo import UserSettings, UserSubscription
 
 from ..catalog import FREE_PLAN, PREMIUM_PLAN
@@ -184,26 +185,40 @@ class FakeUserRepo(UserRepo):
 
 @dataclass
 class FakeUsageRepo(UsageRepo):
-    """In-memory UsageRepo for domain tests."""
+    stats: UsageStats = field(default_factory=lambda: UsageStats(last_usage=None, daily_usage=0))
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
+    _transaction_lock_held: bool = field(default=False, repr=False)
 
-    stats: UsageStats = field(
-        default_factory=lambda: UsageStats(last_usage=None, daily_usage=0),
-    )
+    async def release_transaction_lock(self) -> None:
+        if self._transaction_lock_held:
+            self._transaction_lock_held = False
+            self._lock.release()
 
-    async def get_stats(self, user_id: UserId) -> UsageStats:
-        _ = UserId.ensure(user_id)
-        return self.stats
-
-    async def record(self, user_id: UserId, at: AwareDatetime) -> None:
+    async def get_stats(self, user_id: UserId, at: AwareDatetime, lock: bool = False) -> UsageStats:
         _ = UserId.ensure(user_id)
         _ = AwareDatetime.ensure(at)
-        self.stats = UsageStats(last_usage=at, daily_usage=self.stats.daily_usage + 1)
+        if lock:
+            await self._lock.acquire()
+            self._transaction_lock_held = True
+        return self.stats
 
-    @classmethod
-    def ensure(cls, repo: Self) -> Self:
-        if not isinstance(repo, UsageRepo):
-            raise TypeError("repo must be a UsageRepo")
-        return repo
+    async def record(self, user_id: UserId, at: AwareDatetime) -> UsageSnapshot:
+        _ = UserId.ensure(user_id)
+        at = AwareDatetime.ensure(at)
+        try:
+            snapshot = UsageSnapshot(
+                last_usage=self.stats.last_usage,
+                daily_usage=self.stats.daily_usage,
+                daily_usage_on=at.value.date(),
+            )
+            self.stats = UsageStats(last_usage=at, daily_usage=self.stats.daily_usage + 1)
+            return snapshot
+        finally:
+            await self.release_transaction_lock()
+
+    async def refund(self, user_id: UserId, snapshot: UsageSnapshot) -> None:
+        _ = UserId.ensure(user_id)
+        self.stats = UsageStats(last_usage=snapshot.last_usage, daily_usage=max(0, snapshot.daily_usage))
 
 
 @dataclass

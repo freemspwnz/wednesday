@@ -63,45 +63,50 @@ async def cmd_generate(
         model = Model.parse(user.model)
         raw_prompt = (command.args or "").strip()
 
-        await scope.user_generation_uc.assert_allowed(user_id=user.id, at=at)
+        snap = await scope.user_generation_uc.begin_generation(user_id=user.id, at=at)
+        committed = False
         status = await message.answer(image_msg.GENERATION_STARTED)
 
-        if raw_prompt:
-            try:
-                render = await scope.image_generation_uc.by_user(model=model, prompt=raw_prompt)
-            except PromptRejectedError as exc:
-                logger.warning(
-                    "Prompt rejected",
-                    user_id=str(user.id.value),
-                    code=exc.code,
-                )
-                await scope.user_moderation_uc.assign_ban(user_id=user.id, at=at)
-                await status.edit_text(user_message_for_exception(exc))
+        try:
+            if raw_prompt:
+                try:
+                    render = await scope.image_generation_uc.by_user(model=model, prompt=raw_prompt)
+                except PromptRejectedError as exc:
+                    logger.warning(
+                        "Prompt rejected",
+                        user_id=str(user.id.value),
+                        code=exc.code,
+                    )
+                    await scope.user_moderation_uc.assign_ban(user_id=user.id, at=at)
+                    await status.edit_text(user_message_for_exception(exc))
+                    return
+            else:
+                render = await scope.image_generation_uc.random(model=model)
+
+            sent = await message.answer_photo(
+                photo=BufferedInputFile(render.content, filename="wednesday.png"),
+            )
+            if not sent.photo:
+                logger.error("Telegram returned photo message without photo sizes")
                 return
-        else:
-            render = await scope.image_generation_uc.random(model=model)
 
-        sent = await message.answer_photo(
-            photo=BufferedInputFile(render.content, filename="wednesday.png"),
-        )
-        if not sent.photo:
-            logger.error("Telegram returned photo message without photo sizes")
-            return
-
-        file_id = TelegramFileId.parse(sent.photo[-1].file_id)
-        image_id = ImageId.new()
-        card = await scope.image_generation_uc.register(
-            image_id=image_id,
-            file_id=file_id,
-            meta=ImageMeta(author_id=user.id, model=model),
-            render=render,
-            chat_id=chat.id,
-            at=at,
-        )
-        await sent.edit_reply_markup(
-            reply_markup=build_vote_kb(image_id=str(card.id), rating=card.rating),
-        )
-        await scope.user_generation_uc.record_usage(user_id=user.id, at=at)
+            file_id = TelegramFileId.parse(sent.photo[-1].file_id)
+            image_id = ImageId.new()
+            card = await scope.image_generation_uc.register(
+                image_id=image_id,
+                file_id=file_id,
+                meta=ImageMeta(author_id=user.id, model=model),
+                render=render,
+                chat_id=chat.id,
+                at=at,
+            )
+            await sent.edit_reply_markup(
+                reply_markup=build_vote_kb(image_id=str(card.id), rating=card.rating),
+            )
+            committed = True
+        finally:
+            if not committed:
+                await scope.user_generation_uc.refund_generation(user_id=user.id, snapshot=snap)
 
         try:
             await status.delete()
