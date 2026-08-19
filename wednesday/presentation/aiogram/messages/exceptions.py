@@ -2,7 +2,7 @@
 
 from builtins import BaseException
 
-from app.exceptions import AppError, LimitStorageError
+from app.exceptions import AppError, LimitStorageError, UnknownProviderError
 from domain.chat.exceptions import (
     AccessDeniedError as ChatAccessDeniedError,
     ChatNotFoundError,
@@ -81,6 +81,8 @@ def _cooldown_message(exc: CooldownViolationError) -> str:
 
 def user_message_for_exception(exc: BaseException) -> str | None:
     """User-facing text; None means use a generic fallback message."""
+    if isinstance(exc, UnknownProviderError):
+        return GENERATION_FAILED
     if isinstance(exc, UserNotFoundError):
         return USER_NOT_FOUND
     if isinstance(exc, ChatNotFoundError):

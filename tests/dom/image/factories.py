@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Self
 from uuid import UUID
 
-from domain.catalog import Model
+from domain.catalog import Model, Vendor
 from domain.chat import ChatId
 from domain.image import (
     ActiveState,
@@ -233,6 +233,21 @@ class FakePromptCatalog(PromptCatalog):
 
     async def components(self) -> PromptComponents:
         return self.components_data
+
+
+@dataclass
+class FakeGeneratorRegistry:
+    """Fake GeneratorRegistry that always resolves to a single FakeGenerator."""
+
+    generator: "FakeGenerator | None" = None
+
+    def resolve(self, vendor: Vendor) -> Generator:
+        from app.exceptions import UnknownProviderError
+
+        Vendor.ensure(vendor)
+        if self.generator is None:
+            raise UnknownProviderError(str(vendor))
+        return self.generator
 
 
 @dataclass

@@ -7,9 +7,10 @@ from uuid import UUID
 import pytest
 
 from app.dto import ImageCard
+from app.exceptions import UnknownProviderError
 from app.protocols import Logger
 from app.use_cases.image import ImageCatalogUseCase, ImageGenerationUseCase
-from domain.catalog import Model
+from domain.catalog import Model, Vendor
 from domain.chat import ChatId
 from domain.image import (
     ImageId,
@@ -24,7 +25,13 @@ from domain.image import (
 )
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserId
-from tests.dom.image.factories import FakeGenerator, FakeImageRepo, FakePromptCatalog, FakeViewRepo
+from tests.dom.image.factories import (
+    FakeGenerator,
+    FakeGeneratorRegistry,
+    FakeImageRepo,
+    FakePromptCatalog,
+    FakeViewRepo,
+)
 
 from ...factories import FakeUoW, mk_logger
 
@@ -33,16 +40,24 @@ def dt(hour: int) -> AwareDatetime:
     return AwareDatetime(datetime(2026, 1, 1, hour, 0, tzinfo=UTC))
 
 
+_SBER = Vendor.parse("sber")
+
+
 def _make_uc(
     *,
     uow: FakeUoW | None = None,
     gen: FakeGenerator | None = None,
+    registry: FakeGeneratorRegistry | None = None,
     logger: Logger | None = None,
 ) -> ImageGenerationUseCase:
+    if registry is None:
+        registry = FakeGeneratorRegistry(
+            generator=gen or FakeGenerator(text_response="enriched frog", image_content=b"png"),
+        )
     return ImageGenerationUseCase(
         uow=uow or FakeUoW(),
         prompts=FakePromptCatalog(),
-        gen=gen or FakeGenerator(text_response="enriched frog", image_content=b"png"),
+        generators=registry,
         policy=PromptModerationPolicy(),
         logger=logger or Mock(spec=Logger),
     )
@@ -64,6 +79,7 @@ async def test_uc_by_user_returns_render() -> None:
     uc = _make_uc()
 
     render = await uc.by_user(
+        vendor=_SBER,
         model=Model.parse("gigachat-2-lite"),
         prompt="frog meme",
     )
@@ -79,7 +95,7 @@ async def test_uc_by_user_logs_finish_at_info() -> None:
     log = mk_logger()
     uc = _make_uc(logger=log)
 
-    await uc.by_user(model=Model.parse("gigachat-2-lite"), prompt="frog meme")
+    await uc.by_user(vendor=_SBER, model=Model.parse("gigachat-2-lite"), prompt="frog meme")
 
     log.info.assert_called_once_with(
         "Image generation by user finished",
@@ -95,8 +111,34 @@ async def test_uc_by_user_rejects_banned_prompt() -> None:
 
     with pytest.raises(PromptRejectedError):
         await uc.by_user(
+            vendor=_SBER,
             model=Model.parse("gigachat-2-lite"),
             prompt="naked frog",
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_by_user_unknown_vendor_raises() -> None:
+    uc = _make_uc(registry=FakeGeneratorRegistry(generator=None))
+
+    with pytest.raises(UnknownProviderError):
+        await uc.by_user(
+            vendor=Vendor.parse("yandex"),
+            model=Model.parse("gigachat-2-lite"),
+            prompt="frog meme",
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_random_unknown_vendor_raises() -> None:
+    uc = _make_uc(registry=FakeGeneratorRegistry(generator=None))
+
+    with pytest.raises(UnknownProviderError):
+        await uc.random(
+            vendor=Vendor.parse("yandex"),
+            model=Model.parse("gigachat-2-lite"),
         )
 
 
@@ -107,7 +149,7 @@ async def test_uc_random_returns_render() -> None:
         gen=FakeGenerator(text_response="random frog", image_content=b"rnd"),
     )
 
-    render = await uc.random(model=Model.parse("gigachat-2-lite"))
+    render = await uc.random(vendor=_SBER, model=Model.parse("gigachat-2-lite"))
 
     assert isinstance(render, ImageRender)
     assert render.content == b"rnd"
@@ -123,7 +165,7 @@ async def test_uc_random_logs_finish_at_info() -> None:
         logger=log,
     )
 
-    await uc.random(model=Model.parse("gigachat-2-lite"))
+    await uc.random(vendor=_SBER, model=Model.parse("gigachat-2-lite"))
 
     log.info.assert_called_once_with(
         "Random image generation finished",
