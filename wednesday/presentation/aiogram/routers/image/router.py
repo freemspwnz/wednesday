@@ -7,7 +7,7 @@ from aiogram.types import BufferedInputFile, Message
 
 from app.dto import ChatContext, UserContext
 from app.protocols import RequestScope
-from domain.catalog import Model
+from domain.catalog import Model, Vendor
 from domain.image import ImageId, ImageMeta, PromptRejectedError, TelegramFileId
 from domain.kernel.vo import AwareDatetime
 
@@ -63,6 +63,7 @@ async def cmd_generate(
         logger = scope.logger.bind(module="image_router")
         at = AwareDatetime.now_utc()
         model = Model.parse(user.model)
+        vendor = Vendor.parse(user.model_vendor)
         raw_prompt = (command.args or "").strip()
 
         snap = await scope.user_generation_uc.begin_generation(user_id=user.id, at=at)
@@ -72,7 +73,7 @@ async def cmd_generate(
         try:
             if raw_prompt:
                 try:
-                    render = await scope.image_generation_uc.by_user(model=model, prompt=raw_prompt)
+                    render = await scope.image_generation_uc.by_user(vendor=vendor, model=model, prompt=raw_prompt)
                 except PromptRejectedError as exc:
                     logger.warning(
                         "Prompt rejected",
@@ -83,7 +84,7 @@ async def cmd_generate(
                     await status.edit_text(user_message_for_exception(exc))
                     return
             else:
-                render = await scope.image_generation_uc.random(model=model)
+                render = await scope.image_generation_uc.random(vendor=vendor, model=model)
 
             sent = await message.answer_photo(
                 photo=BufferedInputFile(render.content, filename="wednesday.png"),

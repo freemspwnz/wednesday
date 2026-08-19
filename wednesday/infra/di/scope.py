@@ -126,9 +126,8 @@ class ScopeContainer(RequestScope):
 
     @cached_property
     def image_generation_uc(self) -> ImageGenerationUseCase:
-        sber = self._providers.sber
         return ImageGenerationUseCase(
-            gen=sber,
+            generators=self._providers,
             prompts=self.prompts,
             policy=PromptModerationPolicy(),
             uow=self._uow(),

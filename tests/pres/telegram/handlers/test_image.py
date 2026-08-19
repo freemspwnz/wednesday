@@ -9,7 +9,7 @@ from aiogram.filters import CommandObject
 from aiogram.types import CallbackQuery, Chat as TgChat, Message, PhotoSize, User as TgUser
 
 from app.dto import ChatContext, ImageCard, UserContext
-from domain.catalog import Model
+from domain.catalog import Model, Vendor
 from domain.chat import ChatProfile, ChatType
 from domain.image import (
     ImageMeta,
@@ -113,6 +113,7 @@ async def test_cmd_generate_with_prompt_success(
     mock_scope.user_generation_uc.begin_generation.assert_awaited_once()
     mock_scope.image_generation_uc.by_user.assert_awaited_once()
     by_user_kwargs = mock_scope.image_generation_uc.by_user.await_args.kwargs
+    assert by_user_kwargs["vendor"] == Vendor.parse(user.model_vendor)
     assert by_user_kwargs["prompt"] == "cute frog"
     mock_scope.image_generation_uc.random.assert_not_called()
     answer_photo.assert_awaited_once()
@@ -161,6 +162,8 @@ async def test_cmd_generate_without_args_uses_random(
         await cmd_generate(message, command, user, chat_context, mock_scope)
 
     mock_scope.image_generation_uc.random.assert_awaited_once()
+    random_kwargs = mock_scope.image_generation_uc.random.await_args.kwargs
+    assert random_kwargs["vendor"] == Vendor.parse(user.model_vendor)
     mock_scope.image_generation_uc.by_user.assert_not_called()
 
 

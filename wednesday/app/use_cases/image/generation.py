@@ -1,12 +1,11 @@
 from random import choice
 
 from app.dto import ImageCard
-from app.protocols import Logger, UoW
-from domain.catalog import Model
+from app.protocols import GeneratorRegistry, Logger, UoW
+from domain.catalog import Model, Vendor
 from domain.chat import ChatId
 from domain.image import (
     GenerationError,
-    Generator,
     Image,
     ImageId,
     ImageMeta,
@@ -34,20 +33,21 @@ class ImageGenerationUseCase(ImageBaseUseCase):
     def __init__(
         self,
         *,
-        gen: Generator,
+        generators: GeneratorRegistry,
         prompts: PromptCatalog,
         policy: PromptModerationPolicy,
         uow: UoW,
         logger: Logger,
     ) -> None:
         super().__init__(uow=uow, logger=logger)
-        self._gen = gen
+        self._generators = generators
         self._prompts = prompts
         self._policy = policy
 
     async def by_user(
         self,
         *,
+        vendor: Vendor,
         model: Model,
         prompt: str,
     ) -> ImageRender:
@@ -55,6 +55,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
             "Image generation by user started",
             model=str(model),
         )
+        gen = self._generators.resolve(vendor)
         resolved_model = Model.ensure(model)
         normalized = NormalizedPrompt.parse(prompt)
         Image.moderate(prompt=normalized, policy=self._policy)
@@ -62,7 +63,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         enriched: NormalizedPrompt | None = None
         enrichment_system = await self._prompts.enrichment_prompt()
         try:
-            enriched_raw = await self._gen.generate_text(
+            enriched_raw = await gen.generate_text(
                 model=str(resolved_model),
                 system_prompt=enrichment_system,
                 user_prompt=str(normalized),
@@ -77,7 +78,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
             enriched=enriched,
         )
         generation_system = await self._prompts.generation_prompt()
-        content = await self._gen.generate_image(
+        content = await gen.generate_image(
             model=str(resolved_model),
             system_prompt=generation_system,
             user_prompt=str(prompts.effective()),
@@ -90,14 +91,15 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         )
         return render
 
-    async def random(self, *, model: Model) -> ImageRender:
+    async def random(self, *, vendor: Vendor, model: Model) -> ImageRender:
         self._logger.debug("Random image generation started", model=str(model))
+        gen = self._generators.resolve(vendor)
         resolved_model = Model.ensure(model)
         source = PromptSource.LLM
         base_system = await self._prompts.base_prompt()
         try:
             prompt = NormalizedPrompt.parse(
-                await self._gen.generate_text(
+                await gen.generate_text(
                     model=str(resolved_model),
                     system_prompt=base_system,
                     user_prompt="",
@@ -109,7 +111,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
 
         prompts = ImagePrompts(primary=prompt, source=source)
         generation_system = await self._prompts.generation_prompt()
-        content = await self._gen.generate_image(
+        content = await gen.generate_image(
             model=str(resolved_model),
             system_prompt=generation_system,
             user_prompt=str(prompts.effective()),
