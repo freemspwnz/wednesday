@@ -58,3 +58,18 @@ class ImageCatalogUseCase(ImageBaseUseCase):
             chat_id=str(chat_id.value),
             image_id=str(image_id.value),
         )
+
+    async def reset_views(self, *, chat_id: ChatId) -> int:
+        chat_id = ChatId.ensure(chat_id)
+        self._logger.debug(
+            "Image catalog reset views started",
+            chat_id=str(chat_id.value),
+        )
+        async with self._uow:
+            count = await self._uow.views.reset_for_chat(chat_id)
+        self._logger.debug(
+            "Image catalog reset views finished",
+            chat_id=str(chat_id.value),
+            count=count,
+        )
+        return count

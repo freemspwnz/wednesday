@@ -22,6 +22,28 @@ def dt(hour: int) -> AwareDatetime:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_uc_reset_views_delegates_to_repo() -> None:
+    image = mk_image(image_id=3, rating=mk_rating(likes=2), created_at=dt(9))
+    repo = FakeViewRepo(candidates=[image])
+    chat_id = ChatId(UUID(int=100))
+    other_chat_id = ChatId(UUID(int=101))
+    repo.shown = {
+        (chat_id.value, image.id),
+        (other_chat_id.value, image.id),
+    }
+    uow = FakeUoW(views=repo)
+    uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
+
+    result = await uc.reset_views(chat_id=chat_id)
+
+    assert result == 1
+    assert (chat_id.value, image.id) not in repo.shown
+    assert (other_chat_id.value, image.id) in repo.shown
+    assert uow.enter_count == uow.exit_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_uc_pick_for_chat_returns_none_when_catalog_empty() -> None:
     views = AsyncMock()
     views.get_unseen_for_chat.return_value = None
