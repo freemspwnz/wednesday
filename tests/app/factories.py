@@ -61,6 +61,9 @@ class FakeUoW:
         exc_value: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
+        usage = self.usage
+        if hasattr(usage, "release_transaction_lock"):
+            await usage.release_transaction_lock()
         self.exit_count += 1
 
 

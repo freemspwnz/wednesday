@@ -2,7 +2,7 @@ from app.dto import UserContext
 from app.protocols import CacheRepo, Logger, UoW
 from domain.catalog import Model, ModelCatalog, SubscriptionCatalog
 from domain.kernel.vo import AwareDatetime
-from domain.user import ModelNotFoundError, User, UserBannedError, UserId
+from domain.user import ModelNotFoundError, UsageSnapshot, User, UserBannedError, UserId
 from domain.user.exceptions import CooldownViolationError, LimitViolationError, ValidationError
 from domain.user.policies import CooldownViolation, DailyLimitViolation, LimitAllowed, LimitDenied, LimitPolicy
 
@@ -15,10 +15,10 @@ class UserGenerationUseCase(UserBaseUseCase):
     def __init__(
         self,
         *,
-        uow: UoW,
-        cache: CacheRepo[UserContext, User],
         models: ModelCatalog,
         subscriptions: SubscriptionCatalog,
+        uow: UoW,
+        cache: CacheRepo[UserContext, User],
         logger: Logger,
     ) -> None:
         super().__init__(uow=uow, cache=cache, logger=logger)
@@ -42,17 +42,21 @@ class UserGenerationUseCase(UserBaseUseCase):
             ),
         )
 
-    async def assert_allowed(self, *, user_id: UserId, at: AwareDatetime) -> None:
-        """Check ban/limits without consuming a generation slot."""
-        self._log_scenario_start(action="assert_allowed", user_id=user_id)
+    async def begin_generation(self, *, user_id: UserId, at: AwareDatetime) -> UsageSnapshot:
+        """Reserve one generation slot after limit checks (check + record in one UoW).
+
+        Returns a snapshot for ``refund_generation`` when render, send, or register fails.
+        """
+        self._log_scenario_start(action="begin_generation", user_id=user_id)
         async with self._uow:
             await self._assert_allowed(user_id=user_id, at=at)
+            return await self._uow.usage.record(user_id, at)
 
-    async def record_usage(self, *, user_id: UserId, at: AwareDatetime) -> None:
-        """Consume one generation slot after a successful render/send."""
-        self._log_scenario_start(action="record_usage", user_id=user_id)
+    async def refund_generation(self, *, user_id: UserId, snapshot: UsageSnapshot) -> None:
+        """Restore usage counters from a snapshot when generation did not finish successfully."""
+        self._log_scenario_start(action="refund_generation", user_id=user_id)
         async with self._uow:
-            await self._uow.usage.record(user_id, at)
+            await self._uow.usage.refund(user_id, snapshot)
 
     async def _select_model(
         self,
@@ -73,7 +77,7 @@ class UserGenerationUseCase(UserBaseUseCase):
 
     async def _assert_allowed(self, *, user_id: UserId, at: AwareDatetime) -> None:
         user = await self._load_user_or_raise(user_id=user_id)
-        stats = await self._uow.usage.get_stats(user_id)
+        stats = await self._uow.usage.get_stats(user_id, at, True)
         default_plan = await self._subscriptions.default_plan()
 
         subscription = user.subscription.effective_at(default_plan, at)
