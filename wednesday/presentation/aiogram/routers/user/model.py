@@ -7,7 +7,6 @@ from aiogram.types import Message
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
 from domain.catalog import Model
-from domain.kernel.vo import AwareDatetime
 
 from ...filters import InsufficientCommandArgs, RequireCommandArgs
 from ...messages import user as user_msg
@@ -32,10 +31,11 @@ async def cmd_set_model(
     """Set image generation model for the caller."""
 
     async def _action() -> None:
+        at = message.date
         updated = await scope.user_generation_uc.select_model(
             user_id=user.id,
             model=Model.parse(command_args[0]),
-            at=AwareDatetime.now_utc(),
+            at=at,
         )
         await message.answer(user_msg.format_set_model_success(str(updated.settings.model)))
 

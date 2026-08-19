@@ -7,9 +7,7 @@ from aiogram.types import BufferedInputFile, Message
 
 from app.dto import ChatContext, UserContext
 from app.protocols import RequestScope
-from domain.catalog import Model, Vendor
-from domain.image import ImageId, ImageMeta, PromptRejectedError, TelegramFileId
-from domain.kernel.vo import AwareDatetime
+from domain.image import PromptRejectedError
 
 from ...messages import image as image_msg
 from ...messages.exceptions import user_message_for_exception
@@ -31,7 +29,9 @@ async def cmd_random(
     """Send a random unseen catalog image for the current chat."""
 
     async def _action() -> None:
+        at = message.date
         card = await scope.image_catalog_uc.pick_for_chat(chat_id=chat.id)
+
         if card is None:
             await message.answer(image_msg.RANDOM_CATALOG_EMPTY)
             return
@@ -43,7 +43,7 @@ async def cmd_random(
         await scope.image_catalog_uc.mark_shown(
             chat_id=chat.id,
             image_id=card.id,
-            at=AwareDatetime.now_utc(),
+            at=at,
         )
 
     await run_message_handler(message, scope.logger, _action)
@@ -60,46 +60,31 @@ async def cmd_generate(
     """Generate an image from a user prompt or a random LLM prompt."""
 
     async def _action() -> None:
+        at = message.date
         logger = scope.logger.bind(module="image_router")
-        at = AwareDatetime.now_utc()
-        model = Model.parse(user.model)
-        vendor = Vendor.parse(user.model_vendor)
-        raw_prompt = (command.args or "").strip()
+        raw_prompt = (command.args or "").strip() or None
 
         snap = await scope.user_generation_uc.begin_generation(user_id=user.id, at=at)
-        committed = False
         status = await message.answer(image_msg.GENERATION_STARTED)
+        committed = False
 
         try:
-            if raw_prompt:
-                try:
-                    render = await scope.image_generation_uc.by_user(vendor=vendor, model=model, prompt=raw_prompt)
-                except PromptRejectedError as exc:
-                    logger.warning(
-                        "Prompt rejected",
-                        user_id=str(user.id.value),
-                        code=exc.code,
-                    )
-                    await scope.user_moderation_uc.assign_ban(user_id=user.id, at=at)
-                    await status.edit_text(user_message_for_exception(exc))
-                    return
-            else:
-                render = await scope.image_generation_uc.random(vendor=vendor, model=model)
-
+            render = await scope.image_generation_uc.generate(
+                vendor=user.model_vendor,
+                model=user.model,
+                prompt=raw_prompt,
+            )
             sent = await message.answer_photo(
                 photo=BufferedInputFile(render.content, filename="wednesday.png"),
             )
             if not sent.photo:
                 logger.error("Telegram returned photo message without photo sizes")
                 return
-
-            file_id = TelegramFileId.parse(sent.photo[-1].file_id)
-            image_id = ImageId.new()
             card = await scope.image_generation_uc.register(
-                image_id=image_id,
-                file_id=file_id,
-                meta=ImageMeta(author_id=user.id, model=model),
-                render=render,
+                file_id=sent.photo[-1].file_id,
+                author_id=user.id,
+                model=user.model,
+                prompts=render.prompts,
                 chat_id=chat.id,
                 at=at,
             )
@@ -107,6 +92,11 @@ async def cmd_generate(
                 reply_markup=build_vote_kb(image_id=str(card.id), rating=card.rating),
             )
             committed = True
+        except PromptRejectedError as exc:
+            logger.warning("Prompt rejected, assigning ban")
+            await scope.user_moderation_uc.assign_ban(user_id=user.id, at=at)
+            await status.edit_text(user_message_for_exception(exc))
+            return
         finally:
             if not committed:
                 await scope.user_generation_uc.refund_generation(user_id=user.id, snapshot=snap)

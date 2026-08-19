@@ -9,7 +9,6 @@ from aiogram.exceptions import TelegramAPIError
 
 from app.protocols import Logger, RequestScope, ScopeFactory
 from domain.chat import Chat
-from domain.kernel.vo import AwareDatetime
 
 from ..messages import image as image_msg
 from ..routers.image.vote import build_vote_kb
@@ -43,16 +42,17 @@ class CatalogScheduleRunner:
         self._fired: set[_SlotKey] = set()
 
     async def run(self) -> None:
+        at = datetime.now(UTC)
         self._logger.info("Catalog schedule runner started")
         try:
             while True:
-                await self.tick(at=AwareDatetime.now_utc())
-                await asyncio.sleep(self._seconds_until_next_minute(datetime.now(UTC)))
+                await self.tick(at=at)
+                await asyncio.sleep(self._seconds_until_next_minute(at))
         except asyncio.CancelledError:
             self._logger.info("Catalog schedule runner stopped")
             raise
 
-    async def tick(self, *, at: AwareDatetime) -> None:
+    async def tick(self, *, at: datetime) -> None:
         self._prune_fired(at)
         try:
             async with self._scope_factory() as scope:
@@ -64,7 +64,7 @@ class CatalogScheduleRunner:
         except Exception:
             self._logger.exception("Catalog schedule tick failed")
 
-    async def _deliver(self, *, scope: RequestScope, chat: Chat, at: AwareDatetime) -> None:
+    async def _deliver(self, *, scope: RequestScope, chat: Chat, at: datetime) -> None:
         key = self._slot_key(chat, at)
         if key in self._fired:
             return
@@ -153,13 +153,13 @@ class CatalogScheduleRunner:
             )
         self._fired.add(key)
 
-    def _prune_fired(self, at: AwareDatetime) -> None:
-        cutoff = at.value.date() - timedelta(days=2)
+    def _prune_fired(self, at: datetime) -> None:
+        cutoff = at.date() - timedelta(days=2)
         self._fired = {key for key in self._fired if key[1] >= cutoff}
 
     @staticmethod
-    def _slot_key(chat: Chat, at: AwareDatetime) -> _SlotKey:
-        local = at.value.astimezone(chat.schedules.timezone)
+    def _slot_key(chat: Chat, at: datetime) -> _SlotKey:
+        local = at.astimezone(chat.schedules.timezone)
         return (chat.id.value, local.date(), local.hour, local.minute)
 
     @staticmethod

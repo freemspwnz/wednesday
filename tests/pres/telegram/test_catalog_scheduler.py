@@ -15,7 +15,8 @@ from tests.dom.image.factories import mk_image
 
 from .factories import ScopeCM
 
-_WED_NOON = AwareDatetime(datetime(2026, 1, 7, 12, 0, tzinfo=UTC))
+_WED_NOON_DT = datetime(2026, 1, 7, 12, 0, tzinfo=UTC)
+_WED_NOON = AwareDatetime(_WED_NOON_DT)
 
 
 def _runner(
@@ -48,9 +49,9 @@ async def test_tick_sends_unseen_catalog_photo(
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=card)
     runner, bot = _runner(mock_scope=mock_scope, mock_logger=mock_logger)
 
-    await runner.tick(at=_WED_NOON)
+    await runner.tick(at=_WED_NOON_DT)
 
-    mock_scope.chat_schedule_uc.list_due.assert_awaited_once_with(at=_WED_NOON)
+    mock_scope.chat_schedule_uc.list_due.assert_awaited_once_with(at=_WED_NOON_DT)
     mock_scope.image_catalog_uc.pick_for_chat.assert_awaited_once_with(chat_id=chat.id)
     bot.send_photo.assert_awaited_once()
     kwargs = bot.send_photo.await_args.kwargs
@@ -60,10 +61,9 @@ async def test_tick_sends_unseen_catalog_photo(
     mock_scope.image_catalog_uc.mark_shown.assert_awaited_once_with(
         chat_id=chat.id,
         image_id=card.id,
-        at=_WED_NOON,
+        at=_WED_NOON_DT,
     )
-    mock_scope.image_generation_uc.by_user.assert_not_called()
-    mock_scope.image_generation_uc.random.assert_not_called()
+    mock_scope.image_generation_uc.generate.assert_not_called()
 
 
 @pytest.mark.unit
@@ -77,8 +77,8 @@ async def test_tick_sends_notice_when_catalog_empty(
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=None)
     runner, bot = _runner(mock_scope=mock_scope, mock_logger=mock_logger)
 
-    await runner.tick(at=_WED_NOON)
-    await runner.tick(at=_WED_NOON)
+    await runner.tick(at=_WED_NOON_DT)
+    await runner.tick(at=_WED_NOON_DT)
 
     bot.send_photo.assert_not_called()
     bot.send_message.assert_awaited_once_with(
@@ -101,8 +101,8 @@ async def test_tick_does_not_send_twice_in_the_same_minute(
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=card)
     runner, bot = _runner(mock_scope=mock_scope, mock_logger=mock_logger)
 
-    await runner.tick(at=_WED_NOON)
-    await runner.tick(at=_WED_NOON)
+    await runner.tick(at=_WED_NOON_DT)
+    await runner.tick(at=_WED_NOON_DT)
 
     bot.send_photo.assert_awaited_once()
     assert mock_scope.image_catalog_uc.pick_for_chat.await_count == 1
@@ -125,8 +125,8 @@ async def test_tick_send_error_does_not_mark_shown_or_retry(
     )
     runner, _ = _runner(mock_scope=mock_scope, mock_logger=mock_logger, bot=bot)
 
-    await runner.tick(at=_WED_NOON)
-    await runner.tick(at=_WED_NOON)
+    await runner.tick(at=_WED_NOON_DT)
+    await runner.tick(at=_WED_NOON_DT)
 
     assert bot.send_photo.await_count == 1
     mock_scope.image_catalog_uc.mark_shown.assert_not_awaited()
@@ -153,12 +153,12 @@ async def test_tick_send_error_does_not_block_next_chat(
     )
     runner, _ = _runner(mock_scope=mock_scope, mock_logger=mock_logger, bot=bot)
 
-    await runner.tick(at=_WED_NOON)
+    await runner.tick(at=_WED_NOON_DT)
 
     assert bot.send_photo.await_count == 2
     assert bot.send_photo.await_args.kwargs["chat_id"] == ok.profile.telegram_id
     mock_scope.image_catalog_uc.mark_shown.assert_awaited_once_with(
         chat_id=ok.id,
         image_id=card.id,
-        at=_WED_NOON,
+        at=_WED_NOON_DT,
     )

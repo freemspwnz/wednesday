@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserId, UserRole
 from domain.user.exceptions import ValidationError
@@ -52,12 +54,13 @@ class UserModerationUseCase(UserBaseUseCase):
             runner=lambda: self._expire_ban_if_due(user_id=user_id, at=at),
         )
 
-    async def assign_ban(self, *, user_id: UserId, at: AwareDatetime) -> User:
+    async def assign_ban(self, *, user_id: UserId, at: datetime) -> User:
         """Record a moderation strike and ban when BanDurationPolicy assigns one."""
+        time = AwareDatetime.from_datetime(at)
         return await self._run_mutating(
             action="assign_ban",
             user_id=user_id,
-            runner=lambda: self._assign_ban(user_id=user_id, at=at),
+            runner=lambda: self._assign_ban(user_id=user_id, at=time),
         )
 
     async def _ban(

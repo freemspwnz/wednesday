@@ -9,10 +9,8 @@ from aiogram.filters import CommandObject
 from aiogram.types import CallbackQuery, Chat as TgChat, Message, PhotoSize, User as TgUser
 
 from app.dto import ChatContext, ImageCard, UserContext
-from domain.catalog import Model, Vendor
 from domain.chat import ChatProfile, ChatType
 from domain.image import (
-    ImageMeta,
     ImageNotFoundError,
     ImagePrompts,
     ImageRender,
@@ -92,7 +90,7 @@ async def test_cmd_generate_with_prompt_success(
     card = ImageCard.from_domain(image)
 
     mock_scope.user_generation_uc.begin_generation = AsyncMock(return_value=MagicMock())
-    mock_scope.image_generation_uc.by_user = AsyncMock(return_value=render)
+    mock_scope.image_generation_uc.generate = AsyncMock(return_value=render)
     mock_scope.image_generation_uc.register = AsyncMock(return_value=card)
     mock_scope.user_generation_uc.refund_generation = AsyncMock()
 
@@ -111,20 +109,19 @@ async def test_cmd_generate_with_prompt_success(
 
     answer.assert_awaited_once_with(image_msg.GENERATION_STARTED)
     mock_scope.user_generation_uc.begin_generation.assert_awaited_once()
-    mock_scope.image_generation_uc.by_user.assert_awaited_once()
-    by_user_kwargs = mock_scope.image_generation_uc.by_user.await_args.kwargs
-    assert by_user_kwargs["vendor"] == Vendor.parse(user.model_vendor)
-    assert by_user_kwargs["prompt"] == "cute frog"
-    mock_scope.image_generation_uc.random.assert_not_called()
+    mock_scope.image_generation_uc.generate.assert_awaited_once()
+    gen_kwargs = mock_scope.image_generation_uc.generate.await_args.kwargs
+    assert gen_kwargs["vendor"] == user.model_vendor
+    assert gen_kwargs["model"] == user.model
+    assert gen_kwargs["prompt"] == "cute frog"
     answer_photo.assert_awaited_once()
     mock_scope.image_generation_uc.register.assert_awaited_once()
-    kwargs = mock_scope.image_generation_uc.register.await_args.kwargs
-    assert kwargs["file_id"] == TelegramFileId.parse("AgACAgIAAxkBAAI")
-    assert isinstance(kwargs["meta"], ImageMeta)
-    assert kwargs["meta"].author_id == user.id
-    assert kwargs["meta"].model == Model.parse(user.model)
-    assert kwargs["chat_id"] == chat_context.id
-    assert "image_id" in kwargs
+    reg_kwargs = mock_scope.image_generation_uc.register.await_args.kwargs
+    assert reg_kwargs["file_id"] == "AgACAgIAAxkBAAI"
+    assert reg_kwargs["author_id"] == user.id
+    assert reg_kwargs["model"] == user.model
+    assert reg_kwargs["chat_id"] == chat_context.id
+    assert reg_kwargs["prompts"] == render.prompts
     edit_markup.assert_awaited_once()
     assert edit_markup.await_args is not None
     markup = edit_markup.await_args.kwargs["reply_markup"]
@@ -145,7 +142,7 @@ async def test_cmd_generate_without_args_uses_random(
     card = ImageCard.from_domain(image)
 
     mock_scope.user_generation_uc.begin_generation = AsyncMock(return_value=MagicMock())
-    mock_scope.image_generation_uc.random = AsyncMock(return_value=render)
+    mock_scope.image_generation_uc.generate = AsyncMock(return_value=render)
     mock_scope.image_generation_uc.register = AsyncMock(return_value=card)
     mock_scope.user_generation_uc.refund_generation = AsyncMock()
 
@@ -161,10 +158,11 @@ async def test_cmd_generate_without_args_uses_random(
     ):
         await cmd_generate(message, command, user, chat_context, mock_scope)
 
-    mock_scope.image_generation_uc.random.assert_awaited_once()
-    random_kwargs = mock_scope.image_generation_uc.random.await_args.kwargs
-    assert random_kwargs["vendor"] == Vendor.parse(user.model_vendor)
-    mock_scope.image_generation_uc.by_user.assert_not_called()
+    mock_scope.image_generation_uc.generate.assert_awaited_once()
+    gen_kwargs = mock_scope.image_generation_uc.generate.await_args.kwargs
+    assert gen_kwargs["vendor"] == user.model_vendor
+    assert gen_kwargs["model"] == user.model
+    assert gen_kwargs["prompt"] is None
 
 
 @pytest.mark.unit
@@ -176,7 +174,7 @@ async def test_cmd_generate_rejected_prompt_assigns_ban(
     user = mk_user_context()
     snap = MagicMock()
     mock_scope.user_generation_uc.begin_generation = AsyncMock(return_value=snap)
-    mock_scope.image_generation_uc.by_user = AsyncMock(
+    mock_scope.image_generation_uc.generate = AsyncMock(
         side_effect=PromptRejectedError("prohibited_content"),
     )
     mock_scope.user_moderation_uc.assign_ban = AsyncMock()
@@ -191,13 +189,8 @@ async def test_cmd_generate_rejected_prompt_assigns_ban(
     with patch.object(Message, "answer", new_callable=AsyncMock, return_value=status) as answer:
         await cmd_generate(message, command, user, chat_context, mock_scope)
 
-    mock_scope.logger.warning.assert_called_once_with(
-        "Prompt rejected",
-        user_id=str(user.id.value),
-        code="prohibited_content",
-    )
     mock_scope.user_generation_uc.begin_generation.assert_awaited_once()
-    mock_scope.image_generation_uc.by_user.assert_awaited_once()
+    mock_scope.image_generation_uc.generate.assert_awaited_once()
     mock_scope.user_moderation_uc.assign_ban.assert_awaited_once()
     mock_scope.user_generation_uc.refund_generation.assert_awaited_once_with(
         user_id=user.id,
