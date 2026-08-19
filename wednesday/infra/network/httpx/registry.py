@@ -2,15 +2,18 @@ from functools import cached_property
 
 from httpx2 import Timeout
 
-from app.protocols import Logger
+from app.exceptions import UnknownProviderError
+from app.protocols import GeneratorRegistry, Logger
+from domain.catalog import Vendor
+from domain.image import Generator
 from infra.config import Config, HttpConfig
 
 from .factory import HttpClientFactory
 from .providers import SberAuth, SberClient
 
 
-class ProvidersRegistry:
-    """Lazy registry of outbound HTTP provider clients."""
+class ProvidersRegistry(GeneratorRegistry):
+    """Generator registry for outbound HTTP provider clients."""
 
     def __init__(
         self,
@@ -23,8 +26,16 @@ class ProvidersRegistry:
         self._factory = factory
         self._logger = logger.bind(module=self.__class__.__name__)
 
+    def resolve(self, vendor: Vendor) -> Generator:
+        Vendor.ensure(vendor)
+        match str(vendor):
+            case "sber":
+                return self.sber
+            case _:
+                raise UnknownProviderError(str(vendor))
+
     @cached_property
-    def sber(self) -> SberClient:
+    def sber(self) -> Generator:
         config = self._config.gigachat
         client = self._factory(
             http=config.http,
