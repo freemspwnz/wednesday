@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.dto import UserContext
 from app.protocols import CacheRepo, Logger, UoW
 from domain.catalog import Model, ModelCatalog, SubscriptionCatalog
@@ -30,27 +32,29 @@ class UserGenerationUseCase(UserBaseUseCase):
         *,
         user_id: UserId,
         model: Model,
-        at: AwareDatetime,
+        at: datetime,
     ) -> User:
+        time = AwareDatetime.from_datetime(at)
         return await self._run_mutating(
             action="select_model",
             user_id=user_id,
             runner=lambda: self._select_model(
                 user_id=user_id,
                 model=model,
-                at=at,
+                at=time,
             ),
         )
 
-    async def begin_generation(self, *, user_id: UserId, at: AwareDatetime) -> UsageSnapshot:
+    async def begin_generation(self, *, user_id: UserId, at: datetime) -> UsageSnapshot:
         """Reserve one generation slot after limit checks (check + record in one UoW).
 
         Returns a snapshot for ``refund_generation`` when render, send, or register fails.
         """
         self._log_scenario_start(action="begin_generation", user_id=user_id)
+        time = AwareDatetime.from_datetime(at)
         async with self._uow:
-            await self._assert_allowed(user_id=user_id, at=at)
-            return await self._uow.usage.record(user_id, at)
+            await self._assert_allowed(user_id=user_id, at=time)
+            return await self._uow.usage.record(user_id, time)
 
     async def refund_generation(self, *, user_id: UserId, snapshot: UsageSnapshot) -> None:
         """Restore usage counters from a snapshot when generation did not finish successfully."""

@@ -80,7 +80,7 @@ async def test_uc_assign_ban_records_strike_without_ban_under_threshold() -> Non
     log = mk_logger()
     uc, uow, cache = make_moderation_uc(repo=user_repo, violations=violations, logger=log)
 
-    got = await uc.assign_ban(user_id=user.id, at=dt(12))
+    got = await uc.assign_ban(user_id=user.id, at=dt(12).value)
 
     assert isinstance(got.state, ActiveState)
     assert violations.stats.total == 1
@@ -102,7 +102,7 @@ async def test_uc_assign_ban_bans_when_threshold_reached() -> None:
     log = mk_logger()
     uc, _, cache = make_moderation_uc(repo=user_repo, violations=violations, logger=log)
 
-    got = await uc.assign_ban(user_id=user.id, at=dt(12))
+    got = await uc.assign_ban(user_id=user.id, at=dt(12).value)
 
     assert isinstance(got.pull_events()[0], UserBanned)
     assert got.state.is_banned_at(dt(12))

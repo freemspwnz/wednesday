@@ -1,3 +1,4 @@
+from datetime import datetime
 from random import choice
 
 from app.dto import ImageCard
@@ -19,6 +20,7 @@ from domain.image import (
     ValidationError,
 )
 from domain.kernel import AwareDatetime
+from domain.user import UserId
 
 from .base import ImageBaseUseCase
 
@@ -44,7 +46,20 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         self._prompts = prompts
         self._policy = policy
 
-    async def by_user(
+    async def generate(
+        self,
+        *,
+        vendor: str,
+        model: str,
+        prompt: str | None,
+    ) -> ImageRender:
+        dom_vendor = Vendor.parse(vendor)
+        dom_model = Model.parse(model)
+        if prompt:
+            return await self._by_user(vendor=dom_vendor, model=dom_model, prompt=prompt)
+        return await self._random(vendor=dom_vendor, model=dom_model)
+
+    async def _by_user(
         self,
         *,
         vendor: Vendor,
@@ -91,7 +106,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         )
         return render
 
-    async def random(self, *, vendor: Vendor, model: Model) -> ImageRender:
+    async def _random(self, *, vendor: Vendor, model: Model) -> ImageRender:
         self._logger.debug("Random image generation started", model=str(model))
         gen = self._generators.resolve(vendor)
         resolved_model = Model.ensure(model)
@@ -127,39 +142,39 @@ class ImageGenerationUseCase(ImageBaseUseCase):
     async def register(  # noqa: PLR0913
         self,
         *,
-        image_id: ImageId,
-        file_id: TelegramFileId,
-        meta: ImageMeta,
-        render: ImageRender,
+        file_id: str,
+        author_id: UserId,
+        model: str,
+        prompts: ImagePrompts,
         chat_id: ChatId,
-        at: AwareDatetime,
+        at: datetime,
     ) -> ImageCard:
         """Persist a catalog image after Telegram upload yields file_id.
 
         Records a view for the chat that already received the photo so
         /random will not pick it again in the same chat.
         """
-
+        time = AwareDatetime.from_datetime(at)
         image = Image.register(
-            id=image_id,
-            meta=meta,
-            file_id=file_id,
-            prompts=render.prompts,
-            created_at=at,
+            id=ImageId.new(),
+            meta=ImageMeta(author_id=author_id, model=Model.parse(model)),
+            file_id=TelegramFileId.parse(file_id),
+            prompts=prompts,
+            created_at=time,
         )
         self._logger.debug(
             "Image catalog registration started",
             image_id=str(image.id.value),
-            author_id=str(meta.author_id.value),
+            author_id=str(author_id.value),
             chat_id=str(chat_id.value),
         )
         async with self._uow:
             await self._uow.images.save(image)
-            await self._uow.views.mark_shown(chat_id, image.id, at=at)
+            await self._uow.views.mark_shown(chat_id, image.id, at=time)
         self._logger.info(
             "Image aggregate registered",
             image_id=str(image.id.value),
-            author_id=str(meta.author_id.value),
+            author_id=str(author_id.value),
             chat_id=str(chat_id.value),
         )
         return ImageCard.from_domain(image)

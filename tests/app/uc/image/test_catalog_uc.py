@@ -52,7 +52,7 @@ async def test_uc_reset_views_allows_pick_again() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=200))
 
-    await uc.mark_shown(chat_id=chat_id, image_id=image.id, at=dt(10))
+    await uc.mark_shown(chat_id=chat_id, image_id=image.id, at=dt(10).value)
     assert await uc.pick_for_chat(chat_id=chat_id) is None
 
     count = await uc.reset_views(chat_id=chat_id)
@@ -110,7 +110,7 @@ async def test_uc_mark_shown_records_view() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=100))
 
-    await uc.mark_shown(chat_id=chat_id, image_id=image.id, at=dt(10))
+    await uc.mark_shown(chat_id=chat_id, image_id=image.id, at=dt(10).value)
 
     assert (chat_id.value, image.id) in views.shown
     assert uow.enter_count == uow.exit_count == 1

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.dto import ImageCard
 from domain.chat import ChatId
 from domain.image import ImageId, ImageNotFoundError, ImageRatingPolicy
@@ -40,19 +42,19 @@ class ImageCatalogUseCase(ImageBaseUseCase):
         *,
         chat_id: ChatId,
         image_id: ImageId,
-        at: AwareDatetime,
+        at: datetime,
     ) -> None:
         """Record that the chat received this image (after a successful send)."""
         chat_id = ChatId.ensure(chat_id)
         image_id = ImageId.ensure(image_id)
-        at = AwareDatetime.ensure(at)
+        time = AwareDatetime.from_datetime(at)
         self._logger.debug(
             "Image catalog mark shown started",
             chat_id=str(chat_id.value),
             image_id=str(image_id.value),
         )
         async with self._uow:
-            await self._uow.views.mark_shown(chat_id, image_id, at=at)
+            await self._uow.views.mark_shown(chat_id, image_id, at=time)
         self._logger.debug(
             "Image catalog mark shown finished",
             chat_id=str(chat_id.value),

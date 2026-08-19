@@ -1,3 +1,4 @@
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from domain.chat import (
@@ -16,13 +17,13 @@ from .base import ChatBaseUseCase
 class ChatScheduleUseCase(ChatBaseUseCase):
     """Domain chat schedule commands in a single UoW scope."""
 
-    async def list_due(self, *, at: AwareDatetime) -> list[Chat]:
+    async def list_due(self, *, at: datetime) -> list[Chat]:
         """Return active chats whose schedule matches ``at`` (timezone + weekday)."""
-        at = AwareDatetime.ensure(at)
-        self._logger.debug("Chat schedule due scan started", at=str(at))
+        time = AwareDatetime.from_datetime(at)
+        self._logger.debug("Chat schedule due scan started", at=str(time))
         async with self._uow:
             candidates = await self._uow.chats.list_active_scheduled()
-        due = [chat for chat in candidates if chat.is_due_at(at)]
+        due = [chat for chat in candidates if chat.is_due_at(time)]
         self._logger.info(
             "Chat schedule due scan finished",
             candidates=len(candidates),

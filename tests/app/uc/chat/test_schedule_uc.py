@@ -77,7 +77,7 @@ async def test_uc_list_due_keeps_matching_active_slot() -> None:
     repo.list_active_scheduled.return_value = [due, inactive, empty, other_day, other_time, moscow_due]
     uc, uow, cache = make_schedule_uc(repo=repo)
 
-    got = await uc.list_due(at=_WED_NOON)
+    got = await uc.list_due(at=_WED_NOON.value)
 
     assert got == [due, moscow_due]
     repo.list_active_scheduled.assert_awaited_once()
