@@ -3,6 +3,7 @@ import pytest
 import app.dto as dto_module
 import app.exceptions as exc_module
 import app.protocols as proto_module
+from app.protocols.network import GeneratorRegistry
 from app.protocols.observe import (
     CacheMetrics,
     CBMetrics,
@@ -31,6 +32,7 @@ def test_public_exports_are_available() -> None:
     assert hasattr(exc_module, "MaxAttemptsExhaustedError")
     assert hasattr(proto_module, "UoW")
     assert hasattr(proto_module, "Logger")
+    assert hasattr(exc_module, "UnknownProviderError")
 
 
 @pytest.mark.unit
@@ -54,5 +56,6 @@ def test_protocol_symbols_import_correctly() -> None:
         CircuitBreaker,
         RateLimiter,
         Retrier,
+        GeneratorRegistry,
     ]
     assert all(symbol is not None for symbol in symbols)

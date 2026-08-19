@@ -7,6 +7,7 @@ from .http import (
     HttpTransportError,
     UnexpectedHttpError,
 )
+from .registry import UnknownProviderError
 
 __all__ = [
     "HttpAuthError",
@@ -16,4 +17,5 @@ __all__ = [
     "HttpTimeoutError",
     "HttpTransportError",
     "UnexpectedHttpError",
+    "UnknownProviderError",
 ]

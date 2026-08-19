@@ -1,4 +1,5 @@
 from .di import RequestScope, ScopeFactory
+from .network import GeneratorRegistry
 from .observe import (
     CacheMetrics,
     CacheOperation,
@@ -33,6 +34,7 @@ __all__ = [
     "CacheRepoRegistry",
     "CircuitBreaker",
     "DBMetrics",
+    "GeneratorRegistry",
     "HttpMetrics",
     "Logger",
     "MetricsCollector",

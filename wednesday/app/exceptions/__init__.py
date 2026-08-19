@@ -9,6 +9,7 @@ from .network import (
     HttpTimeoutError,
     HttpTransportError,
     UnexpectedHttpError,
+    UnknownProviderError,
 )
 from .observe import LoggingError, LogMessageFormatError, MetricsError, MetricsExportError, MetricsHttpExporterError
 from .persistence import (
@@ -86,5 +87,6 @@ __all__ = [
     "UnexpectedHttpError",
     "UnexpectedLimitError",
     "UnexpectedRetryError",
+    "UnknownProviderError",
     "unwrap_exception",
 ]
