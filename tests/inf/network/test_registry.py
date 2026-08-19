@@ -5,6 +5,10 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
+from app.exceptions import UnknownProviderError
+from app.protocols import GeneratorRegistry
+from domain.catalog import Vendor
+from domain.image import Generator
 from infra.config import Config, GigaChatConfig, HttpConfig, HttpTimeoutConfig
 from infra.config.observe import MetricsConfig
 from infra.config.resilience.asyncbreaker import CircuitBreakerConfig
@@ -63,6 +67,45 @@ class TestProvidersRegistry:
         assert isinstance(sber, SberClient)
         assert registry.sber is sber
         await registry.aclose()
+        assert "sber" not in registry.__dict__
+
+    def test_implements_generator_registry_protocol(
+        self,
+        mock_logger: MagicMock,
+        mock_http_metrics: MagicMock,
+    ) -> None:
+        registry = _registry(mock_logger=mock_logger, mock_http_metrics=mock_http_metrics)
+        assert isinstance(registry, GeneratorRegistry)
+
+    def test_resolve_sber_returns_sber_client(
+        self,
+        mock_logger: MagicMock,
+        mock_http_metrics: MagicMock,
+    ) -> None:
+        registry = _registry(mock_logger=mock_logger, mock_http_metrics=mock_http_metrics)
+        gen = registry.resolve(Vendor.parse("sber"))
+        assert isinstance(gen, SberClient)
+        assert isinstance(gen, Generator)
+
+    def test_resolve_sber_returns_cached_instance(
+        self,
+        mock_logger: MagicMock,
+        mock_http_metrics: MagicMock,
+    ) -> None:
+        registry = _registry(mock_logger=mock_logger, mock_http_metrics=mock_http_metrics)
+        first = registry.resolve(Vendor.parse("sber"))
+        second = registry.resolve(Vendor.parse("sber"))
+        assert first is second
+
+    def test_resolve_unknown_vendor_raises(
+        self,
+        mock_logger: MagicMock,
+        mock_http_metrics: MagicMock,
+    ) -> None:
+        registry = _registry(mock_logger=mock_logger, mock_http_metrics=mock_http_metrics)
+        with pytest.raises(UnknownProviderError) as exc_info:
+            registry.resolve(Vendor.parse("yandex"))
+        assert exc_info.value.vendor == "yandex"
         assert "sber" not in registry.__dict__
 
     @pytest.mark.asyncio
