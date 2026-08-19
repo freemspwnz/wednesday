@@ -14,10 +14,12 @@ from domain.kernel.vo import AwareDatetime
 from ...messages import image as image_msg
 from ...messages.exceptions import user_message_for_exception
 from ..utils import run_message_handler
+from .reset import reset_router
 from .vote import build_vote_kb, vote_router
 
 image_router = Router(name="image")
 image_router.include_router(vote_router)
+image_router.include_router(reset_router)
 
 
 @image_router.message(Command("random"))

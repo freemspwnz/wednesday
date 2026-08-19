@@ -44,6 +44,26 @@ async def test_uc_reset_views_delegates_to_repo() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_uc_reset_views_allows_pick_again() -> None:
+    image = mk_image(image_id=5, rating=mk_rating(likes=2), created_at=dt(9))
+    views = FakeViewRepo(candidates=[image])
+    images = FakeImageRepo.with_images(image)
+    uow = FakeUoW(images=images, views=views)
+    uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
+    chat_id = ChatId(UUID(int=200))
+
+    await uc.mark_shown(chat_id=chat_id, image_id=image.id, at=dt(10))
+    assert await uc.pick_for_chat(chat_id=chat_id) is None
+
+    count = await uc.reset_views(chat_id=chat_id)
+    assert count == 1
+    card = await uc.pick_for_chat(chat_id=chat_id)
+    assert card is not None
+    assert card.id == image.id
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_uc_pick_for_chat_returns_none_when_catalog_empty() -> None:
     views = AsyncMock()
     views.get_unseen_for_chat.return_value = None
