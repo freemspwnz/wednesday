@@ -2,6 +2,7 @@ import pytest
 
 from app.exceptions import (
     AggregateMappingError,
+    AppError,
     CacheError,
     CacheTimeoutError,
     CacheUnavailableError,
@@ -14,8 +15,17 @@ from app.exceptions import (
     MetricsHttpExporterError,
     RepositoryError,
     TooManyRequests,
+    UnknownProviderError,
     unwrap_exception,
 )
+
+
+@pytest.mark.unit
+def test_unknown_provider_error_keeps_vendor() -> None:
+    exc = UnknownProviderError("yandex")
+    assert exc.vendor == "yandex"
+    assert "yandex" in str(exc)
+    assert isinstance(exc, AppError)
 
 
 @pytest.mark.unit
