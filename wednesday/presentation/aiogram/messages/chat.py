@@ -36,7 +36,7 @@ SCHEDULE_MENU_TITLE = "📅 Расписание"
 
 SCHEDULE_CLEAR_CONFIRM = "Очистить все слоты расписания?"
 
-SCHEDULE_CLOSED = "📅 Расписание закрыто."
+SCHEDULE_CLOSED = "📅 Готово."
 
 SCHEDULE_BACK = "« Назад"
 

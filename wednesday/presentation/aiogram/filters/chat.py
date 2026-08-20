@@ -1,19 +1,23 @@
 """Filters for in-chat command handlers."""
 
-from aiogram.filters import BaseFilter
-from aiogram.types import TelegramObject
+from typing import ClassVar
 
-from app.dto import ChatContext
+from aiogram.enums import ChatType
+from aiogram.filters import BaseFilter
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 
 class GroupChatFilter(BaseFilter):
-    """Passes when registration middleware provided a group or supergroup chat."""
+    """Passes for group/supergroup chats (Telegram update chat type)."""
 
-    async def __call__(
-        self,
-        event: TelegramObject,
-        chat: ChatContext | None = None,
-    ) -> bool:
-        if not isinstance(chat, ChatContext):
+    _GROUP_CHAT_TYPES: ClassVar[frozenset[ChatType]] = frozenset({ChatType.GROUP, ChatType.SUPERGROUP})
+
+    async def __call__(self, event: TelegramObject) -> bool:
+        chat = None
+        if isinstance(event, Message):
+            chat = event.chat
+        elif isinstance(event, CallbackQuery) and isinstance(event.message, Message):
+            chat = event.message.chat
+        if chat is None:
             return False
-        return chat.type in {"group", "supergroup"}
+        return chat.type in self._GROUP_CHAT_TYPES
