@@ -35,15 +35,16 @@ async def test_uc_vote_persists_rating_in_uow() -> None:
     uc = ImageVoteUseCase(uow=uow, logger=mk_logger())
 
     got = await uc.vote(
-        image_id=image.id,
-        voter_id=_VOTER_ID,
-        chat_id=_PRIVATE_CHAT_ID,
+        image_id=str(image.id),
+        voter_id=str(_VOTER_ID),
+        chat_id=str(_PRIVATE_CHAT_ID),
         value=1,
-        at=dt(11),
+        at=dt(11).value,
     )
 
     assert isinstance(got, ImageCard)
-    assert got.rating == mk_rating(likes=2)
+    assert got.likes == 2
+    assert got.dislikes == 0
     assert uow.enter_count == uow.exit_count == 1
     assert vote_repo.votes[image.id, _VOTER_ID].value == 1
     assert (_PRIVATE_CHAT_ID.value, image.id) in views.shown
@@ -60,11 +61,11 @@ async def test_uc_vote_noop_still_marks_shown() -> None:
     uc = ImageVoteUseCase(uow=uow, logger=mk_logger())
 
     got = await uc.vote(
-        image_id=image.id,
-        voter_id=_VOTER_ID,
-        chat_id=_PRIVATE_CHAT_ID,
+        image_id=str(image.id),
+        voter_id=str(_VOTER_ID),
+        chat_id=str(_PRIVATE_CHAT_ID),
         value=1,
-        at=dt(11),
+        at=dt(11).value,
     )
 
     assert got is None
@@ -82,17 +83,17 @@ async def test_uc_vote_hides_image_from_private_chat_random() -> None:
     catalog_uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
 
     await vote_uc.vote(
-        image_id=image.id,
-        voter_id=_VOTER_ID,
-        chat_id=_PRIVATE_CHAT_ID,
+        image_id=str(image.id),
+        voter_id=str(_VOTER_ID),
+        chat_id=str(_PRIVATE_CHAT_ID),
         value=1,
-        at=dt(11),
+        at=dt(11).value,
     )
 
-    assert await catalog_uc.pick_for_chat(chat_id=_PRIVATE_CHAT_ID) is None
-    picked = await catalog_uc.pick_for_chat(chat_id=_OTHER_CHAT_ID)
+    assert await catalog_uc.pick_for_chat(chat_id=str(_PRIVATE_CHAT_ID)) is None
+    picked = await catalog_uc.pick_for_chat(chat_id=str(_OTHER_CHAT_ID))
     assert picked is not None
-    assert picked.id == image.id
+    assert picked.id == str(image.id)
 
 
 @pytest.mark.unit
@@ -106,10 +107,10 @@ async def test_uc_vote_propagates_image_not_found() -> None:
     missing = ImageId(UUID(int=404))
     with pytest.raises(ImageNotFoundError):
         await uc.vote(
-            image_id=missing,
-            voter_id=UserId(UUID(int=502)),
-            chat_id=_PRIVATE_CHAT_ID,
+            image_id=str(missing),
+            voter_id=str(UserId(UUID(int=502))),
+            chat_id=str(_PRIVATE_CHAT_ID),
             value=-1,
-            at=dt(11),
+            at=dt(11).value,
         )
     assert views.shown == set()

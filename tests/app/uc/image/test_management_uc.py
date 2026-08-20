@@ -33,7 +33,7 @@ async def test_uc_hide_persists_admin_hidden() -> None:
     uow = FakeUoW(images=image_repo)
     uc = ImageManagementUseCase(uow=uow, logger=mk_logger())
 
-    got = await uc.hide(image_id=image.id, actor=UserRole.OWNER, at=dt(11))
+    got = await uc.hide(image_id=str(image.id), actor=int(UserRole.OWNER), at=dt(11).value)
 
     assert isinstance(got.state, HiddenState)
     assert got.state.reason == HiddenReason.ADMIN
@@ -53,7 +53,7 @@ async def test_uc_show_after_admin_hide_resets_votes() -> None:
     uow = FakeUoW(images=image_repo, votes=vote_repo)
     uc = ImageManagementUseCase(uow=uow, logger=mk_logger())
 
-    got = await uc.show(image_id=image.id, actor=UserRole.OWNER, at=dt(12))
+    got = await uc.show(image_id=str(image.id), actor=int(UserRole.OWNER), at=dt(12).value)
 
     assert isinstance(got.state, ActiveState)
     assert await vote_repo.list_for_image(image.id) == []
@@ -69,7 +69,7 @@ async def test_uc_show_propagates_image_not_found() -> None:
     )
     with pytest.raises(ImageNotFoundError):
         await uc.show(
-            image_id=ImageId(UUID(int=404)),
-            actor=UserRole.OWNER,
-            at=dt(11),
+            image_id=str(ImageId(UUID(int=404))),
+            actor=int(UserRole.OWNER),
+            at=dt(11).value,
         )

@@ -10,16 +10,16 @@ from app.dto import ImageCard
 from app.exceptions import UnknownProviderError
 from app.protocols import Logger
 from app.use_cases.image import ImageCatalogUseCase, ImageGenerationUseCase
-from domain.catalog import Model, Vendor
+from domain.catalog import Model
 from domain.chat import ChatId
 from domain.image import (
+    ImageId,
     ImagePrompts,
     ImageRender,
     NormalizedPrompt,
     PromptModerationPolicy,
     PromptRejectedError,
     PromptSource,
-    TelegramFileId,
 )
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserId
@@ -36,9 +36,6 @@ from ...factories import FakeUoW, mk_logger
 
 def dt(hour: int) -> AwareDatetime:
     return AwareDatetime(datetime(2026, 1, 1, hour, 0, tzinfo=UTC))
-
-
-_SBER = Vendor.parse("sber")
 
 
 def _make_uc(
@@ -176,10 +173,10 @@ async def test_uc_generate_without_prompt_logs_finish_at_info() -> None:
 async def _register(uc: ImageGenerationUseCase, *, chat_id: ChatId) -> ImageCard:
     return await uc.register(
         file_id="AgACAgIAAxkBAAI",
-        author_id=UserId(UUID(int=42)),
+        author_id=str(UserId(UUID(int=42))),
         model="gigachat-2-lite",
         prompts=_mk_render().prompts,
-        chat_id=chat_id,
+        chat_id=str(chat_id),
         at=dt(12).value,
     )
 
@@ -198,14 +195,15 @@ async def test_uc_register_persists_image_and_view_in_uow() -> None:
     card = await _register(uc, chat_id=chat_id)
 
     assert isinstance(card, ImageCard)
-    assert card.file_id == TelegramFileId.parse("AgACAgIAAxkBAAI")
+    assert card.file_id == "AgACAgIAAxkBAAI"
+    assert card.likes >= 0
     assert uow.enter_count == uow.exit_count == 1
-    saved = await image_repo.get_by_id(card.id)
+    saved = await image_repo.get_by_id(ImageId(UUID(card.id)))
     assert saved is not None
     assert saved.meta.author_id == author_id
     assert saved.meta.model == model
     assert saved.prompts == _mk_render().prompts
-    assert (chat_id.value, card.id) in views.shown
+    assert (chat_id.value, saved.id) in views.shown
 
 
 @pytest.mark.unit
@@ -220,12 +218,12 @@ async def test_uc_register_hides_image_from_same_chat_random() -> None:
     other_chat_id = ChatId(UUID(int=101))
 
     card = await _register(gen_uc, chat_id=chat_id)
-    saved = await image_repo.get_by_id(card.id)
+    saved = await image_repo.get_by_id(ImageId(UUID(card.id)))
     assert saved is not None
     views.candidates = [saved]
 
-    assert await catalog_uc.pick_for_chat(chat_id=chat_id) is None
+    assert await catalog_uc.pick_for_chat(chat_id=str(chat_id)) is None
 
-    picked = await catalog_uc.pick_for_chat(chat_id=other_chat_id)
+    picked = await catalog_uc.pick_for_chat(chat_id=str(other_chat_id))
     assert picked is not None
     assert picked.id == card.id

@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.dto import ChatContext
 from domain.chat import (
     Chat,
     ChatId,
@@ -22,7 +23,7 @@ from domain.chat import (
 from domain.chat.exceptions import ScheduleLimitExceededError
 from domain.kernel.vo import AwareDatetime
 
-from .helpers import dt, make_schedule_uc, mk_chat, owner_actor
+from .helpers import dt, make_schedule_uc, mk_chat, owner_kwargs, plain_dt
 
 # 2026-01-07 is Wednesday.
 _WED_NOON = AwareDatetime(datetime(2026, 1, 7, 12, 0, tzinfo=UTC))
@@ -79,7 +80,8 @@ async def test_uc_list_due_keeps_matching_active_slot() -> None:
 
     got = await uc.list_due(at=_WED_NOON.value)
 
-    assert got == [due, moscow_due]
+    assert [ctx.tg_id for ctx in got] == [due.profile.telegram_id, moscow_due.profile.telegram_id]
+    assert all(isinstance(ctx, ChatContext) for ctx in got)
     repo.list_active_scheduled.assert_awaited_once()
     repo.save.assert_not_awaited()
     cache.chats.set.assert_not_awaited()
@@ -96,7 +98,7 @@ async def test_uc_chat_not_found_does_not_save() -> None:
     dummy = mk_chat(chat_id=99)
 
     with pytest.raises(ChatNotFoundError) as ei:
-        await uc.clear_schedules(chat_id=cid, actor=owner_actor(dummy), at=dt(11))
+        await uc.clear_schedules(**owner_kwargs(dummy), at=plain_dt(11))
 
     assert ei.value.chat_id == str(cid)
     repo.save.assert_not_awaited()
@@ -109,25 +111,25 @@ async def test_uc_change_schedule_day_and_timezone_happy_path() -> None:
     repo = AsyncMock()
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
-    uc, _, _cache = make_schedule_uc(repo=repo)
-    london = ZoneInfo("Europe/London")
+    uc, _, cache = make_schedule_uc(repo=repo)
 
-    await uc.change_schedule_day(
-        chat_id=chat.id,
-        actor=owner_actor(chat),
-        new_weekday=Weekday.FRIDAY,
-        at=dt(11),
+    day_ctx = await uc.change_schedule_day(
+        **owner_kwargs(chat),
+        new_weekday=int(Weekday.FRIDAY),
+        at=plain_dt(11),
     )
-    await uc.change_schedule_timezone(
-        chat_id=chat.id,
-        actor=owner_actor(chat),
-        timezone=london,
-        at=dt(12),
+    tz_ctx = await uc.change_schedule_timezone(
+        **owner_kwargs(chat),
+        timezone="Europe/London",
+        at=plain_dt(12),
     )
 
     assert chat.schedules.weekday == Weekday.FRIDAY
-    assert chat.schedules.timezone == london
+    assert str(chat.schedules.timezone) == "Europe/London"
+    assert day_ctx.weekday == int(Weekday.FRIDAY)
+    assert tz_ctx.timezone == "Europe/London"
     assert repo.save.await_count == 2
+    assert cache.chats.set.await_count == 2
 
 
 @pytest.mark.unit
@@ -137,12 +139,11 @@ async def test_uc_add_remove_clear_schedules_happy_path() -> None:
     chat = mk_chat(now=dt(10))
     repo.get_by_id.return_value = chat
     uc, _, _cache = make_schedule_uc(repo=repo)
-    slot = ChatSchedule(9, 30)
 
-    await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=slot, at=dt(11))
-    await uc.remove_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=slot, at=dt(12))
-    await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=ChatSchedule(10, 0), at=dt(13))
-    await uc.clear_schedules(chat_id=chat.id, actor=owner_actor(chat), at=dt(14))
+    await uc.add_schedule(**owner_kwargs(chat), schedule=(9, 30), at=plain_dt(11))
+    await uc.remove_schedule(**owner_kwargs(chat), schedule=(9, 30), at=plain_dt(12))
+    await uc.add_schedule(**owner_kwargs(chat), schedule=(10, 0), at=plain_dt(13))
+    await uc.clear_schedules(**owner_kwargs(chat), at=plain_dt(14))
 
     assert chat.schedules.schedules == ()
     assert repo.save.await_count == 4
@@ -157,18 +158,16 @@ async def test_uc_stale_write_propagates() -> None:
     uc, _, _cache = make_schedule_uc(repo=repo)
 
     await uc.change_schedule_day(
-        chat_id=chat.id,
-        actor=owner_actor(chat),
-        new_weekday=Weekday.TUESDAY,
-        at=dt(12),
+        **owner_kwargs(chat),
+        new_weekday=int(Weekday.TUESDAY),
+        at=plain_dt(12),
     )
 
     with pytest.raises(StaleWriteError):
         await uc.change_schedule_day(
-            chat_id=chat.id,
-            actor=owner_actor(chat),
-            new_weekday=Weekday.THURSDAY,
-            at=dt(11),
+            **owner_kwargs(chat),
+            new_weekday=int(Weekday.THURSDAY),
+            at=plain_dt(11),
         )
 
     assert repo.save.await_count == 1
@@ -182,11 +181,11 @@ async def test_uc_schedule_limit_exceeded_propagates() -> None:
     repo.get_by_id.return_value = chat
     uc, _, _cache = make_schedule_uc(repo=repo)
 
-    await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=ChatSchedule(8, 0), at=dt(11))
-    await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=ChatSchedule(9, 0), at=dt(12))
-    await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=ChatSchedule(10, 0), at=dt(13))
+    await uc.add_schedule(**owner_kwargs(chat), schedule=(8, 0), at=plain_dt(11))
+    await uc.add_schedule(**owner_kwargs(chat), schedule=(9, 0), at=plain_dt(12))
+    await uc.add_schedule(**owner_kwargs(chat), schedule=(10, 0), at=plain_dt(13))
 
     with pytest.raises(ScheduleLimitExceededError):
-        await uc.add_schedule(chat_id=chat.id, actor=owner_actor(chat), schedule=ChatSchedule(11, 0), at=dt(14))
+        await uc.add_schedule(**owner_kwargs(chat), schedule=(11, 0), at=plain_dt(14))
 
     assert repo.save.await_count == 3
