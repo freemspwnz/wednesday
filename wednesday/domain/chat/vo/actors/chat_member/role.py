@@ -11,7 +11,7 @@ class ChatMemberRole(StrEnum):
     RESTRICTED = "restricted"
 
     @classmethod
-    def ensure(cls, role: Self) -> Self:
+    def ensure(cls, role: object) -> Self:
         if not isinstance(role, cls):
-            raise ValidationError("role must be a ChatMemberRole")
+            raise ValidationError(f"Role must be an instance of {cls.__name__}")
         return role

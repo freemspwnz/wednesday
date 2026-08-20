@@ -91,9 +91,9 @@ class Chat:
         )
 
     @classmethod
-    def ensure(cls, chat: Self) -> Self:
-        if not isinstance(chat, Chat):
-            raise ValidationError("chat must be a Chat")
+    def ensure(cls, chat: object) -> Self:
+        if not isinstance(chat, cls):
+            raise ValidationError(f"Chat must be an instance of {cls.__name__}")
         return chat
 
     @property

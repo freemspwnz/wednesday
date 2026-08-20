@@ -34,7 +34,7 @@ class Model:
         return cls(value=raw.strip().lower())
 
     @classmethod
-    def ensure(cls, model: Self) -> Self:
-        if not isinstance(model, Model):
-            raise ValidationError("model must be a Model")
+    def ensure(cls, model: object) -> Self:
+        if not isinstance(model, cls):
+            raise ValidationError(f"model must be an instance of {cls.__name__}")
         return model

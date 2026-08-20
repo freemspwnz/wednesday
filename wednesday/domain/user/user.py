@@ -113,9 +113,9 @@ class User:
         )
 
     @classmethod
-    def ensure(cls, user: Self) -> Self:
-        if not isinstance(user, User):
-            raise ValidationError("user must be a User")
+    def ensure(cls, user: object) -> Self:
+        if not isinstance(user, cls):
+            raise ValidationError(f"User must be an instance of {cls.__name__}")
         return user
 
     @property

@@ -21,7 +21,7 @@ class ChatMemberId:
         return str(self.value)
 
     @classmethod
-    def ensure(cls, member_id: Self) -> Self:
+    def ensure(cls, member_id: object) -> Self:
         if not isinstance(member_id, cls):
-            raise ValidationError("member_id must be a ChatMemberId")
+            raise ValidationError(f"Member ID must be an instance of {cls.__name__}")
         return member_id

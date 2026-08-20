@@ -39,5 +39,5 @@ class UserSubscription:
     @classmethod
     def ensure(cls, subscription: object) -> Self:
         if not isinstance(subscription, cls):
-            raise ValidationError(f"subscription must be a {cls.__name__}")
+            raise ValidationError(f"Subscription must be an instance of {cls.__name__}")
         return subscription

@@ -15,7 +15,7 @@ class ChatEvent:
         AwareDatetime.ensure(self.occurred_at)
 
     @classmethod
-    def ensure(cls, event: Self) -> Self:
+    def ensure(cls, event: object) -> Self:
         if not isinstance(event, cls):
-            raise ValidationError("event must be a ChatEvent")
+            raise ValidationError(f"Event must be an instance of {cls.__name__}")
         return event

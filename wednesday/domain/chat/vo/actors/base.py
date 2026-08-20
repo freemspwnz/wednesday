@@ -7,7 +7,7 @@ class ManagementActor:
     """Base class for management actors."""
 
     @classmethod
-    def ensure(cls, actor: Self) -> Self:
+    def ensure(cls, actor: object) -> Self:
         if not isinstance(actor, cls):
-            raise ValidationError("actor must be a ManagementActor")
+            raise ValidationError(f"Actor must be an instance of {cls.__name__}")
         return actor

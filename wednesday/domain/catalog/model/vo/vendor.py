@@ -34,7 +34,7 @@ class Vendor:
         return cls(value=raw.strip().lower())
 
     @classmethod
-    def ensure(cls, vendor: Self) -> Self:
-        if not isinstance(vendor, Vendor):
-            raise ValidationError("vendor must be a Vendor")
+    def ensure(cls, vendor: object) -> Self:
+        if not isinstance(vendor, cls):
+            raise ValidationError(f"vendor must be an instance of {cls.__name__}")
         return vendor

@@ -21,7 +21,7 @@ class ManagementContext:
         ChatId.ensure(self.chat_id)
 
     @classmethod
-    def ensure(cls, ctx: Self) -> Self:
+    def ensure(cls, ctx: object) -> Self:
         if not isinstance(ctx, cls):
-            raise ValidationError("ctx must be a ManagementContext")
+            raise ValidationError(f"Context must be an instance of {cls.__name__}")
         return ctx

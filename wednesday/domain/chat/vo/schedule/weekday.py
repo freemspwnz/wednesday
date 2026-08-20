@@ -14,7 +14,7 @@ class Weekday(IntEnum):
     SUNDAY = 7
 
     @classmethod
-    def ensure(cls, weekday: Self) -> Self:
+    def ensure(cls, weekday: object) -> Self:
         if not isinstance(weekday, cls):
-            raise ValidationError("weekday must be a Weekday")
+            raise ValidationError(f"Weekday must be an instance of {cls.__name__}")
         return weekday

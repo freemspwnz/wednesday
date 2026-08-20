@@ -34,7 +34,7 @@ class Series:
         return cls(value=raw.strip().lower())
 
     @classmethod
-    def ensure(cls, series: Self) -> Self:
-        if not isinstance(series, Series):
-            raise ValidationError("series must be a Series")
+    def ensure(cls, series: object) -> Self:
+        if not isinstance(series, cls):
+            raise ValidationError(f"series must be an instance of {cls.__name__}")
         return series

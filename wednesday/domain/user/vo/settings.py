@@ -25,7 +25,7 @@ class UserSettings:
         )
 
     @classmethod
-    def ensure(cls, settings: Self) -> Self:
+    def ensure(cls, settings: object) -> Self:
         if not isinstance(settings, cls):
-            raise ValidationError("settings must be a UserSettings")
+            raise ValidationError(f"Settings must be an instance of {cls.__name__}")
         return settings

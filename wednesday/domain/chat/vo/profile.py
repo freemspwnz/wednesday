@@ -36,7 +36,7 @@ class ChatProfile:
             raise ValidationError("Chat username too long")
 
     @classmethod
-    def ensure(cls, profile: Self) -> Self:
+    def ensure(cls, profile: object) -> Self:
         if not isinstance(profile, cls):
-            raise ValidationError("profile must be a ChatProfile")
+            raise ValidationError(f"Profile must be an instance of {cls.__name__}")
         return profile
