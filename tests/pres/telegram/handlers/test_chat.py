@@ -467,9 +467,58 @@ async def test_cb_schedule_day_denied_by_domain_policy(
         await h.cb_schedule(callback, callback_data, chat_context, bot, mock_scope)
 
     edit.assert_not_awaited()
-    # Early ack, then error alert (query already answered on real Telegram → fallback path).
-    assert answer.await_count == 2
-    answer.assert_awaited_with(exc_msg.INSUFFICIENT_PERMISSIONS, show_alert=True)
+    answer.assert_awaited_once_with(exc_msg.INSUFFICIENT_PERMISSIONS, show_alert=True)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_add_duplicate_toasts_without_uc(
+    mock_scope: MagicMock,
+) -> None:
+    with_slot = replace(mk_chat_context(tg_id=-1001), schedules=[(9, 30)])
+    callback = make_callback_query(
+        data=ScheduleData(action="add", value=pack_hhmm(9, 30)).pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+    bot = AsyncMock()
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_text", new_callable=AsyncMock) as edit,
+    ):
+        await h.cb_schedule(callback, callback_data, with_slot, bot, mock_scope)
+
+    mock_scope.chat_schedule_uc.add_schedule.assert_not_awaited()
+    edit.assert_not_awaited()
+    answer.assert_awaited_once_with(chat_msg.SCHEDULE_SLOT_EXISTS, show_alert=True)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_add_limit_toasts_without_uc(
+    mock_scope: MagicMock,
+) -> None:
+    full = replace(
+        mk_chat_context(tg_id=-1001),
+        schedules=[(8, 0), (9, 0), (10, 0)],
+    )
+    callback = make_callback_query(
+        data=ScheduleData(action="add", value=pack_hhmm(11, 0)).pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+    bot = AsyncMock()
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_text", new_callable=AsyncMock) as edit,
+    ):
+        await h.cb_schedule(callback, callback_data, full, bot, mock_scope)
+
+    mock_scope.chat_schedule_uc.add_schedule.assert_not_awaited()
+    edit.assert_not_awaited()
+    answer.assert_awaited_once_with(chat_msg.SCHEDULE_LIMIT_REACHED, show_alert=True)
 
 
 @pytest.mark.unit

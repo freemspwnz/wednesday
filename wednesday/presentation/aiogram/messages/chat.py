@@ -41,6 +41,12 @@ SCHEDULE_BACK = "« Назад"
 
 SCHEDULE_NO_SLOTS = "Нет слотов для удаления."
 
+SCHEDULE_SLOT_EXISTS = "Это время уже в расписании."
+
+SCHEDULE_LIMIT_REACHED = "Достигнут лимит расписаний для чата."
+
+SCHEDULE_TRY_LATER = "Слишком много нажатий. Подождите немного."
+
 SCHEDULE_ADD_USAGE = "Использование: /schedule_add ЧЧ:ММ"
 
 SCHEDULE_REMOVE_USAGE = "Использование: /schedule_remove ЧЧ:ММ"
