@@ -76,12 +76,12 @@ class TestRedisChatRepo:
         client = MagicMock()
         client.set = AsyncMock()
 
-        chat = MagicMock()
-        chat.profile.telegram_id = 88
+        context = MagicMock()
+        context.tg_id = 88
 
-        with patch.object(ChatSnapshot, "from_domain", return_value=fake_snap):
+        with patch.object(ChatSnapshot, "from_context", return_value=fake_snap):
             repo = RedisChatRepo(client=client, logger=mock_logger, ttl=timedelta(minutes=5))
-            await repo.set(chat)
+            await repo.set(context)
 
         client.set.assert_awaited_once()
         call_kw = client.set.await_args.kwargs

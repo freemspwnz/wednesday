@@ -19,7 +19,7 @@ def test_user_id_and_profile_helpers() -> None:
     assert str(user_id) == str(UUID(int=7))
     assert isinstance(UserId.new(), UserId)
     with pytest.raises(ValidationError):
-        UserId.ensure("bad")  # type: ignore[arg-type]
+        UserId.ensure("bad")
 
     profile = UserProfile(
         telegram_id=123,

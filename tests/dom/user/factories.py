@@ -244,8 +244,8 @@ class FakeViolationRepo(ViolationRepo):
         )
 
     @classmethod
-    def ensure(cls, repo: Self) -> Self:
-        if not isinstance(repo, ViolationRepo):
+    def ensure(cls, repo: object) -> Self:
+        if not isinstance(repo, cls):
             raise TypeError("repo must be a ViolationRepo")
         return repo
 

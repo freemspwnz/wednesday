@@ -86,12 +86,12 @@ class TestRedisUserRepo:
         client = MagicMock()
         client.set = AsyncMock()
 
-        user = MagicMock()
-        user.profile.telegram_id = 33
+        context = MagicMock()
+        context.tg_id = 33
 
-        with patch.object(UserSnapshot, "from_domain", return_value=fake_snap):
+        with patch.object(UserSnapshot, "from_context", return_value=fake_snap):
             repo = RedisUserRepo(client=client, logger=mock_logger, ttl=timedelta(minutes=5))
-            await repo.set(user)
+            await repo.set(context)
 
         client.set.assert_awaited_once()
         assert client.set.await_args.args[0] == "ctx:user:33"
