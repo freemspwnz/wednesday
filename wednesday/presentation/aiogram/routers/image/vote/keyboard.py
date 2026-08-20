@@ -3,8 +3,6 @@
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from domain.image import ImageRating
-
 from ....messages.image import vote_btn_down, vote_btn_up
 from .data import ImageVoteData
 
@@ -15,7 +13,8 @@ _VOTE_DOWN = -1
 def build_vote_kb(
     *,
     image_id: str,
-    rating: ImageRating,
+    likes: int,
+    dislikes: int,
 ) -> InlineKeyboardMarkup:
     """Build vote row with global likes / dislikes counts."""
 
@@ -23,11 +22,11 @@ def build_vote_kb(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=vote_btn_up(rating.likes),
+                    text=vote_btn_up(likes),
                     callback_data=ImageVoteData(image_id=image_id, value=_VOTE_UP).pack(),
                 ),
                 InlineKeyboardButton(
-                    text=vote_btn_down(rating.dislikes),
+                    text=vote_btn_down(dislikes),
                     callback_data=ImageVoteData(image_id=image_id, value=_VOTE_DOWN).pack(),
                 ),
             ],
@@ -39,11 +38,12 @@ async def edit_vote_markup(
     callback: CallbackQuery,
     *,
     image_id: str,
-    rating: ImageRating,
+    likes: int,
+    dislikes: int,
 ) -> None:
     if not isinstance(callback.message, Message):
         return
-    desired = build_vote_kb(image_id=image_id, rating=rating)
+    desired = build_vote_kb(image_id=image_id, likes=likes, dislikes=dislikes)
     if _same_markup(callback.message.reply_markup, desired):
         return
     try:

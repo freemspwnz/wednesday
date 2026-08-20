@@ -1,4 +1,4 @@
-"""Telegram → domain mapping for in-chat commands."""
+"""Telegram → DTO mapping for in-chat commands."""
 
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
@@ -6,27 +6,26 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import Message
 
 from app.dto import ChatContext
-from domain.chat import ChatMember, ChatMemberId, ChatMemberRole
 
 
-def telegram_status_to_chat_member_role(status: ChatMemberStatus) -> ChatMemberRole | None:
-    """Map Telegram membership status to domain role (no access policy)."""
+def telegram_status_to_str(status: ChatMemberStatus) -> str:
+    """Map Telegram membership status to string role."""
     if status == ChatMemberStatus.CREATOR:
-        return ChatMemberRole.OWNER
+        return "owner"
     if status == ChatMemberStatus.ADMINISTRATOR:
-        return ChatMemberRole.ADMIN
+        return "admin"
     if status == ChatMemberStatus.MEMBER:
-        return ChatMemberRole.MEMBER
+        return "member"
     if status == ChatMemberStatus.RESTRICTED:
-        return ChatMemberRole.RESTRICTED
-    return None
+        return "restricted"
+    raise ValueError("unknown Telegram membership status")
 
 
 async def resolve_chat_member(
     bot: Bot,
     message: Message,
     chat: ChatContext,
-) -> ChatMember:
+) -> tuple[int, str]:
     """Build domain ChatMember for the caller; raise ValueError only on adapter failures."""
     caller = message.from_user
     if caller is None:
@@ -39,13 +38,6 @@ async def resolve_chat_member(
         msg = "Не удалось проверить участника в чате."
         raise ValueError(msg) from exc
 
-    role = telegram_status_to_chat_member_role(member.status)
-    if role is None:
-        msg = "Вы не являетесь активным участником этого чата."
-        raise ValueError(msg)
+    role = telegram_status_to_str(member.status)
 
-    return ChatMember(
-        id=ChatMemberId(caller.id),
-        role=role,
-        chat_id=chat.id,
-    )
+    return caller.id, role

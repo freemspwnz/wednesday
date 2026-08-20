@@ -37,8 +37,8 @@ async def cmd_random(
             return
 
         await message.answer_photo(
-            photo=str(card.file_id),
-            reply_markup=build_vote_kb(image_id=str(card.id), rating=card.rating),
+            photo=card.file_id,
+            reply_markup=build_vote_kb(image_id=card.id, likes=card.likes, dislikes=card.dislikes),
         )
         await scope.image_catalog_uc.mark_shown(
             chat_id=chat.id,
@@ -89,7 +89,7 @@ async def cmd_generate(
                 at=at,
             )
             await sent.edit_reply_markup(
-                reply_markup=build_vote_kb(image_id=str(card.id), rating=card.rating),
+                reply_markup=build_vote_kb(image_id=card.id, likes=card.likes, dislikes=card.dislikes),
             )
             committed = True
         except PromptRejectedError as exc:

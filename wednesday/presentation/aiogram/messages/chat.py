@@ -1,9 +1,6 @@
 """Chat messages: membership events and schedule commands."""
 
-from zoneinfo import ZoneInfo
-
 from app.dto import ChatContext
-from domain.chat import Chat, ChatSchedule, Weekday
 
 BOT_ADDED_TO_CHAT = "Привет! Я Wednesday Frog Bot!\n\nНажми /start и я расскажу, что я умею."
 
@@ -47,23 +44,23 @@ SCHEDULE_DAY_USAGE = "Использование: /schedule_day <день>"
 SCHEDULE_TZ_USAGE = "Использование: /schedule_tz <таймзона>"
 
 
-def weekday_label(weekday: Weekday) -> str:
+def weekday_label(weekday: int) -> str:
     return _WEEKDAY_LABELS.get(weekday, str(weekday))
 
 
-_WEEKDAY_LABELS: dict[Weekday, str] = {
-    Weekday.MONDAY: "понедельник",
-    Weekday.TUESDAY: "вторник",
-    Weekday.WEDNESDAY: "среда",
-    Weekday.THURSDAY: "четверг",
-    Weekday.FRIDAY: "пятница",
-    Weekday.SATURDAY: "суббота",
-    Weekday.SUNDAY: "воскресенье",
+_WEEKDAY_LABELS: dict[int, str] = {
+    1: "понедельник",
+    2: "вторник",
+    3: "среда",
+    4: "четверг",
+    5: "пятница",
+    6: "суббота",
+    7: "воскресенье",
 }
 
 
-def _format_time(slot: ChatSchedule) -> str:
-    return f"{slot.hour:02d}:{slot.minute:02d}"
+def _format_time(slot: tuple[int, int]) -> str:
+    return f"{slot[0]:02d}:{slot[1]:02d}"
 
 
 def format_schedule_context(chat: ChatContext) -> str:
@@ -76,29 +73,17 @@ def format_schedule_context(chat: ChatContext) -> str:
     )
 
 
-def format_schedule_chat(chat: Chat) -> str:
-    """Format schedule from chat aggregate returned by use case."""
-    from domain.chat import ActiveState
-
-    return _format_schedule(
-        is_active=isinstance(chat.state, ActiveState),
-        weekday=chat.schedules.weekday,
-        timezone=chat.schedules.timezone,
-        schedules=chat.schedules.schedules,
-    )
-
-
 def _format_schedule(
     *,
     is_active: bool,
-    weekday: Weekday,
-    timezone: ZoneInfo,
-    schedules: tuple[ChatSchedule, ...],
+    weekday: int,
+    timezone: str,
+    schedules: list[tuple[int, int]],
 ) -> str:
     status = "активна" if is_active else "приостановлена"
     day = _WEEKDAY_LABELS.get(weekday, str(weekday))
     if schedules:
-        slots = ", ".join(_format_time(slot) for slot in sorted(schedules, key=lambda s: (s.hour, s.minute)))
+        slots = ", ".join(_format_time(slot) for slot in sorted(schedules, key=lambda s: (s[0], s[1])))
     else:
         slots = "нет слотов"
     return f"📅 Расписание чата\n\nРассылка: {status}\nДень: {day}\nТаймзона: {timezone}\nВремена: {slots}"

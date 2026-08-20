@@ -1,13 +1,10 @@
-from uuid import UUID
+from datetime import UTC, datetime
 
 from aiogram import Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from app.dto import UserContext
 from app.protocols import RequestScope
-from domain.chat import ChatProfile, ChatType
-from domain.image import ImageId
-from domain.kernel.vo import AwareDatetime
 
 from ...utils import run_callback_handler
 from .data import ImageVoteData
@@ -26,21 +23,31 @@ async def cb_image_vote(
     """Record a vote and refresh likes / dislikes on the keyboard."""
 
     async def _action() -> None:
+        if not isinstance(callback.message, Message):
+            await callback.answer()
+            return
+        message = callback.message
+        at = datetime.now(UTC)
         private_chat = await scope.chat_management_uc.register(
-            profile=ChatProfile(type=ChatType.PRIVATE, telegram_id=user.tg_id),
+            tg_id=user.tg_id,
+            type="private",
+            title=message.chat.title,
+            username=message.chat.username,
+            at=at,
         )
         card = await scope.image_vote_uc.vote(
-            image_id=ImageId(UUID(callback_data.image_id)),
+            image_id=callback_data.image_id,
             voter_id=user.id,
             chat_id=private_chat.id,
             value=callback_data.value,
-            at=AwareDatetime.now_utc(),
+            at=at,
         )
         if card is not None:
             await edit_vote_markup(
                 callback,
                 image_id=callback_data.image_id,
-                rating=card.rating,
+                likes=card.likes,
+                dislikes=card.dislikes,
             )
         await callback.answer()
 

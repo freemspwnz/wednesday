@@ -2,18 +2,18 @@
 
 import asyncio
 from datetime import UTC, date, datetime, timedelta
-from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
+from app.dto import ChatContext
 from app.protocols import Logger, RequestScope, ScopeFactory
-from domain.chat import Chat
 
 from ..messages import image as image_msg
 from ..routers.image.vote import build_vote_kb
 
-_SlotKey = tuple[UUID, date, int, int]
+_SlotKey = tuple[str, date, int, int]
 
 
 class CatalogScheduleRunner:
@@ -64,7 +64,7 @@ class CatalogScheduleRunner:
         except Exception:
             self._logger.exception("Catalog schedule tick failed")
 
-    async def _deliver(self, *, scope: RequestScope, chat: Chat, at: datetime) -> None:
+    async def _deliver(self, *, scope: RequestScope, chat: ChatContext, at: datetime) -> None:
         key = self._slot_key(chat, at)
         if key in self._fired:
             return
@@ -74,8 +74,8 @@ class CatalogScheduleRunner:
         except Exception:
             self._logger.warning(
                 "Catalog schedule pick failed",
-                chat_id=str(chat.id.value),
-                tg_id=chat.profile.telegram_id,
+                chat_id=chat.id,
+                tg_id=chat.tg_id,
                 exc_info=True,
             )
             return
@@ -86,15 +86,19 @@ class CatalogScheduleRunner:
 
         try:
             await self._bot.send_photo(
-                chat_id=chat.profile.telegram_id,
-                photo=str(card.file_id),
-                reply_markup=build_vote_kb(image_id=str(card.id), rating=card.rating),
+                chat_id=chat.tg_id,
+                photo=card.file_id,
+                reply_markup=build_vote_kb(
+                    image_id=card.id,
+                    likes=card.likes,
+                    dislikes=card.dislikes,
+                ),
             )
         except TelegramAPIError:
             self._logger.warning(
                 "Catalog schedule send failed",
-                chat_id=str(chat.id.value),
-                tg_id=chat.profile.telegram_id,
+                chat_id=chat.id,
+                tg_id=chat.tg_id,
                 exc_info=True,
             )
             self._fired.add(key)
@@ -102,8 +106,8 @@ class CatalogScheduleRunner:
         except Exception:
             self._logger.warning(
                 "Catalog schedule delivery failed",
-                chat_id=str(chat.id.value),
-                tg_id=chat.profile.telegram_id,
+                chat_id=chat.id,
+                tg_id=chat.tg_id,
                 exc_info=True,
             )
             self._fired.add(key)
@@ -118,38 +122,38 @@ class CatalogScheduleRunner:
         except Exception:
             self._logger.warning(
                 "Catalog schedule mark shown failed",
-                chat_id=str(chat.id.value),
-                tg_id=chat.profile.telegram_id,
-                image_id=str(card.id.value),
+                chat_id=chat.id,
+                tg_id=chat.tg_id,
+                image_id=card.id,
                 exc_info=True,
             )
 
         self._fired.add(key)
         self._logger.info(
             "Catalog schedule photo sent",
-            chat_id=str(chat.id.value),
-            tg_id=chat.profile.telegram_id,
-            image_id=str(card.id.value),
+            chat_id=chat.id,
+            tg_id=chat.tg_id,
+            image_id=card.id,
         )
 
-    async def _send_empty_notice(self, *, chat: Chat, key: _SlotKey) -> None:
+    async def _send_empty_notice(self, *, chat: ChatContext, key: _SlotKey) -> None:
         try:
             await self._bot.send_message(
-                chat_id=chat.profile.telegram_id,
+                chat_id=chat.tg_id,
                 text=image_msg.SCHEDULE_CATALOG_EMPTY,
             )
         except TelegramAPIError:
             self._logger.warning(
                 "Catalog schedule notice failed",
-                chat_id=str(chat.id.value),
-                tg_id=chat.profile.telegram_id,
+                chat_id=chat.id,
+                tg_id=chat.tg_id,
                 exc_info=True,
             )
         else:
             self._logger.info(
                 "Catalog schedule notice: no unseen image",
-                chat_id=str(chat.id.value),
-                tg_id=chat.profile.telegram_id,
+                chat_id=chat.id,
+                tg_id=chat.tg_id,
             )
         self._fired.add(key)
 
@@ -158,9 +162,9 @@ class CatalogScheduleRunner:
         self._fired = {key for key in self._fired if key[1] >= cutoff}
 
     @staticmethod
-    def _slot_key(chat: Chat, at: datetime) -> _SlotKey:
-        local = at.astimezone(chat.schedules.timezone)
-        return (chat.id.value, local.date(), local.hour, local.minute)
+    def _slot_key(chat: ChatContext, at: datetime) -> _SlotKey:
+        local = at.astimezone(ZoneInfo(chat.timezone))
+        return (chat.id, local.date(), local.hour, local.minute)
 
     @staticmethod
     def _seconds_until_next_minute(now: datetime) -> float:

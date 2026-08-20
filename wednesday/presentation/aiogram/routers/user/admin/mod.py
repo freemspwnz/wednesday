@@ -9,8 +9,6 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
-from domain.kernel.vo import AwareDatetime
-from domain.user import UserRole
 
 from ....filters import InsufficientCommandArgs, RequireCommandArgs
 from ....messages import common as common_msg, exceptions as exc_msg
@@ -20,13 +18,13 @@ from ...utils import parse_telegram_id, run_message_handler
 mod_router = Router(name="mod")
 
 
-@mod_router.message(Command("mod"), InsufficientCommandArgs())
-async def cmd_mod_usage(message: Message) -> None:
-    await message.answer(admin_msg.MOD_USAGE)
+@mod_router.message(Command("promote"), InsufficientCommandArgs())
+async def cmd_promote_usage(message: Message) -> None:
+    await message.answer(admin_msg.PROMOTE_USAGE)
 
 
-@mod_router.message(Command("mod"), RequireCommandArgs())
-async def cmd_mod(
+@mod_router.message(Command("promote"), RequireCommandArgs())
+async def cmd_promote(
     message: Message,
     command_args: list[str],
     logger: Logger,
@@ -36,6 +34,7 @@ async def cmd_mod(
     """Promote user to admin (domain management policy)."""
 
     async def _action() -> None:
+        at = message.date
         target = await scope.user_lifecycle_uc.find_by_tg_id(
             tg_id=parse_telegram_id(command_args[0]),
         )
@@ -45,21 +44,21 @@ async def cmd_mod(
         await scope.user_management_uc.change_role(
             user_id=target.id,
             actor=user.role,
-            new_role=UserRole.ADMIN,
-            at=AwareDatetime.now_utc(),
+            action="promote",
+            at=at,
         )
         await message.answer(admin_msg.USER_PROMOTED.format(tg_id=target.tg_id))
 
     await run_message_handler(message, logger, _action)
 
 
-@mod_router.message(Command("unmod"), InsufficientCommandArgs())
-async def cmd_unmod_usage(message: Message) -> None:
-    await message.answer(admin_msg.UNMOD_USAGE)
+@mod_router.message(Command("demote"), InsufficientCommandArgs())
+async def cmd_demote_usage(message: Message) -> None:
+    await message.answer(admin_msg.DEMOTE_USAGE)
 
 
-@mod_router.message(Command("unmod"), RequireCommandArgs())
-async def cmd_unmod(
+@mod_router.message(Command("demote"), RequireCommandArgs())
+async def cmd_demote(
     message: Message,
     command_args: list[str],
     logger: Logger,
@@ -69,6 +68,7 @@ async def cmd_unmod(
     """Revoke admin role."""
 
     async def _action() -> None:
+        at = message.date
         target = await scope.user_lifecycle_uc.find_by_tg_id(
             tg_id=parse_telegram_id(command_args[0]),
         )
@@ -78,8 +78,8 @@ async def cmd_unmod(
         await scope.user_management_uc.change_role(
             user_id=target.id,
             actor=user.role,
-            new_role=UserRole.USER,
-            at=AwareDatetime.now_utc(),
+            action="demote",
+            at=at,
         )
         await message.answer(admin_msg.USER_DEMOTED.format(tg_id=target.tg_id))
 

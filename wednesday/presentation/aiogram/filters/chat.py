@@ -4,7 +4,6 @@ from aiogram.filters import BaseFilter
 from aiogram.types import TelegramObject
 
 from app.dto import ChatContext
-from domain.chat import ChatType
 
 
 class GroupChatFilter(BaseFilter):
@@ -17,4 +16,4 @@ class GroupChatFilter(BaseFilter):
     ) -> bool:
         if not isinstance(chat, ChatContext):
             return False
-        return chat.type in {ChatType.GROUP, ChatType.SUPERGROUP}
+        return chat.type in {"group", "supergroup"}

@@ -6,7 +6,6 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
-from domain.catalog import Model
 
 from ...filters import InsufficientCommandArgs, RequireCommandArgs
 from ...messages import user as user_msg
@@ -34,10 +33,10 @@ async def cmd_set_model(
         at = message.date
         updated = await scope.user_generation_uc.select_model(
             user_id=user.id,
-            model=Model.parse(command_args[0]),
+            model=command_args[0].lower(),
             at=at,
         )
-        await message.answer(user_msg.format_set_model_success(str(updated.settings.model)))
+        await message.answer(user_msg.format_set_model_success(updated.model))
 
     await run_message_handler(message, logger, _action)
 

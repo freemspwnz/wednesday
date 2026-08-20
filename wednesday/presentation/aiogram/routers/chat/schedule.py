@@ -6,7 +6,6 @@ from aiogram.types import Message
 
 from app.dto import ChatContext
 from app.protocols import Logger, RequestScope
-from domain.kernel.vo import AwareDatetime
 
 from ...filters import GroupChatFilter, InsufficientCommandArgs, RequireCommandArgs
 from ...messages import chat as chat_msg
@@ -53,15 +52,17 @@ async def cmd_schedule_add(  # noqa: PLR0913, PLR0917
     """Add a send time slot."""
 
     async def _action() -> None:
-        actor = await resolve_chat_member(bot, message, chat)
+        at = message.date
+        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
         slot = parse_schedule_time(command_args[0])
         updated = await scope.chat_schedule_uc.add_schedule(
             chat_id=chat.id,
-            actor=actor,
+            actor_id=actor_id,
+            actor_role=actor_role,
             schedule=slot,
-            at=AwareDatetime.now_utc(),
+            at=at,
         )
-        await message.answer(chat_msg.format_schedule_chat(updated))
+        await message.answer(chat_msg.format_schedule_context(updated))
 
     await run_message_handler(message, logger, _action)
 
@@ -83,15 +84,17 @@ async def cmd_schedule_remove(  # noqa: PLR0913, PLR0917
     """Remove a send time slot."""
 
     async def _action() -> None:
-        actor = await resolve_chat_member(bot, message, chat)
+        at = message.date
+        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
         slot = parse_schedule_time(command_args[0])
         updated = await scope.chat_schedule_uc.remove_schedule(
             chat_id=chat.id,
-            actor=actor,
+            actor_id=actor_id,
+            actor_role=actor_role,
             schedule=slot,
-            at=AwareDatetime.now_utc(),
+            at=at,
         )
-        await message.answer(chat_msg.format_schedule_chat(updated))
+        await message.answer(chat_msg.format_schedule_context(updated))
 
     await run_message_handler(message, logger, _action)
 
@@ -107,13 +110,15 @@ async def cmd_schedule_clear(
     """Clear all schedule slots."""
 
     async def _action() -> None:
-        actor = await resolve_chat_member(bot, message, chat)
+        at = message.date
+        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
         updated = await scope.chat_schedule_uc.clear_schedules(
             chat_id=chat.id,
-            actor=actor,
-            at=AwareDatetime.now_utc(),
+            actor_id=actor_id,
+            actor_role=actor_role,
+            at=at,
         )
-        await message.answer(chat_msg.format_schedule_chat(updated))
+        await message.answer(chat_msg.format_schedule_context(updated))
 
     await run_message_handler(message, logger, _action)
 
@@ -135,15 +140,17 @@ async def cmd_schedule_day(  # noqa: PLR0913, PLR0917
     """Change schedule weekday."""
 
     async def _action() -> None:
-        actor = await resolve_chat_member(bot, message, chat)
+        at = message.date
+        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
         weekday = parse_weekday(command_args[0])
         updated = await scope.chat_schedule_uc.change_schedule_day(
             chat_id=chat.id,
-            actor=actor,
+            actor_id=actor_id,
+            actor_role=actor_role,
             new_weekday=weekday,
-            at=AwareDatetime.now_utc(),
+            at=at,
         )
-        await message.answer(chat_msg.format_schedule_chat(updated))
+        await message.answer(chat_msg.format_schedule_context(updated))
 
     await run_message_handler(message, logger, _action)
 
@@ -165,14 +172,16 @@ async def cmd_schedule_tz(  # noqa: PLR0913, PLR0917
     """Change schedule timezone."""
 
     async def _action() -> None:
-        actor = await resolve_chat_member(bot, message, chat)
+        at = message.date
+        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
         timezone = parse_timezone(command_args[0])
         updated = await scope.chat_schedule_uc.change_schedule_timezone(
             chat_id=chat.id,
-            actor=actor,
+            actor_id=actor_id,
+            actor_role=actor_role,
             timezone=timezone,
-            at=AwareDatetime.now_utc(),
+            at=at,
         )
-        await message.answer(chat_msg.format_schedule_chat(updated))
+        await message.answer(chat_msg.format_schedule_context(updated))
 
     await run_message_handler(message, logger, _action)
