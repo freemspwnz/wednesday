@@ -24,6 +24,7 @@ from domain.chat import AccessDeniedError
 from presentation.aiogram.messages import chat as chat_msg, exceptions as exc_msg
 from presentation.aiogram.routers import chat as h
 from presentation.aiogram.routers.chat.schedule import ScheduleData
+from presentation.aiogram.routers.chat.schedule.keyboard import pack_hhmm
 
 from ..factories import make_callback_query, make_message, mk_chat_context
 
@@ -201,23 +202,143 @@ async def test_cb_schedule_opens_day_submenu(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cb_schedule_stub_answers_wip(
+async def test_cb_schedule_opens_hours_picker(
     chat_context: object,
     mock_scope: MagicMock,
 ) -> None:
-    from presentation.aiogram.messages import common as common_msg
-
     callback = make_callback_query(
-        data=ScheduleData(action="stub", value="add").pack(),
+        data=ScheduleData(action="hours").pack(),
         chat_id=-1001,
     )
     callback_data = ScheduleData.unpack(callback.data or "")
     bot = AsyncMock()
 
-    with patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer:
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit,
+    ):
         await h.cb_schedule(callback, callback_data, chat_context, bot, mock_scope)
 
-    answer.assert_awaited_once_with(common_msg.WIP)
+    edit.assert_awaited_once()
+    answer.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_adds_slot_via_hhmm(
+    chat_context: object,
+    mock_scope: MagicMock,
+) -> None:
+    updated = replace(mk_chat_context(tg_id=-1001), schedules=[(9, 30)])
+    mock_scope.chat_schedule_uc.add_schedule = AsyncMock(return_value=updated)
+    callback = make_callback_query(
+        data=ScheduleData(action="add", value=pack_hhmm(9, 30)).pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+    bot = AsyncMock()
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
+        patch.object(Message, "edit_text", new_callable=AsyncMock),
+        patch(
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            new_callable=AsyncMock,
+            return_value=(1, "admin"),
+        ),
+    ):
+        await h.cb_schedule(callback, callback_data, chat_context, bot, mock_scope)
+
+    mock_scope.chat_schedule_uc.add_schedule.assert_awaited_once()
+    call = mock_scope.chat_schedule_uc.add_schedule.await_args
+    assert call is not None
+    assert call.kwargs["schedule"] == (9, 30)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_removes_slot(
+    chat_context: object,
+    mock_scope: MagicMock,
+) -> None:
+    with_slot = replace(mk_chat_context(tg_id=-1001), schedules=[(12, 0)])
+    updated = replace(with_slot, schedules=[])
+    mock_scope.chat_schedule_uc.remove_schedule = AsyncMock(return_value=updated)
+    callback = make_callback_query(
+        data=ScheduleData(action="rm", value=pack_hhmm(12, 0)).pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+    bot = AsyncMock()
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
+        patch.object(Message, "edit_text", new_callable=AsyncMock),
+        patch(
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            new_callable=AsyncMock,
+            return_value=(1, "admin"),
+        ),
+    ):
+        await h.cb_schedule(callback, callback_data, with_slot, bot, mock_scope)
+
+    mock_scope.chat_schedule_uc.remove_schedule.assert_awaited_once()
+    call = mock_scope.chat_schedule_uc.remove_schedule.await_args
+    assert call is not None
+    assert call.kwargs["schedule"] == (12, 0)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_rmlist_empty_toasts(
+    chat_context: object,
+    mock_scope: MagicMock,
+) -> None:
+    callback = make_callback_query(
+        data=ScheduleData(action="rmlist").pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+    bot = AsyncMock()
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit,
+    ):
+        await h.cb_schedule(callback, callback_data, chat_context, bot, mock_scope)
+
+    edit.assert_not_awaited()
+    answer.assert_awaited_once_with(chat_msg.SCHEDULE_NO_SLOTS, show_alert=True)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_clears_slots_on_confirm(
+    chat_context: object,
+    mock_scope: MagicMock,
+) -> None:
+    with_slot = replace(mk_chat_context(tg_id=-1001), schedules=[(9, 0)])
+    updated = replace(with_slot, schedules=[])
+    mock_scope.chat_schedule_uc.clear_schedules = AsyncMock(return_value=updated)
+    callback = make_callback_query(
+        data=ScheduleData(action="clear", value="yes").pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+    bot = AsyncMock()
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
+        patch.object(Message, "edit_text", new_callable=AsyncMock),
+        patch(
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            new_callable=AsyncMock,
+            return_value=(1, "admin"),
+        ),
+    ):
+        await h.cb_schedule(callback, callback_data, with_slot, bot, mock_scope)
+
+    mock_scope.chat_schedule_uc.clear_schedules.assert_awaited_once()
 
 
 @pytest.mark.unit

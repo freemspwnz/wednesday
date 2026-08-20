@@ -25,7 +25,12 @@ TIMEZONE_PRESETS: tuple[str, ...] = (
     "Asia/Vladivostok",
 )
 
+MINUTE_STEPS: tuple[int, ...] = (0, 15, 30, 45)
+_HOURS_PER_ROW = 6
 _SLOTS_LABEL_MAX = 28
+_HHMM_LEN = 4
+_HOUR_MAX = 23
+_MINUTE_MAX = 59
 
 
 def build_main_kb(chat: ChatContext) -> InlineKeyboardMarkup:
@@ -50,7 +55,7 @@ def build_status_kb(*, is_active: bool) -> InlineKeyboardMarkup:
         rows.append([_btn("Выключить", action="status", value="off")])
     else:
         rows.append([_btn("Включить", action="status", value="on")])
-    rows.append([_back_btn()])
+    rows.append([_back_main()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -61,7 +66,7 @@ def build_day_kb(*, current: int) -> InlineKeyboardMarkup:
         mark = "·" if day == current else ""
         label = f"{mark}{_WEEKDAY_SHORT[day]}{mark}"
         row.append(_btn(label, action="day", value=str(day)))
-    return InlineKeyboardMarkup(inline_keyboard=[row, [_back_btn()]])
+    return InlineKeyboardMarkup(inline_keyboard=[row, [_back_main()]])
 
 
 def build_tz_kb(*, current: str) -> InlineKeyboardMarkup:
@@ -70,22 +75,98 @@ def build_tz_kb(*, current: str) -> InlineKeyboardMarkup:
     for index, tz in enumerate(TIMEZONE_PRESETS):
         mark = "✓ " if tz == current else ""
         rows.append([_btn(f"{mark}{tz}", action="tz", value=str(index))])
-    rows.append([_back_btn()])
+    rows.append([_back_main()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_slots_kb() -> InlineKeyboardMarkup:
-    """Stub: add / remove / clear + back (mutations in a later commit)."""
+    """Add / remove / clear + back to main."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                _btn("Добавить", action="stub", value="add"),
-                _btn("Удалить", action="stub", value="remove"),
+                _btn("Добавить", action="hours"),
+                _btn("Удалить", action="rmlist"),
             ],
-            [_btn("Очистить", action="stub", value="clear")],
-            [_back_btn()],
+            [_btn("Очистить", action="clear", value="ask")],
+            [_back_main()],
         ],
     )
+
+
+def build_hours_kb() -> InlineKeyboardMarkup:
+    """Hour grid (00–23) + back to slots."""
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for hour in range(24):
+        row.append(_btn(f"{hour:02d}", action="mins", value=str(hour)))
+        if len(row) == _HOURS_PER_ROW:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([_back_slots()])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_minutes_kb(*, hour: int) -> InlineKeyboardMarkup:
+    """Minute steps for a chosen hour + back to hours."""
+    row = [
+        _btn(
+            f"{hour:02d}:{minute:02d}",
+            action="add",
+            value=_pack_hhmm(hour, minute),
+        )
+        for minute in MINUTE_STEPS
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[row, [_btn(chat_msg.SCHEDULE_BACK, action="hours")]])
+
+
+def build_remove_kb(schedules: list[tuple[int, int]]) -> InlineKeyboardMarkup:
+    """Existing slots as remove targets + back to slots."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            _btn(
+                f"{hour:02d}:{minute:02d}",
+                action="rm",
+                value=_pack_hhmm(hour, minute),
+            )
+        ]
+        for hour, minute in sorted(schedules, key=lambda s: (s[0], s[1]))
+    ]
+    rows.append([_back_slots()])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_clear_confirm_kb() -> InlineKeyboardMarkup:
+    """Confirm clearing all slots."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                _btn("Да", action="clear", value="yes"),
+                _btn("Отмена", action="clear", value="no"),
+            ],
+        ],
+    )
+
+
+def pack_hhmm(hour: int, minute: int) -> str:
+    return _pack_hhmm(hour, minute)
+
+
+def unpack_hhmm(raw: str) -> tuple[int, int]:
+    if len(raw) != _HHMM_LEN or not raw.isdigit():
+        msg = "Некорректное время."
+        raise ValueError(msg)
+    hour = int(raw[:2])
+    minute = int(raw[2:])
+    if hour > _HOUR_MAX or minute > _MINUTE_MAX:
+        msg = "Некорректное время."
+        raise ValueError(msg)
+    return hour, minute
+
+
+def _pack_hhmm(hour: int, minute: int) -> str:
+    return f"{hour:02d}{minute:02d}"
 
 
 def _slots_label(schedules: list[tuple[int, int]]) -> str:
@@ -105,5 +186,9 @@ def _btn(text: str, *, action: str, value: str = "") -> InlineKeyboardButton:
     )
 
 
-def _back_btn() -> InlineKeyboardButton:
+def _back_main() -> InlineKeyboardButton:
     return _btn(chat_msg.SCHEDULE_BACK, action="menu")
+
+
+def _back_slots() -> InlineKeyboardButton:
+    return _btn(chat_msg.SCHEDULE_BACK, action="open", value="slots")

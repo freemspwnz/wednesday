@@ -10,18 +10,23 @@ from app.dto import ChatContext
 from app.protocols import Logger, RequestScope
 
 from ....filters import GroupChatFilter, InsufficientCommandArgs, RequireCommandArgs
-from ....messages import chat as chat_msg, common as common_msg
+from ....messages import chat as chat_msg
 from ...utils import run_callback_handler, run_message_handler
 from ..mappers import resolve_chat_member
 from ..parsers import parse_schedule_time, parse_timezone, parse_weekday
 from .data import ScheduleData
 from .keyboard import (
     TIMEZONE_PRESETS,
+    build_clear_confirm_kb,
     build_day_kb,
+    build_hours_kb,
     build_main_kb,
+    build_minutes_kb,
+    build_remove_kb,
     build_slots_kb,
     build_status_kb,
     build_tz_kb,
+    unpack_hhmm,
 )
 
 chat_schedule_router = Router(name="chat_schedule")
@@ -29,6 +34,7 @@ chat_schedule_router = Router(name="chat_schedule")
 _GROUP_TYPES = frozenset({"group", "supergroup"})
 _WEEKDAY_MIN = 1
 _WEEKDAY_MAX = 7
+_HOUR_MAX = 23
 
 
 @chat_schedule_router.message(Command("schedule"))
@@ -64,7 +70,7 @@ async def cb_schedule(
     bot: Bot,
     scope: RequestScope,
 ) -> None:
-    """Navigate schedule menu and apply day / timezone / active mutations."""
+    """Navigate schedule menu and apply schedule mutations."""
 
     async def _action() -> None:
         if not isinstance(callback.message, Message):
@@ -75,31 +81,52 @@ async def cb_schedule(
             return
 
         action = callback_data.action
+        value = callback_data.value
+
         if action == "menu":
             await _show_main(callback, chat)
             return
         if action == "open":
-            markup = _open_submenu(callback_data.value, chat)
-            if markup is None:
-                await callback.answer()
-                return
-            await callback.message.edit_reply_markup(reply_markup=markup)
-            await callback.answer()
+            await _show_markup(callback, _open_submenu(value, chat))
+            return
+        if action == "hours":
+            await _show_markup(callback, build_hours_kb())
+            return
+        if action == "mins":
+            await _show_markup(callback, _minutes_submenu(value))
+            return
+        if action == "rmlist":
+            await _show_remove_list(callback, chat)
+            return
+        if action == "clear" and value == "ask":
+            await _show_markup(callback, build_clear_confirm_kb())
+            return
+        if action == "clear" and value == "no":
+            await _show_markup(callback, build_slots_kb())
             return
         if action == "status":
-            updated = await _apply_status(callback, bot, scope, chat, callback_data.value)
+            updated = await _apply_status(callback, bot, scope, chat, value)
             await _show_main(callback, updated)
             return
         if action == "day":
-            updated = await _apply_day(callback, bot, scope, chat, callback_data.value)
+            updated = await _apply_day(callback, bot, scope, chat, value)
             await _show_main(callback, updated)
             return
         if action == "tz":
-            updated = await _apply_tz(callback, bot, scope, chat, callback_data.value)
+            updated = await _apply_tz(callback, bot, scope, chat, value)
             await _show_main(callback, updated)
             return
-        if action == "stub":
-            await callback.answer(common_msg.WIP)
+        if action == "add":
+            updated = await _apply_add(callback, bot, scope, chat, value)
+            await _show_main(callback, updated)
+            return
+        if action == "rm":
+            updated = await _apply_remove(callback, bot, scope, chat, value)
+            await _show_main(callback, updated)
+            return
+        if action == "clear" and value == "yes":
+            updated = await _apply_clear(callback, bot, scope, chat)
+            await _show_main(callback, updated)
             return
         await callback.answer()
 
@@ -116,6 +143,36 @@ def _open_submenu(value: str, chat: ChatContext) -> InlineKeyboardMarkup | None:
     if value == "slots":
         return build_slots_kb()
     return None
+
+
+def _minutes_submenu(value: str) -> InlineKeyboardMarkup:
+    try:
+        hour = int(value)
+    except ValueError as exc:
+        msg = "Некорректный час."
+        raise ValueError(msg) from exc
+    if hour < 0 or hour > _HOUR_MAX:
+        msg = "Некорректный час."
+        raise ValueError(msg)
+    return build_minutes_kb(hour=hour)
+
+
+async def _show_remove_list(callback: CallbackQuery, chat: ChatContext) -> None:
+    if not chat.schedules:
+        await callback.answer(chat_msg.SCHEDULE_NO_SLOTS, show_alert=True)
+        return
+    await _show_markup(callback, build_remove_kb(chat.schedules))
+
+
+async def _show_markup(callback: CallbackQuery, markup: InlineKeyboardMarkup | None) -> None:
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    if markup is None:
+        await callback.answer()
+        return
+    await callback.message.edit_reply_markup(reply_markup=markup)
+    await callback.answer()
 
 
 async def _show_main(callback: CallbackQuery, chat: ChatContext) -> None:
@@ -202,6 +259,60 @@ async def _apply_tz(
         actor_id=actor_id,
         actor_role=actor_role,
         timezone=timezone,
+        at=at,
+    )
+
+
+async def _apply_add(
+    callback: CallbackQuery,
+    bot: Bot,
+    scope: RequestScope,
+    chat: ChatContext,
+    value: str,
+) -> ChatContext:
+    slot = unpack_hhmm(value)
+    at = datetime.now(UTC)
+    actor_id, actor_role = await resolve_chat_member(bot, callback, chat)
+    return await scope.chat_schedule_uc.add_schedule(
+        chat_id=chat.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        schedule=slot,
+        at=at,
+    )
+
+
+async def _apply_remove(
+    callback: CallbackQuery,
+    bot: Bot,
+    scope: RequestScope,
+    chat: ChatContext,
+    value: str,
+) -> ChatContext:
+    slot = unpack_hhmm(value)
+    at = datetime.now(UTC)
+    actor_id, actor_role = await resolve_chat_member(bot, callback, chat)
+    return await scope.chat_schedule_uc.remove_schedule(
+        chat_id=chat.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        schedule=slot,
+        at=at,
+    )
+
+
+async def _apply_clear(
+    callback: CallbackQuery,
+    bot: Bot,
+    scope: RequestScope,
+    chat: ChatContext,
+) -> ChatContext:
+    at = datetime.now(UTC)
+    actor_id, actor_role = await resolve_chat_member(bot, callback, chat)
+    return await scope.chat_schedule_uc.clear_schedules(
+        chat_id=chat.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
         at=at,
     )
 
