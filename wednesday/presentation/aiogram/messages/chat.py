@@ -35,6 +35,10 @@ SCHEDULE_USAGE = (
     "/schedule_tz <IANA> — таймзона (Europe/Moscow)"
 )
 
+SCHEDULE_PRIVATE_ONLY = "Расписание доступно только в групповых чатах."
+
+SCHEDULE_BACK = "« Назад"
+
 SCHEDULE_ADD_USAGE = "Использование: /schedule_add ЧЧ:ММ"
 
 SCHEDULE_REMOVE_USAGE = "Использование: /schedule_remove ЧЧ:ММ"

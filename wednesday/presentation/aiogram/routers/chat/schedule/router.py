@@ -1,38 +1,104 @@
-"""In-chat schedule management commands."""
+"""In-chat schedule management: text CRUD + inline menu scaffold."""
 
 from aiogram import Bot, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.dto import ChatContext
 from app.protocols import Logger, RequestScope
 
-from ...filters import GroupChatFilter, InsufficientCommandArgs, RequireCommandArgs
-from ...messages import chat as chat_msg
-from ..utils import run_message_handler
-from .mappers import resolve_chat_member
-from .parsers import parse_schedule_time, parse_timezone, parse_weekday
+from ....filters import GroupChatFilter, InsufficientCommandArgs, RequireCommandArgs
+from ....messages import chat as chat_msg, common as common_msg
+from ...utils import run_callback_handler, run_message_handler
+from ..mappers import resolve_chat_member
+from ..parsers import parse_schedule_time, parse_timezone, parse_weekday
+from .data import ScheduleData
+from .keyboard import (
+    build_day_kb,
+    build_main_kb,
+    build_slots_kb,
+    build_status_kb,
+    build_tz_kb,
+)
 
 chat_schedule_router = Router(name="chat_schedule")
 
+_GROUP_TYPES = frozenset({"group", "supergroup"})
 
-@chat_schedule_router.message(Command("schedule"), GroupChatFilter())
+
+@chat_schedule_router.message(Command("schedule"))
 async def cmd_schedule(
     message: Message,
     command: CommandObject,
     chat: ChatContext,
     logger: Logger,
 ) -> None:
-    """Show current chat schedule or command help (readable by any group member)."""
+    """Show schedule UI in groups; explain private limitation elsewhere."""
 
     async def _action() -> None:
         args = (command.args or "").split()
         if args and args[0].lower() in {"help", "?"}:
             await message.answer(chat_msg.SCHEDULE_USAGE)
             return
-        await message.answer(chat_msg.format_schedule_context(chat))
+        if chat.type not in _GROUP_TYPES:
+            await message.answer(chat_msg.SCHEDULE_PRIVATE_ONLY)
+            return
+        await message.answer(
+            chat_msg.format_schedule_context(chat),
+            reply_markup=build_main_kb(chat),
+        )
 
     await run_message_handler(message, logger, _action)
+
+
+@chat_schedule_router.callback_query(ScheduleData.filter())
+async def cb_schedule(
+    callback: CallbackQuery,
+    callback_data: ScheduleData,
+    chat: ChatContext,
+    scope: RequestScope,
+) -> None:
+    """Navigate schedule menu stubs (mutations land in later commits)."""
+
+    async def _action() -> None:
+        if not isinstance(callback.message, Message):
+            await callback.answer()
+            return
+        if chat.type not in _GROUP_TYPES:
+            await callback.answer(chat_msg.SCHEDULE_PRIVATE_ONLY, show_alert=True)
+            return
+
+        action = callback_data.action
+        if action == "menu":
+            await callback.message.edit_reply_markup(reply_markup=build_main_kb(chat))
+            await callback.answer()
+            return
+        if action == "open":
+            markup = _open_submenu(callback_data.value, chat)
+            if markup is None:
+                await callback.answer()
+                return
+            await callback.message.edit_reply_markup(reply_markup=markup)
+            await callback.answer()
+            return
+        if action == "stub":
+            await callback.answer(common_msg.WIP)
+            return
+        await callback.answer()
+
+    await run_callback_handler(callback, scope.logger, _action)
+
+
+def _open_submenu(value: str, chat: ChatContext) -> InlineKeyboardMarkup | None:
+    if value == "status":
+        return build_status_kb(is_active=chat.is_active)
+    if value == "day":
+        return build_day_kb(current=chat.weekday)
+    if value == "tz":
+        return build_tz_kb(current=chat.timezone)
+    if value == "slots":
+        return build_slots_kb()
+    return None
 
 
 @chat_schedule_router.message(Command("schedule_add"), GroupChatFilter(), InsufficientCommandArgs())
