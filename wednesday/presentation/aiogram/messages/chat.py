@@ -24,18 +24,19 @@ MEMBER_LEFT = [
 ]
 
 SCHEDULE_USAGE = (
-    "Команды чата:\n"
-    "/schedule — показать расписание\n"
+    "Расписание чата (только в группе):\n"
+    "/schedule — меню настроек (кнопки)\n"
     "/activate — включить рассылку\n"
-    "/deactivate — приостановить рассылку\n"
-    "/schedule_add ЧЧ:ММ — добавить время\n"
-    "/schedule_remove ЧЧ:ММ — удалить время\n"
-    "/schedule_clear — очистить все слоты\n"
-    "/schedule_day <день> — день недели (wed, среда…)\n"
-    "/schedule_tz <IANA> — таймзона (Europe/Moscow)"
+    "/deactivate — приостановить рассылку"
 )
 
 SCHEDULE_PRIVATE_ONLY = "Расписание доступно только в групповых чатах."
+
+SCHEDULE_MENU_TITLE = "📅 Расписание"
+
+SCHEDULE_CLEAR_CONFIRM = "Очистить все слоты расписания?"
+
+SCHEDULE_CLOSED = "📅 Расписание закрыто."
 
 SCHEDULE_BACK = "« Назад"
 
@@ -47,13 +48,7 @@ SCHEDULE_LIMIT_REACHED = "Достигнут лимит расписаний д�
 
 SCHEDULE_TRY_LATER = "Слишком много нажатий. Подождите немного."
 
-SCHEDULE_ADD_USAGE = "Использование: /schedule_add ЧЧ:ММ"
-
-SCHEDULE_REMOVE_USAGE = "Использование: /schedule_remove ЧЧ:ММ"
-
-SCHEDULE_DAY_USAGE = "Использование: /schedule_day <день>"
-
-SCHEDULE_TZ_USAGE = "Использование: /schedule_tz <таймзона>"
+SCHEDULE_SAVED_RETRY = "Сохранено. Подождите и откройте /schedule снова."
 
 
 def weekday_label(weekday: int) -> str:

@@ -44,6 +44,7 @@ def build_main_kb(chat: ChatContext) -> InlineKeyboardMarkup:
             [_btn(f"День: {day}", action="open", value="day")],
             [_btn(f"TZ: {chat.timezone}", action="open", value="tz")],
             [_btn(f"Слоты: {slots}", action="open", value="slots")],
+            [_btn("Закрыть", action="close")],
         ],
     )
 
@@ -142,7 +143,7 @@ def build_clear_confirm_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                _btn("Да", action="clear", value="yes"),
+                _btn("Да, очистить", action="clear", value="yes"),
                 _btn("Отмена", action="clear", value="no"),
             ],
         ],

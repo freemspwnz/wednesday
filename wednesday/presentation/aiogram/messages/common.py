@@ -14,7 +14,7 @@ WELCOME = (
     "/set_model - Выбрать модель генерации\n"
     "/list_models - Список доступных моделей\n"
     "/reset - Сбросить просмотренные изображения\n"
-    "/schedule help - Показать команды для настройки расписания (только в чате)\n"
+    "/schedule - Настройка расписания (только в группе)\n"
 )
 
 HELP = (
@@ -28,7 +28,7 @@ HELP = (
     "/set_model - Выбрать модель генерации\n"
     "/list_models - Список доступных моделей\n"
     "/reset - Сбросить просмотренные изображения\n"
-    "/schedule help - Показать команды для настройки расписания (только в чате)\n"
+    "/schedule - Настройка расписания (только в группе)\n"
 )
 
 UNKNOWN_COMMAND = "❓ Неизвестная команда!\n\nИспользуйте /help для получения списка команд."
@@ -46,4 +46,5 @@ BOT_COMMANDS: tuple[BotCommand, ...] = (
     BotCommand(command="set_model", description="Выбрать модель для генерации изображений"),
     BotCommand(command="list_models", description="Список доступных моделей"),
     BotCommand(command="reset", description="Сбросить просмотренные изображения"),
+    BotCommand(command="schedule", description="Настройка расписания чата"),
 )
