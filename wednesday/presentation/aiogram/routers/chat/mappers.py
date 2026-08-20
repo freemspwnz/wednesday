@@ -3,7 +3,7 @@
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from app.dto import ChatContext
 
@@ -23,11 +23,11 @@ def telegram_status_to_str(status: ChatMemberStatus) -> str:
 
 async def resolve_chat_member(
     bot: Bot,
-    message: Message,
+    event: Message | CallbackQuery,
     chat: ChatContext,
 ) -> tuple[int, str]:
-    """Build domain ChatMember for the caller; raise ValueError only on adapter failures."""
-    caller = message.from_user
+    """Build domain actor for the caller; raise ValueError only on adapter failures."""
+    caller = event.from_user
     if caller is None:
         msg = "Не удалось определить пользователя."
         raise ValueError(msg)
