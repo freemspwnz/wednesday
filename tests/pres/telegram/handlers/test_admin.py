@@ -43,7 +43,7 @@ async def test_ban_success(mock_scope: MagicMock, mock_logger: MagicMock, admin_
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_mod_denied_by_domain_policy(
+async def test_promote_denied_by_domain_policy(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
     admin_user: UserContext,
@@ -54,6 +54,6 @@ async def test_mod_denied_by_domain_policy(
     mock_scope.user_management_uc.change_role.side_effect = AccessDeniedError("access_denied")
 
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
-        await h.cmd_mod(make_message(user_id=2), ["42"], mock_logger, mock_scope, admin_user)
+        await h.cmd_promote(make_message(user_id=2), ["42"], mock_logger, mock_scope, admin_user)
 
     answer.assert_awaited_once_with(exc_msg.INSUFFICIENT_PERMISSIONS)

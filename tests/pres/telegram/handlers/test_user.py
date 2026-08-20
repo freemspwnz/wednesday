@@ -9,7 +9,7 @@ from app.dto import UserContext
 from domain.user.exceptions import ModelNotFoundError, ModelSelectionError
 from presentation.aiogram.messages import exceptions as exc_msg, user as user_msg
 from presentation.aiogram.routers import user as handlers
-from tests.dom.user.factories import descriptor_lite, descriptor_pro, dt, mk_user
+from tests.dom.user.factories import descriptor_lite, descriptor_pro
 
 from ..factories import make_message, mk_user_context
 
@@ -41,7 +41,7 @@ async def test_set_model_usage() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_set_model_success(user_context: UserContext, mock_scope: MagicMock, mock_logger: MagicMock) -> None:
-    updated = mk_user(user_id=1, now=dt(10))
+    updated = mk_user_context()
     mock_scope.user_generation_uc.select_model = AsyncMock(return_value=updated)
     message = make_message(text="/set_model gigachat-2-lite")
 
