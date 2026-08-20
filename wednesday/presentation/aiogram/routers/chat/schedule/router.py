@@ -1,6 +1,7 @@
 """In-chat schedule management via inline keyboard."""
 
 from aiogram import Bot, Router
+from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
@@ -16,7 +17,6 @@ from .screens import close_menu, navigate, refresh_after_mutation
 
 chat_schedule_router = Router(name="chat_schedule")
 
-_GROUP_TYPES = frozenset({"group", "supergroup"})
 _NAV_ACTIONS = frozenset({"menu", "open", "hours", "mins", "rmlist"})
 _MUTATE_ACTIONS = frozenset({"add", "status", "day", "tz", "rm"})
 
@@ -35,7 +35,7 @@ async def cmd_schedule(
         if args and args[0].lower() in {"help", "?"}:
             await message.answer(chat_msg.SCHEDULE_USAGE)
             return
-        if chat.type not in _GROUP_TYPES:
+        if message.chat.type not in {ChatType.GROUP, ChatType.SUPERGROUP}:
             await message.answer(chat_msg.SCHEDULE_PRIVATE_ONLY)
             return
         await message.answer(
@@ -60,7 +60,7 @@ async def cb_schedule(
         if not isinstance(callback.message, Message):
             await safe_callback_answer(callback)
             return
-        if chat.type not in _GROUP_TYPES:
+        if callback.message.chat.type not in {ChatType.GROUP, ChatType.SUPERGROUP}:
             await safe_callback_answer(callback, chat_msg.SCHEDULE_PRIVATE_ONLY, show_alert=True)
             return
 
