@@ -20,7 +20,7 @@ from aiogram.types import (
     User,
 )
 
-from domain.chat import AccessDeniedError
+from domain.chat import AccessDeniedError, ScheduleLimitExceededError
 from presentation.aiogram.messages import chat as chat_msg, exceptions as exc_msg
 from presentation.aiogram.routers import chat as h
 from presentation.aiogram.routers.chat.schedule import ScheduleData
@@ -242,7 +242,7 @@ async def test_cb_schedule_adds_slot_via_hhmm(
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
         patch.object(Message, "edit_text", new_callable=AsyncMock),
         patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -275,7 +275,7 @@ async def test_cb_schedule_removes_slot(
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
         patch.object(Message, "edit_text", new_callable=AsyncMock),
         patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -331,7 +331,7 @@ async def test_cb_schedule_clears_slots_on_confirm(
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
         patch.object(Message, "edit_text", new_callable=AsyncMock),
         patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -360,7 +360,7 @@ async def test_cb_schedule_sets_day_and_refreshes_main(
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
         patch.object(Message, "edit_text", new_callable=AsyncMock) as edit,
         patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -396,7 +396,7 @@ async def test_cb_schedule_sets_timezone(
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
         patch.object(Message, "edit_text", new_callable=AsyncMock),
         patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -429,7 +429,7 @@ async def test_cb_schedule_activates_broadcast(
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock),
         patch.object(Message, "edit_text", new_callable=AsyncMock),
         patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -459,7 +459,7 @@ async def test_cb_schedule_day_denied_by_domain_policy(
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
         patch.object(Message, "edit_text", new_callable=AsyncMock) as edit,
         patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "member"),
         ),
@@ -496,12 +496,15 @@ async def test_cb_schedule_add_duplicate_toasts_without_uc(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cb_schedule_add_limit_toasts_without_uc(
+async def test_cb_schedule_add_limit_toasts_from_domain(
     mock_scope: MagicMock,
 ) -> None:
     full = replace(
         mk_chat_context(tg_id=-1001),
         schedules=[(8, 0), (9, 0), (10, 0)],
+    )
+    mock_scope.chat_schedule_uc.add_schedule = AsyncMock(
+        side_effect=ScheduleLimitExceededError(3),
     )
     callback = make_callback_query(
         data=ScheduleData(action="add", value=pack_hhmm(11, 0)).pack(),
@@ -513,12 +516,17 @@ async def test_cb_schedule_add_limit_toasts_without_uc(
     with (
         patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
         patch.object(Message, "edit_text", new_callable=AsyncMock) as edit,
+        patch(
+            "presentation.aiogram.routers.chat.schedule.actions.resolve_chat_member",
+            new_callable=AsyncMock,
+            return_value=(1, "member"),
+        ),
     ):
         await h.cb_schedule(callback, callback_data, full, bot, mock_scope)
 
-    mock_scope.chat_schedule_uc.add_schedule.assert_not_awaited()
+    mock_scope.chat_schedule_uc.add_schedule.assert_awaited_once()
     edit.assert_not_awaited()
-    answer.assert_awaited_once_with(chat_msg.SCHEDULE_LIMIT_REACHED, show_alert=True)
+    answer.assert_awaited_once_with(exc_msg.SCHEDULE_LIMIT_EXCEEDED, show_alert=True)
 
 
 @pytest.mark.unit

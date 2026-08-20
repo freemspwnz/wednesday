@@ -20,8 +20,8 @@ _WEEKDAY_SHORT: dict[int, str] = {
 TIMEZONE_PRESETS: tuple[str, ...] = (
     "UTC",
     "Europe/Moscow",
-    "Europe/Kyiv",
-    "Asia/Yekaterinburg",
+    "Europe/Kaliningrad",
+    "Asia/Novosibirsk",
     "Asia/Vladivostok",
 )
 
