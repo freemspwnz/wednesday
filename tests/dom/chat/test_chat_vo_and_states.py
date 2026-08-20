@@ -34,6 +34,13 @@ def test_chat_id_new_returns_random_uuid() -> None:
 
 
 @pytest.mark.unit
+def test_chat_id_from_int_is_deterministic() -> None:
+    assert ChatId.from_int(2) == ChatId.from_int(2)
+    assert ChatId.from_int(2) != ChatId.from_int(3)
+    assert isinstance(ChatId.from_int(2), ChatId)
+
+
+@pytest.mark.unit
 def test_chat_profile_rejects_zero_telegram_id() -> None:
     with pytest.raises(ValidationError):
         ChatProfile(type=ChatType.PRIVATE, telegram_id=0)
