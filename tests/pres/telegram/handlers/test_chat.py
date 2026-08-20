@@ -9,6 +9,7 @@ from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramForbiddenError
 from aiogram.filters import CommandObject
 from aiogram.types import (
+    CallbackQuery,
     Chat,
     ChatMember as TgChatMember,
     ChatMemberBanned,
@@ -22,8 +23,9 @@ from aiogram.types import (
 from domain.chat import AccessDeniedError
 from presentation.aiogram.messages import chat as chat_msg, exceptions as exc_msg
 from presentation.aiogram.routers import chat as h
+from presentation.aiogram.routers.chat.schedule import ScheduleData
 
-from ..factories import make_message, mk_chat_context
+from ..factories import make_callback_query, make_message, mk_chat_context
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -125,7 +127,7 @@ async def test_chat_member_skips_greetings_in_private(mock_logger: MagicMock) ->
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_cmd_schedule_shows_context_without_actor_check(
+async def test_cmd_schedule_shows_context_with_inline_kb(
     chat_context: object,
     mock_logger: MagicMock,
 ) -> None:
@@ -137,6 +139,26 @@ async def test_cmd_schedule_shows_context_without_actor_check(
 
     answer.assert_awaited_once()
     assert "Расписание чата" in _answer_text(answer)
+    call = answer.await_args
+    assert call is not None
+    assert call.kwargs.get("reply_markup") is not None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cmd_schedule_private_explains_group_only(
+    mock_logger: MagicMock,
+) -> None:
+    from domain.chat import ChatType
+
+    private = mk_chat_context(tg_id=42, chat_type=ChatType.PRIVATE, domain_id=11)
+    message = make_message(text="/schedule", chat_id=42)
+    command = CommandObject(prefix="/", command="schedule", args=None)
+
+    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+        await h.cmd_schedule(message, command, private, mock_logger)
+
+    answer.assert_awaited_once_with(chat_msg.SCHEDULE_PRIVATE_ONLY)
 
 
 @pytest.mark.unit
@@ -152,6 +174,48 @@ async def test_cmd_schedule_help(
         await h.cmd_schedule(message, command, chat_context, mock_logger)
 
     answer.assert_awaited_once_with(chat_msg.SCHEDULE_USAGE)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_opens_day_submenu(
+    chat_context: object,
+    mock_scope: MagicMock,
+) -> None:
+    callback = make_callback_query(
+        data=ScheduleData(action="open", value="day").pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+
+    with (
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_reply_markup", new_callable=AsyncMock) as edit,
+    ):
+        await h.cb_schedule(callback, callback_data, chat_context, mock_scope)
+
+    edit.assert_awaited_once()
+    answer.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cb_schedule_stub_answers_wip(
+    chat_context: object,
+    mock_scope: MagicMock,
+) -> None:
+    from presentation.aiogram.messages import common as common_msg
+
+    callback = make_callback_query(
+        data=ScheduleData(action="stub", value="activate").pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
+
+    with patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer:
+        await h.cb_schedule(callback, callback_data, chat_context, mock_scope)
+
+    answer.assert_awaited_once_with(common_msg.WIP)
 
 
 @pytest.mark.unit
@@ -187,7 +251,7 @@ async def test_cmd_schedule_add_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -212,7 +276,7 @@ async def test_cmd_schedule_add_denied_by_domain_policy(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "member"),
         ),
@@ -315,7 +379,7 @@ async def test_cmd_schedule_remove_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -341,7 +405,7 @@ async def test_cmd_schedule_clear_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -367,7 +431,7 @@ async def test_cmd_schedule_day_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
@@ -396,7 +460,7 @@ async def test_cmd_schedule_tz_calls_uc(
     with (
         patch.object(Message, "answer", new_callable=AsyncMock) as answer,
         patch(
-            "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
+            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
             new_callable=AsyncMock,
             return_value=(1, "admin"),
         ),
