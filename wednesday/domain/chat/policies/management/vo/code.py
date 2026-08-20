@@ -10,7 +10,7 @@ class ManagementAccessCode(StrEnum):
     ACTOR_CHAT_MISMATCH = "actor_chat_mismatch"
 
     @classmethod
-    def ensure(cls, code: Self) -> Self:
+    def ensure(cls, code: object) -> Self:
         if not isinstance(code, cls):
-            raise ValidationError("code must be a ManagementAccessCode")
+            raise ValidationError(f"Code must be an instance of {cls.__name__}")
         return code

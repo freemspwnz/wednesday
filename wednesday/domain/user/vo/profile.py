@@ -17,7 +17,7 @@ class UserProfile:
     last_name: NonEmptyStr | None = None
     username: str | None = None
     language_code: str | None = None
-    has_tg_premium: bool = False
+    has_tg_premium: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.telegram_id, int):
@@ -33,7 +33,7 @@ class UserProfile:
         return NonEmptyStr(" ".join(parts))
 
     @classmethod
-    def ensure(cls, profile: Self) -> Self:
-        if not isinstance(profile, UserProfile):
-            raise ValidationError("profile must be a UserProfile")
+    def ensure(cls, profile: object) -> Self:
+        if not isinstance(profile, cls):
+            raise ValidationError(f"Profile must be an instance of {cls.__name__}")
         return profile

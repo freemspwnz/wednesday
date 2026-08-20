@@ -11,7 +11,7 @@ class ChatType(StrEnum):
     CHANNEL = "channel"
 
     @classmethod
-    def ensure(cls, chat_type: Self) -> Self:
+    def ensure(cls, chat_type: object) -> Self:
         if not isinstance(chat_type, cls):
-            raise ValidationError("chat_type must be a ChatType")
+            raise ValidationError(f"chat_type must be an instance of {cls.__name__}")
         return chat_type

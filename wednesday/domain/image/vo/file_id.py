@@ -21,7 +21,7 @@ class TelegramFileId:
             raise ValidationError(f"telegram file id exceeds max length {self._MAX_LENGTH}")
 
     def __str__(self) -> str:
-        return self.value
+        return str(self.value)
 
     @classmethod
     def parse(cls, raw: str) -> Self:

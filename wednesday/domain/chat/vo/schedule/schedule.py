@@ -21,7 +21,7 @@ class ChatSchedule:
             raise ValidationError(f"Minute must be 0-59, got {self.minute}")
 
     @classmethod
-    def ensure(cls, schedule: Self) -> Self:
+    def ensure(cls, schedule: object) -> Self:
         if not isinstance(schedule, cls):
-            raise ValidationError("schedule must be a ChatSchedule")
+            raise ValidationError(f"Schedule must be an instance of {cls.__name__}")
         return schedule

@@ -11,7 +11,7 @@ class UserRole(IntEnum):
     USER = 0
 
     @classmethod
-    def ensure(cls, role: Self) -> Self:
-        if not isinstance(role, UserRole):
-            raise ValidationError("role must be a UserRole")
+    def ensure(cls, role: object) -> Self:
+        if not isinstance(role, cls):
+            raise ValidationError(f"Role must be an instance of {cls.__name__}")
         return role

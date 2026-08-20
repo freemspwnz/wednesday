@@ -19,7 +19,7 @@ class UserState(ABC):
     def effective_at(self, now: AwareDatetime) -> "UserState": ...
 
     @classmethod
-    def ensure(cls, state: Self) -> Self:
+    def ensure(cls, state: object) -> Self:
         if not isinstance(state, cls):
-            raise ValidationError("state must be a UserState")
+            raise ValidationError(f"State must be an instance of {cls.__name__}")
         return state

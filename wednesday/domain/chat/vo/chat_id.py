@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Self
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_DNS, UUID, uuid4, uuid5
 
 from ..exceptions import ValidationError
 
@@ -23,7 +23,11 @@ class ChatId:
         return cls(value=uuid4())
 
     @classmethod
-    def ensure(cls, chat_id: Self) -> Self:
-        if not isinstance(chat_id, ChatId):
-            raise ValidationError("chat_id must be a ChatId")
+    def from_int(cls, other: int) -> Self:
+        return cls(value=uuid5(NAMESPACE_DNS, f"chat:{other}"))
+
+    @classmethod
+    def ensure(cls, chat_id: object) -> Self:
+        if not isinstance(chat_id, cls):
+            raise ValidationError(f"chat_id must be an instance of {cls.__name__}")
         return chat_id

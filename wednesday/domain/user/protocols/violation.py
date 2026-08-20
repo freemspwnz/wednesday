@@ -25,7 +25,7 @@ class ViolationRepo(Protocol):
         ...
 
     @classmethod
-    def ensure(cls, repo: Self) -> Self:
+    def ensure(cls, repo: object) -> Self:
         if not isinstance(repo, cls):
-            raise ValidationError(f"repo must be an instance of {cls.__name__}")
+            raise ValidationError(f"Repository must be an instance of {cls.__name__}")
         return repo

@@ -30,7 +30,7 @@ class ModelDescriptor:
             raise ValidationError("active must be a bool")
 
     @classmethod
-    def ensure(cls, descriptor: Self) -> Self:
+    def ensure(cls, descriptor: object) -> Self:
         if not isinstance(descriptor, cls):
-            raise ValidationError("descriptor must be a ModelDescriptor")
+            raise ValidationError(f"descriptor must be an instance of {cls.__name__}")
         return descriptor
