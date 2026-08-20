@@ -8,11 +8,11 @@ from .ban import (
     cmd_unban_usage,
 )
 from .mod import (
+    cmd_demote,
+    cmd_demote_usage,
     cmd_list_mods,
-    cmd_mod,
-    cmd_mod_usage,
-    cmd_unmod,
-    cmd_unmod_usage,
+    cmd_promote,
+    cmd_promote_usage,
     mod_router,
 )
 from .ops import (
@@ -31,14 +31,14 @@ __all__ = [
     "admin_router",
     "cmd_ban",
     "cmd_ban_usage",
+    "cmd_demote",
+    "cmd_demote_usage",
     "cmd_force_send",
     "cmd_list_chats",
     "cmd_list_mods",
-    "cmd_mod",
-    "cmd_mod_usage",
+    "cmd_promote",
+    "cmd_promote_usage",
     "cmd_status",
     "cmd_unban",
     "cmd_unban_usage",
-    "cmd_unmod",
-    "cmd_unmod_usage",
 ]

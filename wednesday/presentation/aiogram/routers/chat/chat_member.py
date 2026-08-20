@@ -8,9 +8,6 @@ from aiogram.exceptions import TelegramForbiddenError
 from aiogram.types import ChatMemberUpdated
 
 from app.protocols import Logger, RequestScope
-from domain.chat import System
-from domain.kernel.exceptions import InvalidStateTransitionError
-from domain.kernel.vo import AwareDatetime
 
 from ...messages import chat as chat_msg
 from ...middlewares.utils import CHAT_MEMBER_LEFT_STATUSES
@@ -28,28 +25,16 @@ async def on_my_chat_member(
     scope: RequestScope,
 ) -> None:
     """Bot added/removed to/from chat."""
+    at = event.date
     log = logger.bind(module="my_chat_member")
     status = event.new_chat_member.status
     log.info("My chat member event", status=status)
 
     if status in CHAT_MEMBER_LEFT_STATUSES:
-        chat = await scope.chat_management_uc.find_by_tg_id(tg_id=event.chat.id)
-        if chat is not None:
-            try:
-                await scope.chat_management_uc.deactivate(
-                    chat_id=chat.id,
-                    actor=System(),
-                    at=AwareDatetime.now_utc(),
-                )
-                log.info("Chat deactivated after bot left", tg_chat_id=event.chat.id)
-            except InvalidStateTransitionError:
-                log.debug("Chat already inactive", tg_chat_id=event.chat.id)
-            except Exception:
-                log.warning(
-                    "Failed to deactivate chat after bot left",
-                    tg_chat_id=event.chat.id,
-                    exc_info=True,
-                )
+        await scope.chat_management_uc.on_bot_kicked(
+            tg_id=event.chat.id,
+            at=at,
+        )
         return
 
     if status == ChatMemberStatus.MEMBER:

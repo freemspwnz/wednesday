@@ -1,14 +1,12 @@
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal
+from datetime import UTC, datetime
+from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import Chat, ChatMemberUpdated, TelegramObject, User
+from aiogram.types import CallbackQuery, Chat, ChatMemberUpdated, Message, TelegramObject, User
 
 from app.dto import ChatContext, UserContext
 from app.protocols import Logger
-from domain.chat import ChatProfile, ChatType
-from domain.kernel.vo import NonEmptyStr
-from domain.user import UserProfile
 
 from ..utils import CHAT_MEMBER_LEFT_STATUSES, require_request_scope
 
@@ -56,15 +54,27 @@ class RegistrationMiddleware(BaseMiddleware):
 
         tg_user = self._extract_user(payload)
         tg_chat = self._extract_chat(payload)
+        at = self._extract_at(payload)
 
         if tg_user is not None:
             user = await scope.user_lifecycle_uc.register(
-                profile=self._to_user_profile(tg_user),
+                tg_id=tg_user.id,
+                is_bot=tg_user.is_bot,
+                first_name=tg_user.first_name,
+                last_name=tg_user.last_name,
+                username=tg_user.username,
+                language_code=tg_user.language_code,
+                has_tg_premium=tg_user.is_premium,
+                at=at,
             )
 
         if tg_chat is not None:
             chat = await scope.chat_management_uc.register(
-                profile=self._to_chat_profile(tg_chat),
+                tg_id=tg_chat.id,
+                type=tg_chat.type,
+                title=tg_chat.title,
+                username=tg_chat.username,
+                at=at,
             )
 
         data["user"] = user
@@ -89,68 +99,35 @@ class RegistrationMiddleware(BaseMiddleware):
         member = event.new_chat_member
         return member.user.is_bot and member.status in CHAT_MEMBER_LEFT_STATUSES
 
-    def _extract_user(self, event: TelegramObject) -> User | None:
-        entity = self._extract_entity(entity_type="user", event=event)
-        return entity if isinstance(entity, User) else None
-
-    def _extract_chat(self, event: TelegramObject) -> Chat | None:
-        entity = self._extract_entity(entity_type="chat", event=event)
-        return entity if isinstance(entity, Chat) else None
-
     @staticmethod
-    def _extract_entity(
-        *,
-        entity_type: Literal["user", "chat"],
-        event: TelegramObject,
-    ) -> User | Chat | None:
-        if entity_type == "chat":
-            direct_chat = getattr(event, "chat", None)
-            search = "chat"
-            if isinstance(direct_chat, Chat):
-                return direct_chat
-
-        if entity_type == "user":
-            direct_user = getattr(event, "from_user", None)
-            search = "from_user"
-            if isinstance(direct_user, User):
-                return direct_user
-
-        entity = getattr(event, search, None)
-        if entity_type == "user" and isinstance(entity, User):
-            return entity
-        if entity_type == "chat" and isinstance(entity, Chat):
-            return entity
-
+    def _extract_user(event: TelegramObject) -> User | None:
+        user = getattr(event, "from_user", None)
+        if isinstance(user, User):
+            return user
         message = getattr(event, "message", None)
-        if message is not None:
-            found = getattr(message, search, None)
-            if entity_type == "user" and isinstance(found, User):
-                return found
-            if entity_type == "chat" and isinstance(found, Chat):
-                return found
-
-        if entity_type == "user" and isinstance(event, ChatMemberUpdated):
+        nested = getattr(message, "from_user", None) if message is not None else None
+        if isinstance(nested, User):
+            return nested
+        if isinstance(event, ChatMemberUpdated):
             return event.new_chat_member.user
-
         return None
 
     @staticmethod
-    def _to_user_profile(user: User) -> UserProfile:
-        return UserProfile(
-            telegram_id=user.id,
-            is_bot=user.is_bot,
-            first_name=NonEmptyStr(user.first_name),
-            last_name=NonEmptyStr(user.last_name) if user.last_name else None,
-            username=user.username,
-            language_code=user.language_code,
-            has_tg_premium=bool(user.is_premium),
-        )
+    def _extract_chat(event: TelegramObject) -> Chat | None:
+        chat = getattr(event, "chat", None)
+        if isinstance(chat, Chat):
+            return chat
+        message = getattr(event, "message", None)
+        nested = getattr(message, "chat", None) if message is not None else None
+        return nested if isinstance(nested, Chat) else None
 
     @staticmethod
-    def _to_chat_profile(chat: Chat) -> ChatProfile:
-        return ChatProfile(
-            type=ChatType(chat.type),
-            telegram_id=chat.id,
-            title=chat.title,
-            username=chat.username,
-        )
+    def _extract_at(event: TelegramObject) -> datetime:
+        if isinstance(event, Message | ChatMemberUpdated):
+            return event.date
+        if isinstance(event, CallbackQuery):
+            return datetime.now(UTC)
+        date = getattr(event, "date", None)
+        if isinstance(date, datetime):
+            return date
+        return datetime.now(UTC)

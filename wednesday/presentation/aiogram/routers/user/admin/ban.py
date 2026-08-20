@@ -6,7 +6,6 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
-from domain.kernel.vo import AwareDatetime
 
 from ....filters import InsufficientCommandArgs, RequireCommandArgs
 from ....messages import exceptions as exc_msg
@@ -32,13 +31,13 @@ async def cmd_ban(
     """Ban user: /ban <telegram_id> <days>."""
 
     async def _action() -> None:
+        now = message.date
         tg_user_id = parse_telegram_id(command_args[0])
         days = parse_positive_int(command_args[1])
         target = await scope.user_lifecycle_uc.find_by_tg_id(tg_id=tg_user_id)
         if target is None:
             await message.answer(exc_msg.USER_NOT_FOUND)
             return
-        now = AwareDatetime.now_utc()
         until = now + timedelta(days=days)
         await scope.user_moderation_uc.ban(
             user_id=target.id,
@@ -67,6 +66,7 @@ async def cmd_unban(
     """Unban user."""
 
     async def _action() -> None:
+        now = message.date
         target = await scope.user_lifecycle_uc.find_by_tg_id(
             tg_id=parse_telegram_id(command_args[0]),
         )
@@ -76,7 +76,7 @@ async def cmd_unban(
         await scope.user_moderation_uc.unban(
             user_id=target.id,
             actor=user.role,
-            at=AwareDatetime.now_utc(),
+            at=now,
         )
         await message.answer(admin_msg.USER_UNBANNED.format(tg_id=target.tg_id))
 

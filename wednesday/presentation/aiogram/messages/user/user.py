@@ -1,26 +1,12 @@
 """User-facing profile and model command texts."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.dto import UserContext
-from domain.catalog import SubscriptionTier
-from domain.kernel.vo import AwareDatetime
-from domain.user import UserRole
 
 _DISPLAY_TZ = ZoneInfo("Europe/Moscow")
-
-_ROLE_LABELS: dict[UserRole, str] = {
-    UserRole.USER: "Пользователь",
-    UserRole.ADMIN: "Администратор",
-    UserRole.OWNER: "Владелец",
-    UserRole.SYSTEM: "Система",
-}
-
-_TIER_LABELS: dict[SubscriptionTier, str] = {
-    SubscriptionTier.FREE: "Бесплатная",
-    SubscriptionTier.PREMIUM: "Премиум",
-}
 
 _STATUS_ACTIVE = "Активен"
 _STATUS_BANNED = "Заблокирован"
@@ -39,7 +25,7 @@ def format_me(user: UserContext) -> str:
     lines = [
         "👤 Ваш профиль",
         "",
-        f"Роль: {_ROLE_LABELS[user.role]}",
+        f"Роль: {user.role_label}",
         *_subscription_lines(user),
         *_model_lines(user),
         "",
@@ -49,7 +35,7 @@ def format_me(user: UserContext) -> str:
 
 
 def _subscription_lines(user: UserContext) -> list[str]:
-    lines = [f"Подписка: {_TIER_LABELS[user.subscription_tier]}"]
+    lines = [f"Подписка: {user.subscription_label}"]
     lines.append(f"Лимит в день: {user.subscription_daily_limit}")
     lines.append(f"Перерыв: {user.subscription_cooldown_minutes} мин")
     if user.subscription_expires_at is not None:
@@ -71,8 +57,8 @@ def _status_line(user: UserContext) -> str:
     return _STATUS_ACTIVE
 
 
-def _format_dt(dt: AwareDatetime) -> str:
-    local = dt.value.astimezone(_DISPLAY_TZ)
+def _format_dt(dt: datetime) -> str:
+    local = dt.astimezone(_DISPLAY_TZ)
     return f"{local:%d.%m.%Y}, {local:%H:%M} ({_DISPLAY_TZ.key})"
 
 
