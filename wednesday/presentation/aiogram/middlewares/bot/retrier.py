@@ -1,4 +1,6 @@
-from typing import TypeVar
+"""Retry middleware for outgoing Telegram API requests."""
+
+from typing import ClassVar, TypeVar
 
 from aiogram import Bot
 from aiogram.client.session.middlewares.base import (
@@ -16,6 +18,14 @@ T = TypeVar("T")
 class RetryRequestMW(BaseRequestMiddleware):
     """Retry middleware for outgoing Telegram API requests."""
 
+    # Edit-message floods sleep for tens of seconds via Retry-After; fail fast instead.
+    _NO_RETRY_METHODS: ClassVar[frozenset[str]] = frozenset({
+        "EditMessageReplyMarkup",
+        "EditMessageText",
+        "EditMessageCaption",
+        "EditMessageMedia",
+    })
+
     def __init__(
         self,
         *,
@@ -32,6 +42,8 @@ class RetryRequestMW(BaseRequestMiddleware):
         method: TelegramMethod[T],
     ) -> Response[T]:
         method_name = method.__class__.__name__
+        if method_name in self._NO_RETRY_METHODS:
+            return await make_request(bot, method)
         try:
             return await self._retrier.execute(make_request, bot, method)
         except MaxAttemptsExhaustedError as exc:
