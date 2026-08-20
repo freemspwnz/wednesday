@@ -139,7 +139,7 @@ async def test_cmd_schedule_shows_context_with_inline_kb(
         await h.cmd_schedule(message, command, chat_context, mock_logger)
 
     answer.assert_awaited_once()
-    assert "Расписание чата" in _answer_text(answer)
+    assert _answer_text(answer) == chat_msg.SCHEDULE_MENU_TITLE
     call = answer.await_args
     assert call is not None
     assert call.kwargs.get("reply_markup") is not None
@@ -523,70 +523,25 @@ async def test_cb_schedule_add_limit_toasts_without_uc(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("handler", "usage_text"),
-    [
-        (h.cmd_schedule_add_usage, chat_msg.SCHEDULE_ADD_USAGE),
-        (h.cmd_schedule_remove_usage, chat_msg.SCHEDULE_REMOVE_USAGE),
-        (h.cmd_schedule_day_usage, chat_msg.SCHEDULE_DAY_USAGE),
-        (h.cmd_schedule_tz_usage, chat_msg.SCHEDULE_TZ_USAGE),
-    ],
-)
-async def test_schedule_usage_handlers(handler: object, usage_text: str) -> None:
-    message = make_message()
-    with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
-        await handler(message)  # type: ignore[operator]
-    answer.assert_awaited_once_with(usage_text)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_cmd_schedule_add_calls_uc(
+async def test_cb_schedule_closes_menu(
     chat_context: object,
     mock_scope: MagicMock,
-    mock_logger: MagicMock,
 ) -> None:
-    updated = mk_chat_context(tg_id=-1001)
-    mock_scope.chat_schedule_uc.add_schedule = AsyncMock(return_value=updated)
-    message = make_message(text="/schedule_add 09:30", chat_id=-1001)
+    callback = make_callback_query(
+        data=ScheduleData(action="close").pack(),
+        chat_id=-1001,
+    )
+    callback_data = ScheduleData.unpack(callback.data or "")
     bot = AsyncMock()
 
     with (
-        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
-        patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
-            new_callable=AsyncMock,
-            return_value=(1, "admin"),
-        ),
+        patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer,
+        patch.object(Message, "edit_text", new_callable=AsyncMock) as edit,
     ):
-        await h.cmd_schedule_add(message, ["09:30"], chat_context, bot, mock_scope, mock_logger)
+        await h.cb_schedule(callback, callback_data, chat_context, bot, mock_scope)
 
-    mock_scope.chat_schedule_uc.add_schedule.assert_awaited_once()
+    edit.assert_awaited_once_with(chat_msg.SCHEDULE_CLOSED, reply_markup=None)
     answer.assert_awaited_once()
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_cmd_schedule_add_denied_by_domain_policy(
-    chat_context: object,
-    mock_scope: MagicMock,
-    mock_logger: MagicMock,
-) -> None:
-    mock_scope.chat_schedule_uc.add_schedule = AsyncMock(side_effect=AccessDeniedError("not_enough_rights"))
-    message = make_message(text="/schedule_add 09:30", chat_id=-1001)
-    bot = AsyncMock()
-
-    with (
-        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
-        patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
-            new_callable=AsyncMock,
-            return_value=(1, "member"),
-        ),
-    ):
-        await h.cmd_schedule_add(message, ["09:30"], chat_context, bot, mock_scope, mock_logger)
-
-    answer.assert_awaited_once_with(exc_msg.INSUFFICIENT_PERMISSIONS)
 
 
 @pytest.mark.unit
@@ -665,113 +620,3 @@ async def test_cmd_activate_denied_by_domain_policy(
         await h.cmd_activate(message, chat_context, bot, mock_scope, mock_logger)
 
     answer.assert_awaited_once_with(exc_msg.INSUFFICIENT_PERMISSIONS)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_cmd_schedule_remove_calls_uc(
-    chat_context: object,
-    mock_scope: MagicMock,
-    mock_logger: MagicMock,
-) -> None:
-    updated = mk_chat_context(tg_id=-1001)
-    mock_scope.chat_schedule_uc.remove_schedule = AsyncMock(return_value=updated)
-    message = make_message(text="/schedule_remove 09:30", chat_id=-1001)
-    bot = AsyncMock()
-
-    with (
-        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
-        patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
-            new_callable=AsyncMock,
-            return_value=(1, "admin"),
-        ),
-    ):
-        await h.cmd_schedule_remove(message, ["09:30"], chat_context, bot, mock_scope, mock_logger)
-
-    mock_scope.chat_schedule_uc.remove_schedule.assert_awaited_once()
-    answer.assert_awaited_once()
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_cmd_schedule_clear_calls_uc(
-    chat_context: object,
-    mock_scope: MagicMock,
-    mock_logger: MagicMock,
-) -> None:
-    updated = mk_chat_context(tg_id=-1001)
-    mock_scope.chat_schedule_uc.clear_schedules = AsyncMock(return_value=updated)
-    message = make_message(text="/schedule_clear", chat_id=-1001)
-    bot = AsyncMock()
-
-    with (
-        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
-        patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
-            new_callable=AsyncMock,
-            return_value=(1, "admin"),
-        ),
-    ):
-        await h.cmd_schedule_clear(message, chat_context, bot, mock_scope, mock_logger)
-
-    mock_scope.chat_schedule_uc.clear_schedules.assert_awaited_once()
-    answer.assert_awaited_once()
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_cmd_schedule_day_calls_uc(
-    chat_context: object,
-    mock_scope: MagicMock,
-    mock_logger: MagicMock,
-) -> None:
-    updated = mk_chat_context(tg_id=-1001)
-    mock_scope.chat_schedule_uc.change_schedule_day = AsyncMock(return_value=updated)
-    message = make_message(text="/schedule_day wed", chat_id=-1001)
-    bot = AsyncMock()
-
-    with (
-        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
-        patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
-            new_callable=AsyncMock,
-            return_value=(1, "admin"),
-        ),
-    ):
-        await h.cmd_schedule_day(message, ["wed"], chat_context, bot, mock_scope, mock_logger)
-
-    mock_scope.chat_schedule_uc.change_schedule_day.assert_awaited_once()
-    call = mock_scope.chat_schedule_uc.change_schedule_day.await_args
-    assert call is not None
-    assert call.kwargs["new_weekday"] == 3
-    answer.assert_awaited_once()
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_cmd_schedule_tz_calls_uc(
-    chat_context: object,
-    mock_scope: MagicMock,
-    mock_logger: MagicMock,
-) -> None:
-    updated = mk_chat_context(tg_id=-1001)
-    mock_scope.chat_schedule_uc.change_schedule_timezone = AsyncMock(return_value=updated)
-    message = make_message(text="/schedule_tz Europe/Moscow", chat_id=-1001)
-    bot = AsyncMock()
-
-    with (
-        patch.object(Message, "answer", new_callable=AsyncMock) as answer,
-        patch(
-            "presentation.aiogram.routers.chat.schedule.router.resolve_chat_member",
-            new_callable=AsyncMock,
-            return_value=(1, "admin"),
-        ),
-    ):
-        await h.cmd_schedule_tz(message, ["Europe/Moscow"], chat_context, bot, mock_scope, mock_logger)
-
-    mock_scope.chat_schedule_uc.change_schedule_timezone.assert_awaited_once()
-    call = mock_scope.chat_schedule_uc.change_schedule_timezone.await_args
-    assert call is not None
-    assert call.kwargs["timezone"] == "Europe/Moscow"
-    answer.assert_awaited_once()

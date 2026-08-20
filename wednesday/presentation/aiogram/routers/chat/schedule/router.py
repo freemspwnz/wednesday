@@ -1,4 +1,4 @@
-"""In-chat schedule management: text CRUD + inline menu."""
+"""In-chat schedule management via inline keyboard."""
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -12,11 +12,9 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from app.dto import ChatContext
 from app.protocols import Logger, RequestScope
 
-from ....filters import GroupChatFilter, InsufficientCommandArgs, RequireCommandArgs
 from ....messages import chat as chat_msg
 from ...utils import run_callback_handler, run_message_handler, safe_callback_answer
 from ..mappers import resolve_chat_member
-from ..parsers import parse_schedule_time, parse_timezone, parse_weekday
 from .data import ScheduleData
 from .keyboard import (
     TIMEZONE_PRESETS,
@@ -60,7 +58,7 @@ async def cmd_schedule(
             await message.answer(chat_msg.SCHEDULE_PRIVATE_ONLY)
             return
         await message.answer(
-            chat_msg.format_schedule_context(chat),
+            chat_msg.SCHEDULE_MENU_TITLE,
             reply_markup=build_main_kb(chat),
         )
 
@@ -92,6 +90,10 @@ async def cb_schedule(
             await safe_callback_answer(callback, chat_msg.SCHEDULE_NO_SLOTS, show_alert=True)
             return
 
+        if action == "close":
+            await _close_menu(callback)
+            return
+
         if action in {"menu", "open", "hours", "mins", "rmlist"} or (action == "clear" and value in {"ask", "no"}):
             await _navigate(callback, chat, action, value)
             return
@@ -119,15 +121,41 @@ async def cb_schedule(
     await run_callback_handler(callback, scope.logger, _action)
 
 
+async def _close_menu(callback: CallbackQuery) -> None:
+    if not isinstance(callback.message, Message):
+        await safe_callback_answer(callback)
+        return
+    try:
+        await callback.message.edit_text(chat_msg.SCHEDULE_CLOSED, reply_markup=None)
+    except TelegramRetryAfter:
+        await safe_callback_answer(callback, chat_msg.SCHEDULE_TRY_LATER, show_alert=True)
+        return
+    except TelegramBadRequest:
+        pass
+    await safe_callback_answer(callback)
+
+
 async def _navigate(
     callback: CallbackQuery,
     chat: ChatContext,
     action: str,
     value: str,
 ) -> None:
-    """Edit markup first, then ack (so flood can still use an alert toast)."""
+    """Edit screen first, then ack (so flood can still use an alert toast)."""
     if action == "menu":
         status = await _edit_main(callback, chat)
+    elif action == "clear" and value == "ask":
+        status = await _edit_screen(
+            callback,
+            chat_msg.SCHEDULE_CLEAR_CONFIRM,
+            build_clear_confirm_kb(),
+        )
+    elif action == "clear" and value == "no":
+        status = await _edit_screen(
+            callback,
+            chat_msg.SCHEDULE_MENU_TITLE,
+            build_slots_kb(),
+        )
     else:
         if action == "open":
             markup = _open_submenu(value, chat)
@@ -137,11 +165,13 @@ async def _navigate(
             markup = _minutes_submenu(value)
         elif action == "rmlist":
             markup = build_remove_kb(chat.schedules)
-        elif action == "clear" and value == "ask":
-            markup = build_clear_confirm_kb()
         else:
             markup = build_slots_kb()
-        status = await _edit_markup(callback, markup)
+        # Leaving clear-confirm restores the short title with the submenu.
+        if isinstance(callback.message, Message) and callback.message.text == chat_msg.SCHEDULE_CLEAR_CONFIRM:
+            status = await _edit_screen(callback, chat_msg.SCHEDULE_MENU_TITLE, markup)
+        else:
+            status = await _edit_markup(callback, markup)
 
     if status == "flood":
         await safe_callback_answer(callback, chat_msg.SCHEDULE_TRY_LATER, show_alert=True)
@@ -172,8 +202,11 @@ async def _mutate(
 ) -> None:
     """Run UC before ack so domain errors can still show an alert toast."""
     updated = await runner()
+    status = await _edit_main(callback, updated)
+    if status == "flood":
+        await safe_callback_answer(callback, chat_msg.SCHEDULE_SAVED_RETRY, show_alert=True)
+        return
     await safe_callback_answer(callback)
-    await _edit_main(callback, updated)
 
 
 def _open_submenu(value: str, chat: ChatContext) -> InlineKeyboardMarkup | None:
@@ -215,10 +248,16 @@ async def _edit_markup(callback: CallbackQuery, markup: InlineKeyboardMarkup | N
 
 
 async def _edit_main(callback: CallbackQuery, chat: ChatContext) -> _EditStatus:
-    if not isinstance(callback.message, Message):
+    return await _edit_screen(callback, chat_msg.SCHEDULE_MENU_TITLE, build_main_kb(chat))
+
+
+async def _edit_screen(
+    callback: CallbackQuery,
+    text: str,
+    markup: InlineKeyboardMarkup | None,
+) -> _EditStatus:
+    if not isinstance(callback.message, Message) or markup is None:
         return "noop"
-    text = chat_msg.format_schedule_context(chat)
-    markup = build_main_kb(chat)
     if callback.message.text == text and _same_markup(callback.message.reply_markup, markup):
         return "noop"
     try:
@@ -367,155 +406,3 @@ async def _apply_clear(
         actor_role=actor_role,
         at=at,
     )
-
-
-@chat_schedule_router.message(Command("schedule_add"), GroupChatFilter(), InsufficientCommandArgs())
-async def cmd_schedule_add_usage(message: Message) -> None:
-    await message.answer(chat_msg.SCHEDULE_ADD_USAGE)
-
-
-@chat_schedule_router.message(Command("schedule_add"), GroupChatFilter(), RequireCommandArgs())
-async def cmd_schedule_add(  # noqa: PLR0913, PLR0917
-    message: Message,
-    command_args: list[str],
-    chat: ChatContext,
-    bot: Bot,
-    scope: RequestScope,
-    logger: Logger,
-) -> None:
-    """Add a send time slot."""
-
-    async def _action() -> None:
-        at = message.date
-        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
-        slot = parse_schedule_time(command_args[0])
-        updated = await scope.chat_schedule_uc.add_schedule(
-            chat_id=chat.id,
-            actor_id=actor_id,
-            actor_role=actor_role,
-            schedule=slot,
-            at=at,
-        )
-        await message.answer(chat_msg.format_schedule_context(updated))
-
-    await run_message_handler(message, logger, _action)
-
-
-@chat_schedule_router.message(Command("schedule_remove"), GroupChatFilter(), InsufficientCommandArgs())
-async def cmd_schedule_remove_usage(message: Message) -> None:
-    await message.answer(chat_msg.SCHEDULE_REMOVE_USAGE)
-
-
-@chat_schedule_router.message(Command("schedule_remove"), GroupChatFilter(), RequireCommandArgs())
-async def cmd_schedule_remove(  # noqa: PLR0913, PLR0917
-    message: Message,
-    command_args: list[str],
-    chat: ChatContext,
-    bot: Bot,
-    scope: RequestScope,
-    logger: Logger,
-) -> None:
-    """Remove a send time slot."""
-
-    async def _action() -> None:
-        at = message.date
-        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
-        slot = parse_schedule_time(command_args[0])
-        updated = await scope.chat_schedule_uc.remove_schedule(
-            chat_id=chat.id,
-            actor_id=actor_id,
-            actor_role=actor_role,
-            schedule=slot,
-            at=at,
-        )
-        await message.answer(chat_msg.format_schedule_context(updated))
-
-    await run_message_handler(message, logger, _action)
-
-
-@chat_schedule_router.message(Command("schedule_clear"), GroupChatFilter())
-async def cmd_schedule_clear(
-    message: Message,
-    chat: ChatContext,
-    bot: Bot,
-    scope: RequestScope,
-    logger: Logger,
-) -> None:
-    """Clear all schedule slots."""
-
-    async def _action() -> None:
-        at = message.date
-        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
-        updated = await scope.chat_schedule_uc.clear_schedules(
-            chat_id=chat.id,
-            actor_id=actor_id,
-            actor_role=actor_role,
-            at=at,
-        )
-        await message.answer(chat_msg.format_schedule_context(updated))
-
-    await run_message_handler(message, logger, _action)
-
-
-@chat_schedule_router.message(Command("schedule_day"), GroupChatFilter(), InsufficientCommandArgs())
-async def cmd_schedule_day_usage(message: Message) -> None:
-    await message.answer(chat_msg.SCHEDULE_DAY_USAGE)
-
-
-@chat_schedule_router.message(Command("schedule_day"), GroupChatFilter(), RequireCommandArgs())
-async def cmd_schedule_day(  # noqa: PLR0913, PLR0917
-    message: Message,
-    command_args: list[str],
-    chat: ChatContext,
-    bot: Bot,
-    scope: RequestScope,
-    logger: Logger,
-) -> None:
-    """Change schedule weekday."""
-
-    async def _action() -> None:
-        at = message.date
-        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
-        weekday = parse_weekday(command_args[0])
-        updated = await scope.chat_schedule_uc.change_schedule_day(
-            chat_id=chat.id,
-            actor_id=actor_id,
-            actor_role=actor_role,
-            new_weekday=weekday,
-            at=at,
-        )
-        await message.answer(chat_msg.format_schedule_context(updated))
-
-    await run_message_handler(message, logger, _action)
-
-
-@chat_schedule_router.message(Command("schedule_tz"), GroupChatFilter(), InsufficientCommandArgs())
-async def cmd_schedule_tz_usage(message: Message) -> None:
-    await message.answer(chat_msg.SCHEDULE_TZ_USAGE)
-
-
-@chat_schedule_router.message(Command("schedule_tz"), GroupChatFilter(), RequireCommandArgs())
-async def cmd_schedule_tz(  # noqa: PLR0913, PLR0917
-    message: Message,
-    command_args: list[str],
-    chat: ChatContext,
-    bot: Bot,
-    scope: RequestScope,
-    logger: Logger,
-) -> None:
-    """Change schedule timezone."""
-
-    async def _action() -> None:
-        at = message.date
-        actor_id, actor_role = await resolve_chat_member(bot, message, chat)
-        timezone = parse_timezone(command_args[0])
-        updated = await scope.chat_schedule_uc.change_schedule_timezone(
-            chat_id=chat.id,
-            actor_id=actor_id,
-            actor_role=actor_role,
-            timezone=timezone,
-            at=at,
-        )
-        await message.answer(chat_msg.format_schedule_context(updated))
-
-    await run_message_handler(message, logger, _action)
