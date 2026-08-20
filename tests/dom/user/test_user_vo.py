@@ -4,6 +4,7 @@ import pytest
 
 import domain.user as user_api
 from domain.catalog import Model, ModelDescriptor, Series, SubscriptionTier, Vendor
+from domain.chat import ChatId
 from domain.kernel.vo import NonEmptyStr
 from domain.user import ActiveState, BannedState, UserId, UserProfile
 from domain.user.exceptions import InvalidStateTransitionError, ValidationError
@@ -27,10 +28,19 @@ def test_user_id_and_profile_helpers() -> None:
         last_name=NonEmptyStr("Doe"),
     )
     assert str(profile.full_name) == "Jane Doe"
+    assert profile.has_tg_premium is None
     with pytest.raises(ValidationError):
         UserProfile(telegram_id=0, is_bot=False, first_name=NonEmptyStr("A"))
     with pytest.raises(ValidationError):
         UserProfile(telegram_id=1, is_bot=False, first_name=NonEmptyStr("A"), username="a" * 65)
+
+
+@pytest.mark.unit
+def test_user_id_from_int_is_deterministic_and_namespaced() -> None:
+    assert UserId.from_int(1) == UserId.from_int(1)
+    assert UserId.from_int(1) != UserId.from_int(2)
+    assert isinstance(UserId.from_int(42), UserId)
+    assert UserId.from_int(42).value != ChatId.from_int(42).value
 
 
 @pytest.mark.unit
