@@ -8,13 +8,24 @@ from app.dto import ChatContext
 from domain.chat import (
     AccessDeniedError,
     ActiveState,
-    ChatProfile,
+    ChatId,
     ChatType,
+    InactiveState,
+    System,
 )
 from domain.chat.exceptions import InvalidStateTransitionError
 
 from ...factories import mk_chat_context, mk_logger
-from .helpers import dt, make_management_uc, member_actor, mk_chat, owner_actor
+from .helpers import (
+    dt,
+    make_management_uc,
+    member_kwargs,
+    mk_chat,
+    mk_chat_for_tg,
+    owner_kwargs,
+    plain_dt,
+    register_kwargs,
+)
 
 
 @pytest.mark.unit
@@ -22,17 +33,18 @@ from .helpers import dt, make_management_uc, member_actor, mk_chat, owner_actor
 async def test_uc_register_loads_and_caches() -> None:
     repo = AsyncMock()
     uc, _, cache = make_management_uc(repo=repo)
-    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
     cache.chats.get_by_id.return_value = None
-    domain_chat = mk_chat(chat_id=7, telegram_id=-100, now=dt(10))
+    domain_chat = mk_chat_for_tg(tg_id=-100, now=dt(10))
 
     repo.get_by_id.return_value = domain_chat
-    got = await uc.register(profile=profile)
+    got = await uc.register(**register_kwargs(tg_id=-100, at=plain_dt(10)))
 
     assert isinstance(got, ChatContext)
     assert got.tg_id == -100
-    cache.chats.set.assert_awaited_once_with(domain_chat)
+    cache.chats.set.assert_awaited_once()
+    assert isinstance(cache.chats.set.await_args.args[0], ChatContext)
     repo.save.assert_not_awaited()
+    repo.get_by_id.assert_awaited_once_with(ChatId.from_int(-100))
 
 
 @pytest.mark.unit
@@ -40,11 +52,10 @@ async def test_uc_register_loads_and_caches() -> None:
 async def test_uc_register_returns_cached_value_without_uow() -> None:
     repo = AsyncMock()
     uc, uow, cache = make_management_uc(repo=repo)
-    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
     cached = mk_chat_context(tg_id=-100, chat_type=ChatType.GROUP)
     cache.chats.get_by_id.return_value = cached
 
-    got = await uc.register(profile=profile)
+    got = await uc.register(**register_kwargs(tg_id=-100))
 
     assert got is cached
     assert uow.enter_count == 0
@@ -56,13 +67,13 @@ async def test_uc_register_logs_info_on_first_create() -> None:
     log = mk_logger()
     repo = AsyncMock()
     uc, _, cache = make_management_uc(repo=repo, logger=log)
-    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
     cache.chats.get_by_id.return_value = None
     repo.get_by_id.return_value = None
 
-    got = await uc.register(profile=profile)
+    got = await uc.register(**register_kwargs(tg_id=-100))
 
     assert got.tg_id == -100
+    assert got.id == str(ChatId.from_int(-100))
     repo.save.assert_awaited_once()
     log.info.assert_called_once_with("Chat registered", tg_id=-100)
 
@@ -73,12 +84,11 @@ async def test_uc_register_skips_info_for_existing_chat() -> None:
     log = mk_logger()
     repo = AsyncMock()
     uc, _, cache = make_management_uc(repo=repo, logger=log)
-    profile = ChatProfile(type=ChatType.GROUP, telegram_id=-100, title="T")
     cache.chats.get_by_id.return_value = None
-    domain_chat = mk_chat(chat_id=7, telegram_id=-100, now=dt(10))
+    domain_chat = mk_chat_for_tg(tg_id=-100, now=dt(10))
     repo.get_by_id.return_value = domain_chat
 
-    await uc.register(profile=profile)
+    await uc.register(**register_kwargs(tg_id=-100, at=plain_dt(10)))
 
     log.info.assert_not_called()
 
@@ -89,58 +99,16 @@ async def test_uc_find_by_tg_id_loads_from_db_without_create() -> None:
     repo = AsyncMock()
     uc, _, cache = make_management_uc(repo=repo)
     cache.chats.get_by_id.return_value = None
-    domain_chat = mk_chat(chat_id=8, telegram_id=-200, now=dt(10))
+    domain_chat = mk_chat_for_tg(tg_id=-200, now=dt(10))
 
     repo.get_by_id.return_value = domain_chat
     got = await uc.find_by_tg_id(tg_id=-200)
 
     assert isinstance(got, ChatContext)
     assert got.tg_id == -200
-    repo.get_by_id.assert_awaited_once()
-    cache.chats.set.assert_awaited_once_with(domain_chat)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_uc_change_profile_happy_path_persists_and_closes_uow() -> None:
-    repo = AsyncMock()
-    chat = mk_chat(now=dt(10))
-    repo.get_by_id.return_value = chat
-    uc, uow, cache = make_management_uc(repo=repo)
-    new_profile = ChatProfile(type=ChatType.GROUP, telegram_id=-1001, title="Ops")
-
-    got = await uc.change_profile(
-        chat_id=chat.id,
-        actor=owner_actor(chat),
-        new_profile=new_profile,
-        at=dt(11),
-    )
-
-    assert got.profile == new_profile
-    repo.get_by_id.assert_awaited_once_with(chat.id)
-    repo.save.assert_awaited_once_with(chat)
-    assert uow.enter_count == uow.exit_count == 1
-    cache.chats.set.assert_awaited_once_with(got)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_uc_management_access_denied_propagates_and_skips_save() -> None:
-    repo = AsyncMock()
-    chat = mk_chat(now=dt(10))
-    repo.get_by_id.return_value = chat
-    uc, _, _cache = make_management_uc(repo=repo)
-    new_profile = ChatProfile(type=ChatType.GROUP, telegram_id=-1001, title="X")
-
-    with pytest.raises(AccessDeniedError):
-        await uc.change_profile(
-            chat_id=chat.id,
-            actor=member_actor(chat),
-            new_profile=new_profile,
-            at=dt(11),
-        )
-
-    repo.save.assert_not_awaited()
+    repo.get_by_id.assert_awaited_once_with(ChatId.from_int(-200))
+    cache.chats.set.assert_awaited_once()
+    assert isinstance(cache.chats.set.await_args.args[0], ChatContext)
 
 
 @pytest.mark.unit
@@ -151,10 +119,12 @@ async def test_uc_deactivate_and_activate_happy_path() -> None:
     repo.get_by_id.return_value = chat
     uc, _, cache = make_management_uc(repo=repo)
 
-    await uc.deactivate(chat_id=chat.id, actor=owner_actor(chat), at=dt(11))
-    await uc.activate(chat_id=chat.id, actor=owner_actor(chat), at=dt(12))
+    deactivated = await uc.deactivate(**owner_kwargs(chat), at=plain_dt(11))
+    activated = await uc.activate(**owner_kwargs(chat), at=plain_dt(12))
 
     assert isinstance(chat.state, ActiveState)
+    assert deactivated.is_active is False
+    assert activated.is_active is True
     assert repo.save.await_count == 2
     assert cache.chats.set.await_count == 2
 
@@ -168,6 +138,72 @@ async def test_uc_activate_when_already_active_propagates() -> None:
     uc, _, _cache = make_management_uc(repo=repo)
 
     with pytest.raises(InvalidStateTransitionError):
-        await uc.activate(chat_id=chat.id, actor=owner_actor(chat), at=dt(11))
+        await uc.activate(**owner_kwargs(chat), at=plain_dt(11))
 
+    repo.save.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_deactivate_access_denied_propagates_and_skips_save() -> None:
+    repo = AsyncMock()
+    chat = mk_chat(now=dt(10))
+    repo.get_by_id.return_value = chat
+    uc, _, cache = make_management_uc(repo=repo)
+
+    with pytest.raises(AccessDeniedError):
+        await uc.deactivate(**member_kwargs(chat), at=plain_dt(11))
+
+    repo.save.assert_not_awaited()
+    cache.chats.set.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_on_bot_kicked_returns_none_when_chat_missing() -> None:
+    repo = AsyncMock()
+    uc, _, cache = make_management_uc(repo=repo)
+    cache.chats.get_by_id.return_value = None
+    repo.get_by_id.return_value = None
+
+    got = await uc.on_bot_kicked(tg_id=-404, at=plain_dt(11))
+
+    assert got is None
+    repo.save.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_on_bot_kicked_deactivates_active_chat() -> None:
+    repo = AsyncMock()
+    chat = mk_chat_for_tg(tg_id=-300, now=dt(10))
+    repo.get_by_id.return_value = chat
+    uc, _, cache = make_management_uc(repo=repo)
+    cache.chats.get_by_id.return_value = None
+
+    got = await uc.on_bot_kicked(tg_id=-300, at=plain_dt(11))
+
+    assert isinstance(got, ChatContext)
+    assert got.is_active is False
+    assert isinstance(chat.state, InactiveState)
+    repo.save.assert_awaited_once_with(chat)
+    cache.chats.set.assert_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uc_on_bot_kicked_is_idempotent_when_already_inactive() -> None:
+    repo = AsyncMock()
+    chat = mk_chat_for_tg(tg_id=-301, now=dt(10))
+    chat.deactivate(actor=System(), at=dt(10))
+    chat.pull_events()
+    cached = ChatContext.from_domain(chat)
+    uc, _, cache = make_management_uc(repo=repo)
+    cache.chats.get_by_id.return_value = cached
+    repo.get_by_id.return_value = chat
+
+    got = await uc.on_bot_kicked(tg_id=-301, at=plain_dt(11))
+
+    assert got is cached
+    assert got.is_active is False
     repo.save.assert_not_awaited()

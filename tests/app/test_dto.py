@@ -20,7 +20,7 @@ def _dt(hour: int) -> AwareDatetime:
 
 
 @pytest.mark.unit
-def test_user_context_from_domain_maps_new_aggregate_shape() -> None:
+def test_user_context_from_domain_maps_flattened_fields() -> None:
     user = User.register(
         id=UserId(UUID(int=101)),
         profile=UserProfile(
@@ -49,16 +49,21 @@ def test_user_context_from_domain_maps_new_aggregate_shape() -> None:
 
     ctx = UserContext.from_domain(user)
 
-    assert ctx.id == user.id
+    assert ctx.id == str(user.id)
     assert ctx.tg_id == 123456
     assert ctx.has_tg_premium is True
     assert ctx.is_banned is True
-    assert isinstance(ctx.banned_until, AwareDatetime)
-    assert ctx.subscription_tier == SubscriptionTier.PREMIUM
+    assert ctx.is_active is False
+    assert ctx.banned_until == _dt(12).value
+    assert ctx.role == int(UserRole.ADMIN)
+    assert ctx.is_admin is True
+    assert ctx.subscription_tier == int(SubscriptionTier.PREMIUM)
     assert ctx.subscription_daily_limit == user.subscription.plan.daily_limit
     assert ctx.model_vendor == "sber"
     assert ctx.model_series == "gigachat"
     assert ctx.model == "gigachat-2-pro"
+    assert ctx.role_label == "Администратор"
+    assert ctx.subscription_label == "Премиум"
 
 
 @pytest.mark.unit
@@ -81,12 +86,15 @@ def test_chat_context_from_domain_maps_schedule_fields() -> None:
 
     ctx = ChatContext.from_domain(chat)
 
-    assert ctx.id == chat.id
+    assert ctx.id == str(chat.id)
     assert ctx.tg_id == -100500
-    assert ctx.type == ChatType.GROUP
-    assert ctx.timezone == ZoneInfo("UTC")
-    assert ctx.weekday == Weekday.MONDAY
-    assert ctx.schedules == chat.schedules.schedules
+    assert ctx.type == str(ChatType.GROUP)
+    assert ctx.title == "Team"
+    assert ctx.username == "team_chat"
+    assert ctx.is_active is True
+    assert ctx.timezone == "UTC"
+    assert ctx.weekday == int(Weekday.MONDAY)
+    assert ctx.schedules == [(9, 0), (12, 30)]
 
 
 @pytest.mark.unit
@@ -100,6 +108,7 @@ def test_image_card_from_domain_maps_fields() -> None:
 
     card = ImageCard.from_domain(image)
 
-    assert card.id == image.id
-    assert card.file_id == TelegramFileId.parse("AgACAgIAAxkB")
-    assert card.rating == mk_rating(likes=3)
+    assert card.id == str(image.id)
+    assert card.file_id == "AgACAgIAAxkB"
+    assert card.likes == 3
+    assert card.dislikes == 0

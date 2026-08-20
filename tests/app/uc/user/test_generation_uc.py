@@ -23,7 +23,7 @@ from tests.dom.user.factories import (
     FakeUserRepo,
 )
 
-from .helpers import dt, make_generation_uc, mk_user
+from .helpers import dt, make_generation_uc, mk_user, plain_dt
 
 
 def _make_generation_uc_for_request(
@@ -52,7 +52,7 @@ async def test_concurrent_begin_generation_rejects_second_request() -> None:
 
     async def attempt() -> object:
         uc = _make_generation_uc_for_request(users=users, usage=usage, cache=cache)
-        return await uc.begin_generation(user_id=user.id, at=dt(12).value)
+        return await uc.begin_generation(user_id=str(user.id), at=plain_dt(12))
 
     first, second = await asyncio.gather(attempt(), attempt(), return_exceptions=True)
 
@@ -74,10 +74,10 @@ async def test_begin_generation_then_second_call_hits_cooldown() -> None:
     usage = FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=0))
     uc, _, _ = make_generation_uc(repo=users, usage=usage)
 
-    await uc.begin_generation(user_id=user.id, at=dt(12).value)
+    await uc.begin_generation(user_id=str(user.id), at=plain_dt(12))
 
     with pytest.raises(CooldownViolationError):
-        await uc.begin_generation(user_id=user.id, at=dt(12).value)
+        await uc.begin_generation(user_id=str(user.id), at=plain_dt(12))
 
 
 @pytest.mark.unit
@@ -88,8 +88,8 @@ async def test_refund_generation_restores_previous_state() -> None:
     usage = FakeUsageRepo(stats=UsageStats(last_usage=dt(9), daily_usage=1))
     uc, _, _ = make_generation_uc(repo=users, usage=usage)
 
-    snap = await uc.begin_generation(user_id=user.id, at=dt(12).value)
-    await uc.refund_generation(user_id=user.id, snapshot=snap)
+    snap = await uc.begin_generation(user_id=str(user.id), at=plain_dt(12))
+    await uc.refund_generation(user_id=str(user.id), snapshot=snap)
 
     assert usage.stats.last_usage == dt(9)
     assert usage.stats.daily_usage == 1
@@ -104,14 +104,14 @@ async def test_begin_generation_propagates_ban_and_limit() -> None:
     uc, _, _ = make_generation_uc(repo=users)
 
     with pytest.raises(UserBannedError):
-        await uc.begin_generation(user_id=user.id, at=dt(12).value)
+        await uc.begin_generation(user_id=str(user.id), at=plain_dt(12))
 
     user.unban(actor=UserRole.OWNER, at=dt(12))
     usage = FakeUsageRepo(stats=UsageStats(last_usage=None, daily_usage=100))
     uc, _, _ = make_generation_uc(repo=users, usage=usage)
 
     with pytest.raises(LimitViolationError):
-        await uc.begin_generation(user_id=user.id, at=dt(13).value)
+        await uc.begin_generation(user_id=str(user.id), at=plain_dt(13))
 
 
 @pytest.mark.unit
@@ -120,4 +120,4 @@ async def test_begin_generation_propagates_not_found() -> None:
     uc, _, _ = make_generation_uc(repo=FakeUserRepo())
 
     with pytest.raises(UserNotFoundError):
-        await uc.begin_generation(user_id=UserId(UUID(int=404)), at=dt(12).value)
+        await uc.begin_generation(user_id=str(UserId(UUID(int=404))), at=plain_dt(12))

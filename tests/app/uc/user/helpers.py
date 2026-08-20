@@ -28,6 +28,10 @@ def dt(hour: int) -> AwareDatetime:
     return AwareDatetime(datetime(2026, 1, 1, hour, 0, tzinfo=UTC))
 
 
+def plain_dt(hour: int) -> datetime:
+    return dt(hour).value
+
+
 def mk_user(*, user_id: int = 1, role: UserRole = UserRole.USER, now: AwareDatetime | None = None) -> User:
     current = now or dt(12)
     return User.register(
@@ -40,8 +44,30 @@ def mk_user(*, user_id: int = 1, role: UserRole = UserRole.USER, now: AwareDatet
     )
 
 
-def profile(*, tg_id: int = 999, first_name: str = "A") -> UserProfile:
-    return UserProfile(telegram_id=tg_id, is_bot=False, first_name=NonEmptyStr(first_name))
+def mk_user_for_tg(*, tg_id: int, role: UserRole = UserRole.USER, now: AwareDatetime | None = None) -> User:
+    """Domain user whose id matches ``UserId.from_int(tg_id)`` (register/find path)."""
+    current = now or dt(12)
+    return User.register(
+        id=UserId.from_int(tg_id),
+        profile=UserProfile(telegram_id=tg_id, is_bot=False, first_name=NonEmptyStr("Test")),
+        role=role,
+        subscription=subscription_free(current),
+        settings=default_settings(),
+        at=current,
+    )
+
+
+def register_kwargs(*, tg_id: int = 999, first_name: str = "A", at: datetime | None = None) -> dict:
+    return {
+        "tg_id": tg_id,
+        "is_bot": False,
+        "first_name": first_name,
+        "last_name": None,
+        "username": None,
+        "language_code": None,
+        "has_tg_premium": None,
+        "at": at or plain_dt(12),
+    }
 
 
 def make_lifecycle_uc(

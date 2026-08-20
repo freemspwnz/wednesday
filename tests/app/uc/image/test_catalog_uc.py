@@ -34,7 +34,7 @@ async def test_uc_reset_views_delegates_to_repo() -> None:
     uow = FakeUoW(views=repo)
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
 
-    result = await uc.reset_views(chat_id=chat_id)
+    result = await uc.reset_views(chat_id=str(chat_id))
 
     assert result == 1
     assert (chat_id.value, image.id) not in repo.shown
@@ -52,14 +52,14 @@ async def test_uc_reset_views_allows_pick_again() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=200))
 
-    await uc.mark_shown(chat_id=chat_id, image_id=image.id, at=dt(10).value)
-    assert await uc.pick_for_chat(chat_id=chat_id) is None
+    await uc.mark_shown(chat_id=str(chat_id), image_id=str(image.id), at=dt(10).value)
+    assert await uc.pick_for_chat(chat_id=str(chat_id)) is None
 
-    count = await uc.reset_views(chat_id=chat_id)
+    count = await uc.reset_views(chat_id=str(chat_id))
     assert count == 1
-    card = await uc.pick_for_chat(chat_id=chat_id)
+    card = await uc.pick_for_chat(chat_id=str(chat_id))
     assert card is not None
-    assert card.id == image.id
+    assert card.id == str(image.id)
 
 
 @pytest.mark.unit
@@ -71,7 +71,7 @@ async def test_uc_pick_for_chat_returns_none_when_catalog_empty() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=99))
 
-    result = await uc.pick_for_chat(chat_id=chat_id)
+    result = await uc.pick_for_chat(chat_id=str(chat_id))
 
     assert result is None
     views.get_unseen_for_chat.assert_awaited_once_with(
@@ -92,11 +92,12 @@ async def test_uc_pick_for_chat_returns_card_without_marking() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=100))
 
-    result = await uc.pick_for_chat(chat_id=chat_id)
+    result = await uc.pick_for_chat(chat_id=str(chat_id))
 
     assert isinstance(result, ImageCard)
-    assert result.id == image.id
-    assert result.rating == mk_rating(likes=2)
+    assert result.id == str(image.id)
+    assert result.likes == 2
+    assert result.dislikes == 0
     assert (chat_id.value, image.id) not in views.shown
     assert uow.enter_count == uow.exit_count == 1
 
@@ -110,7 +111,7 @@ async def test_uc_mark_shown_records_view() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=100))
 
-    await uc.mark_shown(chat_id=chat_id, image_id=image.id, at=dt(10).value)
+    await uc.mark_shown(chat_id=str(chat_id), image_id=str(image.id), at=dt(10).value)
 
     assert (chat_id.value, image.id) in views.shown
     assert uow.enter_count == uow.exit_count == 1
@@ -125,10 +126,10 @@ async def test_uc_pick_for_chat_runs_in_uow() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
     chat_id = ChatId(UUID(int=101))
 
-    got = await uc.pick_for_chat(chat_id=chat_id)
+    got = await uc.pick_for_chat(chat_id=str(chat_id))
 
     assert got is not None
-    assert got.id == image.id
+    assert got.id == str(image.id)
     assert uow.enter_count == uow.exit_count == 1
 
 
@@ -142,6 +143,6 @@ async def test_uc_pick_for_chat_raises_when_image_missing() -> None:
     uc = ImageCatalogUseCase(uow=uow, logger=mk_logger())
 
     with pytest.raises(ImageNotFoundError):
-        await uc.pick_for_chat(chat_id=ChatId(UUID(int=102)))
+        await uc.pick_for_chat(chat_id=str(ChatId(UUID(int=102))))
 
     views.mark_shown.assert_not_awaited()
