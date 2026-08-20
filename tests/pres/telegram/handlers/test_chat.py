@@ -1,8 +1,8 @@
 """Tests for chat router (events and schedule commands)."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from zoneinfo import ZoneInfo
 
 import pytest
 from aiogram.enums import ChatMemberStatus
@@ -19,12 +19,11 @@ from aiogram.types import (
     User,
 )
 
-from domain.chat import AccessDeniedError, ChatMember, ChatMemberId, ChatMemberRole, Weekday
-from domain.kernel.exceptions import InvalidStateTransitionError
+from domain.chat import AccessDeniedError
 from presentation.aiogram.messages import chat as chat_msg, exceptions as exc_msg
 from presentation.aiogram.routers import chat as h
 
-from ..factories import make_message
+from ..factories import make_message, mk_chat_context
 
 _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -54,14 +53,6 @@ def _event(
     )
 
 
-def _member_actor(chat_context: object, *, role: ChatMemberRole = ChatMemberRole.ADMIN) -> ChatMember:
-    return ChatMember(
-        id=ChatMemberId(1),
-        role=role,
-        chat_id=chat_context.id,  # type: ignore[attr-defined]
-    )
-
-
 def _answer_text(answer: AsyncMock) -> str:
     call = answer.await_args
     assert call is not None
@@ -72,14 +63,12 @@ def _answer_text(answer: AsyncMock) -> str:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_my_chat_member_left_deactivates(
+async def test_my_chat_member_left_calls_on_bot_kicked(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
-    chat_context: object,
 ) -> None:
-    mock_scope.chat_management_uc.find_by_tg_id.return_value = chat_context
     await h.on_my_chat_member(_event(status=ChatMemberStatus.LEFT, is_bot=True), AsyncMock(), mock_logger, mock_scope)
-    mock_scope.chat_management_uc.deactivate.assert_awaited_once()
+    mock_scope.chat_management_uc.on_bot_kicked.assert_awaited_once_with(tg_id=-100, at=_MSG_DATE)
 
 
 @pytest.mark.unit
@@ -87,11 +76,14 @@ async def test_my_chat_member_left_deactivates(
 async def test_my_chat_member_invalid_transition(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
-    chat_context: object,
 ) -> None:
-    mock_scope.chat_management_uc.find_by_tg_id.return_value = chat_context
-    mock_scope.chat_management_uc.deactivate.side_effect = InvalidStateTransitionError("already")
-    await h.on_my_chat_member(_event(status=ChatMemberStatus.LEFT, is_bot=True), AsyncMock(), mock_logger, mock_scope)
+    from domain.kernel.exceptions import InvalidStateTransitionError
+
+    mock_scope.chat_management_uc.on_bot_kicked.side_effect = InvalidStateTransitionError("already")
+    with pytest.raises(InvalidStateTransitionError):
+        await h.on_my_chat_member(
+            _event(status=ChatMemberStatus.LEFT, is_bot=True), AsyncMock(), mock_logger, mock_scope
+        )
 
 
 @pytest.mark.unit
@@ -187,9 +179,7 @@ async def test_cmd_schedule_add_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from tests.dom.chat.factories import mk_chat
-
-    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    updated = mk_chat_context(tg_id=-1001)
     mock_scope.chat_schedule_uc.add_schedule = AsyncMock(return_value=updated)
     message = make_message(text="/schedule_add 09:30", chat_id=-1001)
     bot = AsyncMock()
@@ -199,7 +189,7 @@ async def test_cmd_schedule_add_calls_uc(
         patch(
             "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context),
+            return_value=(1, "admin"),
         ),
     ):
         await h.cmd_schedule_add(message, ["09:30"], chat_context, bot, mock_scope, mock_logger)
@@ -224,7 +214,7 @@ async def test_cmd_schedule_add_denied_by_domain_policy(
         patch(
             "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context, role=ChatMemberRole.MEMBER),
+            return_value=(1, "member"),
         ),
     ):
         await h.cmd_schedule_add(message, ["09:30"], chat_context, bot, mock_scope, mock_logger)
@@ -239,9 +229,7 @@ async def test_cmd_activate_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from tests.dom.chat.factories import mk_chat
-
-    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    updated = mk_chat_context(tg_id=-1001)
     mock_scope.chat_management_uc.activate = AsyncMock(return_value=updated)
     message = make_message(text="/activate", chat_id=-1001)
     bot = AsyncMock()
@@ -251,7 +239,7 @@ async def test_cmd_activate_calls_uc(
         patch(
             "presentation.aiogram.routers.chat.management.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context),
+            return_value=(1, "admin"),
         ),
     ):
         await h.cmd_activate(message, chat_context, bot, mock_scope, mock_logger)
@@ -268,10 +256,7 @@ async def test_cmd_deactivate_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from tests.dom.chat.factories import mk_chat, owner
-
-    updated = mk_chat(chat_id=10, telegram_id=-1001)
-    updated.deactivate(actor=owner(chat_id=updated.id), at=updated.updated_at)
+    updated = replace(mk_chat_context(tg_id=-1001), is_active=False)
     mock_scope.chat_management_uc.deactivate = AsyncMock(return_value=updated)
     message = make_message(text="/deactivate", chat_id=-1001)
     bot = AsyncMock()
@@ -281,7 +266,7 @@ async def test_cmd_deactivate_calls_uc(
         patch(
             "presentation.aiogram.routers.chat.management.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context),
+            return_value=(1, "admin"),
         ),
     ):
         await h.cmd_deactivate(message, chat_context, bot, mock_scope, mock_logger)
@@ -307,7 +292,7 @@ async def test_cmd_activate_denied_by_domain_policy(
         patch(
             "presentation.aiogram.routers.chat.management.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context, role=ChatMemberRole.MEMBER),
+            return_value=(1, "member"),
         ),
     ):
         await h.cmd_activate(message, chat_context, bot, mock_scope, mock_logger)
@@ -322,9 +307,7 @@ async def test_cmd_schedule_remove_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from tests.dom.chat.factories import mk_chat
-
-    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    updated = mk_chat_context(tg_id=-1001)
     mock_scope.chat_schedule_uc.remove_schedule = AsyncMock(return_value=updated)
     message = make_message(text="/schedule_remove 09:30", chat_id=-1001)
     bot = AsyncMock()
@@ -334,7 +317,7 @@ async def test_cmd_schedule_remove_calls_uc(
         patch(
             "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context),
+            return_value=(1, "admin"),
         ),
     ):
         await h.cmd_schedule_remove(message, ["09:30"], chat_context, bot, mock_scope, mock_logger)
@@ -350,9 +333,7 @@ async def test_cmd_schedule_clear_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from tests.dom.chat.factories import mk_chat
-
-    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    updated = mk_chat_context(tg_id=-1001)
     mock_scope.chat_schedule_uc.clear_schedules = AsyncMock(return_value=updated)
     message = make_message(text="/schedule_clear", chat_id=-1001)
     bot = AsyncMock()
@@ -362,7 +343,7 @@ async def test_cmd_schedule_clear_calls_uc(
         patch(
             "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context),
+            return_value=(1, "admin"),
         ),
     ):
         await h.cmd_schedule_clear(message, chat_context, bot, mock_scope, mock_logger)
@@ -378,9 +359,7 @@ async def test_cmd_schedule_day_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from tests.dom.chat.factories import mk_chat
-
-    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    updated = mk_chat_context(tg_id=-1001)
     mock_scope.chat_schedule_uc.change_schedule_day = AsyncMock(return_value=updated)
     message = make_message(text="/schedule_day wed", chat_id=-1001)
     bot = AsyncMock()
@@ -390,7 +369,7 @@ async def test_cmd_schedule_day_calls_uc(
         patch(
             "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context),
+            return_value=(1, "admin"),
         ),
     ):
         await h.cmd_schedule_day(message, ["wed"], chat_context, bot, mock_scope, mock_logger)
@@ -398,7 +377,7 @@ async def test_cmd_schedule_day_calls_uc(
     mock_scope.chat_schedule_uc.change_schedule_day.assert_awaited_once()
     call = mock_scope.chat_schedule_uc.change_schedule_day.await_args
     assert call is not None
-    assert call.kwargs["new_weekday"] == Weekday.WEDNESDAY
+    assert call.kwargs["new_weekday"] == 3
     answer.assert_awaited_once()
 
 
@@ -409,9 +388,7 @@ async def test_cmd_schedule_tz_calls_uc(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    from tests.dom.chat.factories import mk_chat
-
-    updated = mk_chat(chat_id=10, telegram_id=-1001)
+    updated = mk_chat_context(tg_id=-1001)
     mock_scope.chat_schedule_uc.change_schedule_timezone = AsyncMock(return_value=updated)
     message = make_message(text="/schedule_tz Europe/Moscow", chat_id=-1001)
     bot = AsyncMock()
@@ -421,7 +398,7 @@ async def test_cmd_schedule_tz_calls_uc(
         patch(
             "presentation.aiogram.routers.chat.schedule.resolve_chat_member",
             new_callable=AsyncMock,
-            return_value=_member_actor(chat_context),
+            return_value=(1, "admin"),
         ),
     ):
         await h.cmd_schedule_tz(message, ["Europe/Moscow"], chat_context, bot, mock_scope, mock_logger)
@@ -429,5 +406,5 @@ async def test_cmd_schedule_tz_calls_uc(
     mock_scope.chat_schedule_uc.change_schedule_timezone.assert_awaited_once()
     call = mock_scope.chat_schedule_uc.change_schedule_timezone.await_args
     assert call is not None
-    assert call.kwargs["timezone"] == ZoneInfo("Europe/Moscow")
+    assert call.kwargs["timezone"] == "Europe/Moscow"
     answer.assert_awaited_once()

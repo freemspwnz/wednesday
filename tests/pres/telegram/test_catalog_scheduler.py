@@ -10,10 +10,9 @@ from app.dto import ImageCard
 from domain.kernel.vo import AwareDatetime
 from presentation.aiogram.messages import image as image_msg
 from presentation.aiogram.scheduler.catalog import CatalogScheduleRunner
-from tests.dom.chat.factories import mk_chat
 from tests.dom.image.factories import mk_image
 
-from .factories import ScopeCM
+from .factories import ScopeCM, mk_chat_context
 
 _WED_NOON_DT = datetime(2026, 1, 7, 12, 0, tzinfo=UTC)
 _WED_NOON = AwareDatetime(_WED_NOON_DT)
@@ -43,7 +42,7 @@ async def test_tick_sends_unseen_catalog_photo(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    chat = mk_chat(now=_WED_NOON)
+    chat = mk_chat_context(tg_id=-1001)
     card = ImageCard.from_domain(mk_image(image_id=11))
     mock_scope.chat_schedule_uc.list_due = AsyncMock(return_value=[chat])
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=card)
@@ -55,7 +54,7 @@ async def test_tick_sends_unseen_catalog_photo(
     mock_scope.image_catalog_uc.pick_for_chat.assert_awaited_once_with(chat_id=chat.id)
     bot.send_photo.assert_awaited_once()
     kwargs = bot.send_photo.await_args.kwargs
-    assert kwargs["chat_id"] == chat.profile.telegram_id
+    assert kwargs["chat_id"] == chat.tg_id
     assert kwargs["photo"] == str(card.file_id)
     assert kwargs["reply_markup"] is not None
     mock_scope.image_catalog_uc.mark_shown.assert_awaited_once_with(
@@ -72,7 +71,7 @@ async def test_tick_sends_notice_when_catalog_empty(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    chat = mk_chat(now=_WED_NOON)
+    chat = mk_chat_context(tg_id=-1001)
     mock_scope.chat_schedule_uc.list_due = AsyncMock(return_value=[chat])
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=None)
     runner, bot = _runner(mock_scope=mock_scope, mock_logger=mock_logger)
@@ -82,7 +81,7 @@ async def test_tick_sends_notice_when_catalog_empty(
 
     bot.send_photo.assert_not_called()
     bot.send_message.assert_awaited_once_with(
-        chat_id=chat.profile.telegram_id,
+        chat_id=chat.tg_id,
         text=image_msg.SCHEDULE_CATALOG_EMPTY,
     )
     mock_scope.image_catalog_uc.mark_shown.assert_not_awaited()
@@ -95,7 +94,7 @@ async def test_tick_does_not_send_twice_in_the_same_minute(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    chat = mk_chat(now=_WED_NOON)
+    chat = mk_chat_context(tg_id=-1001)
     card = ImageCard.from_domain(mk_image())
     mock_scope.chat_schedule_uc.list_due = AsyncMock(return_value=[chat])
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=card)
@@ -115,7 +114,7 @@ async def test_tick_send_error_does_not_mark_shown_or_retry(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    chat = mk_chat(now=_WED_NOON)
+    chat = mk_chat_context(tg_id=-1001)
     card = ImageCard.from_domain(mk_image())
     mock_scope.chat_schedule_uc.list_due = AsyncMock(return_value=[chat])
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=card)
@@ -139,8 +138,8 @@ async def test_tick_send_error_does_not_block_next_chat(
     mock_scope: MagicMock,
     mock_logger: MagicMock,
 ) -> None:
-    failing = mk_chat(chat_id=1, telegram_id=-1001, now=_WED_NOON)
-    ok = mk_chat(chat_id=2, telegram_id=-1002, now=_WED_NOON)
+    failing = mk_chat_context(tg_id=-1001, domain_id=1)
+    ok = mk_chat_context(tg_id=-1002, domain_id=2)
     card = ImageCard.from_domain(mk_image())
     mock_scope.chat_schedule_uc.list_due = AsyncMock(return_value=[failing, ok])
     mock_scope.image_catalog_uc.pick_for_chat = AsyncMock(return_value=card)
@@ -156,7 +155,7 @@ async def test_tick_send_error_does_not_block_next_chat(
     await runner.tick(at=_WED_NOON_DT)
 
     assert bot.send_photo.await_count == 2
-    assert bot.send_photo.await_args.kwargs["chat_id"] == ok.profile.telegram_id
+    assert bot.send_photo.await_args.kwargs["chat_id"] == ok.tg_id
     mock_scope.image_catalog_uc.mark_shown.assert_awaited_once_with(
         chat_id=ok.id,
         image_id=card.id,

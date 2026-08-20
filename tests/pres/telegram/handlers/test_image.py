@@ -9,7 +9,7 @@ from aiogram.filters import CommandObject
 from aiogram.types import CallbackQuery, Chat as TgChat, Message, PhotoSize, User as TgUser
 
 from app.dto import ChatContext, ImageCard, UserContext
-from domain.chat import ChatProfile, ChatType
+from domain.chat import ChatType
 from domain.image import (
     ImageNotFoundError,
     ImagePrompts,
@@ -37,7 +37,7 @@ _IMAGE_KEY = str(UUID(int=7))
 
 @pytest.mark.unit
 def test_build_vote_kb_shows_likes_and_dislikes() -> None:
-    kb = build_vote_kb(image_id=_IMAGE_KEY, rating=mk_rating(likes=3, dislikes=1))
+    kb = build_vote_kb(image_id=_IMAGE_KEY, likes=3, dislikes=1)
     row = kb.inline_keyboard[0]
     assert len(row) == 2
     assert row[0].text == "👍 3"
@@ -276,9 +276,10 @@ async def test_cb_image_vote_updates_markup(
     ):
         await cb_image_vote(callback, payload, voter_context, mock_scope)
 
-    mock_scope.chat_management_uc.register.assert_awaited_once_with(
-        profile=ChatProfile(type=ChatType.PRIVATE, telegram_id=voter_context.tg_id),
-    )
+    reg_call = mock_scope.chat_management_uc.register.await_args
+    assert reg_call is not None
+    assert reg_call.kwargs["tg_id"] == voter_context.tg_id
+    assert reg_call.kwargs["type"] == "private"
     mock_scope.image_vote_uc.vote.assert_awaited_once()
     vote_kwargs = mock_scope.image_vote_uc.vote.await_args.kwargs
     assert vote_kwargs["voter_id"] == voter_context.id
@@ -305,7 +306,7 @@ async def test_cb_image_vote_same_markup_skips_edit(
     object.__setattr__(
         callback.message,
         "reply_markup",
-        build_vote_kb(image_id=str(UUID(int=9)), rating=card.rating),
+        build_vote_kb(image_id=str(UUID(int=9)), likes=card.likes, dislikes=card.dislikes),
     )
 
     with (

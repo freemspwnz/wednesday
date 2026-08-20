@@ -1,8 +1,6 @@
 """Tests for RegistrationMiddleware."""
 
-from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Literal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -20,8 +18,6 @@ from aiogram.types import (
 )
 
 from domain.chat import ChatType
-from domain.kernel.vo import NonEmptyStr
-from domain.user import UserProfile
 from presentation.aiogram.middlewares.update.registration import RegistrationMiddleware
 
 from ..factories import mk_chat_context, mk_user_context
@@ -31,63 +27,34 @@ _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 
 @pytest.mark.unit
 class TestMapping:
-    def test_to_user_profile(self) -> None:
-        tg_user = User(
-            id=42,
-            is_bot=False,
-            first_name="Ada",
-            last_name="Lovelace",
-            username="ada",
-            language_code="en",
-            is_premium=True,
+    def test_extract_user_from_message(self) -> None:
+        user = User(id=42, is_bot=False, first_name="Ada")
+        message = Message(
+            message_id=1,
+            date=_MSG_DATE,
+            chat=Chat(id=1, type="private"),
+            from_user=user,
         )
-        profile = RegistrationMiddleware._to_user_profile(tg_user)
-        assert profile == UserProfile(
-            telegram_id=42,
-            is_bot=False,
-            first_name=NonEmptyStr("Ada"),
-            last_name=NonEmptyStr("Lovelace"),
-            username="ada",
-            language_code="en",
-            has_tg_premium=True,
+        assert RegistrationMiddleware._extract_user(message) is user
+
+    def test_extract_chat_from_message(self) -> None:
+        chat = Chat(id=-99, type="group")
+        message = Message(
+            message_id=1,
+            date=_MSG_DATE,
+            chat=chat,
+            from_user=User(id=1, is_bot=False, first_name="A"),
         )
+        assert RegistrationMiddleware._extract_chat(message) is chat
 
-    def test_to_chat_profile(self) -> None:
-        profile = RegistrationMiddleware._to_chat_profile(Chat(id=-1001, type="supergroup", title="Ops"))
-        assert profile.telegram_id == -1001
-        assert profile.type == ChatType.SUPERGROUP
-        assert profile.title == "Ops"
-
-    @pytest.mark.parametrize(
-        ("entity_type", "event_factory"),
-        [
-            (
-                "user",
-                lambda: Message(
-                    message_id=1,
-                    date=_MSG_DATE,
-                    chat=Chat(id=1, type="private"),
-                    from_user=User(id=1, is_bot=False, first_name="A"),
-                ),
-            ),
-            (
-                "chat",
-                lambda: Message(
-                    message_id=1,
-                    date=_MSG_DATE,
-                    chat=Chat(id=-99, type="group"),
-                    from_user=User(id=1, is_bot=False, first_name="A"),
-                ),
-            ),
-        ],
-    )
-    def test_extract_from_message(
-        self, entity_type: Literal["user", "chat"], event_factory: Callable[[], Message]
-    ) -> None:
-        event = event_factory()
-        attr = "from_user" if entity_type == "user" else "chat"
-        found = RegistrationMiddleware._extract_entity(entity_type=entity_type, event=event)
-        assert found is getattr(event, attr)
+    def test_extract_at_from_message(self) -> None:
+        message = Message(
+            message_id=1,
+            date=_MSG_DATE,
+            chat=Chat(id=1, type="private"),
+            from_user=User(id=1, is_bot=False, first_name="A"),
+        )
+        assert RegistrationMiddleware._extract_at(message) == _MSG_DATE
 
     def test_unwrap_update_prefers_callback_query(self) -> None:
         user = User(id=7, is_bot=False, first_name="Voter")
@@ -103,8 +70,8 @@ class TestMapping:
         update = Update(update_id=1, callback_query=callback)
 
         assert RegistrationMiddleware._unwrap_update(update) is callback
-        assert RegistrationMiddleware._extract_entity(entity_type="user", event=callback) is user
-        assert RegistrationMiddleware._extract_entity(entity_type="chat", event=callback) is chat
+        assert RegistrationMiddleware._extract_user(callback) is user
+        assert RegistrationMiddleware._extract_chat(callback) is chat
 
     @pytest.mark.parametrize(
         ("joined", "expected_skip"),
@@ -160,8 +127,14 @@ async def test_call_registers_user_and_chat(mock_scope: MagicMock, mock_logger: 
     assert data["chat"] == reg_chat
     handler.assert_awaited_once()
     mock_scope.user_lifecycle_uc.register.assert_awaited_once()
-    call_kwargs = mock_scope.user_lifecycle_uc.register.await_args.kwargs
-    assert call_kwargs["profile"].telegram_id == 1
+    user_kwargs = mock_scope.user_lifecycle_uc.register.await_args.kwargs
+    assert user_kwargs["tg_id"] == 1
+    assert user_kwargs["at"] == _MSG_DATE
+    mock_scope.chat_management_uc.register.assert_awaited_once()
+    chat_kwargs = mock_scope.chat_management_uc.register.await_args.kwargs
+    assert chat_kwargs["tg_id"] == 1
+    assert chat_kwargs["type"] == "private"
+    assert chat_kwargs["at"] == _MSG_DATE
 
 
 @pytest.mark.unit
@@ -212,7 +185,7 @@ async def test_call_registers_user_from_callback_query_update(
     handler.assert_awaited_once()
     mock_scope.user_lifecycle_uc.register.assert_awaited_once()
     call_kwargs = mock_scope.user_lifecycle_uc.register.await_args.kwargs
-    assert call_kwargs["profile"].telegram_id == 1
+    assert call_kwargs["tg_id"] == 1
 
 
 @pytest.mark.unit
