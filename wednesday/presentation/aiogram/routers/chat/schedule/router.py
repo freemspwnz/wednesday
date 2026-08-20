@@ -1,4 +1,6 @@
-"""In-chat schedule management: text CRUD + inline menu scaffold."""
+"""In-chat schedule management: text CRUD + inline menu."""
+
+from datetime import UTC, datetime
 
 from aiogram import Bot, Router
 from aiogram.filters import Command, CommandObject
@@ -14,6 +16,7 @@ from ..mappers import resolve_chat_member
 from ..parsers import parse_schedule_time, parse_timezone, parse_weekday
 from .data import ScheduleData
 from .keyboard import (
+    TIMEZONE_PRESETS,
     build_day_kb,
     build_main_kb,
     build_slots_kb,
@@ -24,6 +27,8 @@ from .keyboard import (
 chat_schedule_router = Router(name="chat_schedule")
 
 _GROUP_TYPES = frozenset({"group", "supergroup"})
+_WEEKDAY_MIN = 1
+_WEEKDAY_MAX = 7
 
 
 @chat_schedule_router.message(Command("schedule"))
@@ -56,9 +61,10 @@ async def cb_schedule(
     callback: CallbackQuery,
     callback_data: ScheduleData,
     chat: ChatContext,
+    bot: Bot,
     scope: RequestScope,
 ) -> None:
-    """Navigate schedule menu stubs (mutations land in later commits)."""
+    """Navigate schedule menu and apply day / timezone / active mutations."""
 
     async def _action() -> None:
         if not isinstance(callback.message, Message):
@@ -70,8 +76,7 @@ async def cb_schedule(
 
         action = callback_data.action
         if action == "menu":
-            await callback.message.edit_reply_markup(reply_markup=build_main_kb(chat))
-            await callback.answer()
+            await _show_main(callback, chat)
             return
         if action == "open":
             markup = _open_submenu(callback_data.value, chat)
@@ -80,6 +85,18 @@ async def cb_schedule(
                 return
             await callback.message.edit_reply_markup(reply_markup=markup)
             await callback.answer()
+            return
+        if action == "status":
+            updated = await _apply_status(callback, bot, scope, chat, callback_data.value)
+            await _show_main(callback, updated)
+            return
+        if action == "day":
+            updated = await _apply_day(callback, bot, scope, chat, callback_data.value)
+            await _show_main(callback, updated)
+            return
+        if action == "tz":
+            updated = await _apply_tz(callback, bot, scope, chat, callback_data.value)
+            await _show_main(callback, updated)
             return
         if action == "stub":
             await callback.answer(common_msg.WIP)
@@ -99,6 +116,94 @@ def _open_submenu(value: str, chat: ChatContext) -> InlineKeyboardMarkup | None:
     if value == "slots":
         return build_slots_kb()
     return None
+
+
+async def _show_main(callback: CallbackQuery, chat: ChatContext) -> None:
+    if not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+    await callback.message.edit_text(
+        chat_msg.format_schedule_context(chat),
+        reply_markup=build_main_kb(chat),
+    )
+    await callback.answer()
+
+
+async def _apply_status(
+    callback: CallbackQuery,
+    bot: Bot,
+    scope: RequestScope,
+    chat: ChatContext,
+    value: str,
+) -> ChatContext:
+    at = datetime.now(UTC)
+    actor_id, actor_role = await resolve_chat_member(bot, callback, chat)
+    if value == "on":
+        return await scope.chat_management_uc.activate(
+            chat_id=chat.id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            at=at,
+        )
+    if value == "off":
+        return await scope.chat_management_uc.deactivate(
+            chat_id=chat.id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            at=at,
+        )
+    msg = "Неизвестное действие для рассылки."
+    raise ValueError(msg)
+
+
+async def _apply_day(
+    callback: CallbackQuery,
+    bot: Bot,
+    scope: RequestScope,
+    chat: ChatContext,
+    value: str,
+) -> ChatContext:
+    try:
+        weekday = int(value)
+    except ValueError as exc:
+        msg = "Некорректный день недели."
+        raise ValueError(msg) from exc
+    if weekday < _WEEKDAY_MIN or weekday > _WEEKDAY_MAX:
+        msg = "Некорректный день недели."
+        raise ValueError(msg)
+    at = datetime.now(UTC)
+    actor_id, actor_role = await resolve_chat_member(bot, callback, chat)
+    return await scope.chat_schedule_uc.change_schedule_day(
+        chat_id=chat.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        new_weekday=weekday,
+        at=at,
+    )
+
+
+async def _apply_tz(
+    callback: CallbackQuery,
+    bot: Bot,
+    scope: RequestScope,
+    chat: ChatContext,
+    value: str,
+) -> ChatContext:
+    try:
+        index = int(value)
+        timezone = TIMEZONE_PRESETS[index]
+    except (ValueError, IndexError) as exc:
+        msg = "Некорректная таймзона."
+        raise ValueError(msg) from exc
+    at = datetime.now(UTC)
+    actor_id, actor_role = await resolve_chat_member(bot, callback, chat)
+    return await scope.chat_schedule_uc.change_schedule_timezone(
+        chat_id=chat.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        timezone=timezone,
+        at=at,
+    )
 
 
 @chat_schedule_router.message(Command("schedule_add"), GroupChatFilter(), InsufficientCommandArgs())

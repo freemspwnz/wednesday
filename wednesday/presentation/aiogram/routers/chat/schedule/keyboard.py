@@ -1,4 +1,4 @@
-"""Inline keyboards for schedule menu (main + submenu stubs)."""
+"""Inline keyboards for schedule menu (main + submenus)."""
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -25,6 +25,8 @@ TIMEZONE_PRESETS: tuple[str, ...] = (
     "Asia/Vladivostok",
 )
 
+_SLOTS_LABEL_MAX = 28
+
 
 def build_main_kb(chat: ChatContext) -> InlineKeyboardMarkup:
     """Root schedule menu: current values as button labels."""
@@ -42,38 +44,38 @@ def build_main_kb(chat: ChatContext) -> InlineKeyboardMarkup:
 
 
 def build_status_kb(*, is_active: bool) -> InlineKeyboardMarkup:
-    """Stub: enable / disable + back."""
+    """Enable / disable + back."""
     rows: list[list[InlineKeyboardButton]] = []
     if is_active:
-        rows.append([_btn("Выключить", action="stub", value="deactivate")])
+        rows.append([_btn("Выключить", action="status", value="off")])
     else:
-        rows.append([_btn("Включить", action="stub", value="activate")])
+        rows.append([_btn("Включить", action="status", value="on")])
     rows.append([_back_btn()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_day_kb(*, current: int) -> InlineKeyboardMarkup:
-    """Stub: weekday picker + back."""
+    """Weekday picker + back."""
     row: list[InlineKeyboardButton] = []
     for day in range(1, 8):
         mark = "·" if day == current else ""
         label = f"{mark}{_WEEKDAY_SHORT[day]}{mark}"
-        row.append(_btn(label, action="stub", value=f"d{day}"))
+        row.append(_btn(label, action="day", value=str(day)))
     return InlineKeyboardMarkup(inline_keyboard=[row, [_back_btn()]])
 
 
 def build_tz_kb(*, current: str) -> InlineKeyboardMarkup:
-    """Stub: timezone presets + back."""
+    """Timezone presets + back."""
     rows: list[list[InlineKeyboardButton]] = []
     for index, tz in enumerate(TIMEZONE_PRESETS):
         mark = "✓ " if tz == current else ""
-        rows.append([_btn(f"{mark}{tz}", action="stub", value=f"tz{index}")])
+        rows.append([_btn(f"{mark}{tz}", action="tz", value=str(index))])
     rows.append([_back_btn()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_slots_kb() -> InlineKeyboardMarkup:
-    """Stub: add / remove / clear + back."""
+    """Stub: add / remove / clear + back (mutations in a later commit)."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -84,9 +86,6 @@ def build_slots_kb() -> InlineKeyboardMarkup:
             [_back_btn()],
         ],
     )
-
-
-_SLOTS_LABEL_MAX = 28
 
 
 def _slots_label(schedules: list[tuple[int, int]]) -> str:
