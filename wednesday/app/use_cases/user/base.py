@@ -9,44 +9,45 @@ class UserBaseUseCase:
     """Shared UoW + cache orchestration for user command use cases."""
 
     _uow: UoW
-    _cache: CacheRepo[UserContext, User]
+    _cache: CacheRepo[UserContext]
     _logger: Logger
 
     def __init__(
         self,
         *,
         uow: UoW,
-        cache: CacheRepo[UserContext, User],
+        cache: CacheRepo[UserContext],
         logger: Logger,
     ) -> None:
         self._uow = uow
         self._cache = cache
         self._logger = logger.bind(module=self.__class__.__name__)
 
-    def _log_scenario_start(self, *, action: str, user_id: UserId) -> None:
+    def _log_scenario_start(self, *, action: str, user_id: str) -> None:
         self._logger.debug(
             "User command scenario started",
             action=action,
-            user_id=str(user_id),
+            user_id=user_id,
         )
 
     async def _run_mutating(
         self,
         *,
         action: str,
-        user_id: UserId,
+        user_id: str,
         runner: Callable[[], Awaitable[User]],
-    ) -> User:
+    ) -> UserContext:
         self._log_scenario_start(action=action, user_id=user_id)
         async with self._uow:
             user = await runner()
-        await self._cache.set(user)
+        ctx = UserContext.from_domain(user)
+        await self._cache.set(ctx)
         self._logger.debug(
             "User cache snapshot refreshed",
             action=action,
-            tg_id=user.profile.telegram_id,
+            tg_id=ctx.tg_id,
         )
-        return user
+        return ctx
 
     async def _load_user_or_raise(self, *, user_id: UserId) -> User:
         user = await self._uow.users.get_by_id(user_id)

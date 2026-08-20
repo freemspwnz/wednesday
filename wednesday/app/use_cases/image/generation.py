@@ -1,5 +1,6 @@
 from datetime import datetime
 from random import choice
+from uuid import UUID
 
 from app.dto import ImageCard
 from app.protocols import GeneratorRegistry, Logger, UoW
@@ -53,48 +54,48 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         model: str,
         prompt: str | None,
     ) -> ImageRender:
-        dom_vendor = Vendor.parse(vendor)
-        dom_model = Model.parse(model)
-        if prompt:
-            return await self._by_user(vendor=dom_vendor, model=dom_model, prompt=prompt)
-        return await self._random(vendor=dom_vendor, model=dom_model)
+        if prompt is not None:
+            return await self._by_user(
+                vendor=Vendor.parse(vendor),
+                model=Model.parse(model),
+                prompt=NormalizedPrompt.parse(prompt),
+            )
+        return await self._random(vendor=Vendor.parse(vendor), model=Model.parse(model))
 
     async def _by_user(
         self,
         *,
         vendor: Vendor,
         model: Model,
-        prompt: str,
+        prompt: NormalizedPrompt,
     ) -> ImageRender:
         self._logger.debug(
             "Image generation by user started",
             model=str(model),
         )
         gen = self._generators.resolve(vendor)
-        resolved_model = Model.ensure(model)
-        normalized = NormalizedPrompt.parse(prompt)
-        Image.moderate(prompt=normalized, policy=self._policy)
+        Image.moderate(prompt=prompt, policy=self._policy)
 
         enriched: NormalizedPrompt | None = None
         enrichment_system = await self._prompts.enrichment_prompt()
         try:
             enriched_raw = await gen.generate_text(
-                model=str(resolved_model),
+                model=str(model),
                 system_prompt=enrichment_system,
-                user_prompt=str(normalized),
+                user_prompt=str(prompt),
             )
             enriched = NormalizedPrompt.parse(enriched_raw)
         except (GenerationError, ValidationError):
             pass
 
         prompts = ImagePrompts(
-            primary=normalized,
+            primary=prompt,
             source=PromptSource.USER,
             enriched=enriched,
         )
         generation_system = await self._prompts.generation_prompt()
         content = await gen.generate_image(
-            model=str(resolved_model),
+            model=str(model),
             system_prompt=generation_system,
             user_prompt=str(prompts.effective()),
         )
@@ -109,13 +110,12 @@ class ImageGenerationUseCase(ImageBaseUseCase):
     async def _random(self, *, vendor: Vendor, model: Model) -> ImageRender:
         self._logger.debug("Random image generation started", model=str(model))
         gen = self._generators.resolve(vendor)
-        resolved_model = Model.ensure(model)
         source = PromptSource.LLM
         base_system = await self._prompts.base_prompt()
         try:
             prompt = NormalizedPrompt.parse(
                 await gen.generate_text(
-                    model=str(resolved_model),
+                    model=str(model),
                     system_prompt=base_system,
                     user_prompt="",
                 ),
@@ -127,7 +127,7 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         prompts = ImagePrompts(primary=prompt, source=source)
         generation_system = await self._prompts.generation_prompt()
         content = await gen.generate_image(
-            model=str(resolved_model),
+            model=str(model),
             system_prompt=generation_system,
             user_prompt=str(prompts.effective()),
         )
@@ -143,10 +143,10 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         self,
         *,
         file_id: str,
-        author_id: UserId,
+        author_id: str,
         model: str,
         prompts: ImagePrompts,
-        chat_id: ChatId,
+        chat_id: str,
         at: datetime,
     ) -> ImageCard:
         """Persist a catalog image after Telegram upload yields file_id.
@@ -157,25 +157,29 @@ class ImageGenerationUseCase(ImageBaseUseCase):
         time = AwareDatetime.from_datetime(at)
         image = Image.register(
             id=ImageId.new(),
-            meta=ImageMeta(author_id=author_id, model=Model.parse(model)),
+            meta=ImageMeta(author_id=UserId(UUID(author_id)), model=Model.parse(model)),
             file_id=TelegramFileId.parse(file_id),
             prompts=prompts,
             created_at=time,
         )
         self._logger.debug(
             "Image catalog registration started",
-            image_id=str(image.id.value),
-            author_id=str(author_id.value),
-            chat_id=str(chat_id.value),
+            image_id=str(image.id),
+            author_id=author_id,
+            chat_id=chat_id,
         )
         async with self._uow:
             await self._uow.images.save(image)
-            await self._uow.views.mark_shown(chat_id, image.id, at=time)
+            await self._uow.views.mark_shown(
+                chat_id=ChatId(UUID(chat_id)),
+                image_id=image.id,
+                at=time,
+            )
         self._logger.info(
             "Image aggregate registered",
-            image_id=str(image.id.value),
-            author_id=str(author_id.value),
-            chat_id=str(chat_id.value),
+            image_id=str(image.id),
+            author_id=author_id,
+            chat_id=chat_id,
         )
         return ImageCard.from_domain(image)
 

@@ -1,3 +1,6 @@
+from datetime import datetime
+from uuid import UUID
+
 from app.dto import ImageCard
 from domain.chat import ChatId
 from domain.image import HiddenReason, Image, ImageId, ImageRatingPolicy, Vote
@@ -15,47 +18,53 @@ class ImageVoteUseCase(ImageBaseUseCase):
     async def vote(
         self,
         *,
-        image_id: ImageId,
-        voter_id: UserId,
-        chat_id: ChatId,
+        image_id: str,
+        voter_id: str,
+        chat_id: str,
         value: int,
-        at: AwareDatetime,
+        at: datetime,
     ) -> ImageCard | None:
         """Record a vote and mark the image seen for the voter's private chat."""
         self._logger.debug(
             "Image vote scenario started",
-            image_id=str(image_id.value),
-            voter_id=str(voter_id.value),
-            chat_id=str(chat_id.value),
+            image_id=image_id,
+            voter_id=voter_id,
+            chat_id=chat_id,
             value=value,
         )
-        chat_id = ChatId.ensure(chat_id)
+        time = AwareDatetime.from_datetime(at)
+        i_id = ImageId(UUID(image_id))
+        v_id = UserId(UUID(voter_id))
+        c_id = ChatId(UUID(chat_id))
         async with self._uow:
-            existing = await self._get_vote_if_exists(image_id=image_id, voter_id=voter_id)
+            existing = await self._get_vote_if_exists(
+                image_id=i_id,
+                voter_id=v_id,
+            )
             old = existing.value if existing is not None else None
 
             if old == value:
-                await self._uow.views.mark_shown(chat_id, image_id, at=at)
+                await self._uow.views.mark_shown(c_id, i_id, at=time)
                 return None
 
-            image = await self._load_image_or_raise(image_id=image_id)
-            image.add_vote(new=value, old=old, at=at)
-            self._apply_rating_visibility(image=image, at=at)
+            image = await self._load_image_or_raise(image_id=i_id)
+            image.add_vote(new=value, old=old, at=time)
+            self._apply_rating_visibility(image=image, at=time)
             await self._uow.images.save(image)
 
-            vote = Vote(image_id=image_id, voter_id=voter_id, value=value)
+            vote = Vote(image_id=i_id, voter_id=v_id, value=value)
             if existing is None:
                 await self._uow.votes.upsert(vote)
             else:
                 await self._uow.votes.upsert(existing.change(vote.value))
-            await self._uow.views.mark_shown(chat_id, image_id, at=at)
+            await self._uow.views.mark_shown(c_id, i_id, at=time)
 
         self._logger.info(
             "Image aggregate updated",
             action="vote",
-            image_id=str(image_id.value),
-            voter_id=str(voter_id.value),
-            chat_id=str(chat_id.value),
+            image_id=image_id,
+            voter_id=voter_id,
+            chat_id=chat_id,
             value=value,
         )
 

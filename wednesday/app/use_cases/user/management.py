@@ -1,10 +1,13 @@
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from app.dto import UserContext
 from domain.kernel.vo import AwareDatetime
 from domain.user import (
     User,
     UserId,
-    UserProfile,
     UserRole,
-    UserSubscription,
 )
 
 from .base import UserBaseUseCase
@@ -16,57 +19,19 @@ class UserManagementUseCase(UserBaseUseCase):
     async def change_role(
         self,
         *,
-        user_id: UserId,
-        actor: UserRole,
-        new_role: UserRole,
-        at: AwareDatetime,
-    ) -> User:
+        user_id: str,
+        actor: int,
+        action: Literal["promote", "demote"],
+        at: datetime,
+    ) -> UserContext:
         return await self._run_mutating(
             action="change_role",
             user_id=user_id,
             runner=lambda: self._change_role(
-                user_id=user_id,
-                actor=actor,
-                new_role=new_role,
-                at=at,
-            ),
-        )
-
-    async def change_profile(
-        self,
-        *,
-        user_id: UserId,
-        actor: UserRole,
-        new_profile: UserProfile,
-        at: AwareDatetime,
-    ) -> User:
-        return await self._run_mutating(
-            action="change_profile",
-            user_id=user_id,
-            runner=lambda: self._change_profile(
-                user_id=user_id,
-                actor=actor,
-                new_profile=new_profile,
-                at=at,
-            ),
-        )
-
-    async def change_subscription(
-        self,
-        *,
-        user_id: UserId,
-        actor: UserRole,
-        new_subscription: UserSubscription,
-        at: AwareDatetime,
-    ) -> User:
-        return await self._run_mutating(
-            action="change_subscription",
-            user_id=user_id,
-            runner=lambda: self._change_subscription(
-                user_id=user_id,
-                actor=actor,
-                new_subscription=new_subscription,
-                at=at,
+                user_id=UserId(UUID(user_id)),
+                actor=UserRole(actor),
+                action=action,
+                at=AwareDatetime.from_datetime(at),
             ),
         )
 
@@ -75,36 +40,11 @@ class UserManagementUseCase(UserBaseUseCase):
         *,
         user_id: UserId,
         actor: UserRole,
-        new_role: UserRole,
+        action: Literal["promote", "demote"],
         at: AwareDatetime,
     ) -> User:
         user = await self._load_user_or_raise(user_id=user_id)
+        new_role = UserRole(user.role + 1) if action == "promote" else UserRole(user.role - 1)
         user.change_role(actor=actor, new_role=new_role, at=at)
-        await self._uow.users.save(user)
-        return user
-
-    async def _change_profile(
-        self,
-        *,
-        user_id: UserId,
-        actor: UserRole,
-        new_profile: UserProfile,
-        at: AwareDatetime,
-    ) -> User:
-        user = await self._load_user_or_raise(user_id=user_id)
-        user.change_profile(actor=actor, new_profile=new_profile, at=at)
-        await self._uow.users.save(user)
-        return user
-
-    async def _change_subscription(
-        self,
-        *,
-        user_id: UserId,
-        actor: UserRole,
-        new_subscription: UserSubscription,
-        at: AwareDatetime,
-    ) -> User:
-        user = await self._load_user_or_raise(user_id=user_id)
-        user.change_subscription(actor=actor, new_subscription=new_subscription, at=at)
         await self._uow.users.save(user)
         return user
