@@ -467,7 +467,9 @@ async def test_cb_schedule_day_denied_by_domain_policy(
         await h.cb_schedule(callback, callback_data, chat_context, bot, mock_scope)
 
     edit.assert_not_awaited()
-    answer.assert_awaited_once_with(exc_msg.INSUFFICIENT_PERMISSIONS, show_alert=True)
+    # Early ack, then error alert (query already answered on real Telegram → fallback path).
+    assert answer.await_count == 2
+    answer.assert_awaited_with(exc_msg.INSUFFICIENT_PERMISSIONS, show_alert=True)
 
 
 @pytest.mark.unit

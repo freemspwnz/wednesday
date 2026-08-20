@@ -83,6 +83,23 @@ async def is_bot_member_of_chat(bot: Bot, tg_chat_id: int) -> bool:
     return member.status in _BOT_MEMBER_STATUSES
 
 
+async def safe_callback_answer(
+    callback: CallbackQuery,
+    text: str | None = None,
+    *,
+    show_alert: bool = False,
+) -> bool:
+    """Answer a callback query; return False when Telegram rejects it as stale."""
+    try:
+        if text is None:
+            await callback.answer()
+        else:
+            await callback.answer(text, show_alert=show_alert)
+    except TelegramBadRequest:
+        return False
+    return True
+
+
 async def run_message_handler(
     message: Message,
     logger: Logger,
@@ -113,7 +130,14 @@ async def run_callback_handler(
     action: Callable[[], Awaitable[T]],
 ) -> T | None:
     async def reply(text: str) -> None:
-        await callback.answer(text, show_alert=True)
+        if await safe_callback_answer(callback, text, show_alert=True):
+            return
+        if not isinstance(callback.message, Message):
+            return
+        try:
+            await callback.message.answer(text)
+        except (TelegramBadRequest, TelegramForbiddenError):
+            return
 
     return await _run_handler(
         logger.bind(module=_callback_module(callback)),

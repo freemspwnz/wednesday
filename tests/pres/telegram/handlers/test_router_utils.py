@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import CallbackQuery, Message, User as TgUser
 
 from domain.user.exceptions import CooldownViolationError
@@ -15,6 +15,7 @@ from presentation.aiogram.routers.utils import (
     parse_telegram_id,
     run_callback_handler,
     run_message_handler,
+    safe_callback_answer,
 )
 
 from ..factories import make_callback_query, make_message
@@ -181,6 +182,43 @@ async def test_run_callback_handler_replies_via_alert(mock_logger: MagicMock) ->
     with patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as answer:
         await run_callback_handler(callback, mock_logger, action)
     answer.assert_awaited_once_with("bad vote", show_alert=True)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_safe_callback_answer_swallows_stale_query() -> None:
+    callback = make_callback_query(data="test")
+    with patch.object(
+        CallbackQuery,
+        "answer",
+        new_callable=AsyncMock,
+        side_effect=TelegramBadRequest(method=Mock(), message="query is too old"),
+    ):
+        assert await safe_callback_answer(callback) is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_callback_handler_falls_back_to_message_when_alert_stale(
+    mock_logger: MagicMock,
+) -> None:
+    callback = make_callback_query(data="test")
+
+    async def action() -> None:
+        raise ValueError("bad vote")
+
+    with (
+        patch.object(
+            CallbackQuery,
+            "answer",
+            new_callable=AsyncMock,
+            side_effect=TelegramBadRequest(method=Mock(), message="query is too old"),
+        ),
+        patch.object(Message, "answer", new_callable=AsyncMock) as msg_answer,
+    ):
+        await run_callback_handler(callback, mock_logger, action)
+
+    msg_answer.assert_awaited_once_with("bad vote")
 
 
 @pytest.mark.unit

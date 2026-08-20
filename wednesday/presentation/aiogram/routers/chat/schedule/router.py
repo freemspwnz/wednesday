@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from aiogram import Bot, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
@@ -11,7 +12,7 @@ from app.protocols import Logger, RequestScope
 
 from ....filters import GroupChatFilter, InsufficientCommandArgs, RequireCommandArgs
 from ....messages import chat as chat_msg
-from ...utils import run_callback_handler, run_message_handler
+from ...utils import run_callback_handler, run_message_handler, safe_callback_answer
 from ..mappers import resolve_chat_member
 from ..parsers import parse_schedule_time, parse_timezone, parse_weekday
 from .data import ScheduleData
@@ -74,61 +75,67 @@ async def cb_schedule(
 
     async def _action() -> None:
         if not isinstance(callback.message, Message):
-            await callback.answer()
+            await safe_callback_answer(callback)
             return
         if chat.type not in _GROUP_TYPES:
-            await callback.answer(chat_msg.SCHEDULE_PRIVATE_ONLY, show_alert=True)
+            await safe_callback_answer(callback, chat_msg.SCHEDULE_PRIVATE_ONLY, show_alert=True)
             return
 
         action = callback_data.action
         value = callback_data.value
 
+        if action == "rmlist" and not chat.schedules:
+            await safe_callback_answer(callback, chat_msg.SCHEDULE_NO_SLOTS, show_alert=True)
+            return
+
+        # Answer before slow Telegram/DB work so the query does not expire.
+        await safe_callback_answer(callback)
+
         if action == "menu":
-            await _show_main(callback, chat)
+            await _edit_main(callback, chat)
             return
         if action == "open":
-            await _show_markup(callback, _open_submenu(value, chat))
+            await _edit_markup(callback, _open_submenu(value, chat))
             return
         if action == "hours":
-            await _show_markup(callback, build_hours_kb())
+            await _edit_markup(callback, build_hours_kb())
             return
         if action == "mins":
-            await _show_markup(callback, _minutes_submenu(value))
+            await _edit_markup(callback, _minutes_submenu(value))
             return
         if action == "rmlist":
-            await _show_remove_list(callback, chat)
+            await _edit_markup(callback, build_remove_kb(chat.schedules))
             return
         if action == "clear" and value == "ask":
-            await _show_markup(callback, build_clear_confirm_kb())
+            await _edit_markup(callback, build_clear_confirm_kb())
             return
         if action == "clear" and value == "no":
-            await _show_markup(callback, build_slots_kb())
+            await _edit_markup(callback, build_slots_kb())
             return
         if action == "status":
             updated = await _apply_status(callback, bot, scope, chat, value)
-            await _show_main(callback, updated)
+            await _edit_main(callback, updated)
             return
         if action == "day":
             updated = await _apply_day(callback, bot, scope, chat, value)
-            await _show_main(callback, updated)
+            await _edit_main(callback, updated)
             return
         if action == "tz":
             updated = await _apply_tz(callback, bot, scope, chat, value)
-            await _show_main(callback, updated)
+            await _edit_main(callback, updated)
             return
         if action == "add":
             updated = await _apply_add(callback, bot, scope, chat, value)
-            await _show_main(callback, updated)
+            await _edit_main(callback, updated)
             return
         if action == "rm":
             updated = await _apply_remove(callback, bot, scope, chat, value)
-            await _show_main(callback, updated)
+            await _edit_main(callback, updated)
             return
         if action == "clear" and value == "yes":
             updated = await _apply_clear(callback, bot, scope, chat)
-            await _show_main(callback, updated)
+            await _edit_main(callback, updated)
             return
-        await callback.answer()
 
     await run_callback_handler(callback, scope.logger, _action)
 
@@ -157,33 +164,25 @@ def _minutes_submenu(value: str) -> InlineKeyboardMarkup:
     return build_minutes_kb(hour=hour)
 
 
-async def _show_remove_list(callback: CallbackQuery, chat: ChatContext) -> None:
-    if not chat.schedules:
-        await callback.answer(chat_msg.SCHEDULE_NO_SLOTS, show_alert=True)
+async def _edit_markup(callback: CallbackQuery, markup: InlineKeyboardMarkup | None) -> None:
+    if not isinstance(callback.message, Message) or markup is None:
         return
-    await _show_markup(callback, build_remove_kb(chat.schedules))
+    try:
+        await callback.message.edit_reply_markup(reply_markup=markup)
+    except TelegramBadRequest:
+        return
 
 
-async def _show_markup(callback: CallbackQuery, markup: InlineKeyboardMarkup | None) -> None:
+async def _edit_main(callback: CallbackQuery, chat: ChatContext) -> None:
     if not isinstance(callback.message, Message):
-        await callback.answer()
         return
-    if markup is None:
-        await callback.answer()
+    try:
+        await callback.message.edit_text(
+            chat_msg.format_schedule_context(chat),
+            reply_markup=build_main_kb(chat),
+        )
+    except TelegramBadRequest:
         return
-    await callback.message.edit_reply_markup(reply_markup=markup)
-    await callback.answer()
-
-
-async def _show_main(callback: CallbackQuery, chat: ChatContext) -> None:
-    if not isinstance(callback.message, Message):
-        await callback.answer()
-        return
-    await callback.message.edit_text(
-        chat_msg.format_schedule_context(chat),
-        reply_markup=build_main_kb(chat),
-    )
-    await callback.answer()
 
 
 async def _apply_status(
