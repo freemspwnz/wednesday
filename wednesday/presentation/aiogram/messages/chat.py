@@ -39,6 +39,8 @@ SCHEDULE_PRIVATE_ONLY = "Расписание доступно только в �
 
 SCHEDULE_BACK = "« Назад"
 
+SCHEDULE_NO_SLOTS = "Нет слотов для удаления."
+
 SCHEDULE_ADD_USAGE = "Использование: /schedule_add ЧЧ:ММ"
 
 SCHEDULE_REMOVE_USAGE = "Использование: /schedule_remove ЧЧ:ММ"
