@@ -1,14 +1,11 @@
 from datetime import datetime
-from uuid import UUID
-from zoneinfo import ZoneInfo
+from typing import Self
 
 from pydantic import BaseModel
 
 from app.dto import ChatContext
-from domain.chat import ActiveState, Chat, ChatId, ChatSchedule, ChatType, Weekday
-from domain.kernel.vo import AwareDatetime
 
-CHAT_SNAPSHOT_VERSION = 1
+CHAT_SNAPSHOT_VERSION = 2
 
 
 class ChatSnapshot(BaseModel):
@@ -26,32 +23,32 @@ class ChatSnapshot(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, chat: Chat) -> "ChatSnapshot":
+    def from_context(cls, context: ChatContext) -> Self:
         return cls(
-            id=str(chat.id.value),
-            tg_id=chat.profile.telegram_id,
-            type=chat.profile.type.value,
-            title=chat.profile.title,
-            username=chat.profile.username,
-            is_active=isinstance(chat.state, ActiveState),
-            timezone=str(chat.schedules.timezone),
-            weekday=int(chat.schedules.weekday),
-            schedules=[(slot.hour, slot.minute) for slot in chat.schedules.schedules],
-            created_at=chat.created_at.value,
-            updated_at=chat.updated_at.value,
+            id=context.id,
+            tg_id=context.tg_id,
+            type=context.type,
+            title=context.title,
+            username=context.username,
+            is_active=context.is_active,
+            timezone=context.timezone,
+            weekday=context.weekday,
+            schedules=context.schedules,
+            created_at=context.created_at,
+            updated_at=context.updated_at,
         )
 
     def to_context(self) -> ChatContext:
         return ChatContext(
-            id=ChatId(UUID(self.id)),
+            id=self.id,
             tg_id=self.tg_id,
-            type=ChatType(self.type),
+            type=self.type,
             title=self.title,
             username=self.username,
             is_active=self.is_active,
-            timezone=ZoneInfo(self.timezone),
-            weekday=Weekday(self.weekday),
-            schedules=tuple(ChatSchedule(hour=hour, minute=minute) for hour, minute in self.schedules),
-            created_at=AwareDatetime(self.created_at),
-            updated_at=AwareDatetime(self.updated_at),
+            timezone=self.timezone,
+            weekday=self.weekday,
+            schedules=self.schedules,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
         )

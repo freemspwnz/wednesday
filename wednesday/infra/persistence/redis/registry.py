@@ -4,8 +4,6 @@ from redis.asyncio import Redis
 
 from app.dto import ChatContext, UserContext
 from app.protocols import CacheClient, CacheMetrics, CacheRepo, CacheRepoRegistry, Logger
-from domain.chat import Chat
-from domain.user import User
 
 from .client import RedisClient
 from .repos import RedisChatRepo, RedisUserRepo
@@ -34,7 +32,7 @@ class RedisRepoRegistry(CacheRepoRegistry):
         await self._client.warmup()
 
     @cached_property
-    def users(self) -> CacheRepo[UserContext, User]:
+    def users(self) -> CacheRepo[UserContext]:
         return RedisUserRepo(
             client=self._client,
             key_prefix=self._key_prefix,
@@ -42,7 +40,7 @@ class RedisRepoRegistry(CacheRepoRegistry):
         )
 
     @cached_property
-    def chats(self) -> CacheRepo[ChatContext, Chat]:
+    def chats(self) -> CacheRepo[ChatContext]:
         return RedisChatRepo(
             client=self._client,
             key_prefix=self._key_prefix,

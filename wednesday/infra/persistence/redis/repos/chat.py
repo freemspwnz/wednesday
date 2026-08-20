@@ -4,13 +4,12 @@ from pydantic import ValidationError
 
 from app.dto import ChatContext
 from app.protocols import CacheClient, CacheRepo, Logger
-from domain.chat import Chat
 
 from ..snapshots import CHAT_SNAPSHOT_VERSION, ChatSnapshot
 from .utils import log_warning_and_invalidate_cache_key, raw_to_text, ttl_to_seconds
 
 
-class RedisChatRepo(CacheRepo[ChatContext, Chat]):
+class RedisChatRepo(CacheRepo[ChatContext]):
     """Redis-backed cache for chat aggregates (snapshot JSON under a key prefix)."""
 
     def __init__(
@@ -62,10 +61,10 @@ class RedisChatRepo(CacheRepo[ChatContext, Chat]):
             return None
         return snap.to_context()
 
-    async def set(self, chat: Chat, ttl: int | timedelta | None = None) -> None:
-        key = self._key(chat.profile.telegram_id)
+    async def set(self, context: ChatContext, ttl: int | timedelta | None = None) -> None:
+        key = self._key(context.tg_id)
         expire = ttl_to_seconds(ttl) if ttl is not None else ttl_to_seconds(self._ttl)
-        snap = ChatSnapshot.from_domain(chat)
+        snap = ChatSnapshot.from_context(context)
         await self._client.set(key, snap.model_dump_json(), expire=expire)
 
     async def invalidate(self, tg_id: int) -> None:

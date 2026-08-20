@@ -4,13 +4,12 @@ from pydantic import ValidationError
 
 from app.dto import UserContext
 from app.protocols import CacheClient, CacheRepo, Logger
-from domain.user import User
 
 from ..snapshots import USER_SNAPSHOT_VERSION, UserSnapshot
 from .utils import log_warning_and_invalidate_cache_key, raw_to_text, ttl_to_seconds
 
 
-class RedisUserRepo(CacheRepo[UserContext, User]):
+class RedisUserRepo(CacheRepo[UserContext]):
     """Redis-backed cache for user aggregates (snapshot JSON under a key prefix)."""
 
     def __init__(
@@ -62,10 +61,10 @@ class RedisUserRepo(CacheRepo[UserContext, User]):
             return None
         return snap.to_context()
 
-    async def set(self, user: User, ttl: int | timedelta | None = None) -> None:
-        key = self._key(user.profile.telegram_id)
+    async def set(self, context: UserContext, ttl: int | timedelta | None = None) -> None:
+        key = self._key(context.tg_id)
         expire = ttl_to_seconds(ttl) if ttl is not None else ttl_to_seconds(self._ttl)
-        snap = UserSnapshot.from_domain(user)
+        snap = UserSnapshot.from_context(context)
         await self._client.set(key, snap.model_dump_json(), expire=expire)
 
     async def invalidate(self, tg_id: int) -> None:
