@@ -1,38 +1,38 @@
 from dataclasses import dataclass
-from zoneinfo import ZoneInfo
+from datetime import datetime
+from typing import Self
 
-from domain.chat import ActiveState, Chat, ChatId, ChatSchedule, ChatType, Weekday
-from domain.kernel.vo import AwareDatetime
+from domain.chat import ActiveState, Chat
 
 
 @dataclass
 class ChatContext:
     """Registered chat read-model for handlers and cache (always fully materialized)."""
 
-    id: ChatId
+    id: str
     tg_id: int
-    type: ChatType
+    type: str
     is_active: bool
-    timezone: ZoneInfo
-    weekday: Weekday
-    schedules: tuple[ChatSchedule, ...]
-    created_at: AwareDatetime
-    updated_at: AwareDatetime
+    timezone: str
+    weekday: int
+    schedules: list[tuple[int, int]]
+    created_at: datetime
+    updated_at: datetime
     title: str | None = None
     username: str | None = None
 
     @classmethod
-    def from_domain(cls, chat: Chat) -> "ChatContext":
-        return ChatContext(
-            id=chat.id,
+    def from_domain(cls, chat: Chat) -> Self:
+        return cls(
+            id=str(chat.id),
             tg_id=chat.profile.telegram_id,
-            type=chat.profile.type,
+            type=str(chat.profile.type),
             title=chat.profile.title,
             username=chat.profile.username,
             is_active=isinstance(chat.state, ActiveState),
-            timezone=chat.schedules.timezone,
-            weekday=chat.schedules.weekday,
-            schedules=chat.schedules.schedules,
-            created_at=chat.created_at,
-            updated_at=chat.updated_at,
+            timezone=str(chat.schedules.timezone),
+            weekday=int(chat.schedules.weekday),
+            schedules=[(slot.hour, slot.minute) for slot in chat.schedules.schedules],
+            created_at=chat.created_at.value,
+            updated_at=chat.updated_at.value,
         )
