@@ -1,5 +1,7 @@
 from datetime import datetime
+from uuid import UUID
 
+from app.dto import UserContext
 from domain.kernel.vo import AwareDatetime
 from domain.user import User, UserId, UserRole
 from domain.user.exceptions import ValidationError
@@ -14,53 +16,59 @@ class UserModerationUseCase(UserBaseUseCase):
     async def ban(
         self,
         *,
-        user_id: UserId,
-        actor: UserRole,
-        until: AwareDatetime,
-        at: AwareDatetime,
-    ) -> User:
+        user_id: str,
+        actor: int,
+        until: datetime,
+        at: datetime,
+    ) -> UserContext:
+        dom_until = AwareDatetime.from_datetime(until)
         return await self._run_mutating(
             action="ban",
             user_id=user_id,
             runner=lambda: self._ban(
-                user_id=user_id,
-                actor=actor,
-                until=until,
-                at=at,
+                user_id=UserId(UUID(user_id)),
+                actor=UserRole(actor),
+                until=dom_until,
+                at=AwareDatetime.from_datetime(at),
             ),
         )
 
     async def unban(
         self,
         *,
-        user_id: UserId,
-        actor: UserRole,
-        at: AwareDatetime,
-    ) -> User:
+        user_id: str,
+        actor: int,
+        at: datetime,
+    ) -> UserContext:
         return await self._run_mutating(
             action="unban",
             user_id=user_id,
             runner=lambda: self._unban(
-                user_id=user_id,
-                actor=actor,
-                at=at,
+                user_id=UserId(UUID(user_id)),
+                actor=UserRole(actor),
+                at=AwareDatetime.from_datetime(at),
             ),
         )
 
-    async def expire_ban_if_due(self, *, user_id: UserId, at: AwareDatetime) -> User:
+    async def expire_ban_if_due(self, *, user_id: str, at: datetime) -> UserContext:
         return await self._run_mutating(
             action="expire_ban_if_due",
             user_id=user_id,
-            runner=lambda: self._expire_ban_if_due(user_id=user_id, at=at),
+            runner=lambda: self._expire_ban_if_due(
+                user_id=UserId(UUID(user_id)),
+                at=AwareDatetime.from_datetime(at),
+            ),
         )
 
-    async def assign_ban(self, *, user_id: UserId, at: datetime) -> User:
+    async def assign_ban(self, *, user_id: str, at: datetime) -> UserContext:
         """Record a moderation strike and ban when BanDurationPolicy assigns one."""
-        time = AwareDatetime.from_datetime(at)
         return await self._run_mutating(
             action="assign_ban",
             user_id=user_id,
-            runner=lambda: self._assign_ban(user_id=user_id, at=time),
+            runner=lambda: self._assign_ban(
+                user_id=UserId(UUID(user_id)),
+                at=AwareDatetime.from_datetime(at),
+            ),
         )
 
     async def _ban(

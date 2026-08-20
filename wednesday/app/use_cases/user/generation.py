@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from app.dto import UserContext
 from app.protocols import CacheRepo, Logger, UoW
@@ -20,7 +21,7 @@ class UserGenerationUseCase(UserBaseUseCase):
         models: ModelCatalog,
         subscriptions: SubscriptionCatalog,
         uow: UoW,
-        cache: CacheRepo[UserContext, User],
+        cache: CacheRepo[UserContext],
         logger: Logger,
     ) -> None:
         super().__init__(uow=uow, cache=cache, logger=logger)
@@ -30,37 +31,37 @@ class UserGenerationUseCase(UserBaseUseCase):
     async def select_model(
         self,
         *,
-        user_id: UserId,
-        model: Model,
+        user_id: str,
+        model: str,
         at: datetime,
-    ) -> User:
-        time = AwareDatetime.from_datetime(at)
+    ) -> UserContext:
         return await self._run_mutating(
             action="select_model",
             user_id=user_id,
             runner=lambda: self._select_model(
-                user_id=user_id,
-                model=model,
-                at=time,
+                user_id=UserId(UUID(user_id)),
+                model=Model.parse(model),
+                at=AwareDatetime.from_datetime(at),
             ),
         )
 
-    async def begin_generation(self, *, user_id: UserId, at: datetime) -> UsageSnapshot:
+    async def begin_generation(self, *, user_id: str, at: datetime) -> UsageSnapshot:
         """Reserve one generation slot after limit checks (check + record in one UoW).
 
         Returns a snapshot for ``refund_generation`` when render, send, or register fails.
         """
         self._log_scenario_start(action="begin_generation", user_id=user_id)
         time = AwareDatetime.from_datetime(at)
+        uid = UserId(UUID(user_id))
         async with self._uow:
-            await self._assert_allowed(user_id=user_id, at=time)
-            return await self._uow.usage.record(user_id, time)
+            await self._assert_allowed(user_id=uid, at=time)
+            return await self._uow.usage.record(uid, time)
 
-    async def refund_generation(self, *, user_id: UserId, snapshot: UsageSnapshot) -> None:
+    async def refund_generation(self, *, user_id: str, snapshot: UsageSnapshot) -> None:
         """Restore usage counters from a snapshot when generation did not finish successfully."""
         self._log_scenario_start(action="refund_generation", user_id=user_id)
         async with self._uow:
-            await self._uow.usage.refund(user_id, snapshot)
+            await self._uow.usage.refund(UserId(UUID(user_id)), snapshot)
 
     async def _select_model(
         self,
