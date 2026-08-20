@@ -20,6 +20,7 @@ def user_snapshot(**kwargs: object) -> UserSnapshot:
         "role": int(UserRole.USER),
         "is_active": True,
         "is_banned": False,
+        "is_admin": False,
         "subscription_tier": int(SubscriptionTier.FREE),
         "subscription_daily_limit": 3,
         "subscription_cooldown_minutes": 0,

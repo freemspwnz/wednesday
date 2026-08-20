@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 
+from app.dto import UserContext
 from domain.catalog import Model, Series, Vendor
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import User, UserId, UserProfile, UserRole
@@ -24,13 +25,13 @@ class TestUserSnapshot:
         assert restored.tg_id == snap.tg_id
         ctx = restored.to_context()
         assert ctx.tg_id == snap.tg_id
-        assert ctx.id is not None
-        assert str(ctx.id.value) == snap.id
+        assert ctx.id == snap.id
         assert ctx.model_vendor == "sber"
         assert ctx.model_series == "gigachat"
         assert ctx.model == "gigachat-2-lite"
+        assert ctx.is_admin is False
 
-    def test_from_domain_roundtrip_preserves_settings(self) -> None:
+    def test_from_context_roundtrip_preserves_settings(self) -> None:
         now = AwareDatetime(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
         user = User.register(
             id=UserId(UUID(int=42)),
@@ -45,7 +46,7 @@ class TestUserSnapshot:
             at=now,
         )
 
-        snap = UserSnapshot.from_domain(user)
+        snap = UserSnapshot.from_context(UserContext.from_domain(user))
         assert snap.v == USER_SNAPSHOT_VERSION
         assert snap.model_vendor == "sber"
         assert snap.model_series == "gigachat"
@@ -56,6 +57,7 @@ class TestUserSnapshot:
         assert ctx.model_vendor == "sber"
         assert ctx.model_series == "gigachat"
         assert ctx.model == "gigachat-2-lite"
+        assert ctx.id == str(user.id)
 
 
 @pytest.mark.unit
@@ -66,5 +68,6 @@ class TestChatSnapshot:
         assert restored.tg_id == snap.tg_id
         ctx = restored.to_context()
         assert ctx.tg_id == snap.tg_id
-        assert ctx.id is not None
-        assert str(ctx.id.value) == snap.id
+        assert ctx.id == snap.id
+        assert ctx.schedules == [(10, 30)]
+        assert ctx.timezone == "Etc/UTC"
