@@ -141,14 +141,9 @@ CI (`.github/workflows/ci.yml`): lint, format, mypy, pytest — без шага 
 
 ## Документация
 
-Описание v7 — этот README (структура, миграции, конфиг, команды `make`).
+Описание проекта — этот README (структура, миграции, конфиг, команды `make`).
 
-Исторические материалы (архитектура и стек до v7):
-
-- [docs/release-notes/](docs/release-notes/) — заметки по релизам v6 и ранее
-- [CHANGELOG.md](CHANGELOG.md) — изменения текущей ветки
-
-Отдельные гайды (`INSTALLATION`, `DEPLOYMENT`, `ARCHITECTURE` в `docs/`) пока не вынесены.
+История изменений: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
