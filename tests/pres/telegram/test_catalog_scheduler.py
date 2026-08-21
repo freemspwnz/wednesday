@@ -1,7 +1,8 @@
 """Tests for in-process catalog schedule delivery."""
 
+import asyncio
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiogram.exceptions import TelegramForbiddenError
@@ -34,6 +35,49 @@ def _runner(
 def test_seconds_until_next_minute_aligns_to_boundary() -> None:
     now = datetime(2026, 1, 7, 12, 0, 40, tzinfo=UTC)
     assert CatalogScheduleRunner._seconds_until_next_minute(now) == 20.0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_advances_wall_clock_across_iterations(
+    mock_scope: MagicMock,
+    mock_logger: MagicMock,
+) -> None:
+    t0 = datetime(2026, 1, 7, 12, 0, 40, tzinfo=UTC)
+    t1 = datetime(2026, 1, 7, 12, 1, 5, tzinfo=UTC)
+    mock_scope.chat_schedule_uc.list_due = AsyncMock(return_value=[])
+    runner, _ = _runner(mock_scope=mock_scope, mock_logger=mock_logger)
+
+    tick_ats: list[datetime] = []
+    sleep_seconds: list[float] = []
+    real_tick = runner.tick
+
+    async def spy_tick(*, at: datetime) -> None:
+        tick_ats.append(at)
+        await real_tick(at=at)
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_seconds.append(seconds)
+        if len(sleep_seconds) >= 2:
+            raise asyncio.CancelledError
+
+    with (
+        patch.object(runner, "tick", side_effect=spy_tick),
+        patch(
+            "presentation.aiogram.scheduler.catalog.datetime",
+            wraps=datetime,
+        ) as mock_dt,
+        patch(
+            "presentation.aiogram.scheduler.catalog.asyncio.sleep",
+            side_effect=fake_sleep,
+        ),
+    ):
+        mock_dt.now.side_effect = [t0, t1]
+        with pytest.raises(asyncio.CancelledError):
+            await runner.run()
+
+    assert tick_ats == [t0, t1]
+    assert sleep_seconds == [20.0, 55.0]
 
 
 @pytest.mark.unit

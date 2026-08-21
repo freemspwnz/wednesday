@@ -1,5 +1,7 @@
 """In-process catalog delivery for chat schedule slots."""
 
+from __future__ import annotations
+
 import asyncio
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -12,8 +14,6 @@ from app.protocols import Logger, RequestScope, ScopeFactory
 
 from ..messages import image as image_msg
 from ..routers.image.vote import build_vote_kb
-
-_SlotKey = tuple[str, date, int, int]
 
 
 class CatalogScheduleRunner:
@@ -29,6 +29,10 @@ class CatalogScheduleRunner:
     the tick does not consume the next unseen image.
     """
 
+    type _SlotKey = tuple[str, date, int, int]
+
+    _fired: set[_SlotKey]
+
     def __init__(
         self,
         *,
@@ -39,13 +43,13 @@ class CatalogScheduleRunner:
         self._bot = bot
         self._scope_factory = scope_factory
         self._logger = logger.bind(module=self.__class__.__name__)
-        self._fired: set[_SlotKey] = set()
+        self._fired = set()
 
     async def run(self) -> None:
-        at = datetime.now(UTC)
         self._logger.info("Catalog schedule runner started")
         try:
             while True:
+                at = datetime.now(UTC)
                 await self.tick(at=at)
                 await asyncio.sleep(self._seconds_until_next_minute(at))
         except asyncio.CancelledError:
