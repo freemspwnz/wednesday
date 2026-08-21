@@ -31,5 +31,21 @@ class CacheTimeoutError(CacheError):
         self.operation = operation
 
 
+class CacheStaleDataError(CacheError):
+    """Cache data is stale (version mismatch)."""
+
+    def __init__(self, message: str, *, operation: str) -> None:
+        super().__init__(message)
+        self.operation = operation
+
+
+class CacheInvalidDataError(CacheError):
+    """Cache data is invalid (malformed JSON)."""
+
+    def __init__(self, message: str, *, operation: str) -> None:
+        super().__init__(message)
+        self.operation = operation
+
+
 class UnexpectedCacheError(UnexpectedAppError):
     """Unexpected Redis error, not belonging to explicit classes above."""
