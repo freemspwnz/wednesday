@@ -2,7 +2,9 @@ from aiogram import Router
 
 from .admin import admin_router
 from .model import (
+    cb_select_model,
     cmd_list_models,
+    cmd_models,
     cmd_set_model,
     cmd_set_model_usage,
     model_router,
@@ -17,8 +19,10 @@ user_router.include_router(admin_router)
 
 __all__ = [
     "admin_router",
+    "cb_select_model",
     "cmd_list_models",
     "cmd_me",
+    "cmd_models",
     "cmd_set_model",
     "cmd_set_model_usage",
     "user_router",

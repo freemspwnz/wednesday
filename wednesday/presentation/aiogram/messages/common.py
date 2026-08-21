@@ -11,8 +11,7 @@ WELCOME = (
     "/me - Ваш профиль (роль, подписка, модель, статус)\n"
     "/generate - Сгенерировать изображение (в рамках индивидуального лимита)\n"
     "/random - Случайное изображение из каталога\n"
-    "/set_model - Выбрать модель генерации\n"
-    "/list_models - Список доступных моделей\n"
+    "/models - Выбрать модель генерации\n"
     "/reset - Сбросить просмотренные изображения\n"
     "/schedule - Настройка расписания (только в группе)\n"
 )
@@ -25,8 +24,7 @@ HELP = (
     "/me - Ваш профиль (роль, подписка, модель, статус)\n"
     "/generate - Сгенерировать изображение (в рамках индивидуального лимита)\n"
     "/random - Случайное изображение из каталога\n"
-    "/set_model - Выбрать модель генерации\n"
-    "/list_models - Список доступных моделей\n"
+    "/models - Выбрать модель генерации\n"
     "/reset - Сбросить просмотренные изображения\n"
     "/schedule - Настройка расписания (только в группе)\n"
 )
@@ -43,8 +41,7 @@ BOT_COMMANDS: tuple[BotCommand, ...] = (
     BotCommand(command="me", description="Ваш профиль"),
     BotCommand(command="generate", description="Сгенерировать изображение"),
     BotCommand(command="random", description="Случайное изображение из каталога"),
-    BotCommand(command="set_model", description="Выбрать модель для генерации изображений"),
-    BotCommand(command="list_models", description="Список доступных моделей"),
+    BotCommand(command="models", description="Выбрать модель для генерации изображений"),
     BotCommand(command="reset", description="Сбросить просмотренные изображения"),
     BotCommand(command="schedule", description="Настройка расписания чата"),
 )

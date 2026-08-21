@@ -23,6 +23,16 @@ def test_format_list_models_with_items() -> None:
 
 
 @pytest.mark.unit
-def test_bot_commands_include_random() -> None:
+def test_bot_commands_include_models_not_legacy() -> None:
     commands = {item.command for item in common_msg.BOT_COMMANDS}
+    assert "models" in commands
     assert "random" in commands
+    assert "set_model" not in commands
+    assert "list_models" not in commands
+
+
+@pytest.mark.unit
+def test_help_mentions_models_not_legacy() -> None:
+    assert "/models" in common_msg.HELP
+    assert "/set_model" not in common_msg.HELP
+    assert "/list_models" not in common_msg.HELP
