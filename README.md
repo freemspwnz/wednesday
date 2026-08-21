@@ -137,6 +137,18 @@ make run           # uv run python wednesday/main.py
 
 CI (`.github/workflows/ci.yml`): lint, format, mypy, pytest — без шага `migrate` (тесты persistence на моках).
 
+### Changelog
+
+Черновик секции для следующего релиза собирается из conventional commits после последнего тега (`git-cliff`, конфиг в `pyproject.toml`). Маппинг: `feat` → Added, `fix` → Fixed, `refactor`/`perf`/`revert` → Changed; внутри секций — слои Domain / App / Presentation / Infrastructure по scope (`pres`→Presentation, `image`→App). `test`/`ci`/`chore` (в т.ч. deps) и `fix(ci)`/`fix(test)` пропускаются. В черновик попадают subject, body и ссылки на `#N` (issue) из коммита.
+
+```bash
+make changelog-draft                      # stdout: ## [unreleased]
+make changelog-draft VERSION=7.7.0        # stdout: ## [7.7.0] — …
+make changelog-draft VERSION=7.7.0 PREPEND=1  # вставить секцию в CHANGELOG.md
+```
+
+Перед тегом черновик можно править вручную — сырые subject’ы коммитов не обязаны быть финальными release notes. Исторические секции `CHANGELOG.md` команда не пересобирает. Тег `vX.Y.Z` по-прежнему кормит GitHub Release из `## [X.Y.Z]` через `.github/workflows/gh-release.yml`.
+
 ---
 
 ## Документация
