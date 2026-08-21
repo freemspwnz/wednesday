@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.exceptions import CacheInvalidDataError
+from infra.persistence.redis.codec import dump_user_context, load_user_context
 from infra.persistence.redis.repos.user import RedisUserRepo
-from infra.persistence.redis.snapshots.user import UserSnapshot
 
-from .snapshots import user_snapshot
+from .contexts import mk_user_context, user_payload
 
 
 @pytest.mark.unit
@@ -31,7 +32,7 @@ class TestRedisUserRepo:
 
     @pytest.mark.asyncio
     async def test_get_by_id_hit_returns_context(self, mock_logger: MagicMock) -> None:
-        payload = user_snapshot(tg_id=77).model_dump_json()
+        payload = user_payload(tg_id=77)
         client = MagicMock()
         client.get = AsyncMock(return_value=payload)
         repo = RedisUserRepo(client=client, logger=mock_logger)
@@ -49,8 +50,8 @@ class TestRedisUserRepo:
         client.delete.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_get_by_id_legacy_v1_snapshot_invalidates(self, mock_logger: MagicMock) -> None:
-        legacy = user_snapshot(v=1).model_dump_json()
+    async def test_get_by_id_legacy_v1_invalidates(self, mock_logger: MagicMock) -> None:
+        legacy = user_payload(v=1)
         client = MagicMock()
         client.get = AsyncMock(return_value=legacy)
         client.delete = AsyncMock()
@@ -60,7 +61,7 @@ class TestRedisUserRepo:
 
     @pytest.mark.asyncio
     async def test_get_by_id_stale_version_invalidates(self, mock_logger: MagicMock) -> None:
-        stale = user_snapshot(v=999).model_dump_json()
+        stale = user_payload(v=999)
         client = MagicMock()
         client.get = AsyncMock(return_value=stale)
         client.delete = AsyncMock()
@@ -69,31 +70,38 @@ class TestRedisUserRepo:
         client.delete.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_get_by_id_parse_runtime_error_invalidates(self, mock_logger: MagicMock) -> None:
+    async def test_get_by_id_invalid_payload_invalidates(self, mock_logger: MagicMock) -> None:
+        client = MagicMock()
+        client.get = AsyncMock(return_value="{")
+        client.delete = AsyncMock()
+        repo = RedisUserRepo(client=client, logger=mock_logger)
+        assert await repo.get_by_id(1) is None
+        client.delete.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_codec_error_invalidates(self, mock_logger: MagicMock) -> None:
         client = MagicMock()
         client.get = AsyncMock(return_value="{}")
         client.delete = AsyncMock()
-        with patch.object(UserSnapshot, "model_validate_json", side_effect=RuntimeError("boom")):
+        with patch(
+            "infra.persistence.redis.repos.user.load_user_context",
+            side_effect=CacheInvalidDataError("boom", operation="load_user_context"),
+        ):
             repo = RedisUserRepo(client=client, logger=mock_logger)
             assert await repo.get_by_id(1) is None
-
         client.delete.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_set_calls_client(self, mock_logger: MagicMock) -> None:
-        fake_snap = MagicMock()
-        fake_snap.model_dump_json.return_value = '{"stub":true}'
         client = MagicMock()
         client.set = AsyncMock()
-
-        context = MagicMock()
-        context.tg_id = 33
-
-        with patch.object(UserSnapshot, "from_context", return_value=fake_snap):
-            repo = RedisUserRepo(client=client, logger=mock_logger, ttl=timedelta(minutes=5))
-            await repo.set(context)
+        context = mk_user_context(tg_id=33)
+        repo = RedisUserRepo(client=client, logger=mock_logger, ttl=timedelta(minutes=5))
+        await repo.set(context)
 
         client.set.assert_awaited_once()
         assert client.set.await_args.args[0] == "ctx:user:33"
-        assert client.set.await_args.args[1] == '{"stub":true}'
         assert client.set.await_args.kwargs["expire"] == 300
+        stored = client.set.await_args.args[1]
+        assert load_user_context(stored).tg_id == 33
+        assert stored == dump_user_context(context)

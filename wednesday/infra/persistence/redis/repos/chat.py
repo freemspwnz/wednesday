@@ -1,16 +1,15 @@
 from datetime import timedelta
 
-from pydantic import ValidationError
-
 from app.dto import ChatContext
+from app.exceptions import CacheInvalidDataError, CacheStaleDataError
 from app.protocols import CacheClient, CacheRepo, Logger
 
-from ..snapshots import CHAT_SNAPSHOT_VERSION, ChatSnapshot
+from ..codec import dump_chat_context, load_chat_context
 from .utils import log_warning_and_invalidate_cache_key, raw_to_text, ttl_to_seconds
 
 
 class RedisChatRepo(CacheRepo[ChatContext]):
-    """Redis-backed cache for chat aggregates (snapshot JSON under a key prefix)."""
+    """Redis-backed cache for chat contexts (JSON under a key prefix)."""
 
     def __init__(
         self,
@@ -32,40 +31,32 @@ class RedisChatRepo(CacheRepo[ChatContext]):
             return None
 
         try:
-            snap = ChatSnapshot.model_validate_json(payload)
-        except ValidationError:
+            context = load_chat_context(payload)
+        except CacheStaleDataError:
             await log_warning_and_invalidate_cache_key(
                 client=self._client,
                 logger=self._logger,
                 key=key,
-                message="Invalid chat snapshot in cache",
+                message="Stale chat context in cache",
             )
             return None
-        except Exception:
+        except CacheInvalidDataError:
             await log_warning_and_invalidate_cache_key(
                 client=self._client,
                 logger=self._logger,
                 key=key,
-                message="Failed to parse chat snapshot",
+                message="Invalid chat context in cache",
                 exc_info=True,
             )
             return None
 
-        if snap.v != CHAT_SNAPSHOT_VERSION:
-            await log_warning_and_invalidate_cache_key(
-                client=self._client,
-                logger=self._logger,
-                key=key,
-                message="Stale chat snapshot version in cache",
-            )
-            return None
-        return snap.to_context()
+        return context
 
     async def set(self, context: ChatContext, ttl: int | timedelta | None = None) -> None:
         key = self._key(context.tg_id)
         expire = ttl_to_seconds(ttl) if ttl is not None else ttl_to_seconds(self._ttl)
-        snap = ChatSnapshot.from_context(context)
-        await self._client.set(key, snap.model_dump_json(), expire=expire)
+        payload = dump_chat_context(context)
+        await self._client.set(key, payload, expire=expire)
 
     async def invalidate(self, tg_id: int) -> None:
         await self._client.delete(self._key(tg_id))

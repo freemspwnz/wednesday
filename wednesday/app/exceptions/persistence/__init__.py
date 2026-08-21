@@ -1,6 +1,8 @@
 from .cache import (
     CacheBackendError,
     CacheError,
+    CacheInvalidDataError,
+    CacheStaleDataError,
     CacheTimeoutError,
     CacheUnavailableError,
     UnexpectedCacheError,
@@ -25,6 +27,8 @@ __all__ = [
     "AggregateMappingError",
     "CacheBackendError",
     "CacheError",
+    "CacheInvalidDataError",
+    "CacheStaleDataError",
     "CacheTimeoutError",
     "CacheUnavailableError",
     "CatalogError",
