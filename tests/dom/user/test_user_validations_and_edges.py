@@ -4,7 +4,7 @@ import pytest
 
 from domain.catalog import ModelCatalog, SubscriptionCatalog, SubscriptionPlan, SubscriptionTier
 from domain.user import UserId
-from domain.user.exceptions import InvalidStateTransitionError, ValidationError
+from domain.user.exceptions import ValidationError
 from domain.user.policies.ban_duration.vo import BanAssigned, BanDurationCode, ViolationStats
 from domain.user.policies.limit.vo import LimitDenied
 from domain.user.policies.limit.vo.violations import CooldownViolation, DailyLimitViolation
@@ -28,8 +28,7 @@ def test_value_objects_and_states_validations() -> None:
         SubscriptionPlan(tier=SubscriptionTier.FREE, daily_limit=1, cooldown_minutes=-1)
     with pytest.raises(ValidationError):
         UserSubscription(plan=plan_free(), started_at=dt(12), expires_at=dt(12))
-    with pytest.raises(InvalidStateTransitionError):
-        ActiveState().unban()
+    assert isinstance(ActiveState().unban(), ActiveState)
     with pytest.raises(ValidationError):
         BannedState(until="bad")  # type: ignore[arg-type]
     with pytest.raises(ValidationError):

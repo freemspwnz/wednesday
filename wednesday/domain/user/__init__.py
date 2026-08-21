@@ -19,7 +19,6 @@ from .exceptions import (
     StaleWriteError,
     UserBannedError,
     UserError,
-    UserNotBannedError,
     UserNotFoundError,
     ValidationError,
 )
@@ -78,7 +77,6 @@ __all__ = [
     "UserError",
     "UserEvent",
     "UserId",
-    "UserNotBannedError",
     "UserNotFoundError",
     "UserProfile",
     "UserProfileChanged",

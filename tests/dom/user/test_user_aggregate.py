@@ -7,8 +7,9 @@ from domain.user import (
     StaleWriteError,
     User,
     UserRole,
+    UserUnbanned,
 )
-from domain.user.exceptions import InvalidStateTransitionError, ModelSelectionError, ValidationError
+from domain.user.exceptions import ModelSelectionError, ValidationError
 from domain.user.policies.management import (
     ChangeRole,
     ManagementAccessCode,
@@ -68,12 +69,38 @@ def test_ban_with_same_until_is_noop() -> None:
 
 
 @pytest.mark.unit
+def test_unban_when_active_is_noop() -> None:
+    user = mk_user(now=dt(10))
+    user.pull_events()
+    updated_at_before = user.updated_at
+
+    user.unban(actor=UserRole.OWNER, at=dt(11))
+
+    assert isinstance(user.state, ActiveState)
+    assert user.updated_at == updated_at_before
+    assert user.pull_events() == []
+
+
+@pytest.mark.unit
+def test_unban_from_banned_emits_event() -> None:
+    user = mk_user(now=dt(10))
+    user.ban(actor=UserRole.OWNER, until=dt(20), at=dt(10))
+    user.pull_events()
+
+    user.unban(actor=UserRole.OWNER, at=dt(11))
+
+    assert isinstance(user.state, ActiveState)
+    assert user.updated_at == dt(11)
+    events = user.pull_events()
+    assert len(events) == 1
+    assert isinstance(events[0], UserUnbanned)
+
+
+@pytest.mark.unit
 def test_user_guardrails_and_errors() -> None:
     user = mk_user(now=dt(10), role=UserRole.USER)
     with pytest.raises(AccessDeniedError):
         user.change_role(actor=UserRole.USER, new_role=UserRole.ADMIN, at=dt(11))
-    with pytest.raises(InvalidStateTransitionError):
-        user.unban(actor=UserRole.OWNER, at=dt(11))
     with pytest.raises(StaleWriteError):
         user.mark_seen_at(at=dt(9))
     with pytest.raises(ValidationError):
