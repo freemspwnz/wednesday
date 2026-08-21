@@ -169,8 +169,10 @@ async def test_cmd_models_empty(user_context: UserContext, mock_scope: MagicMock
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_cb_select_model_success(user_context: UserContext, mock_scope: MagicMock) -> None:
-    mock_scope.user_generation_uc.select_model = AsyncMock(return_value=user_context)
-    payload = ModelSelectionData(model="gigachat-2-pro", display_name="GigaChat 2 Pro")
+    updated = mk_user_context()
+    updated.model = "gigachat-2-pro"
+    mock_scope.user_generation_uc.select_model = AsyncMock(return_value=updated)
+    payload = ModelSelectionData(model="gigachat-2-pro")
     callback = make_callback_query(data=payload.pack())
 
     with (
@@ -181,7 +183,7 @@ async def test_cb_select_model_success(user_context: UserContext, mock_scope: Ma
 
     mock_scope.user_generation_uc.select_model.assert_awaited_once()
     edit_text.assert_awaited_once_with(
-        user_msg.format_model_selected("GigaChat 2 Pro"),
+        user_msg.format_set_model_success("gigachat-2-pro"),
         reply_markup=None,
     )
     cb_answer.assert_awaited_once_with()
@@ -190,7 +192,7 @@ async def test_cb_select_model_success(user_context: UserContext, mock_scope: Ma
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_cb_select_model_already_active(user_context: UserContext, mock_scope: MagicMock) -> None:
-    payload = ModelSelectionData(model=user_context.model, display_name="Current")
+    payload = ModelSelectionData(model=user_context.model)
     callback = make_callback_query(data=payload.pack())
 
     with (
@@ -210,7 +212,7 @@ async def test_cb_select_model_tier_denied(user_context: UserContext, mock_scope
     mock_scope.user_generation_uc.select_model = AsyncMock(
         side_effect=ModelSelectionError("tier_too_low"),
     )
-    payload = ModelSelectionData(model="gigachat-2-pro", display_name="GigaChat 2 Pro")
+    payload = ModelSelectionData(model="gigachat-2-pro")
     callback = make_callback_query(data=payload.pack())
 
     with patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as cb_answer:
@@ -237,7 +239,7 @@ async def test_cb_select_model_close(user_context: UserContext, mock_scope: Magi
 
 
 @pytest.mark.unit
-def test_build_models_kb_marks_current_and_packs_display_name() -> None:
+def test_build_models_kb_marks_current_and_packs_model_code() -> None:
     kb = build_models_kb(
         [("gigachat-2-lite", "GigaChat 2 Lite"), ("gigachat-2-pro", "GigaChat 2 Pro")],
         current="gigachat-2-lite",
@@ -248,6 +250,5 @@ def test_build_models_kb_marks_current_and_packs_display_name() -> None:
     assert rows[2][0].text == "Закрыть"
     lite = ModelSelectionData.unpack(rows[0][0].callback_data or "")
     assert lite.model == "gigachat-2-lite"
-    assert lite.display_name == "GigaChat 2 Lite"
     close = ModelSelectionData.unpack(rows[2][0].callback_data or "")
     assert close.model == CLOSE_MODEL
