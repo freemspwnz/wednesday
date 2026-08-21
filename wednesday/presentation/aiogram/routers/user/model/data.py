@@ -7,7 +7,6 @@ CLOSE_MODEL = ""
 
 
 class ModelSelectionData(CallbackData, prefix="mdl"):
-    """Payload: model code (+ display_name for success text), or empty model to close."""
+    """Payload: model code, or empty model to close."""
 
     model: str = CLOSE_MODEL
-    display_name: str = ""

@@ -12,7 +12,6 @@ from .user import (
     SET_MODEL_USAGE,
     format_list_models,
     format_me,
-    format_model_selected,
     format_set_model_success,
 )
 
@@ -28,6 +27,5 @@ __all__ = [
     "admin",
     "format_list_models",
     "format_me",
-    "format_model_selected",
     "format_set_model_success",
 ]

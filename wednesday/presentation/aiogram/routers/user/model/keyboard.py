@@ -27,7 +27,7 @@ def _model_btn(code: str, display_name: str, *, current: str) -> InlineKeyboardB
     mark = _CURRENT_MARK if code == current else ""
     return InlineKeyboardButton(
         text=f"{mark}{display_name}",
-        callback_data=ModelSelectionData(model=code, display_name=display_name).pack(),
+        callback_data=ModelSelectionData(model=code).pack(),
     )
 
 

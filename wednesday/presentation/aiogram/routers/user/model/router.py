@@ -65,13 +65,12 @@ async def cb_select_model(
             return
 
         at = callback.message.date
-        await scope.user_generation_uc.select_model(
+        updated = await scope.user_generation_uc.select_model(
             user_id=user.id,
             model=callback_data.model,
             at=at,
         )
-        label = callback_data.display_name or callback_data.model
-        await _edit_picker(callback.message, user_msg.format_model_selected(label))
+        await _edit_picker(callback.message, user_msg.format_set_model_success(updated.model))
         await safe_callback_answer(callback)
 
     await run_callback_handler(callback, scope.logger, _action)
