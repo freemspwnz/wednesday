@@ -38,6 +38,7 @@ dev = [
   "pytest-cov>=7.0.0,<8.0.0",
   "httpx2-pytest>=1.0.1,<2.0.0",
   "ruff>=0.7.1,<0.8.0",
+  "git-cliff>=2.13.0,<3.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -125,3 +126,99 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::sqlalchemy.exc.SAWarning"
 ]
+
+[tool.git-cliff.changelog]
+header = "# Changelog\n\n"
+body = """
+{%- macro commit_entry(commit) -%}
+- {% if commit.breaking %}[**breaking**] {% endif %}\
+{{ commit.message | upper_first }}\
+{% if commit.links %} ({% for link in commit.links %}[{{ link.text }}]({{ link.href }}){% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+{% if commit.body %}
+{{ commit.body | trim }}
+{% endif %}
+
+{% endmacro -%}
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] — {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% set domain = commits | filter(attribute="scope", value="domain") -%}
+{% if domain %}
+**Domain**
+{% for commit in domain -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% endif -%}
+{% set app = commits | filter(attribute="scope", value="app") -%}
+{% set image = commits | filter(attribute="scope", value="image") -%}
+{% if app or image %}
+**App**
+{% for commit in app -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% for commit in image -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% endif -%}
+{% set presentation = commits | filter(attribute="scope", value="presentation") -%}
+{% set pres = commits | filter(attribute="scope", value="pres") -%}
+{% if presentation or pres %}
+**Presentation**
+{% for commit in presentation -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% for commit in pres -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% endif -%}
+{% set infra = commits | filter(attribute="scope", value="infra") -%}
+{% if infra %}
+**Infrastructure**
+{% for commit in infra -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% endif -%}
+{% for scope, scoped in commits | group_by(attribute="scope") -%}
+{% if scope and scope not in ["domain", "app", "image", "presentation", "pres", "infra"] %}
+**{{ scope | upper_first }}**
+{% for commit in scoped -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% elif not scope %}
+{% for commit in scoped -%}
+{{ self::commit_entry(commit=commit) }}
+{% endfor -%}
+{% endif -%}
+{% endfor -%}
+{% endfor %}
+
+"""
+trim = true
+postprocessors = [
+  # Drop leftover "ref #N" lines if they stayed in the body; links come from link_parsers.
+  { pattern = "(?m)^[ \\t]*ref(s)?[ \\t]+#\\d+[ \\t]*\\n?", replace = "" },
+  { pattern = "\n{3,}", replace = "\n\n" },
+]
+
+[tool.git-cliff.git]
+conventional_commits = true
+filter_unconventional = true
+protect_breaking_commits = true
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix\\(ci\\)", skip = true },
+  { message = "^fix\\(test\\)", skip = true },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf|^refactor|^revert", group = "Changed" },
+  { message = "^doc|^style|^test|^chore|^ci", skip = true },
+]
+link_parsers = [
+  { pattern = "#(\\d+)", href = "https://github.com/freemspwnz/wednesday/issues/$1" },
+]
+filter_commits = false
+tag_pattern = "v[0-9].*"
+sort_commits = "newest"

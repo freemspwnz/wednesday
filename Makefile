@@ -8,7 +8,9 @@ TESTS := tests/
 
 .DEFAULT_GOAL := help
 
-.PHONY: help lint format format-check type test test-cov clean build migrate migrate-revision run
+CHANGELOG_FILE := CHANGELOG.md
+
+.PHONY: help lint format format-check type test test-cov clean build migrate migrate-revision run changelog-draft
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -50,3 +52,15 @@ migrate-revision: ## Generate migration from ORM diff (MSG=name, needs DB)
 
 run: ## Run the application
 	$(UV) python wednesday/main.py
+
+changelog-draft: ## Draft CHANGELOG since last tag (VERSION=x.y.z; PREPEND=1 writes file)
+	@set -euo pipefail; \
+	args='--config pyproject.toml --unreleased --offline'; \
+	if [ -n "$(VERSION)" ]; then args="$$args --tag $(VERSION)"; fi; \
+	if [ "$(PREPEND)" = "1" ]; then \
+	  if [ -z "$(VERSION)" ]; then echo "Usage: make changelog-draft VERSION=x.y.z PREPEND=1" >&2; exit 1; fi; \
+	  $(UV) git-cliff $$args --prepend $(CHANGELOG_FILE); \
+	  echo "Prepended section for $(VERSION) to $(CHANGELOG_FILE) (review before tagging)."; \
+	else \
+	  $(UV) git-cliff $$args --strip header; \
+	fi
