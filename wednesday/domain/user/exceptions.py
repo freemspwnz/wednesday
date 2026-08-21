@@ -26,13 +26,6 @@ class UserBannedError(UserError):
         super().__init__(message)
 
 
-class UserNotBannedError(UserError):
-    """User is not banned."""
-
-    def __init__(self, message: str = "user is not banned") -> None:
-        super().__init__(message)
-
-
 class LimitViolationError(UserError):
     """Subscription limits exceeded."""
 
@@ -77,7 +70,6 @@ __all__ = [
     "StaleWriteError",
     "UserBannedError",
     "UserError",
-    "UserNotBannedError",
     "UserNotFoundError",
     "ValidationError",
 ]

@@ -6,7 +6,6 @@ import pytest
 
 from app.dto import UserContext
 from domain.user import ActiveState, UserBanned, UserRole
-from domain.user.exceptions import InvalidStateTransitionError
 from domain.user.policies import ViolationStats
 from tests.dom.user.factories import FakeUserRepo, FakeViolationRepo
 
@@ -37,16 +36,20 @@ async def test_uc_ban_and_unban_happy_path() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_uc_unban_active_propagates_invalid_transition() -> None:
+async def test_uc_unban_when_active_is_noop() -> None:
     repo = AsyncMock()
     user = mk_user(now=dt(10))
     repo.get_by_id.return_value = user
     uc, _, cache = make_moderation_uc(repo=repo)
 
-    with pytest.raises(InvalidStateTransitionError):
-        await uc.unban(user_id=str(user.id), actor=int(UserRole.OWNER), at=plain_dt(11))
-    cache.users.set.assert_not_awaited()
-    repo.save.assert_not_awaited()
+    got = await uc.unban(user_id=str(user.id), actor=int(UserRole.OWNER), at=plain_dt(11))
+
+    assert isinstance(got, UserContext)
+    assert isinstance(user.state, ActiveState)
+    assert user.updated_at == dt(10)
+    assert user.pull_events() == []
+    repo.save.assert_awaited_once()
+    cache.users.set.assert_awaited_once_with(got)
 
 
 @pytest.mark.unit

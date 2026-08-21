@@ -304,15 +304,16 @@ class User:
         action = Unban(old_state=self._state)
         self._ensure_management_allowed(actor=actor, action=action)
         new = self._state.unban()
-        self._update_at(at)
-        self._state = new
-        self._record_event(
-            UserUnbanned(
-                user_id=self._id,
-                occurred_at=at,
-                actor=actor,
-            ),
-        )
+        if new != self._state:
+            self._update_at(at)
+            self._state = new
+            self._record_event(
+                UserUnbanned(
+                    user_id=self._id,
+                    occurred_at=at,
+                    actor=actor,
+                ),
+            )
 
     def expire_ban_if_due(self, *, at: AwareDatetime) -> None:
         at = AwareDatetime.ensure(at)
