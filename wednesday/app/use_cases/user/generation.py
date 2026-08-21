@@ -28,6 +28,16 @@ class UserGenerationUseCase(UserBaseUseCase):
         self._models = models
         self._subscriptions = subscriptions
 
+    async def list_selectable_models(self, *, subscription_tier: int) -> list[tuple[str, str]]:
+        """Active catalog models allowed for the given subscription tier.
+
+        Returns ``(code, display_name)`` pairs sorted by code.
+        """
+        descriptors = await self._models.list_active()
+        allowed = [d for d in descriptors if int(d.min_tier) <= subscription_tier]
+        allowed.sort(key=lambda d: str(d.model))
+        return [(str(d.model), d.display_name) for d in allowed]
+
     async def select_model(
         self,
         *,

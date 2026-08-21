@@ -20,6 +20,18 @@ LIST_MODELS_HEADER = "Доступные модели:"
 
 LIST_MODELS_FOOTER = "Выбор: /set_model <код модели>"
 
+MODELS_PROMPT = "Выберите модель:"
+
+MODELS_CANCELLED = "Выберите модель: отменено"
+
+MODELS_ALREADY_ACTIVE = "Эта модель уже активна"
+
+MODELS_EMPTY = LIST_MODELS_EMPTY
+
+
+def format_model_selected(display_name: str) -> str:
+    return f"Выбранная модель: {display_name}"
+
 
 def format_me(user: UserContext) -> str:
     lines = [

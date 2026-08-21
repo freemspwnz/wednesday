@@ -121,3 +121,18 @@ async def test_begin_generation_propagates_not_found() -> None:
 
     with pytest.raises(UserNotFoundError):
         await uc.begin_generation(user_id=str(UserId(UUID(int=404))), at=plain_dt(12))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_selectable_models_filters_by_tier() -> None:
+    uc, _, _ = make_generation_uc(repo=FakeUserRepo())
+
+    free = await uc.list_selectable_models(subscription_tier=0)
+    assert free == [("gigachat-2-lite", "GigaChat 2 Lite")]
+
+    premium = await uc.list_selectable_models(subscription_tier=1)
+    assert premium == [
+        ("gigachat-2-lite", "GigaChat 2 Lite"),
+        ("gigachat-2-pro", "GigaChat 2 Pro"),
+    ]
