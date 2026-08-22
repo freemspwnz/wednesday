@@ -1,14 +1,13 @@
 from datetime import timedelta
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserId, ViolationRepo, ViolationStats
 
 from ...models import UserViolationORM
+from .._guard import guard_repo
 
 
 class SQLAViolationRepo(ViolationRepo):
@@ -16,7 +15,7 @@ class SQLAViolationRepo(ViolationRepo):
         self._session = session
 
     async def get_violation_stats(self, user_id: UserId) -> ViolationStats:
-        try:
+        async def _run() -> ViolationStats:
             now = AwareDatetime.now_utc().value
             hour_start = now - timedelta(hours=1)
             day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -38,38 +37,31 @@ class SQLAViolationRepo(ViolationRepo):
                 week=int(row.week),
                 total=int(row.total),
             )
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to load violation stats.",
-                operation="get_violation_stats",
-                entity="user_violations",
-                entity_id=user_id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while loading violation stats.") from exc
+
+        return await guard_repo(
+            operation="get_violation_stats",
+            entity="user_violations",
+            entity_id=user_id.value,
+            sqlalchemy_message="SQLAlchemy failed to load violation stats.",
+            unexpected_message="Unexpected error while loading violation stats.",
+            run=_run,
+        )
 
     async def record_violation(self, user_id: UserId, at: AwareDatetime) -> None:
-        at = AwareDatetime.ensure(at)
-        try:
+        async def _run() -> None:
             row = UserViolationORM(
                 user_id=user_id.value,
                 occurred_at=at.value,
             )
             self._session.add(row)
             await self._session.flush()
-        except IntegrityError as exc:
-            raise DataIntegrityError(
-                "Violation record violated database constraints.",
-                operation="record_violation",
-                entity="user_violations",
-                entity_id=user_id.value,
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to record violation.",
-                operation="record_violation",
-                entity="user_violations",
-                entity_id=user_id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while recording violation.") from exc
+
+        return await guard_repo(
+            operation="record_violation",
+            entity="user_violations",
+            entity_id=user_id.value,
+            integrity_message="Violation record violated database constraints.",
+            sqlalchemy_message="SQLAlchemy failed to record violation.",
+            unexpected_message="Unexpected error while recording violation.",
+            run=_run,
+        )

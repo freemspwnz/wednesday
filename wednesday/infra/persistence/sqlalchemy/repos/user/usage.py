@@ -81,7 +81,6 @@ class SQLAUsageRepo(UsageRepo):
         return snapshot
 
     async def record(self, user_id: UserId, at: AwareDatetime) -> UsageSnapshot:
-        at = AwareDatetime.ensure(at)
         return await guard_repo(
             operation="record",
             entity="user_usage",

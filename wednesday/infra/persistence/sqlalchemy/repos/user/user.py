@@ -1,9 +1,7 @@
 from sqlalchemy import exists, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import AggregateMappingError, DataIntegrityError, RepositoryError, UnexpectedDBError
 from domain.catalog import Model, Series, SubscriptionPlan, SubscriptionTier, Vendor
 from domain.kernel.vo import AwareDatetime, NonEmptyStr
 from domain.user import (
@@ -26,6 +24,7 @@ from ...models import (
     UserStateORM,
     UserSubscriptionORM,
 )
+from .._guard import guard_repo
 
 
 class SQLAUserRepo(UserRepo):
@@ -35,32 +34,26 @@ class SQLAUserRepo(UserRepo):
         self._session = session
 
     async def get_by_id(self, user_id: UserId) -> User | None:
-        try:
+        async def _run() -> User | None:
             stmt = select(UserORM).where(UserORM.id == user_id.value)
             result = await self._session.execute(stmt)
             orm_user = result.scalar_one_or_none()
             if orm_user is None:
                 return None
             return _user_from_orm(orm_user)
-        except ValueError as exc:
-            raise AggregateMappingError(
-                "Failed to map ORM user aggregate.",
-                operation="get_by_id",
-                entity="user",
-                entity_id=user_id.value,
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to load user aggregate.",
-                operation="get_by_id",
-                entity="user",
-                entity_id=user_id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while reading user aggregate.") from exc
+
+        return await guard_repo(
+            operation="get_by_id",
+            entity="user",
+            entity_id=user_id.value,
+            mapping_message="Failed to map ORM user aggregate.",
+            sqlalchemy_message="SQLAlchemy failed to load user aggregate.",
+            unexpected_message="Unexpected error while reading user aggregate.",
+            run=_run,
+        )
 
     async def save(self, user: User) -> None:
-        try:
+        async def _run() -> None:
             await self._session.execute(
                 insert(UserORM)
                 .values(
@@ -169,37 +162,31 @@ class SQLAUserRepo(UserRepo):
                     },
                 ),
             )
-        except IntegrityError as exc:
-            raise DataIntegrityError(
-                "User save violated database constraints.",
-                operation="save",
-                entity="user",
-                entity_id=user.id.value,
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to persist user aggregate.",
-                operation="save",
-                entity="user",
-                entity_id=user.id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while saving user aggregate.") from exc
+
+        return await guard_repo(
+            operation="save",
+            entity="user",
+            entity_id=user.id.value,
+            integrity_message="User save violated database constraints.",
+            sqlalchemy_message="SQLAlchemy failed to persist user aggregate.",
+            unexpected_message="Unexpected error while saving user aggregate.",
+            run=_run,
+        )
 
     async def exists(self, user_id: UserId) -> bool:
-        try:
+        async def _run() -> bool:
             stmt = select(exists().where(UserORM.id == user_id.value))
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to check user existence.",
-                operation="exists",
-                entity="user",
-                entity_id=user_id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while checking user existence.") from exc
+
+        return await guard_repo(
+            operation="exists",
+            entity="user",
+            entity_id=user_id.value,
+            sqlalchemy_message="SQLAlchemy failed to check user existence.",
+            unexpected_message="Unexpected error while checking user existence.",
+            run=_run,
+        )
 
 
 def _user_from_orm(orm: UserORM) -> User:
