@@ -2,15 +2,8 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, exists, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import (
-    AggregateMappingError,
-    DataIntegrityError,
-    RepositoryError,
-    UnexpectedDBError,
-)
 from domain.chat import (
     ActiveState,
     Chat,
@@ -26,6 +19,7 @@ from domain.chat import (
 from domain.kernel.vo import AwareDatetime
 
 from ..models import ChatORM, ChatProfileORM, ChatScheduleSettingsORM, ChatScheduleSlotORM, ChatStateORM
+from ._guard import guard_repo
 
 
 class SQLAChatRepo(ChatRepo):
@@ -33,55 +27,44 @@ class SQLAChatRepo(ChatRepo):
         self._session = session
 
     async def get_by_id(self, chat_id: ChatId) -> Chat | None:
-        try:
+        async def _run() -> Chat | None:
             stmt = select(ChatORM).where(ChatORM.id == chat_id.value)
             result = await self._session.execute(stmt)
             orm_chat = result.scalar_one_or_none()
             if orm_chat is None:
                 return None
             return _chat_from_orm(orm_chat)
-        except ValueError as exc:
-            raise AggregateMappingError(
-                "Failed to map ORM chat aggregate.",
-                operation="get_by_id",
-                entity="chat",
-                entity_id=chat_id.value,
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to load chat aggregate.",
-                operation="get_by_id",
-                entity="chat",
-                entity_id=chat_id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while reading chat aggregate.") from exc
+
+        return await guard_repo(
+            operation="get_by_id",
+            entity="chat",
+            entity_id=chat_id.value,
+            mapping_message="Failed to map ORM chat aggregate.",
+            sqlalchemy_message="SQLAlchemy failed to load chat aggregate.",
+            unexpected_message="Unexpected error while reading chat aggregate.",
+            run=_run,
+        )
 
     async def list_active_scheduled(self) -> list[Chat]:
-        try:
+        async def _run() -> list[Chat]:
             stmt = select(ChatORM).where(
                 ChatORM.state.has(is_active=True),
                 ChatORM.schedule_slots.any(),
             )
             result = await self._session.execute(stmt)
             return [_chat_from_orm(orm) for orm in result.scalars().all()]
-        except ValueError as exc:
-            raise AggregateMappingError(
-                "Failed to map ORM chat aggregate.",
-                operation="list_active_scheduled",
-                entity="chat",
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to list scheduled chats.",
-                operation="list_active_scheduled",
-                entity="chat",
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while listing scheduled chats.") from exc
+
+        return await guard_repo(
+            operation="list_active_scheduled",
+            entity="chat",
+            mapping_message="Failed to map ORM chat aggregate.",
+            sqlalchemy_message="SQLAlchemy failed to list scheduled chats.",
+            unexpected_message="Unexpected error while listing scheduled chats.",
+            run=_run,
+        )
 
     async def save(self, chat: Chat) -> None:
-        try:
+        async def _run() -> None:
             await self._session.execute(
                 insert(ChatORM)
                 .values(
@@ -179,37 +162,31 @@ class SQLAChatRepo(ChatRepo):
                 await self._session.execute(
                     delete(ChatScheduleSlotORM).where(ChatScheduleSlotORM.chat_id == chat.id.value),
                 )
-        except IntegrityError as exc:
-            raise DataIntegrityError(
-                "Chat save violated database constraints.",
-                operation="save",
-                entity="chat",
-                entity_id=chat.id.value,
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to persist chat aggregate.",
-                operation="save",
-                entity="chat",
-                entity_id=chat.id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while saving chat aggregate.") from exc
+
+        return await guard_repo(
+            operation="save",
+            entity="chat",
+            entity_id=chat.id.value,
+            integrity_message="Chat save violated database constraints.",
+            sqlalchemy_message="SQLAlchemy failed to persist chat aggregate.",
+            unexpected_message="Unexpected error while saving chat aggregate.",
+            run=_run,
+        )
 
     async def exists(self, chat_id: ChatId) -> bool:
-        try:
+        async def _run() -> bool:
             stmt = select(exists().where(ChatORM.id == chat_id.value))
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to check chat existence.",
-                operation="exists",
-                entity="chat",
-                entity_id=chat_id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while checking chat existence.") from exc
+
+        return await guard_repo(
+            operation="exists",
+            entity="chat",
+            entity_id=chat_id.value,
+            sqlalchemy_message="SQLAlchemy failed to check chat existence.",
+            unexpected_message="Unexpected error while checking chat existence.",
+            run=_run,
+        )
 
 
 def _chat_from_orm(orm: ChatORM) -> Chat:

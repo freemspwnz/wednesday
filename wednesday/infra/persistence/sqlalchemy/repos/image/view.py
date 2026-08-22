@@ -15,8 +15,6 @@ class SQLAViewRepo(ViewRepo):
         self._session = session
 
     async def was_shown(self, chat_id: ChatId, image_id: ImageId) -> bool:
-        chat_id = ChatId.ensure(chat_id)
-
         async def _run() -> bool:
             stmt = select(
                 exists().where(
@@ -41,8 +39,6 @@ class SQLAViewRepo(ViewRepo):
         image_id: ImageId,
         at: AwareDatetime,
     ) -> None:
-        chat_id = ChatId.ensure(chat_id)
-
         async def _run() -> None:
             await self._session.execute(
                 insert(ViewORM)
@@ -71,8 +67,6 @@ class SQLAViewRepo(ViewRepo):
         chat_id: ChatId,
         min_rating: int,
     ) -> ImageId | None:
-        chat_id = ChatId.ensure(chat_id)
-
         async def _run() -> ImageId | None:
             seen_exists = (
                 select(1)
@@ -108,8 +102,6 @@ class SQLAViewRepo(ViewRepo):
         )
 
     async def reset_for_chat(self, chat_id: ChatId) -> int:
-        chat_id = ChatId.ensure(chat_id)
-
         async def _run() -> int:
             result = await self._session.execute(
                 delete(ViewORM).where(ViewORM.chat_id == chat_id.value).returning(ViewORM.image_id),
