@@ -4,9 +4,6 @@ from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Protocol
 
-from domain.catalog import ModelCatalog, SubscriptionCatalog
-from domain.image import PromptCatalog
-
 from .observe import Logger
 
 if TYPE_CHECKING:
@@ -29,15 +26,6 @@ class RequestScope(Protocol):
 
     @property
     def logger(self) -> Logger: ...
-
-    @property
-    def models(self) -> ModelCatalog: ...
-
-    @property
-    def subscriptions(self) -> SubscriptionCatalog: ...
-
-    @property
-    def prompts(self) -> PromptCatalog: ...
 
     @property
     def user_lifecycle_uc(self) -> UserLifecycleUseCase: ...

@@ -30,12 +30,12 @@ _MSG_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 def _register_production_update_middlewares(
     dp: Dispatcher,
     *,
-    scope_factory: MagicMock,
+    scope: MagicMock,
     limiter: MagicMock,
     logger: MagicMock,
 ) -> None:
     """Same registration order as ``setup_dp``: DI → Registration → Throttling → handler."""
-    di_mw = DIMiddleware(scope_factory=scope_factory, logger=logger)
+    di_mw = DIMiddleware(scope=scope, logger=logger)
     dp.update.middleware(di_mw)
     dp.update.middleware(RegistrationMiddleware(logger=logger))
     dp.update.middleware(ThrottlingMiddleware(limiter=limiter, logger=logger))
@@ -117,7 +117,7 @@ async def test_message_chain_injects_scope_registers_and_throttles(
     dp = Dispatcher()
     _register_production_update_middlewares(
         dp,
-        scope_factory=MagicMock(return_value=ScopeCM(mock_scope)),
+        scope=MagicMock(return_value=ScopeCM(mock_scope)),
         limiter=mock_limiter,
         logger=mock_logger,
     )
@@ -149,7 +149,7 @@ async def test_callback_query_chain_registers_user_and_chat(
     dp = Dispatcher()
     _register_production_update_middlewares(
         dp,
-        scope_factory=MagicMock(return_value=ScopeCM(mock_scope)),
+        scope=MagicMock(return_value=ScopeCM(mock_scope)),
         limiter=mock_limiter,
         logger=mock_logger,
     )
@@ -177,7 +177,7 @@ async def test_bot_left_skips_registration_in_chain(
     dp = Dispatcher()
     _register_production_update_middlewares(
         dp,
-        scope_factory=MagicMock(return_value=ScopeCM(mock_scope)),
+        scope=MagicMock(return_value=ScopeCM(mock_scope)),
         limiter=mock_limiter,
         logger=mock_logger,
     )
@@ -212,7 +212,7 @@ async def test_throttling_drops_update_before_handler(
     dp = Dispatcher()
     _register_production_update_middlewares(
         dp,
-        scope_factory=MagicMock(return_value=ScopeCM(mock_scope)),
+        scope=MagicMock(return_value=ScopeCM(mock_scope)),
         limiter=mock_limiter,
         logger=mock_logger,
     )

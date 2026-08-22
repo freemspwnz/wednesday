@@ -51,12 +51,12 @@ def test_setup_routers_attaches_admin_access_filter(mock_logger: MagicMock) -> N
 @pytest.mark.asyncio
 async def test_setup_dp_registers_handlers_and_middleware(mock_logger: MagicMock, mock_limiter: MagicMock) -> None:
     dp = Dispatcher()
-    scope_factory = MagicMock()
+    scope = MagicMock()
 
     with patch.object(setup_mod, "build_root_router", return_value=Router(name="root")):
         setup_dp(
             dp=dp,
-            scope_factory=scope_factory,
+            scope=scope,
             limiter=mock_limiter,
             admin_id=1,
             logger=mock_logger,
@@ -75,7 +75,7 @@ async def test_dp_startup_handles_telegram_errors(mock_logger: MagicMock) -> Non
     bot.send_message = AsyncMock(side_effect=TelegramAPIError(method=MagicMock(), message="fail"))
 
     with patch.object(setup_mod, "build_root_router", return_value=Router(name="root")):
-        setup_dp(dp=dp, scope_factory=MagicMock(), limiter=MagicMock(), admin_id=1, logger=mock_logger)
+        setup_dp(dp=dp, scope=MagicMock(), limiter=MagicMock(), admin_id=1, logger=mock_logger)
 
     await dp.emit_startup(bot=bot)
     await dp.emit_shutdown(bot=bot)

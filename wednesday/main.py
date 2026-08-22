@@ -48,7 +48,7 @@ async def main() -> None:
     dp = Dispatcher()
     setup_dp(
         dp=dp,
-        scope_factory=container.get_scope,
+        scope=container.scope,
         limiter=limiter,
         admin_id=config.telegram.admin_id,
         logger=container.observe.logger,
@@ -59,7 +59,7 @@ async def main() -> None:
         metrics.serve()
         runner = CatalogScheduleRunner(
             bot=bot,
-            scope_factory=container.get_scope,
+            scope=container.scope,
             logger=container.observe.logger,
         )
         runner_task = asyncio.create_task(runner.run(), name="catalog-schedule")

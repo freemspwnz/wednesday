@@ -59,7 +59,7 @@ class Container:
         )
 
     @asynccontextmanager
-    async def get_scope(self) -> AsyncIterator["ScopeContainer"]:
+    async def scope(self) -> AsyncIterator["ScopeContainer"]:
         scope = ScopeContainer(
             uow=self.persistence.uow_factory,
             cache=self.persistence.cache,

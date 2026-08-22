@@ -26,8 +26,8 @@ def _runner(
     bot: AsyncMock | None = None,
 ) -> tuple[CatalogScheduleRunner, AsyncMock]:
     resolved_bot = bot or AsyncMock()
-    factory = MagicMock(return_value=ScopeCM(mock_scope))
-    runner = CatalogScheduleRunner(bot=resolved_bot, scope_factory=factory, logger=mock_logger)
+    scope = MagicMock(return_value=ScopeCM(mock_scope))
+    runner = CatalogScheduleRunner(bot=resolved_bot, scope=scope, logger=mock_logger)
     return runner, resolved_bot
 
 

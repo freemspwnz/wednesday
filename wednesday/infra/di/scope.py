@@ -13,8 +13,7 @@ from app.use_cases import (
     UserManagementUseCase,
     UserModerationUseCase,
 )
-from domain.catalog import ModelCatalog, SubscriptionCatalog
-from domain.image import PromptCatalog, PromptModerationPolicy
+from domain.image import PromptModerationPolicy
 from infra.network.httpx import ProvidersRegistry
 from infra.persistence.yaml import YamlCatalogFactory
 
@@ -40,22 +39,10 @@ class ScopeContainer(RequestScope):
         return self._logger
 
     @cached_property
-    def models(self) -> ModelCatalog:
-        return self._catalog.models
-
-    @cached_property
-    def subscriptions(self) -> SubscriptionCatalog:
-        return self._catalog.subscriptions
-
-    @cached_property
-    def prompts(self) -> PromptCatalog:
-        return self._catalog.prompts
-
-    @cached_property
     def user_lifecycle_uc(self) -> UserLifecycleUseCase:
         return UserLifecycleUseCase(
-            models=self.models,
-            subscriptions=self.subscriptions,
+            models=self._catalog.models,
+            subscriptions=self._catalog.subscriptions,
             cache=self._cache.users,
             uow=self._uow(),
             logger=self._logger,
@@ -80,8 +67,8 @@ class ScopeContainer(RequestScope):
     @cached_property
     def user_generation_uc(self) -> UserGenerationUseCase:
         return UserGenerationUseCase(
-            models=self.models,
-            subscriptions=self.subscriptions,
+            models=self._catalog.models,
+            subscriptions=self._catalog.subscriptions,
             cache=self._cache.users,
             uow=self._uow(),
             logger=self._logger,
@@ -128,7 +115,7 @@ class ScopeContainer(RequestScope):
     def image_generation_uc(self) -> ImageGenerationUseCase:
         return ImageGenerationUseCase(
             generators=self._providers,
-            prompts=self.prompts,
+            prompts=self._catalog.prompts,
             policy=PromptModerationPolicy(),
             uow=self._uow(),
             logger=self._logger,

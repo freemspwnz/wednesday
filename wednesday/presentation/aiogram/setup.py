@@ -57,7 +57,7 @@ def setup_bot(
 
 def setup_dp(
     dp: Dispatcher,
-    scope_factory: ScopeFactory,
+    scope: ScopeFactory,
     limiter: RateLimiter,
     admin_id: int,
     logger: Logger,
@@ -75,7 +75,7 @@ def setup_dp(
 
     dp.include_router(build_root_router())
 
-    di_mw = DIMiddleware(scope_factory=scope_factory, logger=logger)
+    di_mw = DIMiddleware(scope=scope, logger=logger)
 
     dp.errors.register(error_handler)
     dp.errors.middleware(di_mw)
