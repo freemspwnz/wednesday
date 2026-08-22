@@ -1,17 +1,11 @@
 from sqlalchemy import exists, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import (
-    AggregateMappingError,
-    DataIntegrityError,
-    RepositoryError,
-    UnexpectedDBError,
-)
 from domain.catalog import Model
 from domain.image import (
     ActiveState,
+    HiddenReason,
     HiddenState,
     Image,
     ImageId,
@@ -23,11 +17,11 @@ from domain.image import (
     PromptSource,
     TelegramFileId,
 )
-from domain.image.vo.states import HiddenReason
 from domain.kernel.vo import AwareDatetime
 from domain.user import UserId
 
 from ...models import ImageORM
+from .._guard import guard_repo
 
 
 class SQLAImageRepo(ImageRepo):
@@ -37,32 +31,26 @@ class SQLAImageRepo(ImageRepo):
         self._session = session
 
     async def get_by_id(self, image_id: ImageId) -> Image | None:
-        try:
+        async def _run() -> Image | None:
             stmt = select(ImageORM).where(ImageORM.id == image_id.value)
             result = await self._session.execute(stmt)
             orm_image = result.scalar_one_or_none()
             if orm_image is None:
                 return None
             return _image_from_orm(orm_image)
-        except ValueError as exc:
-            raise AggregateMappingError(
-                "Failed to map ORM image aggregate.",
-                operation="get_by_id",
-                entity="image",
-                entity_id=image_id.value,
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to load image aggregate.",
-                operation="get_by_id",
-                entity="image",
-                entity_id=image_id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while reading image aggregate.") from exc
+
+        return await guard_repo(
+            operation="get_by_id",
+            entity="image",
+            entity_id=image_id.value,
+            mapping_message="Failed to map ORM image aggregate.",
+            sqlalchemy_message="SQLAlchemy failed to load image aggregate.",
+            unexpected_message="Unexpected error while reading image aggregate.",
+            run=_run,
+        )
 
     async def save(self, image: Image) -> None:
-        try:
+        async def _run() -> None:
             state_value, hidden_reason = _state_to_orm(image)
             primary_prompt, enriched_prompt, prompt_source = _prompts_to_orm(image.prompts)
             await self._session.execute(
@@ -97,59 +85,48 @@ class SQLAImageRepo(ImageRepo):
                     },
                 ),
             )
-        except IntegrityError as exc:
-            raise DataIntegrityError(
-                "Image save violated database constraints.",
-                operation="save",
-                entity="image",
-                entity_id=image.id.value,
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to persist image aggregate.",
-                operation="save",
-                entity="image",
-                entity_id=image.id.value,
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while saving image aggregate.") from exc
+
+        await guard_repo(
+            operation="save",
+            entity="image",
+            entity_id=image.id.value,
+            integrity_message="Image save violated database constraints.",
+            sqlalchemy_message="SQLAlchemy failed to persist image aggregate.",
+            unexpected_message="Unexpected error while saving image aggregate.",
+            run=_run,
+        )
 
     async def exists_by_telegram_file_id(self, file_id: TelegramFileId) -> bool:
-        try:
+        async def _run() -> bool:
             stmt = select(exists().where(ImageORM.telegram_file_id == str(file_id)))
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to check image file id existence.",
-                operation="exists_by_telegram_file_id",
-                entity="image",
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while checking image file id existence.") from exc
+
+        return await guard_repo(
+            operation="exists_by_telegram_file_id",
+            entity="image",
+            sqlalchemy_message="SQLAlchemy failed to check image file id existence.",
+            unexpected_message="Unexpected error while checking image file id existence.",
+            run=_run,
+        )
 
     async def get_by_telegram_file_id(self, file_id: TelegramFileId) -> Image | None:
-        try:
+        async def _run() -> Image | None:
             stmt = select(ImageORM).where(ImageORM.telegram_file_id == str(file_id))
             result = await self._session.execute(stmt)
             orm_image = result.scalar_one_or_none()
             if orm_image is None:
                 return None
             return _image_from_orm(orm_image)
-        except ValueError as exc:
-            raise AggregateMappingError(
-                "Failed to map ORM image aggregate.",
-                operation="get_by_telegram_file_id",
-                entity="image",
-            ) from exc
-        except SQLAlchemyError as exc:
-            raise RepositoryError(
-                "SQLAlchemy failed to load image by telegram file id.",
-                operation="get_by_telegram_file_id",
-                entity="image",
-            ) from exc
-        except Exception as exc:
-            raise UnexpectedDBError("Unexpected error while loading image by telegram file id.") from exc
+
+        return await guard_repo(
+            operation="get_by_telegram_file_id",
+            entity="image",
+            mapping_message="Failed to map ORM image aggregate.",
+            sqlalchemy_message="SQLAlchemy failed to load image by telegram file id.",
+            unexpected_message="Unexpected error while loading image by telegram file id.",
+            run=_run,
+        )
 
 
 def _state_to_orm(image: Image) -> tuple[str, str | None]:
