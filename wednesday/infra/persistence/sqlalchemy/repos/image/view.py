@@ -7,7 +7,7 @@ from domain.image import ImageId, ViewRepo
 from domain.kernel.vo import AwareDatetime
 
 from ...models import ImageORM, ViewORM
-from .errors import guard_view
+from .._guard import guard_repo
 
 
 class SQLAViewRepo(ViewRepo):
@@ -27,7 +27,13 @@ class SQLAViewRepo(ViewRepo):
             result = await self._session.execute(stmt)
             return bool(result.scalar_one())
 
-        return await guard_view(operation="was_shown", run=_run)
+        return await guard_repo(
+            operation="was_shown",
+            entity="image_view",
+            sqlalchemy_message="SQLAlchemy failed during was_shown.",
+            unexpected_message="Unexpected error during was_shown.",
+            run=_run,
+        )
 
     async def mark_shown(
         self,
@@ -50,11 +56,14 @@ class SQLAViewRepo(ViewRepo):
                 ),
             )
 
-        await guard_view(
+        await guard_repo(
             operation="mark_shown",
-            run=_run,
+            entity="image_view",
             entity_id=image_id.value,
             integrity_message="Image view mark violated database constraints.",
+            sqlalchemy_message="SQLAlchemy failed during mark_shown.",
+            unexpected_message="Unexpected error during mark_shown.",
+            run=_run,
         )
 
     async def get_unseen_for_chat(
@@ -89,10 +98,13 @@ class SQLAViewRepo(ViewRepo):
                 return None
             return ImageId(image_id)
 
-        return await guard_view(
+        return await guard_repo(
             operation="get_unseen_for_chat",
-            run=_run,
+            entity="image_view",
             mapping_message="Failed to map unseen image id.",
+            sqlalchemy_message="SQLAlchemy failed during get_unseen_for_chat.",
+            unexpected_message="Unexpected error during get_unseen_for_chat.",
+            run=_run,
         )
 
     async def reset_for_chat(self, chat_id: ChatId) -> int:
@@ -104,4 +116,10 @@ class SQLAViewRepo(ViewRepo):
             )
             return len(result.all())
 
-        return await guard_view(operation="reset_for_chat", run=_run)
+        return await guard_repo(
+            operation="reset_for_chat",
+            entity="image_view",
+            sqlalchemy_message="SQLAlchemy failed during reset_for_chat.",
+            unexpected_message="Unexpected error during reset_for_chat.",
+            run=_run,
+        )
