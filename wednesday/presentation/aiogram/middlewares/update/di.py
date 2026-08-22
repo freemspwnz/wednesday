@@ -11,10 +11,10 @@ class DIMiddleware(BaseMiddleware):
     def __init__(
         self,
         *,
-        scope_factory: ScopeFactory,
+        scope: ScopeFactory,
         logger: Logger,
     ) -> None:
-        self._scope_factory = scope_factory
+        self._scope = scope
         self._logger = logger.bind(module=self.__class__.__name__)
 
     async def __call__(
@@ -23,7 +23,7 @@ class DIMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:  # noqa: ANN401  # aiogram handler return type
-        async with self._scope_factory() as scope:
+        async with self._scope() as scope:
             self._logger.debug("Scope container created")
             data["scope"] = scope
             data["logger"] = scope.logger

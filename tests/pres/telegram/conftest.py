@@ -42,7 +42,6 @@ def mock_scope(mock_logger: MagicMock) -> MagicMock:
     scope.user_generation_uc = AsyncMock()
     scope.chat_management_uc = AsyncMock()
     scope.chat_schedule_uc = AsyncMock()
-    scope.models = AsyncMock()
     scope.image_catalog_uc = AsyncMock()
     scope.image_vote_uc = AsyncMock()
     scope.image_management_uc = AsyncMock()

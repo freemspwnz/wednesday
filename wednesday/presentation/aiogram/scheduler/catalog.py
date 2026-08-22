@@ -37,11 +37,11 @@ class CatalogScheduleRunner:
         self,
         *,
         bot: Bot,
-        scope_factory: ScopeFactory,
+        scope: ScopeFactory,
         logger: Logger,
     ) -> None:
         self._bot = bot
-        self._scope_factory = scope_factory
+        self._scope = scope
         self._logger = logger.bind(module=self.__class__.__name__)
         self._fired = set()
 
@@ -59,7 +59,7 @@ class CatalogScheduleRunner:
     async def tick(self, *, at: datetime) -> None:
         self._prune_fired(at)
         try:
-            async with self._scope_factory() as scope:
+            async with self._scope() as scope:
                 due = await scope.chat_schedule_uc.list_due(at=at)
                 for chat in due:
                     await self._deliver(scope=scope, chat=chat, at=at)
