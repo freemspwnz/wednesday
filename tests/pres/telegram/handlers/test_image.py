@@ -19,13 +19,14 @@ from domain.image import (
     PromptSource,
     TelegramFileId,
 )
-from presentation.aiogram.messages import exceptions as exc_msg, image as image_msg
+from presentation.aiogram.messages import exceptions as exc_msg
 from presentation.aiogram.routers.image import (
     ImageVoteData,
     build_vote_kb,
     cb_image_vote,
     cmd_generate,
     cmd_random,
+    messages as image_msg,
 )
 from tests.dom.image.factories import dt, mk_image, mk_rating
 

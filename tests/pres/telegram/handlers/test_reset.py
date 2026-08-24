@@ -6,8 +6,7 @@ import pytest
 from aiogram.types import CallbackQuery, Message
 
 from app.dto import ChatContext
-from presentation.aiogram.messages import image as image_msg
-from presentation.aiogram.routers.image import ResetViewsData, cb_reset_views, cmd_reset
+from presentation.aiogram.routers.image import ResetViewsData, cb_reset_views, cmd_reset, messages as image_msg
 
 from ..factories import make_callback_query, make_message
 

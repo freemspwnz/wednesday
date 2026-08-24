@@ -12,8 +12,8 @@ from aiogram.types import (
 from app.dto import ChatContext
 from app.protocols import RequestScope
 
-from ....messages import image as image_msg
 from ...utils import run_callback_handler, run_message_handler
+from .. import messages as image_msg
 from .data import ResetViewsData
 
 reset_router = Router(name="reset")

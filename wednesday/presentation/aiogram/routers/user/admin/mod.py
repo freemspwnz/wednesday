@@ -9,11 +9,11 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
+from presentation.aiogram.filters import InsufficientCommandArgs, RequireCommandArgs
+from presentation.aiogram.messages import common as common_msg, exceptions as exc_msg
 
-from ....filters import InsufficientCommandArgs, RequireCommandArgs
-from ....messages import common as common_msg, exceptions as exc_msg
-from ....messages.user import admin as admin_msg
 from ...utils import parse_telegram_id, run_message_handler
+from . import messages as admin_msg
 
 mod_router = Router(name="mod")
 

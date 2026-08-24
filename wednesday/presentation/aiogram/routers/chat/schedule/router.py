@@ -8,8 +8,8 @@ from aiogram.types import CallbackQuery, Message
 from app.dto import ChatContext
 from app.protocols import Logger, RequestScope
 
-from ....messages import chat as chat_msg
 from ...utils import run_callback_handler, run_message_handler, safe_callback_answer
+from . import messages as chat_msg
 from .actions import apply_action
 from .data import ScheduleData
 from .keyboard import build_main_kb

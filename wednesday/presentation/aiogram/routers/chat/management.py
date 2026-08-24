@@ -6,11 +6,11 @@ from aiogram.types import Message
 
 from app.dto import ChatContext
 from app.protocols import Logger, RequestScope
+from presentation.aiogram.filters import GroupChatFilter
 
-from ...filters import GroupChatFilter
-from ...messages import chat as chat_msg
 from ..utils import run_message_handler
 from .mappers import resolve_chat_member
+from .schedule import messages as chat_msg
 
 chat_management_router = Router(name="chat_management")
 

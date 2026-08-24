@@ -12,8 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from app.exceptions import unwrap_exception
 from app.protocols import Logger
 from domain.kernel.exceptions import DomainError
-
-from ..messages.exceptions import COMMAND_FAILURE, user_message_for_exception
+from presentation.aiogram.messages.exceptions import COMMAND_FAILURE, user_message_for_exception
 
 T = TypeVar("T")
 

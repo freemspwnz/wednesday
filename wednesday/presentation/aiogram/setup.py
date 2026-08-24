@@ -2,9 +2,9 @@ from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramAPIError
 
 from app.protocols import Logger, RateLimiter, Retrier, ScopeFactory
+from presentation.aiogram.filters import AdminAccessFilter
+from presentation.aiogram.messages import common as common_msg, system as system_msg
 
-from .filters import AdminAccessFilter
-from .messages import common as common_msg, system as system_msg
 from .middlewares import (
     DIMiddleware,
     RateLimitRequestMW,
