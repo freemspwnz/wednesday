@@ -45,7 +45,7 @@ from .resilience import (
     UnexpectedLimitError,
     UnexpectedRetryError,
 )
-from .utils import unwrap_exception
+from .utils import iter_exception_chain, unwrap_exception
 
 __all__ = [
     "AggregateMappingError",
@@ -92,5 +92,6 @@ __all__ = [
     "UnexpectedLimitError",
     "UnexpectedRetryError",
     "UnknownProviderError",
+    "iter_exception_chain",
     "unwrap_exception",
 ]

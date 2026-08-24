@@ -16,6 +16,7 @@ from app.exceptions import (
     RepositoryError,
     TooManyRequests,
     UnknownProviderError,
+    iter_exception_chain,
     unwrap_exception,
 )
 
@@ -35,6 +36,33 @@ def test_unwrap_exception_returns_root_cause() -> None:
     wrapped.__cause__ = root
 
     assert unwrap_exception(wrapped) is root
+
+
+@pytest.mark.unit
+def test_unwrap_exception_follows_context_without_cause() -> None:
+    root = ValueError("root")
+    wrapped = RuntimeError("wrapped")
+    wrapped.__context__ = root
+
+    assert unwrap_exception(wrapped) is root
+
+
+@pytest.mark.unit
+def test_iter_exception_chain_yields_outer_to_root() -> None:
+    root = ValueError("root")
+    wrapped = RuntimeError("wrapped")
+    wrapped.__cause__ = root
+
+    assert list(iter_exception_chain(wrapped)) == [wrapped, root]
+
+
+@pytest.mark.unit
+def test_iter_exception_chain_stops_on_self_cause_cycle() -> None:
+    exc = RuntimeError("loop")
+    exc.__cause__ = exc
+
+    assert list(iter_exception_chain(exc)) == [exc]
+    assert unwrap_exception(exc) is exc
 
 
 @pytest.mark.unit

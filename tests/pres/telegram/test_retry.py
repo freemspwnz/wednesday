@@ -24,6 +24,7 @@ def _tmr() -> TooManyRequests:
         (TelegramServerError(method=_TELEGRAM_METHOD, message="x"), True),
         (_tmr(), True),
         (ValueError("x"), False),
+        (TimeoutError(), False),
     ],
 )
 def test_is_telegram_retryable(exc: BaseException, expected: bool) -> None:
@@ -35,3 +36,25 @@ def test_unwraps_cause_chain() -> None:
     outer = RuntimeError("wrapper")
     outer.__cause__ = _tmr()
     assert is_telegram_retryable(outer) is True
+
+
+@pytest.mark.unit
+def test_telegram_network_error_from_timeout_is_retryable() -> None:
+    try:
+        raise TelegramNetworkError(
+            method=_TELEGRAM_METHOD,
+            message="Request timeout error",
+        ) from TimeoutError()
+    except TelegramNetworkError as exc:
+        assert is_telegram_retryable(exc) is True
+
+
+@pytest.mark.unit
+def test_telegram_server_error_from_timeout_is_retryable() -> None:
+    try:
+        raise TelegramServerError(
+            method=_TELEGRAM_METHOD,
+            message="Bad Gateway",
+        ) from TimeoutError()
+    except TelegramServerError as exc:
+        assert is_telegram_retryable(exc) is True

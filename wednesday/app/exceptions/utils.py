@@ -1,17 +1,16 @@
 from builtins import BaseException
+from collections.abc import Iterator
+
+
+def iter_exception_chain(exception: BaseException) -> Iterator[BaseException]:
+    current: BaseException | None = exception
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        yield current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
 
 
 def unwrap_exception(exception: BaseException) -> BaseException:
-    current: BaseException = exception
-    while True:
-        cause = current.__cause__
-        if cause is not None:
-            current = cause
-            continue
-
-        context = current.__context__
-        if context is not None:
-            current = context
-            continue
-
-        return current
+    *_, root = iter_exception_chain(exception)
+    return root
