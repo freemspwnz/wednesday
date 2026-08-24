@@ -56,3 +56,21 @@ class TestIsHttpxRetryable:
 
     def test_unknown_exception_is_not_retryable(self) -> None:
         assert is_httpx_retryable(ValueError("x")) is False
+
+    def test_bad_gateway_from_non_retryable_cause_is_retryable(self) -> None:
+        try:
+            raise _status_error(HTTPStatus.BAD_GATEWAY) from ValueError("root")
+        except httpx2.HTTPStatusError as exc:
+            assert is_httpx_retryable(exc) is True
+
+    def test_wrapper_around_read_timeout_is_retryable(self) -> None:
+        try:
+            raise RuntimeError("wrapper") from httpx2.ReadTimeout("t")
+        except RuntimeError as exc:
+            assert is_httpx_retryable(exc) is True
+
+    def test_client_error_without_retryable_cause_is_not_retryable(self) -> None:
+        try:
+            raise _status_error(HTTPStatus.BAD_REQUEST) from ValueError("root")
+        except httpx2.HTTPStatusError as exc:
+            assert is_httpx_retryable(exc) is False

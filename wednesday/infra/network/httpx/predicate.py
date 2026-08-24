@@ -2,7 +2,7 @@ from http import HTTPStatus
 
 from httpx2 import HTTPStatusError, TimeoutException, TransportError
 
-from app.exceptions import CircuitOpenError, TooManyRequests, unwrap_exception
+from app.exceptions import CircuitOpenError, TooManyRequests, iter_exception_chain
 
 NO_RETRY_STATUS_CODES: set[int] = {
     HTTPStatus.BAD_REQUEST,  # 400
@@ -25,10 +25,13 @@ def is_httpx_retryable(exception: BaseException) -> bool:
     Decide if the exception is retryable for outbound HTTP calls.
 
     Expects raw httpx2 errors from inside the retry loop (before app-layer mapping).
+    Any retryable frame in the cause/context chain counts.
     """
 
-    exception = unwrap_exception(exception)
+    return any(_is_httpx_retryable_frame(item) for item in iter_exception_chain(exception))
 
+
+def _is_httpx_retryable_frame(exception: BaseException) -> bool:
     if isinstance(exception, TimeoutException):
         return True
 
@@ -45,6 +48,7 @@ def is_httpx_retryable(exception: BaseException) -> bool:
             return False
         if HTTPStatus.INTERNAL_SERVER_ERROR <= status < _HTTP_5XX_END:
             return True
+        return False
 
     if isinstance(exception, CircuitOpenError):
         return True
