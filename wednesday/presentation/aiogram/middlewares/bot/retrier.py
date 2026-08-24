@@ -12,6 +12,8 @@ from aiogram.methods import Response, TelegramMethod
 from app.exceptions import AppError, MaxAttemptsExhaustedError, RetryError
 from app.protocols import Logger, Retrier
 
+from ...predicate import is_telegram_retryable
+
 T = TypeVar("T")
 
 
@@ -68,6 +70,8 @@ class RetryRequestMW(BaseRequestMiddleware):
             )
             raise
         except Exception as exc:
+            if is_telegram_retryable(exc):
+                raise
             self._logger.error(
                 "Unexpected error while retrying Telegram API call",
                 method=method_name,

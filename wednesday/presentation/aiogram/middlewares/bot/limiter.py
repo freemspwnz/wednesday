@@ -53,8 +53,6 @@ class RateLimitRequestMW(BaseRequestMiddleware):
 
                 await self._limiter.call(limit, key)
 
-            return await make_request(bot, method)
-
         except TooManyRequests:
             self._logger.warning(
                 "Rate limit exceeded",
@@ -78,6 +76,8 @@ class RateLimitRequestMW(BaseRequestMiddleware):
                 key=key,
             )
             raise
+
+        return await make_request(bot, method)
 
     @staticmethod
     def _rl_outbound_chat_key(chat_id: int | str) -> str:
