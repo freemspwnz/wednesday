@@ -8,8 +8,7 @@ from aiogram.types import Update
 
 from app.exceptions import LimitStorageError, TooManyRequests
 from domain.chat import ChatType
-from presentation.aiogram.messages import throttling as throttling_msg
-from presentation.aiogram.middlewares.update.throttling import ThrottlingMiddleware
+from presentation.aiogram.middlewares.update.throttling import ThrottlingMiddleware, messages as throttling_msg
 
 from ..factories import make_callback_query, mk_chat_context
 

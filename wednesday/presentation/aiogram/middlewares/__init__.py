@@ -1,4 +1,4 @@
-from .bot import RateLimitRequestMW, RetryRequestMW
+from .request import RateLimitRequestMW, RetryRequestMW
 from .update import DIMiddleware, RegistrationMiddleware, ThrottlingMiddleware
 
 __all__ = [

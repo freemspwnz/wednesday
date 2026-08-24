@@ -31,9 +31,6 @@ HELP = (
 
 UNKNOWN_COMMAND = "❓ Неизвестная команда!\n\nИспользуйте /help для получения списка команд."
 
-WIP = "В разработке..."
-
-
 # Bot commands in Telegram client.
 BOT_COMMANDS: tuple[BotCommand, ...] = (
     BotCommand(command="start", description="Приветствие и список команд"),

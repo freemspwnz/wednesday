@@ -8,7 +8,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import CallbackQuery, Message, User as TgUser
 
 from domain.user.exceptions import CooldownViolationError
-from presentation.aiogram.messages.exceptions import COMMAND_FAILURE, WAIT_FOR_COOLDOWN
+from presentation.aiogram.errors.messages import COMMAND_FAILURE, WAIT_FOR_COOLDOWN
 from presentation.aiogram.routers.utils import (
     is_bot_member_of_chat,
     parse_positive_int,

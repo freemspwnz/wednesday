@@ -2,14 +2,13 @@
 
 from .chat import chat_router
 from .common import common_router
-from .errors import error_handler
 from .image import image_router
-from .user import user_router
+from .user import admin_router, user_router
 
 __all__ = [
+    "admin_router",
     "chat_router",
     "common_router",
-    "error_handler",
     "image_router",
     "user_router",
 ]

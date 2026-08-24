@@ -6,8 +6,8 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
+from presentation.aiogram.errors.messages import USER_NOT_FOUND
 from presentation.aiogram.filters import InsufficientCommandArgs, RequireCommandArgs
-from presentation.aiogram.messages import exceptions as exc_msg
 
 from ...utils import parse_positive_int, parse_telegram_id, run_message_handler
 from . import messages as admin_msg
@@ -36,7 +36,7 @@ async def cmd_ban(
         days = parse_positive_int(command_args[1])
         target = await scope.user_lifecycle_uc.find_by_tg_id(tg_id=tg_user_id)
         if target is None:
-            await message.answer(exc_msg.USER_NOT_FOUND)
+            await message.answer(USER_NOT_FOUND)
             return
         until = now + timedelta(days=days)
         await scope.user_moderation_uc.ban(
@@ -71,7 +71,7 @@ async def cmd_unban(
             tg_id=parse_telegram_id(command_args[0]),
         )
         if target is None:
-            await message.answer(exc_msg.USER_NOT_FOUND)
+            await message.answer(USER_NOT_FOUND)
             return
         await scope.user_moderation_uc.unban(
             user_id=target.id,

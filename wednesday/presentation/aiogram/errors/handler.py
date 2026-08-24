@@ -3,7 +3,8 @@ from aiogram.types import ErrorEvent, Update
 
 from app.exceptions import unwrap_exception
 from app.protocols import Logger
-from presentation.aiogram.messages.exceptions import SERVER_ERROR, user_message_for_exception
+
+from .messages import SERVER_ERROR, user_message_for_exception
 
 
 def _safe_update_log_context(update: Update) -> dict[str, object]:

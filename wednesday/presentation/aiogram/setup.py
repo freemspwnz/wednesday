@@ -3,8 +3,8 @@ from aiogram.exceptions import TelegramAPIError
 
 from app.protocols import Logger, RateLimiter, Retrier, ScopeFactory
 from presentation.aiogram.filters import AdminAccessFilter
-from presentation.aiogram.messages import common as common_msg, system as system_msg
 
+from .errors import error_handler
 from .middlewares import (
     DIMiddleware,
     RateLimitRequestMW,
@@ -13,13 +13,16 @@ from .middlewares import (
     ThrottlingMiddleware,
 )
 from .routers import (
+    admin_router,
     chat_router,
     common_router,
-    error_handler,
     image_router,
     user_router,
 )
-from .routers.user import admin_router
+from .routers.common.messages import BOT_COMMANDS
+
+BOT_STARTED = "Bot started"
+BOT_STOPPED = "Bot stopped"
 
 POLLING_ALLOWED_UPDATES: list[str] = [
     "message",
@@ -88,7 +91,7 @@ def setup_dp(
     async def dp_startup(bot: Bot) -> None:
         su_logger = log.bind(event="startup")
         try:
-            await bot.set_my_commands(list(common_msg.BOT_COMMANDS))
+            await bot.set_my_commands(list(BOT_COMMANDS))
         except TelegramAPIError as exc:
             su_logger.error(
                 "Failed to set bot commands menu",
@@ -96,7 +99,7 @@ def setup_dp(
                 exc_info=True,
             )
         try:
-            await bot.send_message(chat_id=admin_id, text=system_msg.BOT_STARTED)
+            await bot.send_message(chat_id=admin_id, text=BOT_STARTED)
         except TelegramAPIError as exc:
             su_logger.error(
                 "Failed to send startup message to admin",
@@ -109,7 +112,7 @@ def setup_dp(
     async def dp_shutdown(bot: Bot) -> None:
         sd_logger = log.bind(event="shutdown")
         try:
-            await bot.send_message(chat_id=admin_id, text=system_msg.BOT_STOPPED)
+            await bot.send_message(chat_id=admin_id, text=BOT_STOPPED)
         except TelegramAPIError as exc:
             sd_logger.error(
                 "Failed to send shutdown message to admin",

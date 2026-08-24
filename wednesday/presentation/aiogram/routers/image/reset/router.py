@@ -13,7 +13,7 @@ from app.dto import ChatContext
 from app.protocols import RequestScope
 
 from ...utils import run_callback_handler, run_message_handler
-from .. import messages as image_msg
+from . import messages as reset_msg
 from .data import ResetViewsData
 
 reset_router = Router(name="reset")
@@ -41,7 +41,7 @@ async def cmd_reset(
                 ],
             ],
         )
-        await message.answer(image_msg.RESET_CONFIRM_PROMPT, reply_markup=markup)
+        await message.answer(reset_msg.RESET_CONFIRM_PROMPT, reply_markup=markup)
 
     await run_message_handler(message, scope.logger, _action)
 
@@ -60,9 +60,9 @@ async def cb_reset_views(
             return
         if callback_data.confirm:
             count = await scope.image_catalog_uc.reset_views(chat_id=chat.id)
-            await callback.message.edit_text(image_msg.RESET_DONE.format(count=count))
+            await callback.message.edit_text(reset_msg.RESET_DONE.format(count=count))
         else:
-            await callback.message.edit_text(image_msg.RESET_CANCELLED)
+            await callback.message.edit_text(reset_msg.RESET_CANCELLED)
         await callback.answer()
 
     await run_callback_handler(callback, scope.logger, _action)
