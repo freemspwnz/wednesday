@@ -4,12 +4,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiogram import Bot
+from aiogram.exceptions import TelegramNetworkError, TelegramServerError
 from aiogram.methods import SendMessage
 from aiogram.methods.base import Response
 
 from app.exceptions import AppError, LimitStorageError, MaxAttemptsExhaustedError, RetryError, TooManyRequests
 from presentation.aiogram.middlewares.bot.limiter import RateLimitRequestMW
 from presentation.aiogram.middlewares.bot.retrier import RetryRequestMW
+
+_TELEGRAM_METHOD = MagicMock()
 
 
 @pytest.mark.unit
@@ -102,3 +105,44 @@ async def test_retry_logs_and_reraises(exc_type: type[Exception], mock_logger: M
 
     with pytest.raises(exc_type):
         await middleware(AsyncMock(), AsyncMock(spec=Bot), SendMessage(chat_id=1, text="x"))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_rate_limit_does_not_log_downstream_telegram_errors(
+    mock_limiter: MagicMock,
+    mock_logger: MagicMock,
+) -> None:
+    middleware = RateLimitRequestMW(limiter=mock_limiter, logger=mock_logger)
+    make_request = AsyncMock(
+        side_effect=TelegramNetworkError(method=_TELEGRAM_METHOD, message="Request timeout error"),
+    )
+
+    with pytest.raises(TelegramNetworkError):
+        await middleware(make_request, AsyncMock(spec=Bot), SendMessage(chat_id=1, text="x"))
+
+    mock_logger.exception.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        TelegramNetworkError(method=_TELEGRAM_METHOD, message="Request timeout error"),
+        TelegramServerError(method=_TELEGRAM_METHOD, message="Bad Gateway"),
+    ],
+)
+async def test_retry_reraises_telegram_transport_without_unexpected_log(
+    exc: Exception,
+    mock_logger: MagicMock,
+) -> None:
+    retrier = MagicMock()
+    retrier.execute = AsyncMock(side_effect=exc)
+    middleware = RetryRequestMW(retrier=retrier, logger=mock_logger)
+
+    with pytest.raises(type(exc)):
+        await middleware(AsyncMock(), AsyncMock(spec=Bot), SendMessage(chat_id=1, text="x"))
+
+    mock_logger.error.assert_not_called()
+    mock_logger.warning.assert_not_called()

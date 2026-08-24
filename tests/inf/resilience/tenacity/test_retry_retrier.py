@@ -176,3 +176,8 @@ class TestTenacityRetrier:
 
         with pytest.raises(ValueError, match="last"):
             await r.execute(always_fail)
+
+        mock_logger.error.assert_called_once()
+        logged = mock_logger.error.call_args
+        assert logged.args[0] == "Retry attempts exhausted"
+        assert logged.kwargs["exc_info"] is False
