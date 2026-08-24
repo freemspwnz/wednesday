@@ -9,8 +9,8 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
+from presentation.aiogram.errors.messages import USER_NOT_FOUND
 from presentation.aiogram.filters import InsufficientCommandArgs, RequireCommandArgs
-from presentation.aiogram.messages import common as common_msg, exceptions as exc_msg
 
 from ...utils import parse_telegram_id, run_message_handler
 from . import messages as admin_msg
@@ -39,7 +39,7 @@ async def cmd_promote(
             tg_id=parse_telegram_id(command_args[0]),
         )
         if target is None:
-            await message.answer(exc_msg.USER_NOT_FOUND)
+            await message.answer(USER_NOT_FOUND)
             return
         await scope.user_management_uc.change_role(
             user_id=target.id,
@@ -73,7 +73,7 @@ async def cmd_demote(
             tg_id=parse_telegram_id(command_args[0]),
         )
         if target is None:
-            await message.answer(exc_msg.USER_NOT_FOUND)
+            await message.answer(USER_NOT_FOUND)
             return
         await scope.user_management_uc.change_role(
             user_id=target.id,
@@ -89,4 +89,4 @@ async def cmd_demote(
 @mod_router.message(Command("list_mods"))
 async def cmd_list_mods(message: Message) -> None:
     """List administrators (admin)."""
-    await message.answer(common_msg.WIP)
+    await message.answer(admin_msg.WIP)

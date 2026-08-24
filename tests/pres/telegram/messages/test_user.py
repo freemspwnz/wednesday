@@ -5,7 +5,7 @@ import pytest
 from domain.catalog import Model, Series, Vendor
 from domain.user import UserRole
 from domain.user.vo import UserSettings
-from presentation.aiogram.routers.user import messages as user_msg
+from presentation.aiogram.routers.user.profile import messages as user_msg
 from tests.dom.user.factories import mk_user, subscription_premium
 
 from ..factories import dt, mk_user_context

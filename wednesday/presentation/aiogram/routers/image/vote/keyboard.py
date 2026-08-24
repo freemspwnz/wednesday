@@ -3,8 +3,8 @@
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from ..messages import vote_btn_down, vote_btn_up
 from .data import ImageVoteData
+from .messages import vote_btn_down, vote_btn_up
 
 _VOTE_UP = 1
 _VOTE_DOWN = -1

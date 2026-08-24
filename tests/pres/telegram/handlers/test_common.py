@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from aiogram.types import Message
 
-from presentation.aiogram.messages import common as common_msg
 from presentation.aiogram.routers import common as handlers
+from presentation.aiogram.routers.common import messages as common_msg
 
 from ..factories import make_message
 

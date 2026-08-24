@@ -7,7 +7,7 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 from domain.user.exceptions import AccessDeniedError
-from presentation.aiogram.messages import common as common_msg, exceptions as exc_msg
+from presentation.aiogram.errors import messages as exc_msg
 from presentation.aiogram.routers.user import admin as h
 from presentation.aiogram.routers.user.admin import messages as admin_msg
 
@@ -19,7 +19,7 @@ from ..factories import make_message, mk_user_context
 @pytest.mark.parametrize(
     ("handler", "expected"),
     [
-        (h.cmd_status, common_msg.WIP),
+        (h.cmd_status, admin_msg.WIP),
         (h.cmd_unban_usage, admin_msg.UNBAN_USAGE),
     ],
 )

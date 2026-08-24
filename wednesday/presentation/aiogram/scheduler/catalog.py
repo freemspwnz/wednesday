@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramAPIError
 from app.dto import ChatContext
 from app.protocols import Logger, RequestScope, ScopeFactory
 
-from ..routers.image import messages as image_msg
+from ..routers.image.generation import messages as generation_msg
 from ..routers.image.vote import build_vote_kb
 
 
@@ -144,7 +144,7 @@ class CatalogScheduleRunner:
         try:
             await self._bot.send_message(
                 chat_id=chat.tg_id,
-                text=image_msg.SCHEDULE_CATALOG_EMPTY,
+                text=generation_msg.SCHEDULE_CATALOG_EMPTY,
             )
         except TelegramAPIError:
             self._logger.warning(

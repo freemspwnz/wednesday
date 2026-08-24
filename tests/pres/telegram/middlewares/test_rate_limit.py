@@ -2,7 +2,7 @@
 
 import pytest
 
-from presentation.aiogram.middlewares.bot.limiter import RateLimitRequestMW
+from presentation.aiogram.middlewares.request.limiter import RateLimitRequestMW
 
 
 @pytest.mark.unit

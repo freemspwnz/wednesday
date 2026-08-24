@@ -9,8 +9,8 @@ from aiogram.methods import SendMessage
 from aiogram.methods.base import Response
 
 from app.exceptions import AppError, LimitStorageError, MaxAttemptsExhaustedError, RetryError, TooManyRequests
-from presentation.aiogram.middlewares.bot.limiter import RateLimitRequestMW
-from presentation.aiogram.middlewares.bot.retrier import RetryRequestMW
+from presentation.aiogram.middlewares.request.limiter import RateLimitRequestMW
+from presentation.aiogram.middlewares.request.retrier import RetryRequestMW
 
 _TELEGRAM_METHOD = MagicMock()
 

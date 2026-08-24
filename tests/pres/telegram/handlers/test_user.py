@@ -7,12 +7,12 @@ from aiogram.types import CallbackQuery, Message
 
 from app.dto import UserContext
 from domain.user.exceptions import ModelNotFoundError, ModelSelectionError
-from presentation.aiogram.messages import exceptions as exc_msg
+from presentation.aiogram.errors import messages as exc_msg
 from presentation.aiogram.routers import user as handlers
-from presentation.aiogram.routers.user import messages as profile_msg
 from presentation.aiogram.routers.user.model import messages as user_msg
 from presentation.aiogram.routers.user.model.data import CLOSE_MODEL, ModelSelectionData
 from presentation.aiogram.routers.user.model.keyboard import build_models_kb
+from presentation.aiogram.routers.user.profile import messages as profile_msg
 
 from ..factories import make_callback_query, make_message, mk_user_context
 

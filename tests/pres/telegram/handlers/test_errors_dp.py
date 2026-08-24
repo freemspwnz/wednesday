@@ -11,8 +11,8 @@ from aiogram.types import Chat, Message, TelegramObject, Update, User
 
 from app.exceptions import AppError
 from domain.kernel.exceptions import ValidationError
-from presentation.aiogram.messages.exceptions import SERVER_ERROR
-from presentation.aiogram.routers.errors import error_handler, send_text_to_update
+from presentation.aiogram.errors.handler import error_handler, send_text_to_update
+from presentation.aiogram.errors.messages import SERVER_ERROR
 
 from ..factories import make_message
 

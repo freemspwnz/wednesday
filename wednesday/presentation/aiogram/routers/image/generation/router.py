@@ -1,4 +1,4 @@
-"""Image catalog and generation router."""
+"""Image generation router."""
 
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -8,19 +8,16 @@ from aiogram.types import BufferedInputFile, Message
 from app.dto import ChatContext, UserContext
 from app.protocols import RequestScope
 from domain.image import PromptRejectedError
-from presentation.aiogram.messages.exceptions import user_message_for_exception
+from presentation.aiogram.errors.messages import user_message_for_exception
 
-from ..utils import run_message_handler
-from . import messages as image_msg
-from .reset import reset_router
-from .vote import build_vote_kb, vote_router
+from ...utils import run_message_handler
+from ..vote import build_vote_kb
+from . import messages as generation_msg
 
-image_router = Router(name="image")
-image_router.include_router(vote_router)
-image_router.include_router(reset_router)
+generation_router = Router(name="generation")
 
 
-@image_router.message(Command("random"))
+@generation_router.message(Command("random"))
 async def cmd_random(
     message: Message,
     chat: ChatContext,
@@ -33,7 +30,7 @@ async def cmd_random(
         card = await scope.image_catalog_uc.pick_for_chat(chat_id=chat.id)
 
         if card is None:
-            await message.answer(image_msg.RANDOM_CATALOG_EMPTY)
+            await message.answer(generation_msg.RANDOM_CATALOG_EMPTY)
             return
 
         await message.answer_photo(
@@ -49,7 +46,7 @@ async def cmd_random(
     await run_message_handler(message, scope.logger, _action)
 
 
-@image_router.message(Command("generate"))
+@generation_router.message(Command("generate"))
 async def cmd_generate(
     message: Message,
     command: CommandObject,
@@ -61,11 +58,11 @@ async def cmd_generate(
 
     async def _action() -> None:
         at = message.date
-        logger = scope.logger.bind(module="image_router")
+        logger = scope.logger.bind(module="generation_router")
         raw_prompt = (command.args or "").strip() or None
 
         snap = await scope.user_generation_uc.begin_generation(user_id=user.id, at=at)
-        status = await message.answer(image_msg.GENERATION_STARTED)
+        status = await message.answer(generation_msg.GENERATION_STARTED)
         committed = False
 
         try:

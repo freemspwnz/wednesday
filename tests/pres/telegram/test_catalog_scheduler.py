@@ -9,7 +9,7 @@ from aiogram.exceptions import TelegramForbiddenError
 
 from app.dto import ImageCard
 from domain.kernel.vo import AwareDatetime
-from presentation.aiogram.routers.image import messages as image_msg
+from presentation.aiogram.routers.image.generation import messages as image_msg
 from presentation.aiogram.scheduler.catalog import CatalogScheduleRunner
 from tests.dom.image.factories import mk_image
 

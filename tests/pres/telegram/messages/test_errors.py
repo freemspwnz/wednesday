@@ -29,7 +29,7 @@ from domain.user.exceptions import (
     UserBannedError,
     UserNotFoundError,
 )
-from presentation.aiogram.messages.exceptions import (
+from presentation.aiogram.errors.messages import (
     GENERATION_FAILED,
     IMAGE_NOT_FOUND,
     LIMIT_EXHAUSTED,
