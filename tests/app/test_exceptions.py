@@ -66,6 +66,18 @@ def test_iter_exception_chain_stops_on_self_cause_cycle() -> None:
 
 
 @pytest.mark.unit
+def test_iter_exception_chain_skips_suppressed_context() -> None:
+    try:
+        try:
+            raise ValueError("root")
+        except ValueError:
+            raise RuntimeError("outer") from None
+    except RuntimeError as exc:
+        assert list(iter_exception_chain(exc)) == [exc]
+        assert unwrap_exception(exc) is exc
+
+
+@pytest.mark.unit
 def test_too_many_requests_keeps_payload_fields() -> None:
     exc = TooManyRequests(
         retry_after=30,
