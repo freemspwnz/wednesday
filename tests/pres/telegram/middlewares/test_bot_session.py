@@ -106,6 +106,23 @@ async def test_retry_logs_and_reraises(exc_type: type[Exception], mock_logger: M
     with pytest.raises(exc_type):
         await middleware(AsyncMock(), AsyncMock(spec=Bot), SendMessage(chat_id=1, text="x"))
 
+    if exc_type is MaxAttemptsExhaustedError:
+        mock_logger.warning.assert_called_once()
+        assert mock_logger.warning.call_args.args[0] == "Telegram API retries exhausted"
+        mock_logger.error.assert_not_called()
+    elif exc_type is RetryError:
+        mock_logger.warning.assert_called_once()
+        assert mock_logger.warning.call_args.args[0] == "Retry policy rejected request"
+        mock_logger.error.assert_not_called()
+    elif exc_type is AppError:
+        mock_logger.error.assert_called_once()
+        assert mock_logger.error.call_args.args[0] == "AppError while retrying Telegram API call"
+        mock_logger.warning.assert_not_called()
+    else:
+        mock_logger.error.assert_called_once()
+        assert mock_logger.error.call_args.args[0] == "Unexpected error while retrying Telegram API call"
+        mock_logger.warning.assert_not_called()
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

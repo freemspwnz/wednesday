@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter, TelegramServerError
+from aiohttp import ClientError
 
 from app.exceptions import TooManyRequests
 from presentation.aiogram.predicate import is_telegram_retryable
@@ -58,3 +59,25 @@ def test_telegram_server_error_from_timeout_is_retryable() -> None:
         ) from TimeoutError()
     except TelegramServerError as exc:
         assert is_telegram_retryable(exc) is True
+
+
+@pytest.mark.unit
+def test_telegram_network_error_from_aiohttp_client_error_is_retryable() -> None:
+    try:
+        raise TelegramNetworkError(
+            method=_TELEGRAM_METHOD,
+            message="ClientConnectorError",
+        ) from ClientError()
+    except TelegramNetworkError as exc:
+        assert is_telegram_retryable(exc) is True
+
+
+@pytest.mark.unit
+def test_suppressed_retryable_context_is_not_retryable() -> None:
+    try:
+        try:
+            raise TelegramNetworkError(method=_TELEGRAM_METHOD, message="x")
+        except TelegramNetworkError:
+            raise ValueError("outer") from None
+    except ValueError as exc:
+        assert is_telegram_retryable(exc) is False
