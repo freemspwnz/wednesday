@@ -9,8 +9,8 @@ from aiogram.types import ChatMemberUpdated
 
 from app.protocols import Logger, RequestScope
 
-from ...messages import chat as chat_msg
 from ...middlewares.utils import CHAT_MEMBER_LEFT_STATUSES
+from . import messages as chat_msg
 
 chat_member_router = Router(name="chat_member")
 

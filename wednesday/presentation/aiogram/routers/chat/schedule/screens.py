@@ -7,8 +7,8 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.dto import ChatContext
 
-from ....messages import chat as chat_msg
 from ...utils import safe_callback_answer
+from . import messages as chat_msg
 from .keyboard import (
     build_clear_confirm_kb,
     build_day_kb,

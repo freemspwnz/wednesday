@@ -1,6 +1,7 @@
 import pytest
 
-from presentation.aiogram.messages import common as common_msg, user as user_msg
+from presentation.aiogram.messages import common as common_msg
+from presentation.aiogram.routers.user.model import messages as user_msg
 
 
 @pytest.mark.unit

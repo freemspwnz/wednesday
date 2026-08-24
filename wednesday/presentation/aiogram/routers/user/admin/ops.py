@@ -4,7 +4,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from ....messages import common as common_msg
+from presentation.aiogram.messages import common as common_msg
 
 ops_router = Router(name="ops")
 

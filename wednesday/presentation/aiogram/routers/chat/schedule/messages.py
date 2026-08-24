@@ -1,27 +1,6 @@
-"""Chat messages: membership events and schedule commands."""
+"""Schedule command and inline-menu texts."""
 
 from app.dto import ChatContext
-
-BOT_ADDED_TO_CHAT = "Привет! Я Wednesday Frog Bot!\n\nНажми /start и я расскажу, что я умею."
-
-MEMBER_JOINED = [
-    "Хей",
-    "Здаров",
-    "Че как?",
-    "Че хотел?",
-    "Че каво?",
-    "Прив",
-    "Привет",
-    "Йоу",
-]
-
-MEMBER_LEFT = [
-    "Уходи",
-    "Да это жёстко",
-    "Так ему и надо! (извините)",
-    "Так его! (извините)",
-    "Пшёл вон!",
-]
 
 SCHEDULE_USAGE = (
     "Расписание чата (только в группе):\n"

@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.dto import ChatContext
 
-from ....messages import chat as chat_msg
+from . import messages as chat_msg
 from .data import ScheduleData
 
 _WEEKDAY_SHORT: dict[int, str] = {

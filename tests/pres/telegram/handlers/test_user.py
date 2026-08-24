@@ -7,8 +7,10 @@ from aiogram.types import CallbackQuery, Message
 
 from app.dto import UserContext
 from domain.user.exceptions import ModelNotFoundError, ModelSelectionError
-from presentation.aiogram.messages import exceptions as exc_msg, user as user_msg
+from presentation.aiogram.messages import exceptions as exc_msg
 from presentation.aiogram.routers import user as handlers
+from presentation.aiogram.routers.user import messages as profile_msg
+from presentation.aiogram.routers.user.model import messages as user_msg
 from presentation.aiogram.routers.user.model.data import CLOSE_MODEL, ModelSelectionData
 from presentation.aiogram.routers.user.model.keyboard import build_models_kb
 
@@ -24,7 +26,7 @@ def user_context() -> UserContext:
 @pytest.mark.asyncio
 async def test_cmd_me_replies_with_profile(user_context: UserContext) -> None:
     message = make_message(text="/me")
-    expected = user_msg.format_me(user_context)
+    expected = profile_msg.format_me(user_context)
     with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
         await handlers.cmd_me(message, user_context)
     answer.assert_awaited_once_with(text=expected)

@@ -21,9 +21,9 @@ from aiogram.types import (
 )
 
 from domain.chat import AccessDeniedError, ScheduleLimitExceededError
-from presentation.aiogram.messages import chat as chat_msg, exceptions as exc_msg
+from presentation.aiogram.messages import exceptions as exc_msg
 from presentation.aiogram.routers import chat as h
-from presentation.aiogram.routers.chat.schedule import ScheduleData
+from presentation.aiogram.routers.chat.schedule import ScheduleData, messages as chat_msg
 from presentation.aiogram.routers.chat.schedule.keyboard import pack_hhmm
 
 from ..factories import make_callback_query, make_message, mk_chat_context

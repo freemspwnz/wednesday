@@ -8,8 +8,8 @@ from aiogram.types import CallbackQuery
 from app.dto import ChatContext
 from app.protocols import RequestScope
 
-from ....messages import chat as chat_msg
 from ..mappers import resolve_chat_member
+from . import messages as chat_msg
 from .keyboard import TIMEZONE_PRESETS, unpack_hhmm
 
 _WEEKDAY_MIN = 1

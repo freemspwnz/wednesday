@@ -1,1 +1,1 @@
-"""Bot user-facing text constants, grouped by router domain."""
+"""Shared bot texts: commands, errors, system notices, throttling."""

@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramAPIError
 from app.dto import ChatContext
 from app.protocols import Logger, RequestScope, ScopeFactory
 
-from ..messages import image as image_msg
+from ..routers.image import messages as image_msg
 from ..routers.image.vote import build_vote_kb
 
 

@@ -9,8 +9,8 @@ from aiogram.types import CallbackQuery, TelegramObject, Update
 
 from app.exceptions import LimitStorageError, TooManyRequests
 from app.protocols import Logger, RateLimiter
+from presentation.aiogram.messages import throttling as throttling_msg
 
-from ...messages import throttling as throttling_msg
 from ..utils import is_chat
 
 

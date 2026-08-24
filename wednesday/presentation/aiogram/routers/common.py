@@ -5,8 +5,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
 from app.protocols import Logger
-
-from ..messages import common as common_msg
+from presentation.aiogram.messages import common as common_msg
 
 common_router = Router(name="common")
 

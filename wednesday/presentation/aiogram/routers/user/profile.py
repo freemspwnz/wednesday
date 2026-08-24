@@ -4,7 +4,7 @@ from aiogram.types import Message
 
 from app.dto import UserContext
 
-from ...messages import user as user_msg
+from . import messages as user_msg
 
 profile_router = Router(name="profile")
 

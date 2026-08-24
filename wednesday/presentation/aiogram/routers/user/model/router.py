@@ -7,10 +7,10 @@ from aiogram.types import CallbackQuery, Message
 
 from app.dto import UserContext
 from app.protocols import Logger, RequestScope
+from presentation.aiogram.filters import InsufficientCommandArgs, RequireCommandArgs
 
-from ....filters import InsufficientCommandArgs, RequireCommandArgs
-from ....messages import user as user_msg
 from ...utils import run_callback_handler, run_message_handler, safe_callback_answer
+from . import messages as user_msg
 from .data import CLOSE_MODEL, ModelSelectionData
 from .keyboard import build_models_kb
 

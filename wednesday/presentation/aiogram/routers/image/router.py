@@ -8,10 +8,10 @@ from aiogram.types import BufferedInputFile, Message
 from app.dto import ChatContext, UserContext
 from app.protocols import RequestScope
 from domain.image import PromptRejectedError
+from presentation.aiogram.messages.exceptions import user_message_for_exception
 
-from ...messages import image as image_msg
-from ...messages.exceptions import user_message_for_exception
 from ..utils import run_message_handler
+from . import messages as image_msg
 from .reset import reset_router
 from .vote import build_vote_kb, vote_router
 

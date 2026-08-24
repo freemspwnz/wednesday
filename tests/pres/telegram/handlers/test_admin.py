@@ -8,8 +8,8 @@ from aiogram.types import Message
 from app.dto import UserContext
 from domain.user.exceptions import AccessDeniedError
 from presentation.aiogram.messages import common as common_msg, exceptions as exc_msg
-from presentation.aiogram.messages.user import admin as admin_msg
 from presentation.aiogram.routers.user import admin as h
+from presentation.aiogram.routers.user.admin import messages as admin_msg
 
 from ..factories import make_message, mk_user_context
 
