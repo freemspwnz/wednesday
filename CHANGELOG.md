@@ -1,5 +1,32 @@
 # Changelog
 
+## [7.8.0] — 2026-10-09
+
+### Added
+
+**Presentation**
+- Optional `TELEGRAM__PROXY_URL` sends the Telegram session through an HTTP proxy. Empty keeps a direct connection. A bad URL fails at startup and does not print credentials. Other HTTP clients are unchanged ([#101](https://github.com/freemspwnz/wednesday/issues/101)).
+
+### Changed
+
+**Presentation**
+- Feature copy lives next to its routers. Shared errors, throttling, and filters stay at the adapter root. Handler behavior is unchanged.
+
+**Infrastructure**
+- Chat, user, violation, image, vote, and view repos route public methods through shared `guard_repo`, including `ValueError` mapping. Exception types and messages stay the same ([#91](https://github.com/freemspwnz/wednesday/issues/91)).
+- `RequestScope` no longer exposes catalog ports. Handlers and the scheduler call use cases; `scope` is the single factory entry point ([#93](https://github.com/freemspwnz/wednesday/issues/93)).
+
+### Fixed
+
+**App**
+- Retry classification skips a suppressed exception context, so `raise X from None` no longer makes a non-retryable wrapper look retryable ([#97](https://github.com/freemspwnz/wednesday/issues/97)).
+
+**Presentation**
+- Telegram timeouts wrapped in `TelegramNetworkError` are retried. Exhausted transport retries are logged by tenacity and are no longer treated as unexpected middleware errors ([#97](https://github.com/freemspwnz/wednesday/issues/97)).
+
+**Infrastructure**
+- httpx timeout, transport, and retryable status match any frame in the cause chain, not only the root ([#97](https://github.com/freemspwnz/wednesday/issues/97)).
+
 ## [7.7.0] — 2026-08-21
 
 ### Added
