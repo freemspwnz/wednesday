@@ -8,6 +8,7 @@ import asyncio
 from contextlib import suppress
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from infra.config import Config
 from infra.di import Container
@@ -35,7 +36,11 @@ async def main() -> None:
         predicate=is_telegram_retryable,
     )
 
-    bot = Bot(token=config.telegram.token.get_secret_value())
+    proxy_url = config.telegram.proxy_url
+    bot = Bot(
+        token=config.telegram.token.get_secret_value(),
+        session=AiohttpSession(proxy=proxy_url.get_secret_value() if proxy_url else None),
+    )
     setup_bot(
         bot=bot,
         limiter=limiter,
