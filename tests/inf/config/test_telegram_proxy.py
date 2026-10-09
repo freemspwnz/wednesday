@@ -23,17 +23,20 @@ class TestTelegramProxyUrl:
         assert cfg.telegram.proxy_url is None
 
     def test_env_http_url_with_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TELEGRAM__PROXY_URL", "http://user:pass@3x-ui:3128")
+        monkeypatch.setenv("TELEGRAM__PROXY_URL", "http://user:pass@proxy.example:3128")
         cfg = Config(_env_file=None, ENV="DEV", metrics=MetricsConfig(enabled=False))
         assert cfg.telegram.proxy_url is not None
-        assert cfg.telegram.proxy_url.get_secret_value() == "http://user:pass@3x-ui:3128"
+        assert cfg.telegram.proxy_url.get_secret_value() == "http://user:pass@proxy.example:3128"
 
     def test_http_url_without_credentials(self) -> None:
         cfg = TelegramConfig(proxy_url="http://host:3128")  # type: ignore[arg-type]
         assert cfg.proxy_url is not None
         assert cfg.proxy_url.get_secret_value() == "http://host:3128"
 
-    @pytest.mark.parametrize("raw", ["https://host:3128", "socks5://host:1080", "ftp://host", "http://"])
+    @pytest.mark.parametrize(
+        "raw",
+        ["https://host:3128", "socks5://host:1080", "ftp://host", "http://", "http://host:abc"],
+    )
     def test_rejects_non_http_proxy(self, raw: str) -> None:
         with pytest.raises(ValidationError, match="TELEGRAM__PROXY_URL"):
             TelegramConfig(proxy_url=raw)  # type: ignore[arg-type]
@@ -42,3 +45,8 @@ class TestTelegramProxyUrl:
         cfg = TelegramConfig(proxy_url="http://user:s3cret@host:3128")  # type: ignore[arg-type]
         assert isinstance(cfg.proxy_url, SecretStr)
         assert "s3cret" not in repr(cfg)
+
+    def test_invalid_url_hides_secret(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            TelegramConfig(proxy_url="https://user:s3cret@host:3128")  # type: ignore[arg-type]
+        assert "s3cret" not in str(exc.value)

@@ -11,6 +11,7 @@ class TelegramConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
+        hide_input_in_errors=True,
     )
 
     token: SecretStr = Field(default=SecretStr("token"), description="Telegram bot token")
@@ -36,6 +37,10 @@ class TelegramConfig(BaseModel):
         parsed = urlparse(raw)
         if parsed.scheme != "http" or parsed.hostname is None:
             raise ValueError("TELEGRAM__PROXY_URL must be an http URL with a host")
+        try:
+            _ = parsed.port
+        except ValueError:
+            raise ValueError("TELEGRAM__PROXY_URL must be an http URL with a host") from None
         return raw
 
     retrier: RetryConfig = Field(
